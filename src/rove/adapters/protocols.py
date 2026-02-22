@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Union, runtime_checkable
+__all__ = ["AgentAdapter", "PolicyAdapter", "SimAdapter", "StageAdapter", "VLMAdapter"]
+
+from typing import Protocol, runtime_checkable
 
 from rove.models import (
     ActionPrediction,
@@ -24,14 +26,15 @@ class VLMAdapter(Protocol):
         """Perceive step: analyze workspace image and identify objects."""
         ...
 
-    async def plan_task(
-        self, image_base64: str, task: str, scene: SceneAnalysis
-    ) -> TaskPlan:
+    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
         """Plan step: generate a task strategy given scene analysis."""
         ...
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str,
+        self,
+        before_image_base64: str,
+        after_image_base64: str,
+        task: str,
         context: dict | None = None,
     ) -> VerificationResult:
         """Verify step: compare before/after images to check task success."""
@@ -102,4 +105,4 @@ class SimAdapter(Protocol):
         ...
 
 
-StageAdapter = Union[VLMAdapter, PolicyAdapter, AgentAdapter]
+StageAdapter = VLMAdapter | PolicyAdapter | AgentAdapter

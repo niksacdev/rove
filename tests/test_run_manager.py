@@ -94,13 +94,22 @@ class TestRunManager:
 
         # Duplicate the same strategy to get 2 runs
         from rove.models import Strategy
+
         strat2 = Strategy(
-            id="mock-2", display_name="Mock 2", description="",
-            perceive="mock-vlm", plan="mock-vlm", act="mock-vla",
-            verify="mock-vlm", sim="mock-sim",
+            id="mock-2",
+            display_name="Mock 2",
+            description="",
+            perceive="mock-vlm",
+            plan="mock-vlm",
+            act="mock-vla",
+            verify="mock-vlm",
+            sim="mock-sim",
         )
 
         results = await rm.run_strategies(
-            [mock_strategy, strat2], "test", "img", on_event,
+            [mock_strategy, strat2],
+            "test",
+            "img",
+            on_event,
         )
         assert len(results) == 2

@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "ActionPrediction",
+    "GraspPlan",
+    "PipelineContext",
+    "PipelineStage",
+    "PipelineStageResult",
+    "SceneAnalysis",
+    "SimObservation",
+    "StageAssignment",
+    "StageStatus",
+    "Strategy",
+    "TaskPlan",
+    "TrialResult",
+    "VerificationResult",
+]
+
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 
-class PipelineStage(str, Enum):
+class PipelineStage(StrEnum):
     PERCEIVE = "perceive"
     PLAN = "plan"
     ACT = "act"
     VERIFY = "verify"
 
 
-class StageStatus(str, Enum):
+class StageStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"

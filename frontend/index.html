@@ -1,26 +1,110 @@
 <!DOCTYPE html>
 <html lang="en" class="h-full">
+<script>
+  // Apply saved theme immediately to prevent flash
+  (function(){var t=localStorage.getItem("rove-theme")||"dark";document.documentElement.setAttribute("data-theme",t);})();
+</script>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ROVE — Robot Observation &amp; Vision Evaluation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    @keyframes pulse-blue {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
-      50% { box-shadow: 0 0 12px 4px rgba(59,130,246,0.35); }
+    /* ---- Theme variables ---- */
+    :root {
+      --f-bg: #1a1a1a;
+      --f-surface: #252525;
+      --f-elevated: #2d2d2d;
+      --f-border: #383838;
+      --f-border-strong: #4a4a4a;
+      --f-text: #ffffff;
+      --f-text-secondary: #d1d5db;
+      --f-text-muted: #9ca3af;
+      --f-text-faint: #6b7280;
+      --f-text-dim: #4b5563;
+      --f-scrollbar: #444;
+      --f-popover-bg: #2d2d2d;
+      --f-popover-border: #4a4a4a;
+      --f-shadow: rgba(0,0,0,0.4);
+      --f-stage-dot-bg: #383838;
+      color-scheme: dark;
+    }
+    [data-theme="light"] {
+      --f-bg: #f8f9fa;
+      --f-surface: #ffffff;
+      --f-elevated: #f0f1f3;
+      --f-border: #e2e4e8;
+      --f-border-strong: #cdd0d5;
+      --f-text: #1a1b1e;
+      --f-text-secondary: #374151;
+      --f-text-muted: #6b7280;
+      --f-text-faint: #9ca3af;
+      --f-text-dim: #c0c4cc;
+      --f-scrollbar: #c0c4cc;
+      --f-popover-bg: #ffffff;
+      --f-popover-border: #e2e4e8;
+      --f-shadow: rgba(0,0,0,0.1);
+      --f-stage-dot-bg: #d1d5db;
+      color-scheme: light;
+    }
+
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--f-text); }
+
+    /* ---- Light mode: override Tailwind gray utilities ---- */
+    [data-theme="light"] .text-white { color: var(--f-text) !important; }
+    [data-theme="light"] .text-gray-100 { color: #374151 !important; }
+    [data-theme="light"] .text-gray-200 { color: #4b5563 !important; }
+    [data-theme="light"] .text-gray-300 { color: #6b7280 !important; }
+    [data-theme="light"] .text-gray-400 { color: #9ca3af !important; }
+    [data-theme="light"] .text-gray-500 { color: #9ca3af !important; }
+    [data-theme="light"] .text-gray-600 { color: #c0c4cc !important; }
+    [data-theme="light"] .hover\:text-white:hover { color: var(--f-text) !important; }
+    [data-theme="light"] .bg-gray-700 { background-color: #d1d5db !important; }
+    [data-theme="light"] .bg-gray-600 { background-color: #d1d5db !important; }
+    [data-theme="light"] .bg-black\/20 { background: rgba(0,0,0,0.04) !important; }
+    [data-theme="light"] .bg-black\/30 { background: rgba(0,0,0,0.06) !important; }
+    [data-theme="light"] .placeholder-gray-600::placeholder { color: #9ca3af !important; }
+    [data-theme="light"] .border-gray-600 { border-color: #d1d5db !important; }
+
+    @keyframes pulse-purple {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.5); }
+      50% { box-shadow: 0 0 12px 4px rgba(124,58,237,0.35); }
     }
     @keyframes slide-in {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fade-out {
+      from { opacity: 1; }
+      to   { opacity: 0; }
     }
     @keyframes typing-dot {
       0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
       40% { opacity: 1; transform: scale(1); }
     }
-    .animate-slide-in { animation: slide-in 0.4s ease-out forwards; }
-    .pulse-blue { animation: pulse-blue 1.5s ease-in-out infinite; }
+    @keyframes dot-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.6); }
+      50% { box-shadow: 0 0 6px 2px rgba(124,58,237,0.3); }
+    }
+    .animate-slide-in { animation: slide-in 0.4s ease-out forwards; opacity: 0; }
+    .animate-fade-out { animation: fade-out 0.15s ease-out forwards; }
+
+    /* Stage progress dots */
+    .stage-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--f-stage-dot-bg); transition: all 0.3s ease; }
+    .stage-dot.running { background: #7c3aed; animation: dot-pulse 1.5s ease-in-out infinite; }
+    .stage-dot.done { background: #22c55e; }
+    .stage-dot.error { background: #ef4444; }
+
+    /* Stage card left border accents */
+    .stage-card-perceive { border-left: 2px solid #a855f7; }
+    .stage-card-plan { border-left: 2px solid #a855f7; }
+    .stage-card-act { border-left: 2px solid #10b981; }
+    .stage-card-verify { border-left: 2px solid #f59e0b; }
+    .pulse-purple { animation: pulse-purple 1.5s ease-in-out infinite; }
     .typing-dot { animation: typing-dot 1.4s ease-in-out infinite; }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -28,212 +112,324 @@
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: var(--f-scrollbar); border-radius: 3px; }
 
     /* Transition for expandable JSON */
     .json-expand { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
     .json-expand.open { max-height: 600px; overflow-y: auto; }
 
-    /* Strategy card selection */
-    .strategy-card { transition: all 0.2s ease; }
-    .strategy-card.selected { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
+    /* Strategy chip selection */
+    .strategy-chip { transition: all 0.15s ease; position: relative; }
+    .strategy-chip:hover { border-color: var(--f-border-strong); background: rgba(124,58,237,0.03); }
+    .strategy-chip.selected { border-color: #7c3aed; background: rgba(124,58,237,0.1); }
+    .strategy-chip .check-icon { display: none; }
+    .strategy-chip.selected .check-icon { display: flex; }
 
-    /* Tab styling */
-    .strategy-tab { transition: all 0.2s ease; }
-    .strategy-tab.active { border-bottom-color: #3b82f6; color: #fff; }
+    /* Strategy hover popover */
+    .strategy-chip .chip-popover {
+      display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--f-popover-bg); border: 1px solid var(--f-popover-border); border-radius: 8px; padding: 8px 10px;
+      min-width: 180px; z-index: 30; box-shadow: 0 4px 16px var(--f-shadow);
+      pointer-events: none;
+    }
+    .strategy-chip .chip-popover::after {
+      content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: var(--f-popover-border);
+    }
+    .strategy-chip:hover .chip-popover { display: block; }
+
+    /* Tab styling — pill tabs with accent */
+    .strategy-tab {
+      transition: all 0.2s ease; position: relative;
+      border-radius: 6px 6px 0 0;
+    }
+    .strategy-tab:hover { color: var(--f-text-secondary); background: rgba(124,58,237,0.05); }
+    .strategy-tab.active {
+      color: var(--f-text);
+      background: rgba(124,58,237,0.1);
+    }
+    .strategy-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #7c3aed;
+      border-radius: 1px 1px 0 0;
+    }
+
+    /* Nav link active indicator */
+    .nav-link { position: relative; transition: color 0.2s; }
+    .nav-link.active { color: var(--f-text); }
+    .nav-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #7c3aed;
+      border-radius: 1px 1px 0 0;
+    }
+
+    /* Sidebar active item */
+    .sidebar-item { transition: all 0.15s ease; }
+    .sidebar-item.active { background: rgba(124,58,237,0.1); }
+    .sidebar-item.active .sidebar-accent { opacity: 1; }
+
+    /* Sidebar nav link with purple accent */
+    .sidebar-nav-link { position: relative; transition: all 0.15s ease; }
+    .sidebar-nav-link.active { background: rgba(124,58,237,0.1); color: var(--f-text); }
+    .sidebar-nav-link.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      background: #7c3aed;
+      border-radius: 0 3px 3px 0;
+    }
+
+    /* Purple gradient for feature cards */
+    .gradient-card {
+      background: linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(109,40,217,0.08) 100%);
+      border-color: rgba(124,58,237,0.25);
+    }
+
+    /* Pipeline animation */
+    @keyframes stage-highlight {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.04); box-shadow: 0 0 20px rgba(124,58,237,0.3); }
+    }
+    .pipeline-stage { opacity: 0.5; transition: all 0.3s ease; }
+    .pipeline-stage:nth-child(1) { animation: stage-highlight 4s ease-in-out 0s infinite; }
+    .pipeline-stage:nth-child(3) { animation: stage-highlight 4s ease-in-out 1s infinite; }
+    .pipeline-stage:nth-child(5) { animation: stage-highlight 4s ease-in-out 2s infinite; }
+    .pipeline-stage:nth-child(7) { animation: stage-highlight 4s ease-in-out 3s infinite; }
+    @keyframes arrow-flow {
+      0% { background-position: 0 0; }
+      100% { background-position: 24px 0; }
+    }
+    .pipeline-arrow {
+      width: 32px; height: 2px;
+      background: repeating-linear-gradient(90deg, #7c3aed 0, #7c3aed 6px, transparent 6px, transparent 12px);
+      background-size: 24px 2px;
+      animation: arrow-flow 0.8s linear infinite;
+    }
+    @media (max-width: 640px) {
+      .pipeline-flow { flex-direction: column !important; }
+      .pipeline-arrow { width: 2px; height: 24px; background: repeating-linear-gradient(180deg, #7c3aed 0, #7c3aed 6px, transparent 6px, transparent 12px); background-size: 2px 24px; animation: arrow-flow-v 0.8s linear infinite; }
+      @keyframes arrow-flow-v { 0% { background-position: 0 0; } 100% { background-position: 0 24px; } }
+    }
+
+    /* Theme toggle */
+    .theme-toggle { transition: all 0.2s ease; }
+    .theme-toggle:hover { color: var(--f-text); }
   </style>
   <script>
     tailwind.config = {
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+          },
           colors: {
-            'rove-bg': '#09090b',
-            'rove-card': '#1a1a2e',
-            'rove-user': '#16163a',
-            'rove-border': '#2a2a3e',
+            'f-bg':       'var(--f-bg)',
+            'f-surface':  'var(--f-surface)',
+            'f-elevated': 'var(--f-elevated)',
+            'f-border':   'var(--f-border)',
+            'f-border-strong': 'var(--f-border-strong)',
+            'f-purple':   '#7c3aed',
+            'f-purple-hover': '#6d28d9',
           }
         }
       }
     }
   </script>
 </head>
-<body class="h-full bg-rove-bg text-white flex flex-col overflow-hidden">
+<body class="h-full bg-f-bg text-white flex flex-col overflow-hidden">
 
-  <!-- ============ TOP BAR ============ -->
-  <header class="flex items-center gap-3 px-5 py-3 border-b border-rove-border bg-rove-bg/90 backdrop-blur-sm shrink-0 z-20">
-    <div class="flex items-center gap-2">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- ============ TOP NAV BAR (Foundry-style) ============ -->
+  <header class="flex items-center h-12 px-4 border-b border-f-border bg-f-bg shrink-0 z-20">
+    <!-- Left: Logo + breadcrumb -->
+    <div class="flex items-center gap-2 shrink-0">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
-        <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#3b82f6"/><circle cx="4" cy="12" r="1" fill="#3b82f6"/>
-        <circle cx="20" cy="12" r="1" fill="#3b82f6"/><circle cx="12" cy="22" r="1" fill="#3b82f6"/>
+        <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
+        <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
       </svg>
-      <h1 class="text-xl font-bold tracking-tight">ROVE</h1>
+      <span class="text-sm font-semibold tracking-tight">ROVE</span>
+      <span class="text-gray-600 mx-1">/</span>
+      <span class="text-xs text-gray-500">Evaluation</span>
     </div>
-    <span class="text-xs text-gray-400 hidden sm:inline">Robot Observation &amp; Vision Evaluation</span>
-    <div class="ml-auto flex items-center gap-2 text-xs text-gray-500">
-      <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600"></span>
-      <span id="connectionLabel">Disconnected</span>
+
+    <!-- Center: Nav links -->
+    <nav class="hidden md:flex items-center gap-1 ml-8">
+      <a href="#" class="nav-link active text-[13px] text-gray-400 hover:text-white px-3 py-3">Evaluate</a>
+      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Strategies</a>
+      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Models</a>
+    </nav>
+
+    <!-- Right: Theme toggle + Status -->
+    <div class="ml-auto flex items-center gap-3">
+      <button id="themeToggle" class="theme-toggle w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-f-surface" title="Toggle light/dark mode">
+        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4"></i>
+        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 hidden"></i>
+      </button>
+      <div class="flex items-center gap-1.5 text-xs text-gray-500">
+        <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600"></span>
+        <span id="connectionLabel">Disconnected</span>
+      </div>
     </div>
   </header>
 
   <!-- ============ MAIN LAYOUT ============ -->
   <div class="flex flex-1 min-h-0">
 
-    <!-- ---- Left Sidebar: Pipeline Workflow Progress ---- -->
-    <aside class="w-[72px] shrink-0 border-r border-rove-border flex flex-col items-center pt-4 bg-rove-bg">
-      <span class="text-[9px] uppercase tracking-widest text-gray-600 font-semibold mb-4">Pipeline</span>
+    <!-- ---- Left Sidebar: History + Navigation ---- -->
+    <aside class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg">
 
-      <div class="flex flex-col items-center">
-        <!-- Perceive -->
-        <div id="sidebar-perceive" class="sidebar-icon group relative" data-stage="perceive">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
-            <i data-lucide="eye" class="w-5 h-5"></i>
-          </div>
-          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Perceive</span>
+      <!-- History section -->
+      <div class="flex-1 overflow-y-auto pt-4">
+        <span class="text-[11px] text-gray-500 font-semibold px-4 mb-2 block">History</span>
+        <div id="historyList" class="flex flex-col px-2 gap-0.5">
+          <div class="px-3 py-2 text-[11px] text-gray-600 italic">No evaluations yet</div>
         </div>
-        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="perceive"></div>
+      </div>
 
-        <!-- Plan -->
-        <div id="sidebar-plan" class="sidebar-icon group relative" data-stage="plan">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
-            <i data-lucide="brain" class="w-5 h-5"></i>
-          </div>
-          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Plan</span>
-        </div>
-        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="plan"></div>
+      <!-- Divider -->
+      <div class="border-t border-f-border mx-4 my-1"></div>
 
-        <!-- Act -->
-        <div id="sidebar-act" class="sidebar-icon group relative" data-stage="act">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
-            <i data-lucide="bot" class="w-5 h-5"></i>
-          </div>
-          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Act</span>
-        </div>
-        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="act"></div>
-
-        <!-- Verify -->
-        <div id="sidebar-verify" class="sidebar-icon group relative" data-stage="verify">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
-            <i data-lucide="check-circle" class="w-5 h-5"></i>
-          </div>
-          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Verify</span>
-        </div>
+      <!-- Navigation links -->
+      <div class="flex flex-col px-2 gap-0.5 pb-4">
+        <a href="#" data-view="settings" class="sidebar-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-[13px] text-gray-400 hover:text-white hover:bg-f-surface">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span>Settings</span>
+        </a>
       </div>
     </aside>
 
-    <!-- ---- Chat Main Area ---- -->
+    <!-- ---- Content Main Area ---- -->
     <main class="flex-1 flex flex-col min-h-0">
 
-      <!-- Tab bar (hidden until evaluation runs) -->
-      <div id="tabBar" class="hidden shrink-0 border-b border-rove-border bg-rove-bg px-4 flex items-end gap-0 overflow-x-auto"></div>
+      <!-- Sub-tab bar (hidden until evaluation runs) -->
+      <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto"></div>
 
-      <!-- Chat messages scroll area -->
-      <div id="chatArea" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+      <!-- Content scroll area -->
+      <div id="chatArea" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+
         <!-- Welcome screen -->
         <div id="welcomeMsg" class="flex flex-col items-center justify-center h-full text-center px-4">
           <!-- Logo + title -->
-          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/20 flex items-center justify-center mb-5">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-f-purple/20 to-purple-600/10 border border-f-purple/20 flex items-center justify-center mb-5">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
-              <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#3b82f6"/><circle cx="4" cy="12" r="1" fill="#3b82f6"/>
-              <circle cx="20" cy="12" r="1" fill="#3b82f6"/><circle cx="12" cy="22" r="1" fill="#3b82f6"/>
+              <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
+              <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
             </svg>
           </div>
-          <h2 class="text-2xl font-bold mb-2">Welcome to ROVE</h2>
-          <p class="text-gray-400 text-sm max-w-lg mb-8">Robot Observation & Vision Evaluation — evaluate robotics agent pipelines by running VLM+VLA+Agent combinations on manipulation tasks.</p>
+          <h2 class="text-2xl font-semibold mb-2">Welcome to ROVE</h2>
+          <p class="text-gray-300 text-[13px] max-w-lg mb-8">Evaluate robotics agent pipelines by running VLM+VLA+Agent combinations on manipulation tasks.</p>
 
-          <!-- Capability cards -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full mb-8">
-            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
-              <div class="flex items-center gap-2 mb-2">
-                <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <i data-lucide="eye" class="w-4 h-4 text-blue-400"></i>
-                </div>
-                <span class="text-sm font-semibold text-gray-200">Scene Perception</span>
+          <!-- Animated pipeline flow -->
+          <div class="pipeline-flow flex items-center justify-center gap-0 max-w-3xl w-full mb-8">
+            <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
+                <i data-lucide="eye" class="w-5 h-5 text-purple-400"></i>
               </div>
-              <p class="text-xs text-gray-500 leading-relaxed">VLMs analyze workspace images to detect objects, spatial relationships, and task-relevant features.</p>
+              <span class="text-sm font-semibold text-gray-100 block">Perceive</span>
+              <p class="text-[10px] text-gray-400 mt-1">Analyze the scene</p>
             </div>
-            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
-              <div class="flex items-center gap-2 mb-2">
-                <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                  <i data-lucide="brain" class="w-4 h-4 text-purple-400"></i>
-                </div>
-                <span class="text-sm font-semibold text-gray-200">Task Planning</span>
+            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
+                <i data-lucide="brain" class="w-5 h-5 text-purple-400"></i>
               </div>
-              <p class="text-xs text-gray-500 leading-relaxed">VLMs, LLMs, or Foundry agents reason about how to accomplish the task with step-by-step strategies.</p>
+              <span class="text-sm font-semibold text-gray-100 block">Plan</span>
+              <p class="text-[10px] text-gray-400 mt-1">Reason about actions</p>
             </div>
-            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
-              <div class="flex items-center gap-2 mb-2">
-                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
-                </div>
-                <span class="text-sm font-semibold text-gray-200">Action Execution</span>
+            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
+                <i data-lucide="bot" class="w-5 h-5 text-purple-400"></i>
               </div>
-              <p class="text-xs text-gray-500 leading-relaxed">VLAs, LLMs with tools, or Foundry agents execute the planned actions via trajectories or tool calls.</p>
+              <span class="text-sm font-semibold text-gray-100 block">Act</span>
+              <p class="text-[10px] text-gray-400 mt-1">Execute in simulation</p>
             </div>
-            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
-              <div class="flex items-center gap-2 mb-2">
-                <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <i data-lucide="check-circle" class="w-4 h-4 text-amber-400"></i>
-                </div>
-                <span class="text-sm font-semibold text-gray-200">Automated Verification</span>
+            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
+              <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
+                <i data-lucide="check-circle" class="w-5 h-5 text-purple-400"></i>
               </div>
-              <p class="text-xs text-gray-500 leading-relaxed">VLMs compare before/after images to verify task completion with confidence scores and reasoning.</p>
+              <span class="text-sm font-semibold text-gray-100 block">Verify</span>
+              <p class="text-[10px] text-gray-400 mt-1">Confirm success</p>
             </div>
           </div>
 
-          <!-- How to use -->
-          <div class="bg-rove-card/50 border border-rove-border rounded-xl p-4 max-w-lg w-full">
-            <p class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-3">Get Started</p>
+          <!-- Get started card -->
+          <div class="bg-f-surface border border-f-border rounded-xl p-4 max-w-lg w-full">
+            <p class="text-[11px] text-gray-400 font-semibold mb-3">Getting Started</p>
             <div class="flex flex-col gap-2 text-left">
               <div class="flex items-center gap-3">
-                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                <span class="text-xs text-gray-400">Upload a robotics workspace image using the camera button</span>
+                <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                <span class="text-xs text-gray-300">Upload a robotics workspace image using the camera button</span>
               </div>
               <div class="flex items-center gap-3">
-                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                <span class="text-xs text-gray-400">Describe a manipulation task (e.g., "Pick the red bracket and place it in bin A")</span>
+                <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                <span class="text-xs text-gray-300">Describe a manipulation task (e.g., "Pick the red bracket and place it in bin A")</span>
               </div>
               <div class="flex items-center gap-3">
-                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                <span class="text-xs text-gray-400">Select one or more strategies (pipeline configurations) to evaluate</span>
+                <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                <span class="text-xs text-gray-300">Select one or more strategies (pipeline configurations) to evaluate</span>
               </div>
               <div class="flex items-center gap-3">
-                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">4</span>
-                <span class="text-xs text-gray-400">Click Evaluate and compare pipeline results across strategies</span>
+                <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">4</span>
+                <span class="text-xs text-gray-300">Click Evaluate and compare pipeline results across strategies</span>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Strategies view (hidden by default) -->
+        <div id="strategiesView" class="hidden"></div>
+
+        <!-- Models view (hidden by default) -->
+        <div id="modelsView" class="hidden"></div>
+
+        <!-- Settings view (hidden by default) -->
+        <div id="settingsView" class="hidden"></div>
       </div>
 
       <!-- ---- Bottom Input Bar ---- -->
-      <div class="shrink-0 border-t border-rove-border bg-rove-bg px-4 py-3">
+      <div class="shrink-0 border-t border-f-border bg-f-bg px-4 py-3">
 
         <!-- Strategy selector panel (collapsible) -->
         <div id="configPanel" class="mb-3">
-          <button id="configToggle" class="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full">
+          <button id="configToggle" class="flex items-center gap-1.5 text-[11px] text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full">
             <i data-lucide="layers" class="w-3.5 h-3.5"></i>
             <span>Strategies</span>
-            <span id="selectedCount" class="text-blue-400 ml-1">(0 selected)</span>
+            <span id="selectedCount" class="text-f-purple ml-1">(0 selected)</span>
             <i data-lucide="chevron-up" id="configChevron" class="w-3 h-3 ml-auto transition-transform duration-200"></i>
           </button>
 
-          <div id="configContent">
+          <div id="configContent" style="display:none">
             <!-- Mock toggle -->
             <div class="flex items-center gap-4 mb-2">
               <label class="flex items-center gap-2 cursor-pointer">
                 <div class="relative">
                   <input type="checkbox" id="mockToggle" class="sr-only peer" />
-                  <div class="w-8 h-4 bg-gray-700 peer-checked:bg-blue-600 rounded-full transition-colors"></div>
+                  <div class="w-8 h-4 bg-gray-700 peer-checked:bg-f-purple rounded-full transition-colors"></div>
                   <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
                 </div>
-                <span class="text-[10px] text-gray-400 font-medium">Simulation Mode (mock only)</span>
+                <span class="text-[11px] text-gray-400 font-medium">Simulation mode (mock only)</span>
               </label>
             </div>
 
-            <!-- Strategy cards grid -->
-            <div id="strategyGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+            <!-- Strategy chips -->
+            <div id="strategyGrid" class="flex flex-wrap gap-2 mb-2">
               <div class="text-xs text-gray-500">Loading strategies...</div>
             </div>
           </div>
@@ -242,26 +438,28 @@
         <!-- Image preview -->
         <div id="imagePreview" class="hidden mb-3">
           <div class="relative inline-block">
-            <img id="previewImg" class="h-20 rounded-lg border border-rove-border object-cover" />
+            <img id="previewImg" class="h-20 rounded-lg border border-f-border object-cover" />
             <button id="removeImage" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">&times;</button>
           </div>
         </div>
 
         <!-- Input row -->
-        <div class="flex items-end gap-2">
-          <label class="shrink-0 cursor-pointer w-10 h-10 rounded-lg bg-rove-card border border-rove-border flex items-center justify-center hover:border-blue-500 transition-colors">
+        <div class="flex items-center gap-2">
+          <label class="shrink-0 cursor-pointer w-10 h-10 rounded-lg bg-f-surface border border-f-border-strong flex items-center justify-center hover:border-f-purple transition-colors">
             <i data-lucide="camera" class="w-5 h-5 text-gray-400"></i>
             <input type="file" id="imageInput" accept="image/*" class="hidden" />
           </label>
           <div class="flex-1 relative">
             <textarea id="taskInput" rows="1" placeholder="Describe the manipulation task..."
-              class="w-full bg-rove-card border border-rove-border rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-none focus:border-blue-500 placeholder-gray-500 transition-colors"
+              class="w-full bg-f-surface border border-f-border-strong rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-none focus:border-f-purple placeholder-gray-600 transition-colors"
               style="max-height:120px"></textarea>
           </div>
-          <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center justify-center transition-colors">
+          <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-r from-f-purple to-f-purple-hover hover:opacity-90 disabled:bg-gray-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center transition-all">
             <i data-lucide="send" class="w-5 h-5"></i>
           </button>
         </div>
+        <!-- Keyboard hint -->
+        <div class="text-[10px] text-gray-600 mt-1.5 ml-12">Tab to fill sample &middot; Enter to send</div>
       </div>
 
     </main>
@@ -269,16 +467,32 @@
 
   <!-- ============ JAVASCRIPT ============ -->
   <script>
+    "use strict";
     const API_BASE = "http://localhost:5001";
 
     // ---- State ----
     let selectedFile = null;
     let isRunning = false;
     let currentEventSource = null;
-    let strategies = [];            // loaded from API
+    let strategies = [];
     let selectedStrategyIds = new Set();
-    let activeTabId = null;         // currently visible tab
-    let tabData = {};               // { strategyId: { el, typingEl, stages } }
+    let activeTabId = null;
+    let tabData = {};
+    let summaryResults = {}; // { [sid]: { status, success, latency_ms, currentStage, stageStatuses: {perceive,plan,act,verify} } }
+    let summaryEl = null; // DOM element for summary tab content
+    let currentView = "home"; // "home" | "strategies" | "models" | "settings" | "evaluation"
+    let runHistory = []; // { id, task, strategyIds, timestamp, status, tabData }
+    let activeHistoryIndex = -1;
+    let modelsData = null;
+    let configData = null; // full rove.yaml as JSON
+    let sampleIndex = 0;
+
+    const SAMPLE_QUESTIONS = [
+      "Pick up the red bracket from the table and place it in bin A",
+      "Stack the blue cube on top of the green cylinder",
+      "Move the wrench from the left bin to the right bin",
+      "Grasp the bolt and insert it into the threaded hole",
+    ];
 
     // ---- DOM refs ----
     const chatArea      = document.getElementById("chatArea");
@@ -297,33 +511,744 @@
     const strategyGrid  = document.getElementById("strategyGrid");
     const selectedCount = document.getElementById("selectedCount");
     const tabBar        = document.getElementById("tabBar");
+    const historyList   = document.getElementById("historyList");
+    const strategiesView = document.getElementById("strategiesView");
+    const modelsView    = document.getElementById("modelsView");
+    const settingsView  = document.getElementById("settingsView");
 
     // ---- Stage metadata ----
     const STAGES = {
-      perceive: { label: "Scene Analysis",     icon: "eye",          sidebar: "sidebar-perceive" },
-      plan:     { label: "Task Planning",       icon: "brain",        sidebar: "sidebar-plan"     },
-      act:      { label: "Action Execution",    icon: "bot",          sidebar: "sidebar-act"      },
-      verify:   { label: "Verification",        icon: "check-circle", sidebar: "sidebar-verify"   },
+      perceive: { label: "Scene Analysis",     icon: "eye"          },
+      plan:     { label: "Task Planning",       icon: "brain"        },
+      act:      { label: "Action Execution",    icon: "bot"          },
+      verify:   { label: "Verification",        icon: "check-circle" },
     };
 
     const STAGE_COLORS = {
-      perceive: { bg: "bg-blue-500/15", text: "text-blue-300" },
+      perceive: { bg: "bg-purple-500/15", text: "text-purple-300" },
       plan:     { bg: "bg-purple-500/15", text: "text-purple-300" },
       act:      { bg: "bg-emerald-500/15", text: "text-emerald-300" },
       verify:   { bg: "bg-amber-500/15", text: "text-amber-300" },
     };
 
+    // ---- Theme ----
+    function initTheme() {
+      var saved = localStorage.getItem("rove-theme");
+      var theme = saved || "dark";
+      applyTheme(theme);
+
+      document.getElementById("themeToggle").addEventListener("click", function() {
+        var current = document.documentElement.getAttribute("data-theme") || "dark";
+        var next = current === "dark" ? "light" : "dark";
+        applyTheme(next);
+        localStorage.setItem("rove-theme", next);
+      });
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      var sunIcon = document.getElementById("themeIconSun");
+      var moonIcon = document.getElementById("themeIconMoon");
+      if (theme === "light") {
+        sunIcon.classList.add("hidden");
+        moonIcon.classList.remove("hidden");
+      } else {
+        moonIcon.classList.add("hidden");
+        sunIcon.classList.remove("hidden");
+      }
+    }
+
     // ---- Initialize ----
     document.addEventListener("DOMContentLoaded", async function() {
+      initTheme();
       lucide.createIcons();
       await loadStrategies();
+      loadModels();
+      loadConfig();
       autoResizeTextarea();
       initConfigPanel();
+      initSidebarNav();
+      initTopNav();
     });
+
+    // ---- Load config from API ----
+    async function loadConfig() {
+      try {
+        var res = await fetch(API_BASE + "/api/config");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        configData = await res.json();
+      } catch (e) {
+        console.error("Failed to load config:", e);
+      }
+    }
+
+    // ---- Top nav click handlers ----
+    function initTopNav() {
+      document.querySelectorAll("header .nav-link").forEach(function(link) {
+        link.addEventListener("click", function(e) {
+          e.preventDefault();
+          var text = link.textContent.trim().toLowerCase();
+          activeHistoryIndex = -1;
+          if (text === "evaluate") {
+            switchView("home");
+          } else if (text === "strategies") {
+            switchView("strategies");
+          } else if (text === "models") {
+            switchView("models");
+          }
+          updateTopNav(text);
+        });
+      });
+    }
+
+    function updateTopNav(activeText) {
+      document.querySelectorAll("header .nav-link").forEach(function(link) {
+        var t = link.textContent.trim().toLowerCase();
+        if (t === activeText) {
+          link.classList.add("active");
+        } else {
+          link.classList.remove("active");
+        }
+      });
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      currentView = view;
+
+      // Hide all views
+      welcomeMsg.classList.add("hidden");
+      strategiesView.classList.add("hidden");
+      modelsView.classList.add("hidden");
+      settingsView.classList.add("hidden");
+      tabBar.classList.add("hidden");
+
+      // Clear non-persistent content
+      var dynamicEls = chatArea.querySelectorAll(".eval-content");
+      dynamicEls.forEach(function(el) { el.remove(); });
+
+      // Update sidebar nav active state
+      document.querySelectorAll(".sidebar-nav-link").forEach(function(link) {
+        if (link.getAttribute("data-view") === view) {
+          link.classList.add("active");
+        } else {
+          link.classList.remove("active");
+        }
+      });
+
+      // Update top nav active state
+      var navMap = { home: "evaluate", strategies: "strategies", models: "models", settings: "evaluate" };
+      updateTopNav(navMap[view] || "evaluate");
+
+      // Update history active state
+      document.querySelectorAll(".history-item").forEach(function(item) {
+        item.classList.remove("active", "bg-f-surface");
+      });
+
+      switch (view) {
+        case "home":
+          welcomeMsg.classList.remove("hidden");
+          break;
+        case "strategies":
+          renderStrategiesView();
+          strategiesView.classList.remove("hidden");
+          break;
+        case "models":
+          renderModelsView();
+          modelsView.classList.remove("hidden");
+          break;
+        case "settings":
+          renderSettingsView();
+          settingsView.classList.remove("hidden");
+          break;
+        case "evaluation":
+          // Handled by showHistoryEntry
+          break;
+      }
+    }
+
+    function initSidebarNav() {
+      document.querySelectorAll(".sidebar-nav-link").forEach(function(link) {
+        link.addEventListener("click", function(e) {
+          e.preventDefault();
+          var view = link.getAttribute("data-view");
+          activeHistoryIndex = -1;
+          switchView(view);
+        });
+      });
+    }
+
+    // ---- Strategies view (from configData) ----
+    function renderStrategiesView() {
+      strategiesView.textContent = "";
+      var wrapper = document.createElement("div");
+      wrapper.className = "max-w-4xl mx-auto";
+
+      var heading = document.createElement("h2");
+      heading.className = "text-lg font-semibold mb-1";
+      heading.textContent = "Strategies";
+      wrapper.appendChild(heading);
+
+      var stratList = configData && configData.strategies ? Object.entries(configData.strategies) : [];
+      var subtitle = document.createElement("p");
+      subtitle.className = "text-[13px] text-gray-500 mb-4";
+      subtitle.textContent = stratList.length + " pipeline configurations defined in rove.yaml";
+      wrapper.appendChild(subtitle);
+
+      if (stratList.length === 0) {
+        var empty = document.createElement("p");
+        empty.className = "text-sm text-gray-500";
+        empty.textContent = configData ? "No strategies defined" : "Loading config...";
+        wrapper.appendChild(empty);
+        strategiesView.appendChild(wrapper);
+        return;
+      }
+
+      var grid = document.createElement("div");
+      grid.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3";
+
+      stratList.forEach(function(entry) {
+        var sid = entry[0];
+        var s = entry[1];
+        var card = document.createElement("div");
+        card.className = "bg-f-surface border border-f-border rounded-xl p-4 space-y-2";
+
+        var header = document.createElement("div");
+        header.className = "flex items-center justify-between";
+        var name = document.createElement("span");
+        name.className = "text-sm font-semibold text-gray-200";
+        name.textContent = s.display_name || sid;
+        header.appendChild(name);
+
+        if (s.tags && s.tags.length) {
+          var tagWrap = document.createElement("div");
+          tagWrap.className = "flex gap-1";
+          s.tags.forEach(function(t) {
+            var tag = document.createElement("span");
+            tag.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded";
+            tag.textContent = t;
+            tagWrap.appendChild(tag);
+          });
+          header.appendChild(tagWrap);
+        }
+        card.appendChild(header);
+
+        if (s.description) {
+          var desc = document.createElement("p");
+          desc.className = "text-xs text-gray-500";
+          desc.textContent = s.description;
+          card.appendChild(desc);
+        }
+
+        var badges = document.createElement("div");
+        badges.className = "flex flex-wrap gap-1";
+        ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+          if (!s[stage]) return;
+          var colors = STAGE_COLORS[stage];
+          var badge = document.createElement("span");
+          badge.className = "text-[9px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
+          badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
+          badges.appendChild(badge);
+        });
+        if (s.sim) {
+          var simBadge = document.createElement("span");
+          simBadge.className = "text-[9px] bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded";
+          simBadge.textContent = "Sim: " + s.sim;
+          badges.appendChild(simBadge);
+        }
+        card.appendChild(badges);
+
+        grid.appendChild(card);
+      });
+
+      wrapper.appendChild(grid);
+      strategiesView.appendChild(wrapper);
+    }
+
+    // ---- Models view (from configData, grouped by type) ----
+    async function loadModels() {
+      try {
+        var res = await fetch(API_BASE + "/api/models");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        modelsData = await res.json();
+      } catch (e) {
+        console.error("Failed to load models:", e);
+      }
+    }
+
+    function renderModelsView() {
+      modelsView.textContent = "";
+      var wrapper = document.createElement("div");
+      wrapper.className = "max-w-4xl mx-auto";
+
+      var heading = document.createElement("h2");
+      heading.className = "text-lg font-semibold mb-1";
+      heading.textContent = "Model Registry";
+      wrapper.appendChild(heading);
+
+      var endpoints = configData && configData.endpoints ? configData.endpoints : null;
+      if (!endpoints) {
+        var subtitle = document.createElement("p");
+        subtitle.className = "text-[13px] text-gray-500 mb-4";
+        subtitle.textContent = "Loading config...";
+        wrapper.appendChild(subtitle);
+        modelsView.appendChild(wrapper);
+        return;
+      }
+
+      // Regroup flat endpoints by type
+      var grouped = {};
+      Object.entries(endpoints).forEach(function(e) {
+        var id = e[0], ep = e[1], t = ep.type || "unknown";
+        if (!grouped[t]) grouped[t] = {};
+        grouped[t][id] = ep;
+      });
+
+      var totalCount = Object.keys(endpoints).length;
+      var subtitle2 = document.createElement("p");
+      subtitle2.className = "text-[13px] text-gray-500 mb-4";
+      subtitle2.textContent = totalCount + " endpoints defined in rove.yaml";
+      wrapper.appendChild(subtitle2);
+
+      var typeLabels = { vlm: "VLM (Vision-Language)", vla: "VLA (Vision-Language-Action)", llm: "LLM (Language)", grounding: "Grounding", agent: "Agent", sim: "Simulation" };
+      var typeIcons = { vlm: "eye", vla: "bot", llm: "brain", grounding: "crosshair", agent: "workflow", sim: "box" };
+
+      Object.keys(typeLabels).forEach(function(type) {
+        var group = grouped[type];
+        if (!group || typeof group !== "object") return;
+        var entries = Object.entries(group);
+        if (entries.length === 0) return;
+
+        var section = document.createElement("div");
+        section.className = "mb-6";
+
+        var sectionHeader = document.createElement("h3");
+        sectionHeader.className = "text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2";
+        var icon = document.createElement("i");
+        icon.setAttribute("data-lucide", typeIcons[type] || "cpu");
+        icon.className = "w-4 h-4 text-gray-500";
+        sectionHeader.appendChild(icon);
+        var labelSpan = document.createElement("span");
+        labelSpan.textContent = typeLabels[type] || type;
+        sectionHeader.appendChild(labelSpan);
+        var countSpan = document.createElement("span");
+        countSpan.className = "text-[10px] text-gray-600";
+        countSpan.textContent = "(" + entries.length + ")";
+        sectionHeader.appendChild(countSpan);
+        section.appendChild(sectionHeader);
+
+        var grid = document.createElement("div");
+        grid.className = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2";
+
+        entries.forEach(function(entry) {
+          var mid = entry[0];
+          var m = entry[1];
+          var card = document.createElement("div");
+          card.className = "bg-f-surface border border-f-border rounded-lg p-3 space-y-1.5";
+
+          var row = document.createElement("div");
+          row.className = "flex items-center justify-between";
+          var nameSpan = document.createElement("span");
+          nameSpan.className = "text-xs font-semibold text-gray-200";
+          nameSpan.textContent = m.display_name || mid;
+          row.appendChild(nameSpan);
+
+          var statusDot = document.createElement("span");
+          var isAvail = m.adapter && m.adapter.startsWith("mock");
+          statusDot.className = "inline-block w-2 h-2 rounded-full " + (isAvail ? "bg-green-500" : "bg-gray-600");
+          statusDot.title = isAvail ? "Available (mock)" : "Requires setup";
+          row.appendChild(statusDot);
+          card.appendChild(row);
+
+          var idSpan = document.createElement("span");
+          idSpan.className = "text-[10px] text-gray-600 font-mono block";
+          idSpan.textContent = mid;
+          card.appendChild(idSpan);
+
+          if (m.adapter) {
+            var adapterBadge = document.createElement("span");
+            adapterBadge.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded inline-block";
+            adapterBadge.textContent = m.adapter;
+            card.appendChild(adapterBadge);
+          }
+
+          grid.appendChild(card);
+        });
+
+        section.appendChild(grid);
+        wrapper.appendChild(section);
+      });
+
+      modelsView.appendChild(wrapper);
+      lucide.createIcons({ nodes: [wrapper] });
+    }
+
+    // ---- Settings view (full rove.yaml pretty render) ----
+    function makeSectionHeader(iconName, text) {
+      var h = document.createElement("h3");
+      h.className = "text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2";
+      var icon = document.createElement("i");
+      icon.setAttribute("data-lucide", iconName);
+      icon.className = "w-4 h-4 text-gray-500";
+      h.appendChild(icon);
+      var span = document.createElement("span");
+      span.textContent = text;
+      h.appendChild(span);
+      return h;
+    }
+
+    function renderSettingsView() {
+      settingsView.textContent = "";
+      var wrapper = document.createElement("div");
+      wrapper.className = "max-w-3xl mx-auto";
+
+      var heading = document.createElement("h2");
+      heading.className = "text-lg font-semibold mb-1";
+      heading.textContent = "Configuration";
+      wrapper.appendChild(heading);
+
+      var subtitle = document.createElement("p");
+      subtitle.className = "text-[13px] text-gray-500 mb-4";
+      subtitle.textContent = "Full rove.yaml rendered from /api/config";
+      wrapper.appendChild(subtitle);
+
+      if (!configData) {
+        var loading = document.createElement("p");
+        loading.className = "text-sm text-gray-500";
+        loading.textContent = "Loading config...";
+        wrapper.appendChild(loading);
+        settingsView.appendChild(wrapper);
+        return;
+      }
+
+      // --- Defaults section ---
+      if (configData.defaults) {
+        var defSection = document.createElement("div");
+        defSection.className = "mb-6";
+        defSection.appendChild(makeSectionHeader("sliders", "Defaults"));
+        var defCard = document.createElement("div");
+        defCard.className = "bg-f-surface border border-f-border rounded-lg p-3 space-y-1";
+        Object.entries(configData.defaults).forEach(function(entry) {
+          var row = document.createElement("div");
+          row.className = "flex items-center gap-2";
+          var lbl = document.createElement("span");
+          lbl.className = "text-xs text-gray-400 w-36 shrink-0 font-mono";
+          lbl.textContent = entry[0];
+          row.appendChild(lbl);
+          var val = document.createElement("span");
+          val.className = "text-xs text-gray-200";
+          val.textContent = typeof entry[1] === "object" ? JSON.stringify(entry[1]) : String(entry[1]);
+          row.appendChild(val);
+          defCard.appendChild(row);
+        });
+        defSection.appendChild(defCard);
+        wrapper.appendChild(defSection);
+      }
+
+      // --- Endpoints section (compact rows grouped by type) ---
+      if (configData.endpoints) {
+        var modSection = document.createElement("div");
+        modSection.className = "mb-6";
+        modSection.appendChild(makeSectionHeader("cpu", "Endpoints"));
+
+        // Regroup flat endpoints by type for settings display
+        var settingsGrouped = {};
+        Object.entries(configData.endpoints).forEach(function(e) {
+          var eid = e[0], ep = e[1], t = ep.type || "unknown";
+          if (!settingsGrouped[t]) settingsGrouped[t] = {};
+          settingsGrouped[t][eid] = ep;
+        });
+
+        Object.entries(settingsGrouped).forEach(function(typeEntry) {
+          var type = typeEntry[0];
+          var group = typeEntry[1];
+          if (!group || typeof group !== "object") return;
+          var entries = Object.entries(group);
+          if (entries.length === 0) return;
+
+          var typeLabel = document.createElement("p");
+          typeLabel.className = "text-[11px] text-gray-500 font-semibold mt-3 mb-1 uppercase tracking-wide";
+          typeLabel.textContent = type + " (" + entries.length + ")";
+          modSection.appendChild(typeLabel);
+
+          entries.forEach(function(mEntry) {
+            var mid = mEntry[0];
+            var m = mEntry[1];
+            var row = document.createElement("div");
+            row.className = "bg-f-surface border border-f-border rounded-md px-3 py-1.5 flex items-center gap-3 mb-1";
+            var idSpan = document.createElement("span");
+            idSpan.className = "text-xs font-mono text-gray-200 w-44 shrink-0 truncate";
+            idSpan.textContent = mid;
+            idSpan.title = mid;
+            row.appendChild(idSpan);
+            var nameSpan = document.createElement("span");
+            nameSpan.className = "text-xs text-gray-400 flex-1 truncate";
+            nameSpan.textContent = m.display_name || "";
+            row.appendChild(nameSpan);
+            if (m.adapter) {
+              var adBadge = document.createElement("span");
+              adBadge.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded shrink-0";
+              adBadge.textContent = m.adapter;
+              row.appendChild(adBadge);
+            }
+            var dot = document.createElement("span");
+            var isAvail = m.adapter && m.adapter.startsWith("mock");
+            dot.className = "inline-block w-2 h-2 rounded-full shrink-0 " + (isAvail ? "bg-green-500" : "bg-gray-600");
+            row.appendChild(dot);
+            modSection.appendChild(row);
+          });
+        });
+        wrapper.appendChild(modSection);
+      }
+
+      // --- Strategies section (compact cards) ---
+      if (configData.strategies) {
+        var stratSection = document.createElement("div");
+        stratSection.className = "mb-6";
+        stratSection.appendChild(makeSectionHeader("layers", "Strategies"));
+
+        Object.entries(configData.strategies).forEach(function(sEntry) {
+          var sid = sEntry[0];
+          var s = sEntry[1];
+          var row = document.createElement("div");
+          row.className = "bg-f-surface border border-f-border rounded-md px-3 py-2 mb-1";
+          var top = document.createElement("div");
+          top.className = "flex items-center gap-2 mb-1";
+          var nameSpan = document.createElement("span");
+          nameSpan.className = "text-xs font-semibold text-gray-200";
+          nameSpan.textContent = s.display_name || sid;
+          top.appendChild(nameSpan);
+          if (s.description) {
+            var descSpan = document.createElement("span");
+            descSpan.className = "text-[10px] text-gray-500 truncate flex-1";
+            descSpan.textContent = "— " + s.description;
+            top.appendChild(descSpan);
+          }
+          row.appendChild(top);
+
+          var badges = document.createElement("div");
+          badges.className = "flex flex-wrap gap-1";
+          ["perceive", "plan", "act", "verify", "sim"].forEach(function(stage) {
+            if (!s[stage]) return;
+            var colors = STAGE_COLORS[stage] || { bg: "bg-blue-500/15", text: "text-blue-300" };
+            var badge = document.createElement("span");
+            badge.className = "text-[9px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
+            badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
+            badges.appendChild(badge);
+          });
+          row.appendChild(badges);
+          stratSection.appendChild(row);
+        });
+        wrapper.appendChild(stratSection);
+      }
+
+      // --- Connection info ---
+      var connSection = document.createElement("div");
+      connSection.className = "mb-6";
+      connSection.appendChild(makeSectionHeader("wifi", "Session"));
+      var connCard = document.createElement("div");
+      connCard.className = "bg-f-surface border border-f-border rounded-lg p-3 space-y-1";
+      [
+        ["API endpoint", API_BASE],
+        ["Connection", connLabel.textContent],
+        ["Evaluations", runHistory.length + " this session"],
+      ].forEach(function(pair) {
+        var row = document.createElement("div");
+        row.className = "flex items-center gap-2";
+        var lbl = document.createElement("span");
+        lbl.className = "text-xs text-gray-400 w-36 shrink-0";
+        lbl.textContent = pair[0];
+        row.appendChild(lbl);
+        var val = document.createElement("span");
+        val.className = "text-xs text-gray-200";
+        val.textContent = pair[1];
+        row.appendChild(val);
+        connCard.appendChild(row);
+      });
+      connSection.appendChild(connCard);
+      wrapper.appendChild(connSection);
+
+      settingsView.appendChild(wrapper);
+      lucide.createIcons({ nodes: [wrapper] });
+    }
+
+    // ---- Run history ----
+    function addToHistory(evalId, task, strategyIds) {
+      var entry = {
+        id: evalId,
+        task: task,
+        strategyIds: strategyIds,
+        timestamp: new Date(),
+        status: "running",
+      };
+      runHistory.push(entry);
+      activeHistoryIndex = runHistory.length - 1;
+      renderHistory();
+    }
+
+    function updateHistoryStatus(evalId, status) {
+      var entry = runHistory.find(function(e) { return e.id === evalId; });
+      if (entry) {
+        entry.status = status;
+        renderHistory();
+      }
+    }
+
+    function renderHistory() {
+      historyList.textContent = "";
+      if (runHistory.length === 0) {
+        var empty = document.createElement("div");
+        empty.className = "px-3 py-2 text-[11px] text-gray-600 italic";
+        empty.textContent = "No evaluations yet";
+        historyList.appendChild(empty);
+        return;
+      }
+
+      runHistory.slice().reverse().forEach(function(entry, reversedIdx) {
+        var idx = runHistory.length - 1 - reversedIdx;
+        var item = document.createElement("div");
+        item.className = "history-item sidebar-item flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[12px]";
+        if (idx === activeHistoryIndex) {
+          item.classList.add("active", "bg-f-surface");
+        }
+
+        // Status dot
+        var dot = document.createElement("span");
+        var dotColor = entry.status === "running" ? "bg-purple-500 pulse-purple" :
+                       entry.status === "completed" ? "bg-green-500" : "bg-red-500";
+        dot.className = "w-2 h-2 rounded-full shrink-0 " + dotColor;
+        item.appendChild(dot);
+
+        // Task text (truncated)
+        var textSpan = document.createElement("span");
+        textSpan.className = "text-gray-300 truncate flex-1";
+        textSpan.textContent = entry.task.length > 30 ? entry.task.substring(0, 30) + "..." : entry.task;
+        textSpan.title = entry.task;
+        item.appendChild(textSpan);
+
+        // Time
+        var timeSpan = document.createElement("span");
+        timeSpan.className = "text-[10px] text-gray-600 shrink-0";
+        var h = entry.timestamp.getHours().toString().padStart(2, "0");
+        var m = entry.timestamp.getMinutes().toString().padStart(2, "0");
+        timeSpan.textContent = h + ":" + m;
+        item.appendChild(timeSpan);
+
+        item.addEventListener("click", function() {
+          showHistoryEntry(idx);
+        });
+
+        historyList.appendChild(item);
+      });
+    }
+
+    function showHistoryEntry(idx) {
+      activeHistoryIndex = idx;
+      var entry = runHistory[idx];
+      if (!entry) return;
+
+      // Clear sidebar nav active state
+      document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
+
+      // Update history active state
+      document.querySelectorAll(".history-item").forEach(function(item, i) {
+        // History is rendered in reverse, so reverse the index comparison
+        var actualIdx = runHistory.length - 1 - i;
+        if (actualIdx === idx) {
+          item.classList.add("active", "bg-f-surface");
+        } else {
+          item.classList.remove("active", "bg-f-surface");
+        }
+      });
+
+      // Show evaluation content
+      currentView = "evaluation";
+      welcomeMsg.classList.add("hidden");
+      strategiesView.classList.add("hidden");
+      modelsView.classList.add("hidden");
+      settingsView.classList.add("hidden");
+
+      // Restore tab data
+      var ids = entry.strategyIds;
+      if (ids.length > 1) {
+        tabBar.classList.remove("hidden");
+        // Rebuild tab buttons
+        tabBar.textContent = "";
+
+        // Summary tab
+        var summaryTab = document.createElement("button");
+        summaryTab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
+        summaryTab.setAttribute("data-tab-id", "__summary__");
+        var sIcon = document.createElement("i");
+        sIcon.setAttribute("data-lucide", "layout-grid");
+        sIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
+        summaryTab.appendChild(sIcon);
+        var sLabel = document.createElement("span");
+        sLabel.textContent = "Summary";
+        summaryTab.appendChild(sLabel);
+        summaryTab.addEventListener("click", function() { switchTab("__summary__"); });
+        tabBar.appendChild(summaryTab);
+
+        ids.forEach(function(sid, i) {
+          var tab = document.createElement("button");
+          tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
+          tab.setAttribute("data-tab-id", sid);
+
+          var strat = strategies.find(function(s) { return s.id === sid; });
+          var displayName = strat ? strat.display_name : sid;
+          var nameSpan = document.createElement("span");
+          nameSpan.textContent = displayName;
+          tab.appendChild(nameSpan);
+
+          if (tabData[sid]) {
+            var statusBadge = document.createElement("span");
+            statusBadge.className = "ml-2 text-[10px] px-1.5 py-0.5 rounded";
+            var st = tabData[sid].status;
+            if (st === "completed") {
+              statusBadge.className += " bg-green-500/15 text-green-400";
+              statusBadge.textContent = "completed";
+            } else if (st === "error" || st === "failed") {
+              statusBadge.className += " bg-red-500/15 text-red-400";
+              statusBadge.textContent = "error";
+            } else {
+              statusBadge.className += " bg-f-purple/20 text-purple-300";
+              statusBadge.textContent = "running";
+            }
+            tab.appendChild(statusBadge);
+          }
+
+          tab.addEventListener("click", function() { switchTab(sid); });
+          tabBar.appendChild(tab);
+        });
+
+        // Default to summary tab
+        var showSid = activeTabId || "__summary__";
+        document.querySelectorAll(".strategy-tab").forEach(function(t) {
+          if (t.getAttribute("data-tab-id") === showSid) t.classList.add("active");
+        });
+        chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
+        if (showSid === "__summary__" && summaryEl) {
+          chatArea.appendChild(summaryEl);
+        } else if (tabData[showSid]) {
+          chatArea.appendChild(tabData[showSid].el);
+        }
+        activeTabId = showSid;
+        lucide.createIcons({ nodes: [tabBar] });
+      } else {
+        tabBar.classList.add("hidden");
+        var showSid2 = ids[0];
+        chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
+        if (tabData[showSid2]) {
+          chatArea.appendChild(tabData[showSid2].el);
+        }
+        activeTabId = showSid2;
+      }
+    }
 
     // ---- Config panel toggle ----
     function initConfigPanel() {
-      var collapsed = false;
+      var collapsed = true;
+      configChevron.style.transform = "rotate(180deg)";
       configToggle.addEventListener("click", function() {
         collapsed = !collapsed;
         configContent.style.display = collapsed ? "none" : "";
@@ -372,73 +1297,129 @@
     function renderStrategyCards() {
       strategyGrid.textContent = "";
       strategies.forEach(function(s) {
-        var card = document.createElement("div");
-        card.className = "strategy-card bg-rove-card border border-rove-border rounded-lg p-2.5 cursor-pointer";
-        card.setAttribute("data-strategy-id", s.id);
+        var chip = document.createElement("div");
+        chip.className = "strategy-chip bg-f-surface border border-f-border rounded-full px-3 py-1.5 cursor-pointer flex items-center gap-1.5";
+        chip.setAttribute("data-strategy-id", s.id);
 
-        // Header
-        var header = document.createElement("div");
-        header.className = "flex items-center justify-between mb-1.5";
+        // Checkmark (hidden when not selected)
+        var checkWrap = document.createElement("span");
+        checkWrap.className = "check-icon w-3.5 h-3.5 rounded-full bg-f-purple items-center justify-center shrink-0";
+        var checkSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        checkSvg.setAttribute("width", "8");
+        checkSvg.setAttribute("height", "8");
+        checkSvg.setAttribute("viewBox", "0 0 24 24");
+        checkSvg.setAttribute("fill", "none");
+        checkSvg.setAttribute("stroke", "white");
+        checkSvg.setAttribute("stroke-width", "3");
+        checkSvg.setAttribute("stroke-linecap", "round");
+        checkSvg.setAttribute("stroke-linejoin", "round");
+        var checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        checkPath.setAttribute("d", "M20 6L9 17l-5-5");
+        checkSvg.appendChild(checkPath);
+        checkWrap.appendChild(checkSvg);
+        chip.appendChild(checkWrap);
+
         var nameSpan = document.createElement("span");
-        nameSpan.className = "text-[11px] font-semibold text-gray-200";
+        nameSpan.className = "text-[11px] font-medium text-gray-200 whitespace-nowrap";
         nameSpan.textContent = s.display_name;
-        header.appendChild(nameSpan);
-        // Tags
+        chip.appendChild(nameSpan);
+
+        // Tag count (subtle)
         if (s.tags && s.tags.length) {
-          var tagWrap = document.createElement("div");
-          tagWrap.className = "flex gap-1";
-          s.tags.slice(0, 2).forEach(function(t) {
-            var tag = document.createElement("span");
-            tag.className = "text-[8px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full";
-            tag.textContent = t;
-            tagWrap.appendChild(tag);
-          });
-          header.appendChild(tagWrap);
+          var tagDot = document.createElement("span");
+          tagDot.className = "w-1.5 h-1.5 rounded-full bg-gray-600 shrink-0";
+          chip.appendChild(tagDot);
+          var tagSpan = document.createElement("span");
+          tagSpan.className = "text-[9px] text-gray-500";
+          tagSpan.textContent = s.tags[0];
+          chip.appendChild(tagSpan);
         }
-        card.appendChild(header);
 
-        // Description
-        var desc = document.createElement("p");
-        desc.className = "text-[9px] text-gray-500 mb-2";
-        desc.textContent = s.description;
-        card.appendChild(desc);
+        // Hover popover with stage→model detail
+        var popover = document.createElement("div");
+        popover.className = "chip-popover";
 
-        // Model badges
-        var badges = document.createElement("div");
-        badges.className = "flex flex-wrap gap-1";
+        // Popover header
+        var popName = document.createElement("div");
+        popName.className = "text-[11px] font-semibold text-gray-200 mb-1";
+        popName.textContent = s.display_name;
+        popover.appendChild(popName);
+
+        if (s.description) {
+          var popDesc = document.createElement("div");
+          popDesc.className = "text-[10px] text-gray-500 mb-2";
+          popDesc.textContent = s.description;
+          popover.appendChild(popDesc);
+        }
+
+        // Stage → model rows
+        var stageList = document.createElement("div");
+        stageList.className = "space-y-1";
         ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+          if (!s[stage]) return;
           var colors = STAGE_COLORS[stage];
-          var badge = document.createElement("span");
-          badge.className = "text-[8px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded-full";
-          badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
-          badges.appendChild(badge);
+          var row = document.createElement("div");
+          row.className = "flex items-center gap-2";
+          var dot = document.createElement("span");
+          dot.className = "w-1.5 h-1.5 rounded-full shrink-0";
+          if (stage === "perceive" || stage === "plan") dot.style.background = "#a855f7";
+          else if (stage === "act") dot.style.background = "#10b981";
+          else dot.style.background = "#f59e0b";
+          row.appendChild(dot);
+          var label = document.createElement("span");
+          label.className = "text-[9px] uppercase tracking-wider w-[38px] shrink-0 " + colors.text;
+          label.textContent = stage.slice(0, 4);
+          row.appendChild(label);
+          var model = document.createElement("span");
+          model.className = "text-[10px] text-gray-300 font-mono truncate";
+          model.textContent = s[stage];
+          row.appendChild(model);
+          stageList.appendChild(row);
         });
-        card.appendChild(badges);
+        if (s.sim) {
+          var simRow = document.createElement("div");
+          simRow.className = "flex items-center gap-2";
+          var simDot = document.createElement("span");
+          simDot.className = "w-1.5 h-1.5 rounded-full shrink-0";
+          simDot.style.background = "#3b82f6";
+          simRow.appendChild(simDot);
+          var simLabel = document.createElement("span");
+          simLabel.className = "text-[9px] uppercase tracking-wider w-[38px] shrink-0 text-blue-300";
+          simLabel.textContent = "sim";
+          simRow.appendChild(simLabel);
+          var simModel = document.createElement("span");
+          simModel.className = "text-[10px] text-gray-300 font-mono truncate";
+          simModel.textContent = s.sim;
+          simRow.appendChild(simModel);
+          stageList.appendChild(simRow);
+        }
+        popover.appendChild(stageList);
+
+        chip.appendChild(popover);
 
         // Click handler
-        card.addEventListener("click", function() {
+        chip.addEventListener("click", function() {
           if (selectedStrategyIds.has(s.id)) {
             selectedStrategyIds.delete(s.id);
           } else {
             selectedStrategyIds.add(s.id);
           }
-          // Keep mock toggle in sync
           mockToggle.checked = selectedStrategyIds.has("mock") && selectedStrategyIds.size === 1;
           updateStrategyCards();
           updateSelectedCount();
         });
 
-        strategyGrid.appendChild(card);
+        strategyGrid.appendChild(chip);
       });
     }
 
     function updateStrategyCards() {
-      document.querySelectorAll(".strategy-card").forEach(function(card) {
-        var sid = card.getAttribute("data-strategy-id");
+      document.querySelectorAll(".strategy-chip").forEach(function(chip) {
+        var sid = chip.getAttribute("data-strategy-id");
         if (selectedStrategyIds.has(sid)) {
-          card.classList.add("selected");
+          chip.classList.add("selected");
         } else {
-          card.classList.remove("selected");
+          chip.classList.remove("selected");
         }
       });
     }
@@ -471,7 +1452,7 @@
       imagePreview.classList.add("hidden");
     });
 
-    // ---- Auto-resize textarea ----
+    // ---- Auto-resize textarea + keyboard shortcuts ----
     function autoResizeTextarea() {
       taskInput.addEventListener("input", function() {
         taskInput.style.height = "auto";
@@ -482,6 +1463,14 @@
           e.preventDefault();
           evalBtn.click();
         }
+        // Tab to fill sample question
+        if (e.key === "Tab" && taskInput.value.trim() === "") {
+          e.preventDefault();
+          taskInput.value = SAMPLE_QUESTIONS[sampleIndex % SAMPLE_QUESTIONS.length];
+          sampleIndex++;
+          taskInput.style.height = "auto";
+          taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
+        }
       });
     }
 
@@ -491,20 +1480,23 @@
       if (!task || !selectedFile || isRunning || selectedStrategyIds.size === 0) return;
 
       setRunning(true);
-      hideWelcome();
-      resetSidebar();
 
-      // Prepare tabs
       var ids = Array.from(selectedStrategyIds);
-      setupTabs(ids);
 
-      // Add user bubble
-      addUserBubble(previewImg.src, task, ids);
+      // Switch to evaluation view
+      currentView = "evaluation";
+      welcomeMsg.classList.add("hidden");
+      strategiesView.classList.add("hidden");
+      modelsView.classList.add("hidden");
+      settingsView.classList.add("hidden");
+      document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
+
+      setupTabs(ids);
+      addUserCard(previewImg.src, task, ids);
 
       taskInput.value = "";
-      taskInput.style.height = "auto";
+      taskInput.style.height = "38px";
 
-      // POST evaluate with strategy_ids
       var form = new FormData();
       form.append("image", selectedFile);
       form.append("task", task);
@@ -514,6 +1506,10 @@
         var res = await fetch(API_BASE + "/api/evaluate", { method: "POST", body: form });
         if (!res.ok) throw new Error("HTTP " + res.status);
         var body = await res.json();
+
+        // Track in history
+        addToHistory(body.eval_id, task, ids);
+
         connectSSE(body.eval_id);
       } catch (e) {
         console.error("Evaluate failed:", e);
@@ -527,13 +1523,31 @@
       tabBar.textContent = "";
       tabData = {};
       activeTabId = null;
+      summaryResults = {};
+      summaryEl = null;
+
+      // Initialize summary results for each strategy
+      strategyIds.forEach(function(sid) {
+        summaryResults[sid] = {
+          status: "running",
+          success: null,
+          latency_ms: null,
+          currentStage: null,
+          stageStatuses: { perceive: "pending", plan: "pending", act: "pending", verify: "pending" }
+        };
+      });
+
+      // Clear chat area but keep persistent views
+      chatArea.textContent = "";
+      chatArea.appendChild(welcomeMsg);
+      chatArea.appendChild(strategiesView);
+      chatArea.appendChild(modelsView);
+      chatArea.appendChild(settingsView);
 
       if (strategyIds.length <= 1) {
-        // Single strategy — no tab bar needed
         tabBar.classList.add("hidden");
         var sid = strategyIds[0];
         var container = createTabContainer(sid);
-        chatArea.textContent = "";
         chatArea.appendChild(container);
         tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
         activeTabId = sid;
@@ -542,10 +1556,29 @@
 
       tabBar.classList.remove("hidden");
 
-      strategyIds.forEach(function(sid, i) {
-        // Create tab button
+      // Create Summary tab (first)
+      var summaryTab = document.createElement("button");
+      summaryTab.className = "strategy-tab active px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
+      summaryTab.setAttribute("data-tab-id", "__summary__");
+      var summaryIcon = document.createElement("i");
+      summaryIcon.setAttribute("data-lucide", "layout-grid");
+      summaryIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
+      summaryTab.appendChild(summaryIcon);
+      var summaryLabel = document.createElement("span");
+      summaryLabel.textContent = "Summary";
+      summaryTab.appendChild(summaryLabel);
+      summaryTab.addEventListener("click", function() { switchTab("__summary__"); });
+      tabBar.appendChild(summaryTab);
+
+      // Create summary container
+      summaryEl = document.createElement("div");
+      summaryEl.className = "space-y-3";
+      summaryEl.id = "tab-content-__summary__";
+
+      // Strategy tabs
+      strategyIds.forEach(function(sid) {
         var tab = document.createElement("button");
-        tab.className = "strategy-tab px-4 py-2 text-xs text-gray-400 border-b-2 border-transparent whitespace-nowrap";
+        tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
         tab.setAttribute("data-tab-id", sid);
 
         var strat = strategies.find(function(s) { return s.id === sid; });
@@ -556,35 +1589,33 @@
         tab.appendChild(nameSpan);
 
         var statusBadge = document.createElement("span");
-        statusBadge.className = "ml-2 text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-full";
+        statusBadge.className = "ml-2 text-[10px] bg-f-purple/20 text-purple-300 px-1.5 py-0.5 rounded";
         statusBadge.textContent = "running";
         statusBadge.id = "tab-status-" + sid;
         tab.appendChild(statusBadge);
 
         var latencyBadge = document.createElement("span");
-        latencyBadge.className = "ml-1 text-[9px] text-gray-500 hidden";
+        latencyBadge.className = "ml-1 text-[10px] text-gray-500 hidden";
         latencyBadge.id = "tab-latency-" + sid;
         tab.appendChild(latencyBadge);
 
         tab.addEventListener("click", function() { switchTab(sid); });
         tabBar.appendChild(tab);
 
-        // Create tab content container
         var container = createTabContainer(sid);
         tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
-
-        if (i === 0) {
-          activeTabId = sid;
-          tab.classList.add("active");
-          chatArea.textContent = "";
-          chatArea.appendChild(container);
-        }
       });
+
+      // Show summary tab by default
+      activeTabId = "__summary__";
+      chatArea.appendChild(summaryEl);
+      updateSummaryTable(strategyIds);
+      lucide.createIcons({ nodes: [tabBar] });
     }
 
     function createTabContainer(sid) {
       var div = document.createElement("div");
-      div.className = "space-y-4";
+      div.className = "space-y-3";
       div.id = "tab-content-" + sid;
       return div;
     }
@@ -592,7 +1623,6 @@
     function switchTab(sid) {
       if (sid === activeTabId) return;
 
-      // Update tab buttons
       document.querySelectorAll(".strategy-tab").forEach(function(t) {
         if (t.getAttribute("data-tab-id") === sid) {
           t.classList.add("active");
@@ -601,20 +1631,15 @@
         }
       });
 
-      // Swap content
-      chatArea.textContent = "";
-      if (tabData[sid]) {
+      // Remove old tab content but keep persistent views
+      chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
+
+      if (sid === "__summary__" && summaryEl) {
+        chatArea.appendChild(summaryEl);
+      } else if (tabData[sid]) {
         chatArea.appendChild(tabData[sid].el);
       }
       activeTabId = sid;
-
-      // Update sidebar for this tab
-      resetSidebar();
-      if (tabData[sid]) {
-        Object.keys(tabData[sid].stages).forEach(function(stage) {
-          updateSidebar(stage, tabData[sid].stages[stage]);
-        });
-      }
 
       scrollToBottom();
     }
@@ -624,9 +1649,9 @@
       if (badge) {
         badge.textContent = status;
         if (status === "completed") {
-          badge.className = "ml-2 text-[9px] bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full";
+          badge.className = "ml-2 text-[10px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded";
         } else if (status === "error" || status === "failed") {
-          badge.className = "ml-2 text-[9px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded-full";
+          badge.className = "ml-2 text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded";
         }
       }
       if (latencyMs != null) {
@@ -637,6 +1662,116 @@
         }
       }
       if (tabData[sid]) tabData[sid].status = status;
+    }
+
+    // ---- Summary table ----
+    function updateSummaryTable(strategyIds) {
+      if (!summaryEl) return;
+      var ids = strategyIds || Object.keys(summaryResults);
+
+      // Find or create summary table wrapper
+      var tableWrap = summaryEl.querySelector(".summary-table-wrap");
+      if (!tableWrap) {
+        tableWrap = document.createElement("div");
+        tableWrap.className = "summary-table-wrap bg-f-surface border border-f-border rounded-xl overflow-hidden";
+        summaryEl.appendChild(tableWrap);
+      }
+
+      tableWrap.textContent = "";
+
+      // Table header
+      var headerRow = document.createElement("div");
+      headerRow.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
+      ["Strategy", "Status", "Result", "Latency", "Stages"].forEach(function(h) {
+        var cell = document.createElement("span");
+        cell.textContent = h;
+        headerRow.appendChild(cell);
+      });
+      tableWrap.appendChild(headerRow);
+
+      // Table rows
+      ids.forEach(function(sid) {
+        var sr = summaryResults[sid];
+        if (!sr) return;
+        var strat = strategies.find(function(s) { return s.id === sid; });
+        var displayName = strat ? strat.display_name : sid;
+
+        var row = document.createElement("div");
+        row.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
+        row.addEventListener("click", function() { switchTab(sid); });
+
+        // Strategy name
+        var nameCell = document.createElement("span");
+        nameCell.className = "text-xs text-gray-200 font-medium truncate";
+        nameCell.textContent = displayName;
+        row.appendChild(nameCell);
+
+        // Status with colored dot
+        var statusCell = document.createElement("div");
+        statusCell.className = "flex items-center gap-1.5";
+        var statusDot = document.createElement("span");
+        var statusText = document.createElement("span");
+        statusText.className = "text-[11px]";
+        if (sr.status === "completed") {
+          statusDot.className = "w-2 h-2 rounded-full bg-green-500 shrink-0";
+          statusText.className += " text-green-400";
+          statusText.textContent = "done";
+        } else if (sr.status === "error") {
+          statusDot.className = "w-2 h-2 rounded-full bg-red-500 shrink-0";
+          statusText.className += " text-red-400";
+          statusText.textContent = "error";
+        } else {
+          statusDot.className = "w-2 h-2 rounded-full bg-purple-500 pulse-purple shrink-0";
+          statusText.className += " text-purple-300";
+          statusText.textContent = sr.currentStage ? sr.currentStage + "..." : "waiting";
+        }
+        statusCell.appendChild(statusDot);
+        statusCell.appendChild(statusText);
+        row.appendChild(statusCell);
+
+        // Result (success/fail)
+        var resultCell = document.createElement("span");
+        if (sr.success === true) {
+          resultCell.className = "text-[11px] text-green-400 font-semibold";
+          resultCell.textContent = "Pass";
+        } else if (sr.success === false) {
+          resultCell.className = "text-[11px] text-red-400 font-semibold";
+          resultCell.textContent = "Fail";
+        } else {
+          resultCell.className = "text-[11px] text-gray-600";
+          resultCell.textContent = "—";
+        }
+        row.appendChild(resultCell);
+
+        // Latency
+        var latCell = document.createElement("span");
+        latCell.className = "text-[11px] font-mono " + (sr.latency_ms != null ? "text-gray-300" : "text-gray-600");
+        latCell.textContent = sr.latency_ms != null ? Math.round(sr.latency_ms) + "ms" : "—";
+        row.appendChild(latCell);
+
+        // Stage progress dots
+        var dotsCell = document.createElement("div");
+        dotsCell.className = "flex items-center gap-2";
+        ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+          var dotWrap = document.createElement("div");
+          dotWrap.className = "flex items-center gap-1";
+          var dot = document.createElement("span");
+          var stageStatus = sr.stageStatuses[stage];
+          dot.className = "stage-dot";
+          if (stageStatus === "running") dot.classList.add("running");
+          else if (stageStatus === "completed") dot.classList.add("done");
+          else if (stageStatus === "error") dot.classList.add("error");
+          dotWrap.appendChild(dot);
+          var dotLabel = document.createElement("span");
+          dotLabel.className = "text-[9px] text-gray-600";
+          dotLabel.textContent = stage.charAt(0).toUpperCase();
+          dotWrap.appendChild(dotLabel);
+          dotsCell.appendChild(dotWrap);
+        });
+        row.appendChild(dotsCell);
+
+        tableWrap.appendChild(row);
+      });
     }
 
     // ---- SSE connection ----
@@ -654,22 +1789,35 @@
 
         if (!tabData[sid]) return;
 
-        // Track stage status for sidebar
         tabData[sid].stages[stage] = status;
 
-        // Update sidebar only if this is the active tab
-        if (sid === activeTabId) {
-          updateSidebar(stage, status);
+        // Update summary results
+        if (summaryResults[sid]) {
+          summaryResults[sid].stageStatuses[stage] = status;
+          if (status === "running") {
+            summaryResults[sid].currentStage = stage;
+          }
+          updateSummaryTable();
         }
 
         if (status === "running") {
-          if (tabData[sid].typingEl) tabData[sid].typingEl.remove();
-          tabData[sid].typingEl = addTypingIndicator(stage, tabData[sid].el);
+          if (tabData[sid].typingEl) {
+            tabData[sid].typingEl.classList.add("animate-fade-out");
+            var oldTyping = tabData[sid].typingEl;
+            setTimeout(function() { oldTyping.remove(); }, 150);
+          }
+          tabData[sid].typingEl = addTypingIndicator(stage, tabData[sid].el, sid);
         }
 
         if (status === "completed" || status === "error") {
-          if (tabData[sid].typingEl) { tabData[sid].typingEl.remove(); tabData[sid].typingEl = null; }
-          addStageBubble(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el);
+          if (tabData[sid].typingEl) {
+            tabData[sid].typingEl.classList.add("animate-fade-out");
+            var oldEl = tabData[sid].typingEl;
+            setTimeout(function() { oldEl.remove(); }, 150);
+            tabData[sid].typingEl = null;
+          }
+          var stageIndex = ["perceive", "plan", "act", "verify"].indexOf(stage);
+          addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el, stageIndex);
         }
       });
 
@@ -681,6 +1829,15 @@
           tabData[sid].typingEl = null;
         }
         updateTabStatus(sid, "completed", data.total_latency_ms);
+
+        // Update summary
+        if (summaryResults[sid]) {
+          summaryResults[sid].status = "completed";
+          summaryResults[sid].latency_ms = data.total_latency_ms;
+          summaryResults[sid].success = data.success != null ? data.success : null;
+          summaryResults[sid].currentStage = null;
+          updateSummaryTable();
+        }
       });
 
       es.addEventListener("strategy_error", function(e) {
@@ -691,17 +1848,24 @@
           tabData[sid].typingEl = null;
         }
         updateTabStatus(sid, "error");
-        addErrorBubble(data.error || "Strategy failed", tabData[sid] ? tabData[sid].el : chatArea);
+        addErrorCard(data.error || "Strategy failed", tabData[sid] ? tabData[sid].el : chatArea);
+
+        // Update summary
+        if (summaryResults[sid]) {
+          summaryResults[sid].status = "error";
+          summaryResults[sid].currentStage = null;
+          updateSummaryTable();
+        }
       });
 
       es.addEventListener("complete", function() {
         es.close();
         currentEventSource = null;
         setRunning(false);
+        updateHistoryStatus(evalId, "completed");
       });
 
       es.addEventListener("error", function(e) {
-        // Clean up typing indicators
         Object.values(tabData).forEach(function(td) {
           if (td.typingEl) { td.typingEl.remove(); td.typingEl = null; }
         });
@@ -716,10 +1880,11 @@
             if (parsed.message) errMsg = parsed.message;
           }
         } catch (_) {}
-        addErrorBubble(errMsg, chatArea);
+        addErrorCard(errMsg, chatArea);
         es.close();
         currentEventSource = null;
         setRunning(false);
+        updateHistoryStatus(evalId, "error");
       });
     }
 
@@ -727,41 +1892,13 @@
     function setRunning(val) {
       isRunning = val;
       evalBtn.disabled = val;
-    }
-
-    function hideWelcome() {
-      if (welcomeMsg && welcomeMsg.parentNode) welcomeMsg.remove();
-    }
-
-    function resetSidebar() {
-      Object.values(STAGES).forEach(function(s) {
-        var el = document.getElementById(s.sidebar);
-        var inner = el.querySelector("div");
-        inner.className = "w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300";
-      });
-      document.querySelectorAll(".sidebar-connector").forEach(function(c) {
-        c.className = "w-px h-5 bg-gray-700 sidebar-connector";
-      });
-    }
-
-    function updateSidebar(stage, status) {
-      var meta = STAGES[stage];
-      if (!meta) return;
-      var el = document.getElementById(meta.sidebar);
-      var inner = el.querySelector("div");
-
-      inner.classList.remove("text-gray-500", "text-blue-400", "text-green-400", "text-red-400", "pulse-blue", "border", "border-blue-500", "border-green-500", "border-red-500");
-
-      if (status === "running") {
-        inner.classList.add("text-blue-400", "pulse-blue", "border", "border-blue-500");
-      } else if (status === "completed") {
-        inner.classList.add("text-green-400", "border", "border-green-500");
-        var connector = document.querySelector('.sidebar-connector[data-after="' + stage + '"]');
-        if (connector) connector.className = "w-px h-5 bg-green-500/50 sidebar-connector transition-colors duration-500";
-      } else if (status === "error") {
-        inner.classList.add("text-red-400", "border", "border-red-500");
-        var connector = document.querySelector('.sidebar-connector[data-after="' + stage + '"]');
-        if (connector) connector.className = "w-px h-5 bg-red-500/50 sidebar-connector transition-colors duration-500";
+      if (val) {
+        evalBtn.classList.add("opacity-50");
+        // Collapse config panel
+        configContent.style.display = "none";
+        configChevron.style.transform = "rotate(180deg)";
+      } else {
+        evalBtn.classList.remove("opacity-50");
       }
     }
 
@@ -773,30 +1910,37 @@
 
     function addErrorToActiveTab(message) {
       var container = tabData[activeTabId] ? tabData[activeTabId].el : chatArea;
-      addErrorBubble(message, container);
+      addErrorCard(message, container);
     }
 
-    // ---- Bubble builders using DOM API ----
+    // ---- Card builders (structured cards, not chat bubbles) ----
 
-    function addUserBubble(imgSrc, task, strategyIds) {
-      // Add user bubble to the first tab (or the active one)
-      var container = tabData[activeTabId] ? tabData[activeTabId].el : chatArea;
+    function addUserCard(imgSrc, task, strategyIds) {
+      var card = document.createElement("div");
+      card.className = "animate-slide-in bg-f-surface border border-f-border rounded-xl p-3 space-y-2.5";
 
-      var wrapper = document.createElement("div");
-      wrapper.className = "flex justify-end animate-slide-in";
-
-      var bubble = document.createElement("div");
-      bubble.className = "max-w-lg bg-rove-user border border-rove-border rounded-2xl rounded-br-md p-4 space-y-3";
+      // Header
+      var headerRow = document.createElement("div");
+      headerRow.className = "flex items-center gap-2";
+      var userIcon = document.createElement("i");
+      userIcon.setAttribute("data-lucide", "user");
+      userIcon.className = "w-3.5 h-3.5 text-gray-400";
+      headerRow.appendChild(userIcon);
+      var headerLabel = document.createElement("span");
+      headerLabel.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+      headerLabel.textContent = "Evaluation Request";
+      headerRow.appendChild(headerLabel);
+      card.appendChild(headerRow);
 
       var img = document.createElement("img");
       img.src = imgSrc;
-      img.className = "w-full max-h-48 object-cover rounded-lg";
-      bubble.appendChild(img);
+      img.className = "w-full max-h-56 object-contain w-auto mx-auto rounded-lg";
+      card.appendChild(img);
 
       var taskP = document.createElement("p");
       taskP.className = "text-sm text-gray-100";
       taskP.textContent = task;
-      bubble.appendChild(taskP);
+      card.appendChild(taskP);
 
       // Strategy badges
       var badges = document.createElement("div");
@@ -804,69 +1948,75 @@
       strategyIds.forEach(function(sid) {
         var strat = strategies.find(function(s) { return s.id === sid; });
         var badge = document.createElement("span");
-        badge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded-full";
+        badge.className = "text-[10px] bg-f-purple/15 text-purple-300 px-2 py-0.5 rounded";
         badge.textContent = strat ? strat.display_name : sid;
         badges.appendChild(badge);
       });
-      bubble.appendChild(badges);
+      card.appendChild(badges);
 
-      wrapper.appendChild(bubble);
+      // Add only to summary tab (multi-strategy) or the single tab
+      if (summaryEl) {
+        summaryEl.insertBefore(card, summaryEl.firstChild);
+      } else {
+        var container = tabData[activeTabId] ? tabData[activeTabId].el : chatArea;
+        container.appendChild(card);
+      }
 
-      // Add to all tabs
-      Object.values(tabData).forEach(function(td) {
-        td.el.appendChild(wrapper.cloneNode(true));
-      });
-
+      lucide.createIcons({ nodes: [card] });
       scrollToBottom();
     }
 
-    function addTypingIndicator(stage, container) {
+    function addTypingIndicator(stage, container, sid) {
       var meta = STAGES[stage];
-      var wrapper = document.createElement("div");
-      wrapper.className = "flex justify-start animate-slide-in";
-
-      var bubble = document.createElement("div");
-      bubble.className = "max-w-lg bg-rove-card border border-rove-border rounded-2xl rounded-bl-md p-4";
+      var card = document.createElement("div");
+      card.className = "animate-slide-in bg-f-surface border border-f-border rounded-xl p-4 stage-card-" + stage;
 
       var header = document.createElement("div");
       header.className = "flex items-center gap-2 mb-2";
       var icon = document.createElement("i");
       icon.setAttribute("data-lucide", meta.icon);
-      icon.className = "w-4 h-4 text-blue-400";
+      icon.className = "w-4 h-4 text-purple-400";
       header.appendChild(icon);
       var label = document.createElement("span");
-      label.className = "text-xs font-semibold text-blue-400";
-      label.textContent = meta.label;
+      label.className = "text-xs font-semibold text-purple-400";
+      // Show strategy name in multi-strategy mode
+      var strat = sid ? strategies.find(function(s) { return s.id === sid; }) : null;
+      var prefix = (strat && Object.keys(tabData).length > 1) ? strat.display_name + " — " : "";
+      label.textContent = prefix + meta.label;
       header.appendChild(label);
-      bubble.appendChild(header);
+      var chip = document.createElement("span");
+      chip.className = "text-[10px] bg-f-purple/20 text-purple-300 px-1.5 py-0.5 rounded ml-auto";
+      chip.textContent = "running";
+      header.appendChild(chip);
+      card.appendChild(header);
 
       var dots = document.createElement("div");
       dots.className = "flex items-center gap-1.5 py-1";
       for (var i = 0; i < 3; i++) {
         var dot = document.createElement("div");
-        dot.className = "w-2 h-2 bg-blue-400 rounded-full typing-dot";
+        dot.className = "w-2 h-2 bg-purple-400 rounded-full typing-dot";
         dots.appendChild(dot);
       }
-      bubble.appendChild(dots);
+      card.appendChild(dots);
 
-      wrapper.appendChild(bubble);
-      container.appendChild(wrapper);
-      lucide.createIcons({ nodes: [wrapper] });
+      container.appendChild(card);
+      lucide.createIcons({ nodes: [card] });
       scrollToBottom();
-      return wrapper;
+      return card;
     }
 
-    function addStageBubble(stage, status, latencyMs, output, error, modelId, container) {
+    function addStageCard(stage, status, latencyMs, output, error, modelId, container, stageIndex) {
       var meta = STAGES[stage];
       var isOk = status === "completed";
       var accentColor = isOk ? "green" : "red";
-      var bubbleId = "bubble-" + stage + "-" + Date.now();
+      var cardId = "card-" + stage + "-" + Date.now();
 
-      var wrapper = document.createElement("div");
-      wrapper.className = "flex justify-start animate-slide-in";
-
-      var bubble = document.createElement("div");
-      bubble.className = "max-w-xl bg-rove-card border border-rove-border rounded-2xl rounded-bl-md p-4 space-y-3 w-full";
+      var card = document.createElement("div");
+      card.className = "animate-slide-in bg-f-surface border border-f-border rounded-xl p-4 space-y-3 w-full stage-card-" + stage;
+      // Staggered animation delay based on stage index
+      if (stageIndex != null) {
+        card.style.animationDelay = (stageIndex * 50) + "ms";
+      }
 
       // Header row
       var headerRow = document.createElement("div");
@@ -883,15 +2033,26 @@
       labelSpan.textContent = meta.label;
       headerLeft.appendChild(labelSpan);
 
+      // Status chip
+      var statusChip = document.createElement("span");
+      if (isOk) {
+        statusChip.className = "text-[10px] bg-green-500/15 text-green-400 px-1.5 py-0.5 rounded ml-2";
+        statusChip.textContent = "completed";
+      } else {
+        statusChip.className = "text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded ml-2";
+        statusChip.textContent = "error";
+      }
+      headerLeft.appendChild(statusChip);
+
       // Success/fail badge for verify
       if (stage === "verify" && output && output.success != null) {
         var badge = document.createElement("span");
         if (output.success) {
-          badge.className = "text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full ml-2";
-          badge.textContent = "SUCCESS";
+          badge.className = "text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded ml-2";
+          badge.textContent = "Success";
         } else {
-          badge.className = "text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full ml-2";
-          badge.textContent = "FAILED";
+          badge.className = "text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30 px-2 py-0.5 rounded ml-2";
+          badge.textContent = "Failed";
         }
         headerLeft.appendChild(badge);
       }
@@ -902,18 +2063,23 @@
       headerRight.className = "flex items-center gap-1.5";
       if (latencyMs != null) {
         var latBadge = document.createElement("span");
-        latBadge.className = "text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full";
+        latBadge.className = "text-[10px] bg-f-elevated text-gray-300 px-2 py-0.5 rounded";
         latBadge.textContent = latencyMs + "ms";
         headerRight.appendChild(latBadge);
       }
       if (modelId) {
         var modBadge = document.createElement("span");
-        modBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded-full";
+        modBadge.className = "text-[10px] bg-f-purple/15 text-purple-300 px-2 py-0.5 rounded";
         modBadge.textContent = modelId;
         headerRight.appendChild(modBadge);
       }
       headerRow.appendChild(headerRight);
-      bubble.appendChild(headerRow);
+      card.appendChild(headerRow);
+
+      // Divider
+      var divider = document.createElement("div");
+      divider.className = "border-t border-f-border";
+      card.appendChild(divider);
 
       // Body content
       var body = document.createElement("div");
@@ -926,7 +2092,7 @@
       } else if (output) {
         renderStageOutput(body, stage, output);
       }
-      bubble.appendChild(body);
+      card.appendChild(body);
 
       // Expandable raw JSON
       if (output) {
@@ -939,34 +2105,30 @@
         var toggleText = document.createElement("span");
         toggleText.textContent = "Raw output";
         toggleBtn.appendChild(toggleText);
-        bubble.appendChild(toggleBtn);
+        card.appendChild(toggleBtn);
 
         var jsonPanel = document.createElement("div");
-        jsonPanel.id = bubbleId;
+        jsonPanel.id = cardId;
         jsonPanel.className = "json-expand";
         var pre = document.createElement("pre");
         pre.className = "text-[11px] text-gray-500 bg-black/30 rounded-lg p-3 overflow-x-auto";
         pre.textContent = JSON.stringify(output, null, 2);
         jsonPanel.appendChild(pre);
-        bubble.appendChild(jsonPanel);
+        card.appendChild(jsonPanel);
 
         toggleBtn.addEventListener("click", function() {
           jsonPanel.classList.toggle("open");
         });
       }
 
-      wrapper.appendChild(bubble);
-      container.appendChild(wrapper);
-      lucide.createIcons({ nodes: [wrapper] });
+      container.appendChild(card);
+      lucide.createIcons({ nodes: [card] });
       scrollToBottom();
     }
 
-    function addErrorBubble(message, container) {
-      var wrapper = document.createElement("div");
-      wrapper.className = "flex justify-start animate-slide-in";
-
-      var bubble = document.createElement("div");
-      bubble.className = "max-w-lg bg-red-500/10 border border-red-500/30 rounded-2xl rounded-bl-md p-4";
+    function addErrorCard(message, container) {
+      var card = document.createElement("div");
+      card.className = "animate-slide-in bg-red-500/10 border border-red-500/20 rounded-xl p-4";
 
       var inner = document.createElement("div");
       inner.className = "flex items-center gap-2";
@@ -979,10 +2141,9 @@
       msg.textContent = message;
       inner.appendChild(msg);
 
-      bubble.appendChild(inner);
-      wrapper.appendChild(bubble);
-      container.appendChild(wrapper);
-      lucide.createIcons({ nodes: [wrapper] });
+      card.appendChild(inner);
+      container.appendChild(card);
+      lucide.createIcons({ nodes: [card] });
       scrollToBottom();
     }
 
@@ -1009,8 +2170,8 @@
         var section = document.createElement("div");
         section.className = "space-y-1";
         var heading = document.createElement("p");
-        heading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
-        heading.textContent = "Detected Objects";
+        heading.className = "text-[11px] text-gray-500 font-medium";
+        heading.textContent = "Detected objects";
         section.appendChild(heading);
 
         var tagWrap = document.createElement("div");
@@ -1019,7 +2180,7 @@
           var name = typeof obj === "string" ? obj : (obj.label || obj.name || JSON.stringify(obj));
           var conf = (typeof obj === "object" && obj.confidence != null) ? " (" + (obj.confidence * 100).toFixed(0) + "%)" : "";
           var tag = document.createElement("span");
-          tag.className = "text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-md";
+          tag.className = "text-xs bg-f-purple/10 text-purple-300 border border-f-purple/20 px-2 py-0.5 rounded";
           tag.textContent = name + conf;
           tagWrap.appendChild(tag);
         });
@@ -1033,8 +2194,8 @@
         var relSection = document.createElement("div");
         relSection.className = "mt-2 space-y-1";
         var relHeading = document.createElement("p");
-        relHeading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
-        relHeading.textContent = "Spatial Relations";
+        relHeading.className = "text-[11px] text-gray-500 font-medium";
+        relHeading.textContent = "Spatial relations";
         relSection.appendChild(relHeading);
 
         if (Array.isArray(rels)) {
@@ -1106,7 +2267,7 @@
       if (o.reasoning) {
         rendered = true;
         var reason = document.createElement("div");
-        reason.className = "mt-2 text-xs text-gray-400 italic border-l-2 border-gray-600 pl-3";
+        reason.className = "mt-2 text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3";
         reason.textContent = o.reasoning;
         container.appendChild(reason);
       }
@@ -1116,7 +2277,7 @@
         var stepsSection = document.createElement("div");
         stepsSection.className = "mt-2 space-y-1";
         var stepsHeading = document.createElement("p");
-        stepsHeading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
+        stepsHeading.className = "text-[11px] text-gray-500 font-medium";
         stepsHeading.textContent = "Steps";
         stepsSection.appendChild(stepsHeading);
 
@@ -1125,7 +2286,7 @@
           var stepRow = document.createElement("div");
           stepRow.className = "flex items-start gap-2 ml-1";
           var num = document.createElement("span");
-          num.className = "text-[10px] bg-gray-700 text-gray-300 w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5";
+          num.className = "text-[10px] bg-f-elevated text-gray-300 w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5";
           num.textContent = String(i + 1);
           stepRow.appendChild(num);
           var stepText = document.createElement("span");
@@ -1151,23 +2312,23 @@
       if (o.action_type) {
         rendered = true;
         var typeBadge = document.createElement("span");
-        typeBadge.className = "text-[10px] bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded-full mb-2 inline-block";
-        typeBadge.textContent = o.action_type === "tool_calls" ? "Tool Calls" : "Trajectory";
+        typeBadge.className = "text-[10px] bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded mb-2 inline-block";
+        typeBadge.textContent = o.action_type === "tool_calls" ? "Tool calls" : "Trajectory";
         container.appendChild(typeBadge);
       }
 
       if (o.action_type === "tool_calls" && o.tool_calls && Array.isArray(o.tool_calls)) {
         rendered = true;
         var heading = document.createElement("p");
-        heading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium mt-1";
-        heading.textContent = "Tool Invocations";
+        heading.className = "text-[11px] text-gray-500 font-medium mt-1";
+        heading.textContent = "Tool invocations";
         container.appendChild(heading);
 
         o.tool_calls.forEach(function(tc, i) {
           var card = document.createElement("div");
           card.className = "flex items-center gap-2 ml-1 mt-1 bg-black/20 rounded-md px-2 py-1.5";
           var num = document.createElement("span");
-          num.className = "text-[10px] bg-gray-700 text-gray-300 w-5 h-5 rounded-full flex items-center justify-center shrink-0";
+          num.className = "text-[10px] bg-f-elevated text-gray-300 w-5 h-5 rounded flex items-center justify-center shrink-0";
           num.textContent = String(i + 1);
           card.appendChild(num);
           var toolName = document.createElement("span");
@@ -1188,8 +2349,8 @@
       if (o.action_type !== "tool_calls" && actions && Array.isArray(actions)) {
         rendered = true;
         var heading2 = document.createElement("p");
-        heading2.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
-        heading2.textContent = "Action Sequence";
+        heading2.className = "text-[11px] text-gray-500 font-medium";
+        heading2.textContent = "Action sequence";
         container.appendChild(heading2);
 
         actions.forEach(function(a, i) {
@@ -1249,7 +2410,7 @@
         row.appendChild(lbl);
 
         var barOuter = document.createElement("div");
-        barOuter.className = "flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden max-w-[200px]";
+        barOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[200px]";
         var barInner = document.createElement("div");
         barInner.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
         barInner.style.width = pct + "%";
@@ -1266,7 +2427,7 @@
       if (o.reasoning || o.explanation) {
         rendered = true;
         var reason = document.createElement("p");
-        reason.className = "text-xs text-gray-400 italic border-l-2 border-gray-600 pl-3 mt-2";
+        reason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-2";
         reason.textContent = o.reasoning || o.explanation;
         container.appendChild(reason);
       }

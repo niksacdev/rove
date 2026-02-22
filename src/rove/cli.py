@@ -15,7 +15,8 @@ def main():
             port = int(args[idx + 1])
 
         import uvicorn
-        print(f"\n  ROVE — Robot Observation & Vision Evaluation")
+
+        print("\n  ROVE — Robot Observation & Vision Evaluation")
         print(f"  Dashboard: http://localhost:{port}\n")
         uvicorn.run("rove.api.app:app", host="0.0.0.0", port=port, reload=True)
     elif args[0] == "--help":

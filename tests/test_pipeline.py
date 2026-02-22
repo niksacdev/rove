@@ -17,9 +17,7 @@ def pipeline():
         perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
         plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
         act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
-        verify_adapter=MockVLMAdapter(
-            config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}
-        ),
+        verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
         sim=MockSimAdapter(),
     )
 

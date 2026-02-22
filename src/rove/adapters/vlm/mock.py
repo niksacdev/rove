@@ -38,9 +38,7 @@ class MockVLMAdapter:
             raw_response='{"mock": true, "quality": ' + str(self._quality) + "}",
         )
 
-    async def plan_task(
-        self, image_base64: str, task: str, scene: SceneAnalysis
-    ) -> TaskPlan:
+    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
         await self._simulate_latency()
         # Use scene data to inform plan
         target = scene.task_relevant[0] if scene.task_relevant else "target object"
@@ -63,7 +61,10 @@ class MockVLMAdapter:
         )
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str,
+        self,
+        before_image_base64: str,
+        after_image_base64: str,
+        task: str,
         context: dict | None = None,
     ) -> VerificationResult:
         await self._simulate_latency()

@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
-from rove.config import get_strategies
+from rove.config import get_strategies, load_config
 from rove.models import PipelineStage, PipelineStageResult, StageStatus
 from rove.orchestrator.pipeline import EvaluationPipeline
 from rove.orchestrator.run_manager import RunManager
@@ -36,6 +36,7 @@ app.add_middleware(
 registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
+_background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
 
 
 def _stage_to_dict(stage: PipelineStageResult) -> dict:
@@ -65,7 +66,8 @@ async def _run_multi_strategy(
                 raise ValueError(f"Strategy '{sid}' not found in rove.yaml")
             strategies.append(all_strategies[sid])
 
-        run_manager = RunManager(registry)
+        config = load_config()
+        run_manager = RunManager(registry, max_concurrent=config.defaults.max_concurrent_combinations)
 
         async def on_event(strategy_id: str, event_type: str, data: dict) -> None:
             await queue.put({"event": event_type, "data": data})
@@ -126,7 +128,11 @@ async def _run_evaluation(
 
         total_latency = sum(s.get("latency_ms", 0) for s in stages)
         verify_stage = next((s for s in stages if s["stage"] == "verify"), None)
-        success = verify_stage["output"]["success"] if verify_stage and verify_stage.get("output") else False
+        success = (
+            verify_stage["output"]["success"]
+            if verify_stage and verify_stage.get("output")
+            else False
+        )
 
         result = {
             "eval_id": eval_id,
@@ -198,14 +204,26 @@ async def create_evaluation(
     # If strategy_ids provided, use multi-strategy RunManager path
     if strategy_ids:
         ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
-        asyncio.create_task(_run_multi_strategy(eval_id, task, image_base64, ids))
+        bg = asyncio.create_task(_run_multi_strategy(eval_id, task, image_base64, ids))
+        _background_tasks.add(bg)
+        bg.add_done_callback(_background_tasks.discard)
         return {"eval_id": eval_id, "status": "running", "strategies": ids}
 
     # Legacy single-pipeline path
-    asyncio.create_task(_run_evaluation(
-        eval_id, task, image_base64,
-        perceive_model_id, plan_model_id, act_model_id, verify_model_id, sim_id,
-    ))
+    bg = asyncio.create_task(
+        _run_evaluation(
+            eval_id,
+            task,
+            image_base64,
+            perceive_model_id,
+            plan_model_id,
+            act_model_id,
+            verify_model_id,
+            sim_id,
+        )
+    )
+    _background_tasks.add(bg)
+    bg.add_done_callback(_background_tasks.discard)
 
     return {"eval_id": eval_id, "status": "running"}
 
@@ -236,6 +254,12 @@ async def get_evaluation(eval_id: str):
     if eval_id not in _evaluations:
         raise HTTPException(status_code=404, detail="Evaluation not found")
     return _evaluations[eval_id]
+
+
+@app.get("/api/config")
+async def get_config():
+    """Return full rove.yaml as JSON (endpoints, strategies, defaults)."""
+    return load_config().model_dump()
 
 
 @app.get("/api/models")

@@ -5,12 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
 
-from rove.adapters.protocols import SimAdapter
 from rove.adapters.registry import AdapterRegistry
 from rove.models import PipelineStageResult, StageStatus, Strategy
-from rove.orchestrator.pipeline import EvaluationPipeline, _to_dict
+from rove.orchestrator.pipeline import EvaluationPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +43,7 @@ class RunManager:
 
         async with asyncio.TaskGroup() as tg:
             for strategy in strategies:
-                tg.create_task(
-                    self._run_strategy(strategy, task, image_base64, results, on_event)
-                )
+                tg.create_task(self._run_strategy(strategy, task, image_base64, results, on_event))
 
         return results
 
@@ -59,7 +55,15 @@ class RunManager:
         results: list[dict],
         on_event: Callable[[str, str, dict], Awaitable[None]],
     ) -> None:
+        await on_event(strategy.id, "strategy_queued", {
+            "strategy_id": strategy.id,
+            "display_name": strategy.display_name,
+        })
         async with self._semaphore:
+            await on_event(strategy.id, "strategy_started", {
+                "strategy_id": strategy.id,
+                "display_name": strategy.display_name,
+            })
             try:
                 pipeline = self._build_pipeline(strategy)
                 stages: list[dict] = []
@@ -124,4 +128,5 @@ class RunManager:
             act_adapter=act,
             verify_adapter=verify,
             sim=sim,
+            registry=self.registry,
         )

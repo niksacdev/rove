@@ -80,8 +80,10 @@ class TestMockPolicyAdapter:
     async def test_uses_plan_steps_for_trajectory_length(self):
         vla = MockPolicyAdapter(config={"mock_latency_ms": [1, 2]})
         plan = TaskPlan(
-            strategy="test", reasoning="test",
-            steps=["a", "b", "c"], target_object="obj",
+            strategy="test",
+            reasoning="test",
+            steps=["a", "b", "c"],
+            target_object="obj",
         )
         pred = await vla.predict_action("img", "task", plan=plan)
         assert pred.num_steps == 4  # len(steps) + 1

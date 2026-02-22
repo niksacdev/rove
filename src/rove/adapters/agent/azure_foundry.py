@@ -34,14 +34,15 @@ class AzureFoundryAgentAdapter:
         try:
             from azure.ai.agents import AgentsClient
             from azure.identity import DefaultAzureCredential
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "Azure AI Foundry agent SDK not installed. "
                 "Install with: pip install rove-eval[foundry]\n"
                 "Required packages: azure-ai-agents>=1.1.0, azure-ai-projects>=1.0.0"
-            )
+            ) from err
 
         import os
+
         endpoint = os.environ.get(self._endpoint_env, "")
         if not endpoint:
             raise RuntimeError(
@@ -73,6 +74,7 @@ class AzureFoundryAgentAdapter:
         message_content = f"Stage: {stage}\nTask: {task}\n"
         if context:
             import json
+
             message_content += f"Context: {json.dumps(context)}\n"
         if image_base64:
             message_content += f"[Image provided as base64, {len(image_base64)} chars]\n"
@@ -85,7 +87,7 @@ class AzureFoundryAgentAdapter:
             content=message_content,
         )
 
-        run = client.runs.create_and_process(
+        client.runs.create_and_process(
             thread_id=thread.id,
             agent_id=self._agent_id,
         )
@@ -109,6 +111,7 @@ class AzureFoundryAgentAdapter:
 
         # Try to parse as JSON, fall back to raw text
         import json
+
         try:
             return json.loads(response_text)
         except (json.JSONDecodeError, ValueError):

@@ -9,7 +9,13 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from rove.adapters.protocols import AgentAdapter, PolicyAdapter, SimAdapter, StageAdapter, VLMAdapter
+from rove.adapters.protocols import (
+    AgentAdapter,
+    PolicyAdapter,
+    SimAdapter,
+    StageAdapter,
+)
+from rove.adapters.registry import AdapterRegistry
 from rove.models import (
     ActionPrediction,
     PipelineContext,
@@ -86,12 +92,14 @@ class EvaluationPipeline:
         act_adapter: PolicyAdapter | AgentAdapter,
         verify_adapter: StageAdapter,
         sim: SimAdapter,
+        registry: AdapterRegistry | None = None,
     ):
         self.perceive_adapter = perceive_adapter
         self.plan_adapter = plan_adapter
         self.act_adapter = act_adapter
         self.verify_adapter = verify_adapter
         self.sim = sim
+        self._registry = registry
 
     async def _call_adapter(
         self,
@@ -102,6 +110,21 @@ class EvaluationPipeline:
         **context: Any,
     ) -> Any:
         """Dispatch to the appropriate adapter method based on adapter type and stage."""
+        sem = self._registry.get_semaphore(adapter.model_id) if self._registry else None
+        if sem is not None:
+            async with sem:
+                return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
+        return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
+
+    async def _call_adapter_inner(
+        self,
+        stage: str,
+        adapter: StageAdapter,
+        image_base64: str,
+        task: str,
+        **context: Any,
+    ) -> Any:
+        """Inner dispatch — actual adapter call without semaphore."""
         if isinstance(adapter, AgentAdapter):
             # Serialize dataclass objects in context for agent adapters
             agent_context = {k: _to_dict(v) for k, v in context.items()} if context else None
@@ -122,14 +145,17 @@ class EvaluationPipeline:
             return await adapter.plan_task(image_base64, task, scene)
         elif stage == "act":
             return await adapter.predict_action(
-                image_base64, task,
+                image_base64,
+                task,
                 proprioception=context.get("proprioception"),
                 plan=context.get("plan"),
             )
         elif stage == "verify":
             after_image = context.get("after_image", image_base64)
             return await adapter.verify_success(
-                image_base64, after_image, task,
+                image_base64,
+                after_image,
+                task,
                 context=context.get("pipeline_context"),
             )
         else:
@@ -150,22 +176,30 @@ class EvaluationPipeline:
 
         # --- PERCEIVE ---
         perceive_model = self._get_model_id(self.perceive_adapter)
-        yield PipelineStageResult(stage="perceive", status=StageStatus.RUNNING, model_id=perceive_model)
+        yield PipelineStageResult(
+            stage="perceive", status=StageStatus.RUNNING, model_id=perceive_model
+        )
         t0 = time.monotonic()
         try:
             scene = await self._call_adapter("perceive", self.perceive_adapter, image_base64, task)
             ctx.scene = scene
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
-                stage="perceive", status=StageStatus.COMPLETED,
-                latency_ms=round(latency, 1), output=_to_dict(scene), model_id=perceive_model,
+                stage="perceive",
+                status=StageStatus.COMPLETED,
+                latency_ms=round(latency, 1),
+                output=_to_dict(scene),
+                model_id=perceive_model,
             )
         except Exception as e:
             latency = (time.monotonic() - t0) * 1000
             logger.exception("perceive failed")
             yield PipelineStageResult(
-                stage="perceive", status=StageStatus.ERROR,
-                latency_ms=round(latency, 1), error=str(e), model_id=perceive_model,
+                stage="perceive",
+                status=StageStatus.ERROR,
+                latency_ms=round(latency, 1),
+                error=str(e),
+                model_id=perceive_model,
             )
             return
 
@@ -183,21 +217,30 @@ class EvaluationPipeline:
         t0 = time.monotonic()
         try:
             plan = await self._call_adapter(
-                "plan", self.plan_adapter, image_base64, task,
+                "plan",
+                self.plan_adapter,
+                image_base64,
+                task,
                 scene=scene,
             )
             ctx.plan = plan
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
-                stage="plan", status=StageStatus.COMPLETED,
-                latency_ms=round(latency, 1), output=_to_dict(plan), model_id=plan_model,
+                stage="plan",
+                status=StageStatus.COMPLETED,
+                latency_ms=round(latency, 1),
+                output=_to_dict(plan),
+                model_id=plan_model,
             )
         except Exception as e:
             latency = (time.monotonic() - t0) * 1000
             logger.exception("plan failed")
             yield PipelineStageResult(
-                stage="plan", status=StageStatus.ERROR,
-                latency_ms=round(latency, 1), error=str(e), model_id=plan_model,
+                stage="plan",
+                status=StageStatus.ERROR,
+                latency_ms=round(latency, 1),
+                error=str(e),
+                model_id=plan_model,
             )
             return
 
@@ -207,8 +250,13 @@ class EvaluationPipeline:
         t0 = time.monotonic()
         try:
             action_pred = await self._call_adapter(
-                "act", self.act_adapter, image_base64, task,
-                scene=scene, plan=plan, proprioception=ctx.proprioception,
+                "act",
+                self.act_adapter,
+                image_base64,
+                task,
+                scene=scene,
+                plan=plan,
+                proprioception=ctx.proprioception,
             )
             ctx.action = action_pred
 
@@ -236,15 +284,21 @@ class EvaluationPipeline:
                 act_output["tool_calls"] = action_pred.tool_calls
 
             yield PipelineStageResult(
-                stage="act", status=StageStatus.COMPLETED,
-                latency_ms=round(latency, 1), output=act_output, model_id=act_model,
+                stage="act",
+                status=StageStatus.COMPLETED,
+                latency_ms=round(latency, 1),
+                output=act_output,
+                model_id=act_model,
             )
         except Exception as e:
             latency = (time.monotonic() - t0) * 1000
             logger.exception("act failed")
             yield PipelineStageResult(
-                stage="act", status=StageStatus.ERROR,
-                latency_ms=round(latency, 1), error=str(e), model_id=act_model,
+                stage="act",
+                status=StageStatus.ERROR,
+                latency_ms=round(latency, 1),
+                error=str(e),
+                model_id=act_model,
             )
             return
 
@@ -258,19 +312,28 @@ class EvaluationPipeline:
             ctx.after_image_base64 = after_image
 
             verification = await self._call_adapter(
-                "verify", self.verify_adapter, image_base64, task,
+                "verify",
+                self.verify_adapter,
+                image_base64,
+                task,
                 after_image=after_image,
                 pipeline_context=ctx.to_dict(),
             )
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
-                stage="verify", status=StageStatus.COMPLETED,
-                latency_ms=round(latency, 1), output=_to_dict(verification), model_id=verify_model,
+                stage="verify",
+                status=StageStatus.COMPLETED,
+                latency_ms=round(latency, 1),
+                output=_to_dict(verification),
+                model_id=verify_model,
             )
         except Exception as e:
             latency = (time.monotonic() - t0) * 1000
             logger.exception("verify failed")
             yield PipelineStageResult(
-                stage="verify", status=StageStatus.ERROR,
-                latency_ms=round(latency, 1), error=str(e), model_id=verify_model,
+                stage="verify",
+                status=StageStatus.ERROR,
+                latency_ms=round(latency, 1),
+                error=str(e),
+                model_id=verify_model,
             )

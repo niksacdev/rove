@@ -35,15 +35,17 @@ class MockPolicyAdapter:
         for i in range(num_steps):
             t = i / num_steps
             dx = round(random.uniform(-0.02, 0.02) + (start_bias * 0.01 if i == 0 else 0), 4)
-            actions.append([
-                dx,                                              # dx
-                round(random.uniform(-0.02, 0.02), 4),          # dy
-                round(-0.01 * (1 - t), 4),                      # dz (moving down)
-                round(random.uniform(-0.05, 0.05), 4),          # rx
-                round(random.uniform(-0.05, 0.05), 4),          # ry
-                round(random.uniform(-0.05, 0.05), 4),          # rz
-                round(1.0 if i < num_steps - 1 else 0.0, 1),   # gripper (close at end)
-            ])
+            actions.append(
+                [
+                    dx,  # dx
+                    round(random.uniform(-0.02, 0.02), 4),  # dy
+                    round(-0.01 * (1 - t), 4),  # dz (moving down)
+                    round(random.uniform(-0.05, 0.05), 4),  # rx
+                    round(random.uniform(-0.05, 0.05), 4),  # ry
+                    round(random.uniform(-0.05, 0.05), 4),  # rz
+                    round(1.0 if i < num_steps - 1 else 0.0, 1),  # gripper (close at end)
+                ]
+            )
 
         return ActionPrediction(
             actions=actions,

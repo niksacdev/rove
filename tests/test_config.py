@@ -1,26 +1,54 @@
-"""Tests for rove.config — YAML loading and strategy resolution."""
+"""Tests for rove.config — Pydantic-validated YAML loading and strategy resolution."""
 
 from __future__ import annotations
 
-from rove.config import find_model_config, get_strategies, load_config
+from rove.config import (
+    EndpointConfig,
+    RoveConfig,
+    find_model_config,
+    get_endpoint_config,
+    get_strategies,
+    load_config,
+)
 
 
 class TestLoadConfig:
     def test_loads_yaml(self):
         config = load_config()
-        assert "models" in config
-        assert "strategies" in config
+        assert isinstance(config, RoveConfig)
+        assert config.endpoints
+        assert config.strategies
 
-    def test_models_sections(self):
+    def test_endpoint_types(self):
         config = load_config()
-        models = config["models"]
-        assert "vlm" in models
-        assert "vla" in models
-        assert "sim" in models
+        types = {ep.type for ep in config.endpoints.values()}
+        assert "vlm" in types
+        assert "vla" in types
+        assert "sim" in types
 
     def test_mock_vlm_exists(self):
         config = load_config()
-        assert "mock-vlm" in config["models"]["vlm"]
+        assert "mock-vlm" in config.endpoints
+        assert config.endpoints["mock-vlm"].type == "vlm"
+
+    def test_endpoint_is_pydantic(self):
+        config = load_config()
+        ep = config.endpoints["mock-vlm"]
+        assert isinstance(ep, EndpointConfig)
+        assert ep.adapter == "mock_vlm"
+
+
+class TestGetEndpointConfig:
+    def test_get_by_id(self):
+        ep = get_endpoint_config("mock-vlm")
+        assert ep.type == "vlm"
+        assert ep.adapter == "mock_vlm"
+
+    def test_missing_raises(self):
+        import pytest
+
+        with pytest.raises(KeyError):
+            get_endpoint_config("nonexistent-model")
 
 
 class TestFindModelConfig:
@@ -30,15 +58,15 @@ class TestFindModelConfig:
         assert cfg["adapter"] == "mock_vlm"
 
     def test_find_vla(self):
-        model_type, cfg = find_model_config("mock-vla")
+        model_type, _cfg = find_model_config("mock-vla")
         assert model_type == "vla"
 
     def test_find_agent(self):
-        model_type, cfg = find_model_config("mock-agent")
+        model_type, _cfg = find_model_config("mock-agent")
         assert model_type == "agent"
 
     def test_find_sim(self):
-        model_type, cfg = find_model_config("mock-sim")
+        model_type, _cfg = find_model_config("mock-sim")
         assert model_type == "sim"
 
 

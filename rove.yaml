@@ -1,363 +1,389 @@
-# rove.yaml — single source of truth for models AND evaluations
-# Updated 2026-02-21 — model choices based on actual robotics community adoption
+# rove.yaml — single source of truth for endpoints AND evaluations
+# Updated 2026-02-22 — flat endpoint structure with Pydantic validation
 version: "1.0"
 
 # =============================================================================
-# Models — Atomic model configurations (one model per entry)
+# Endpoints — Atomic model/environment configurations (one per entry)
 # =============================================================================
-# Each model maps to one adapter class. Secrets live in environment variables.
+# Each endpoint maps to one adapter class. URLs go here; only auth secrets
+# stay as env var references (api_key_env).
 
-models:
-  vlm:
-    # --- Cloud VLMs ---
-    gpt-4o:
-      adapter: azure_openai
-      display_name: "GPT-4o"
-      deployment_type: azure_managed
-      config:
-        endpoint_env: AZURE_OPENAI_ENDPOINT
-        auth_mode: default_credential
-        api_key_env: AZURE_OPENAI_KEY  # fallback only
-        deployment_name: gpt-4o
-        api_version: "2025-04-01-preview"
-      capabilities: [scene_analysis, task_planning, verification]
-      cost: { type: per_token, input_per_1k: 0.005, output_per_1k: 0.015 }
-      notes: "Most reliable structured JSON output via response_format. Gold standard cloud VLM."
+endpoints:
+  # --- Cloud VLMs ---
+  gpt-4o:
+    type: vlm
+    adapter: azure_openai
+    display_name: "GPT-4o"
+    deployment_type: azure_managed
+    endpoint: "https://your-resource.openai.azure.com/"
+    config:
+      auth_mode: default_credential
+      api_key_env: AZURE_OPENAI_KEY
+      deployment_name: gpt-4o
+      api_version: "2025-04-01-preview"
+    capabilities: [scene_analysis, task_planning, verification]
+    cost: { type: per_token, input_per_1k: 0.005, output_per_1k: 0.015 }
+    notes: "Most reliable structured JSON output via response_format. Gold standard cloud VLM."
 
-    # --- Open-weight VLMs (local + cloud) ---
-    qwen3-vl-8b:
-      adapter: local_transformers
-      display_name: "Qwen3-VL 8B"
-      deployment_type: local
-      config:
-        model_id: "Qwen/Qwen3-VL-8B-Instruct"
-        device: mps
-        max_tokens: 2048
-        quantization: fp16              # fp8 available for GPU
-      capabilities: [scene_analysis, native_grounding, task_planning, verification, 3d_grounding]
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "Qwen/Qwen3-VL-8B-Instruct"
-        lmstudio: true                  # GGUF available via lmstudio-community
-        unsloth: true                   # fine-tuning supported
-        ollama: true                    # qwen3-vl:8b
-      notes: >
-        Successor to Qwen2.5-VL. Superior spatial perception, 3D grounding for embodied AI,
-        native bounding box output. Best open-weight VLM for robotics scene understanding.
+  # --- Open-weight VLMs (local + cloud) ---
+  qwen3-vl-8b:
+    type: vlm
+    adapter: local_transformers
+    display_name: "Qwen3-VL 8B"
+    deployment_type: local
+    config:
+      model_id: "Qwen/Qwen3-VL-8B-Instruct"
+      device: mps
+      max_tokens: 2048
+      quantization: fp16
+    capabilities: [scene_analysis, native_grounding, task_planning, verification, 3d_grounding]
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "Qwen/Qwen3-VL-8B-Instruct"
+      lmstudio: true
+      unsloth: true
+      ollama: true
+    notes: >
+      Successor to Qwen2.5-VL. Superior spatial perception, 3D grounding for embodied AI,
+      native bounding box output. Best open-weight VLM for robotics scene understanding.
 
-    qwen3-vl-2b:
-      adapter: local_transformers
-      display_name: "Qwen3-VL 2B"
-      deployment_type: local
-      config:
-        model_id: "Qwen/Qwen3-VL-2B-Instruct"
-        device: mps
-        max_tokens: 1024
-        quantization: fp16
-      capabilities: [scene_analysis, native_grounding, verification]
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "Qwen/Qwen3-VL-2B-Instruct"
-        lmstudio: true
-        unsloth: true
-        ollama: true
-      notes: "Edge-deployable VLM. Good for latency-sensitive robotics. Limited grasp planning quality."
+  qwen3-vl-2b:
+    type: vlm
+    adapter: local_transformers
+    display_name: "Qwen3-VL 2B"
+    deployment_type: local
+    config:
+      model_id: "Qwen/Qwen3-VL-2B-Instruct"
+      device: mps
+      max_tokens: 1024
+      quantization: fp16
+    capabilities: [scene_analysis, native_grounding, verification]
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "Qwen/Qwen3-VL-2B-Instruct"
+      lmstudio: true
+      unsloth: true
+      ollama: true
+    notes: "Edge-deployable VLM. Good for latency-sensitive robotics. Limited grasp planning quality."
 
-    phi-4-multimodal:
-      adapter: foundry_local
-      display_name: "Phi-4 Multimodal"
-      deployment_type: local
-      config:
-        model_id: "microsoft/phi-4-multimodal"
-        device: auto                    # ONNX Runtime, GPU or CPU
-        max_tokens: 1024
-      capabilities: [scene_analysis, verification]
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        azure_foundry: true             # Foundry Models catalog
-        foundry_local: true             # On-device via Foundry Local runtime
-        huggingface: "microsoft/phi-4-multimodal"
-        lmstudio: true
-        unsloth: true                   # fine-tuning supported
-      notes: >
-        Microsoft's multimodal SLM. Vision+speech+language in one model.
-        Fits in 8GB VRAM. Ideal for edge/on-device robotics evaluation.
+  phi-4-multimodal:
+    type: vlm
+    adapter: foundry_local
+    display_name: "Phi-4 Multimodal"
+    deployment_type: local
+    config:
+      model_id: "microsoft/phi-4-multimodal"
+      device: auto
+      max_tokens: 1024
+    capabilities: [scene_analysis, verification]
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      azure_foundry: true
+      foundry_local: true
+      huggingface: "microsoft/phi-4-multimodal"
+      lmstudio: true
+      unsloth: true
+    notes: >
+      Microsoft's multimodal SLM. Vision+speech+language in one model.
+      Fits in 8GB VRAM. Ideal for edge/on-device robotics evaluation.
 
-    ministral-3-3b:
-      adapter: local_transformers
-      display_name: "Ministral 3 3B"
-      deployment_type: local
-      config:
-        model_id: "mistralai/Ministral-3-3B-Instruct-2512"
-        device: mps
-        max_tokens: 1024
-        quantization: fp16
-      capabilities: [scene_analysis, verification]
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "mistralai/Ministral-3-3B-Instruct-2512"
-        azure_foundry: true             # Azure Foundry catalog
-        lmstudio: true                  # GGUF available
-        ollama: true
-      notes: >
-        Mistral's tiny multimodal model (vision+text). Apache 2.0 license.
-        256K context window. Fits in <8GB VRAM quantized. Good for quick perception checks.
+  ministral-3-3b:
+    type: vlm
+    adapter: local_transformers
+    display_name: "Ministral 3 3B"
+    deployment_type: local
+    config:
+      model_id: "mistralai/Ministral-3-3B-Instruct-2512"
+      device: mps
+      max_tokens: 1024
+      quantization: fp16
+    capabilities: [scene_analysis, verification]
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "mistralai/Ministral-3-3B-Instruct-2512"
+      azure_foundry: true
+      lmstudio: true
+      ollama: true
+    notes: >
+      Mistral's tiny multimodal model (vision+text). Apache 2.0 license.
+      256K context window. Fits in <8GB VRAM quantized. Good for quick perception checks.
 
-    # --- Azure AI Foundry VLMs (demo) ---
-    qwen25-vl-7b:
-      adapter: azure_foundry
-      display_name: "Qwen2.5-VL 7B (Azure)"
-      deployment_type: azure_serverless
-      config:
-        endpoint_env: AZURE_AI_FOUNDRY_ENDPOINT
-        auth_mode: default_credential
-        api_key_env: AZURE_AI_FOUNDRY_KEY  # fallback only
-        model_name: "Qwen2.5-VL-7B-Instruct"
-      capabilities: [scene_analysis, task_planning, verification]
-      cost: { type: per_token, input_per_1k: 0.0003, output_per_1k: 0.001 }
-      notes: "Qwen2.5-VL-7B-Instruct on Azure AI Foundry. Primary demo VLM."
+  # --- Azure AI Foundry VLMs (demo) ---
+  qwen25-vl-7b:
+    type: vlm
+    adapter: azure_foundry
+    display_name: "Qwen2.5-VL 7B (Azure)"
+    deployment_type: azure_serverless
+    endpoint: "https://your-foundry-endpoint.inference.ai.azure.com/"
+    config:
+      auth_mode: default_credential
+      api_key_env: AZURE_AI_FOUNDRY_KEY
+      model_name: "Qwen2.5-VL-7B-Instruct"
+    capabilities: [scene_analysis, task_planning, verification]
+    cost: { type: per_token, input_per_1k: 0.0003, output_per_1k: 0.001 }
+    notes: "Qwen2.5-VL-7B-Instruct on Azure AI Foundry. Primary demo VLM."
 
-    phi-4-multimodal-azure:
-      adapter: azure_foundry
-      display_name: "Phi-4 Multimodal (Azure)"
-      deployment_type: azure_serverless
-      config:
-        endpoint_env: AZURE_AI_FOUNDRY_ENDPOINT
-        auth_mode: default_credential
-        api_key_env: AZURE_AI_FOUNDRY_KEY  # fallback only
-        model_name: "Phi-4-multimodal-instruct"
-      capabilities: [scene_analysis, verification]
-      cost: { type: per_token, input_per_1k: 0.0002, output_per_1k: 0.0008 }
-      notes: "Phi-4 Multimodal on Azure AI Foundry. Comparison VLM for demo."
+  phi-4-multimodal-azure:
+    type: vlm
+    adapter: azure_foundry
+    display_name: "Phi-4 Multimodal (Azure)"
+    deployment_type: azure_serverless
+    endpoint: "https://your-foundry-endpoint.inference.ai.azure.com/"
+    config:
+      auth_mode: default_credential
+      api_key_env: AZURE_AI_FOUNDRY_KEY
+      model_name: "Phi-4-multimodal-instruct"
+    capabilities: [scene_analysis, verification]
+    cost: { type: per_token, input_per_1k: 0.0002, output_per_1k: 0.0008 }
+    notes: "Phi-4 Multimodal on Azure AI Foundry. Comparison VLM for demo."
 
-    # --- Mock VLM (Phase 1 testing) ---
-    mock-vlm:
-      adapter: mock_vlm
-      display_name: "Mock VLM"
-      deployment_type: local
-      config:
-        mock_quality: 0.85
-        mock_latency_ms: [200, 500]
-      capabilities: [scene_analysis, task_planning, verification]
+  # --- Mock VLM (Phase 1 testing) ---
+  mock-vlm:
+    type: vlm
+    adapter: mock_vlm
+    display_name: "Mock VLM"
+    deployment_type: local
+    config:
+      mock_quality: 0.85
+      mock_latency_ms: [200, 500]
+    capabilities: [scene_analysis, task_planning, verification]
 
-  vla:
-    # --- Most popular VLAs in robotics community (2025-2026) ---
-    pi0:
-      adapter: local_openpi
-      display_name: "π0 (Pi-Zero)"
-      deployment_type: local
-      config:
-        model_id: "physical-intelligence/pi0-base"
-        framework: jax                  # native JAX; PyTorch port available via HF
-        action_space: ee_delta
-        chunk_size: 10
-        requires_proprio: true
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: true               # PyTorch port via HF
-        github: "Physical-Intelligence/openpi"
-      notes: >
-        Most advanced open-source VLA. Flow-matching architecture using PaliGemma backbone.
-        ~50 Hz inference. Best zero-shot performance on long-horizon tasks.
-        Supports ALOHA and DROID platforms. π0.5 available with open-world generalization.
+  # --- VLAs ---
+  pi0:
+    type: vla
+    adapter: local_openpi
+    display_name: "π0 (Pi-Zero)"
+    deployment_type: local
+    config:
+      model_id: "physical-intelligence/pi0-base"
+      framework: jax
+      action_space: ee_delta
+      chunk_size: 10
+      requires_proprio: true
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: true
+      github: "Physical-Intelligence/openpi"
+    notes: >
+      Most advanced open-source VLA. Flow-matching architecture using PaliGemma backbone.
+      ~50 Hz inference. Best zero-shot performance on long-horizon tasks.
+      Supports ALOHA and DROID platforms. π0.5 available with open-world generalization.
 
-    pi0-fast:
-      adapter: local_openpi
-      display_name: "π0-FAST"
-      deployment_type: local
-      config:
-        model_id: "physical-intelligence/pi0-fast-base"
-        framework: jax
-        action_space: ee_delta
-        chunk_size: 10
-        requires_proprio: true
-        tokenizer: fast                 # FAST tokenizer for autoregressive discretization
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: true
-        github: "Physical-Intelligence/openpi"
-      notes: >
-        FAST tokenizer variant of π0. Better language following but ~4-5x higher inference cost.
-        Use when instruction-following accuracy matters more than speed.
+  pi0-fast:
+    type: vla
+    adapter: local_openpi
+    display_name: "π0-FAST"
+    deployment_type: local
+    config:
+      model_id: "physical-intelligence/pi0-fast-base"
+      framework: jax
+      action_space: ee_delta
+      chunk_size: 10
+      requires_proprio: true
+      tokenizer: fast
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: true
+      github: "Physical-Intelligence/openpi"
+    notes: >
+      FAST tokenizer variant of π0. Better language following but ~4-5x higher inference cost.
+      Use when instruction-following accuracy matters more than speed.
 
-    openvla-oft-7b:
-      adapter: local_openvla
-      display_name: "OpenVLA-OFT 7B"
-      deployment_type: local
-      config:
-        model_id: "openvla/openvla-7b-finetuned-libero-spatial"
-        device: mps
-        quantization: mlx               # bitsandbytes NOT compatible with MPS
-        action_space: ee_delta
-        chunk_size: 1                   # autoregressive, 1 step per call
-        requires_proprio: false
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "openvla/openvla-7b"
-        unsloth: true                   # fine-tuning supported
-      notes: >
-        Most popular open-source VLA. Autoregressive architecture (256 bins/dim).
-        Has per-token logprobs for principled confidence. ~5-15 Hz inference.
-        IMPORTANT: MLX quantization required on Apple Silicon (no bitsandbytes MPS support).
+  openvla-oft-7b:
+    type: vla
+    adapter: local_openvla
+    display_name: "OpenVLA-OFT 7B"
+    deployment_type: local
+    config:
+      model_id: "openvla/openvla-7b-finetuned-libero-spatial"
+      device: mps
+      quantization: mlx
+      action_space: ee_delta
+      chunk_size: 1
+      requires_proprio: false
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "openvla/openvla-7b"
+      unsloth: true
+    notes: >
+      Most popular open-source VLA. Autoregressive architecture (256 bins/dim).
+      Has per-token logprobs for principled confidence. ~5-15 Hz inference.
+      IMPORTANT: MLX quantization required on Apple Silicon (no bitsandbytes MPS support).
 
-    smolvla-450m:
-      adapter: local_lerobot
-      display_name: "SmolVLA 450M"
-      deployment_type: local
-      config:
-        model_id: "HuggingFaceTB/SmolVLA-base"
-        device: mps
-        action_space: ee_delta
-        chunk_size: 10
-        requires_proprio: true
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "HuggingFaceTB/SmolVLA-base"
-        lerobot: true                   # native LeRobot integration
-      notes: >
-        Tiny VLA achieving comparable performance to 7B+ models.
-        Flow matching with SmolVLM backbone. Ideal for edge deployment.
-        Requires proprioception (current joint state) as input.
+  smolvla-450m:
+    type: vla
+    adapter: local_lerobot
+    display_name: "SmolVLA 450M"
+    deployment_type: local
+    config:
+      model_id: "HuggingFaceTB/SmolVLA-base"
+      device: mps
+      action_space: ee_delta
+      chunk_size: 10
+      requires_proprio: true
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "HuggingFaceTB/SmolVLA-base"
+      lerobot: true
+    notes: >
+      Tiny VLA achieving comparable performance to 7B+ models.
+      Flow matching with SmolVLM backbone. Ideal for edge deployment.
+      Requires proprioception (current joint state) as input.
 
-    cogact-7b:
-      adapter: local_cogact
-      display_name: "CogACT 7B"
-      deployment_type: local
-      config:
-        model_id: "CogACT/CogACT-Base"
-        device: cuda                    # large checkpoint (30GB), needs GPU
-        denoising_steps: 10
-        action_space: ee_delta
-        chunk_size: 16
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "CogACT/CogACT-Base"
-        # Also: CogACT/CogACT-Small, CogACT/CogACT-Large
-      notes: >
-        Microsoft Research VLA. Diffusion-based action prediction.
-        MIT license. Inference latency 2-10s due to diffusion denoising.
-        Available in Small/Base/Large variants.
+  cogact-7b:
+    type: vla
+    adapter: local_cogact
+    display_name: "CogACT 7B"
+    deployment_type: local
+    config:
+      model_id: "CogACT/CogACT-Base"
+      device: cuda
+      denoising_steps: 10
+      action_space: ee_delta
+      chunk_size: 16
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "CogACT/CogACT-Base"
+    notes: >
+      Microsoft Research VLA. Diffusion-based action prediction.
+      MIT license. Inference latency 2-10s due to diffusion denoising.
+      Available in Small/Base/Large variants.
 
-    octo-base:
-      adapter: local_octo
-      display_name: "Octo-Base 93M"
-      deployment_type: local
-      config:
-        model_id: "rail-berkeley/octo-base-1.5"
-        device: cuda
-        action_space: ee_delta
-        chunk_size: 4
-        requires_proprio: true
-      cost: { type: fixed, per_call: 0.00 }
-      max_concurrent: 1
-      availability:
-        huggingface: "rail-berkeley/octo-base-1.5"
-        github: "octo-models/octo"
-      notes: >
-        UC Berkeley's lightweight generalist robot policy (93M params).
-        Transformer-based diffusion policy trained on 800K episodes (Open X-Embodiment).
-        ~13 it/sec on NVIDIA 4090. Good for contact-rich tasks like assembly.
+  octo-base:
+    type: vla
+    adapter: local_octo
+    display_name: "Octo-Base 93M"
+    deployment_type: local
+    config:
+      model_id: "rail-berkeley/octo-base-1.5"
+      device: cuda
+      action_space: ee_delta
+      chunk_size: 4
+      requires_proprio: true
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "rail-berkeley/octo-base-1.5"
+      github: "octo-models/octo"
+    notes: >
+      UC Berkeley's lightweight generalist robot policy (93M params).
+      Transformer-based diffusion policy trained on 800K episodes (Open X-Embodiment).
+      ~13 it/sec on NVIDIA 4090. Good for contact-rich tasks like assembly.
 
-    # --- Mock VLA (Phase 1 testing) ---
-    mock-vla:
-      adapter: mock_vla
-      display_name: "Mock VLA"
-      deployment_type: local
-      config:
-        mock_success_rate: 0.80
-        mock_latency_ms: [50, 150]
+  # --- Mock VLA (Phase 1 testing) ---
+  mock-vla:
+    type: vla
+    adapter: mock_vla
+    display_name: "Mock VLA"
+    deployment_type: local
+    config:
+      mock_success_rate: 0.80
+      mock_latency_ms: [50, 150]
 
-  # --- LLMs for task planning (perceive/plan steps can optionally use a text-only LLM) ---
-  llm:
-    qwen3-8b:
-      adapter: local_transformers
-      display_name: "Qwen3 8B"
-      deployment_type: local
-      config:
-        model_id: "Qwen/Qwen3-8B"
-        device: mps
-        max_tokens: 2048
-      cost: { type: fixed, per_call: 0.00 }
-      availability:
-        huggingface: "Qwen/Qwen3-8B"
-        lmstudio: true
-        unsloth: true
-        ollama: true
-        foundry_local: true
-      notes: >
-        Leading open-source LLM for agent/planning tasks. Strong tool-use and
-        structured output capabilities. Good for task decomposition in robotics.
+  # --- LLMs for task planning ---
+  qwen3-8b:
+    type: llm
+    adapter: local_transformers
+    display_name: "Qwen3 8B"
+    deployment_type: local
+    config:
+      model_id: "Qwen/Qwen3-8B"
+      device: mps
+      max_tokens: 2048
+    cost: { type: fixed, per_call: 0.00 }
+    availability:
+      huggingface: "Qwen/Qwen3-8B"
+      lmstudio: true
+      unsloth: true
+      ollama: true
+      foundry_local: true
+    notes: >
+      Leading open-source LLM for agent/planning tasks. Strong tool-use and
+      structured output capabilities. Good for task decomposition in robotics.
 
-    phi-4-mini:
-      adapter: foundry_local
-      display_name: "Phi-4 Mini 3.8B"
-      deployment_type: local
-      config:
-        model_id: "microsoft/phi-4-mini"
-        device: auto
-        max_tokens: 1024
-      cost: { type: fixed, per_call: 0.00 }
-      availability:
-        azure_foundry: true
-        foundry_local: true             # Flagship Foundry Local model
-        huggingface: "microsoft/phi-4-mini"
-        lmstudio: true
-        ollama: true
-      notes: >
-        Microsoft's edge LLM. Runs entirely on-device via Foundry Local.
-        Ideal for offline robotics planning where cloud is unavailable.
+  phi-4-mini:
+    type: llm
+    adapter: foundry_local
+    display_name: "Phi-4 Mini 3.8B"
+    deployment_type: local
+    config:
+      model_id: "microsoft/phi-4-mini"
+      device: auto
+      max_tokens: 1024
+    cost: { type: fixed, per_call: 0.00 }
+    availability:
+      azure_foundry: true
+      foundry_local: true
+      huggingface: "microsoft/phi-4-mini"
+      lmstudio: true
+      ollama: true
+    notes: >
+      Microsoft's edge LLM. Runs entirely on-device via Foundry Local.
+      Ideal for offline robotics planning where cloud is unavailable.
 
-  grounding:
-    groundingdino:
-      adapter: local_groundingdino
-      display_name: "GroundingDINO"
-      config: { device: mps, prefer_device: cpu }  # CPU fallback for MPS issues
-      availability:
-        huggingface: "IDEA-Research/grounding-dino-base"
-    mock-grounding:
-      adapter: mock_grounding
-      display_name: "Mock Grounding"
+  # --- Grounding ---
+  groundingdino:
+    type: grounding
+    adapter: local_groundingdino
+    display_name: "GroundingDINO"
+    deployment_type: local
+    config: { device: mps, prefer_device: cpu }
+    availability:
+      huggingface: "IDEA-Research/grounding-dino-base"
 
-  agent:
-    mock-agent:
-      adapter: mock_agent
-      display_name: "Mock Agent"
-      deployment_type: local
-      capabilities: [scene_analysis, task_planning, verification, action_execution]
-      config:
-        mock_latency_ms: [300, 800]
+  mock-grounding:
+    type: grounding
+    adapter: mock_grounding
+    display_name: "Mock Grounding"
+    deployment_type: local
+
+  # --- Agents ---
+  mock-agent:
+    type: agent
+    adapter: mock_agent
+    display_name: "Mock Agent"
+    deployment_type: local
+    capabilities: [scene_analysis, task_planning, verification, action_execution]
+    config:
+      mock_latency_ms: [300, 800]
     # Uncomment when Foundry agent is configured:
     # foundry-task-agent:
+    #   type: agent
     #   adapter: azure_foundry_agent
     #   display_name: "Foundry Task Agent"
     #   deployment_type: azure_managed
+    #   endpoint: "https://your-foundry-agent-endpoint.azure.com/"
     #   capabilities: [task_planning, action_execution]
     #   config:
-    #     endpoint_env: AZURE_FOUNDRY_AGENT_ENDPOINT
     #     agent_id: "my-robotics-agent"
 
-  sim:
-    mujoco-libero:
-      adapter: local_mujoco
-      display_name: "MuJoCo + LIBERO"
-      config:
-        task_suite: libero_spatial
-        render_size: [640, 480]
-    mock-sim:
-      adapter: mock_sim
-      display_name: "Mock Sim"
+  # --- Simulation environments ---
+  mujoco-libero:
+    type: sim
+    adapter: local_mujoco
+    display_name: "MuJoCo + LIBERO"
+    deployment_type: local
+    config:
+      task_suite: libero_spatial
+      render_size: [640, 480]
+
+  mock-sim:
+    type: sim
+    adapter: mock_sim
+    display_name: "Mock Sim"
+    deployment_type: local
 
 # =============================================================================
-# Strategies — Named pipeline configurations (map models to stages)
+# Strategies — Named pipeline configurations (map endpoints to stages)
 # =============================================================================
 
 strategies:

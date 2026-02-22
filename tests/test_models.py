@@ -45,9 +45,7 @@ class TestPipelineContext:
 
     def test_with_action(self):
         ctx = PipelineContext(task="test")
-        ctx.action = ActionPrediction(
-            action_type="trajectory", num_steps=3, confidence=0.8
-        )
+        ctx.action = ActionPrediction(action_type="trajectory", num_steps=3, confidence=0.8)
         d = ctx.to_dict()
         assert d["action"]["action_type"] == "trajectory"
 
@@ -79,8 +77,14 @@ class TestStrategy:
 
     def test_with_tags(self):
         s = Strategy(
-            id="x", display_name="X", description="",
-            perceive="a", plan="b", act="c", verify="d", sim="e",
+            id="x",
+            display_name="X",
+            description="",
+            perceive="a",
+            plan="b",
+            act="c",
+            verify="d",
+            sim="e",
             tags=["fast", "cloud"],
         )
         assert s.tags == ["fast", "cloud"]

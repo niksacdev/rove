@@ -71,15 +71,14 @@ class AzureFoundryVLMAdapter:
             return self._client
 
         if not self._endpoint:
-            raise RuntimeError(
-                f"Azure AI Foundry not configured. Set endpoint env var."
-            )
+            raise RuntimeError("Azure AI Foundry not configured. Set endpoint env var.")
 
         from azure.ai.inference import ChatCompletionsClient
 
         # Try DefaultAzureCredential first, fall back to API key
         try:
             from azure.identity import DefaultAzureCredential
+
             credential = DefaultAzureCredential()
             kwargs = {}
             if ".openai.azure.com" in self._endpoint:
@@ -90,13 +89,14 @@ class AzureFoundryVLMAdapter:
                 **kwargs,
             )
             logger.info(f"Using DefaultAzureCredential for {self.model_id}")
-        except Exception:
+        except Exception as err:
             if not self._api_key:
                 raise RuntimeError(
                     "Azure auth failed: DefaultAzureCredential unavailable and no API key set. "
                     "Run 'az login' or set API key env var."
-                )
+                ) from err
             from azure.core.credentials import AzureKeyCredential
+
             self._client = ChatCompletionsClient(
                 endpoint=self._endpoint,
                 credential=AzureKeyCredential(self._api_key),
@@ -129,18 +129,24 @@ class AzureFoundryVLMAdapter:
         response = client.complete(
             model=self._model_name or None,
             messages=[
-                SystemMessage(content="You are a precise robotics vision system. Always respond with valid JSON only."),
-                UserMessage(content=[
-                    {"type": "text", "text": prompt},
-                    self._build_image_content(image_base64),
-                ]),
+                SystemMessage(
+                    content="You are a precise robotics vision system. Always respond with valid JSON only."
+                ),
+                UserMessage(
+                    content=[
+                        {"type": "text", "text": prompt},
+                        self._build_image_content(image_base64),
+                    ]
+                ),
             ],
             max_tokens=1024,
             temperature=0.1,
         )
         latency = (time.monotonic() - t0) * 1000
         raw = response.choices[0].message.content
-        logger.info(f"analyze_scene latency={latency:.0f}ms tokens={response.usage.total_tokens if response.usage else '?'}")
+        logger.info(
+            f"analyze_scene latency={latency:.0f}ms tokens={response.usage.total_tokens if response.usage else '?'}"
+        )
 
         if response.usage:
             self._total_tokens += response.usage.total_tokens
@@ -153,9 +159,7 @@ class AzureFoundryVLMAdapter:
             raw_response=raw,
         )
 
-    async def plan_task(
-        self, image_base64: str, task: str, scene: SceneAnalysis
-    ) -> TaskPlan:
+    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
         from azure.ai.inference.models import SystemMessage, UserMessage
 
         scene_summary = (
@@ -177,16 +181,19 @@ class AzureFoundryVLMAdapter:
             "Return ONLY valid JSON, no markdown."
         )
 
-        t0 = time.monotonic()
         client = self._get_client()
         response = client.complete(
             model=self._model_name or None,
             messages=[
-                SystemMessage(content="You are a precise robotics task planner. Always respond with valid JSON only."),
-                UserMessage(content=[
-                    {"type": "text", "text": prompt},
-                    self._build_image_content(image_base64),
-                ]),
+                SystemMessage(
+                    content="You are a precise robotics task planner. Always respond with valid JSON only."
+                ),
+                UserMessage(
+                    content=[
+                        {"type": "text", "text": prompt},
+                        self._build_image_content(image_base64),
+                    ]
+                ),
             ],
             max_tokens=512,
             temperature=0.1,
@@ -206,7 +213,10 @@ class AzureFoundryVLMAdapter:
         )
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str,
+        self,
+        before_image_base64: str,
+        after_image_base64: str,
+        task: str,
         context: dict | None = None,
     ) -> VerificationResult:
         from azure.ai.inference.models import SystemMessage, UserMessage
@@ -236,19 +246,22 @@ class AzureFoundryVLMAdapter:
             "Return ONLY valid JSON, no markdown."
         )
 
-        t0 = time.monotonic()
         client = self._get_client()
         response = client.complete(
             model=self._model_name or None,
             messages=[
-                SystemMessage(content="You are a precise robotics verification system. Always respond with valid JSON only."),
-                UserMessage(content=[
-                    {"type": "text", "text": prompt},
-                    {"type": "text", "text": "BEFORE image:"},
-                    self._build_image_content(before_image_base64),
-                    {"type": "text", "text": "AFTER image:"},
-                    self._build_image_content(after_image_base64),
-                ]),
+                SystemMessage(
+                    content="You are a precise robotics verification system. Always respond with valid JSON only."
+                ),
+                UserMessage(
+                    content=[
+                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": "BEFORE image:"},
+                        self._build_image_content(before_image_base64),
+                        {"type": "text", "text": "AFTER image:"},
+                        self._build_image_content(after_image_base64),
+                    ]
+                ),
             ],
             max_tokens=512,
             temperature=0.1,

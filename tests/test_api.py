@@ -43,6 +43,26 @@ class TestStrategiesEndpoint:
         assert mock["sim"] == "mock-sim"
 
 
+class TestConfigEndpoint:
+    @pytest.mark.asyncio
+    async def test_get_config(self, client):
+        resp = await client.get("/api/config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "endpoints" in data
+        assert "strategies" in data
+        assert "defaults" in data
+
+    @pytest.mark.asyncio
+    async def test_config_has_endpoints(self, client):
+        resp = await client.get("/api/config")
+        data = resp.json()
+        endpoints = data["endpoints"]
+        # Should have mock endpoints
+        assert "mock-vlm" in endpoints
+        assert endpoints["mock-vlm"]["type"] == "vlm"
+
+
 class TestModelsEndpoint:
     @pytest.mark.asyncio
     async def test_list_models(self, client):
