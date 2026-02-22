@@ -1,0 +1,354 @@
+[
+  {
+    "filename": "tabletop/robo2vlm_001.jpg",
+    "scene_type": "tabletop",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_place_blue_plastic_bottle_into_middle_drawer_3973_q43",
+    "question": "Is there any obstacle blocking the robot from reaching bottle?",
+    "choices": [
+      "No",
+      "Cannot be determined",
+      "Partially reachable",
+      "Yes"
+    ],
+    "correct_answer_index": 0,
+    "correct_answer_text": "No",
+    "task_description": "Is there any obstacle blocking the robot from reaching bottle?"
+  },
+  {
+    "filename": "tabletop/robo2vlm_002.jpg",
+    "scene_type": "tabletop",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_place_blue_plastic_bottle_into_middle_drawer_4454_q2",
+    "question": "The robot is to place blue plastic bottle into middle drawer. Has the robot successfully completed the task?",
+    "choices": [
+      "Cannot be determined",
+      "No",
+      "Yes",
+      "Task was not attempted"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "No",
+    "task_description": "The robot is to place blue plastic bottle into middle drawer. Has the robot successfully completed the task?"
+  },
+  {
+    "filename": "tabletop/robo2vlm_003.jpg",
+    "scene_type": "tabletop",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_place_blue_plastic_bottle_into_middle_drawer_4586_q55",
+    "question": "Is there any obstacle blocking the robot from reaching bottle?",
+    "choices": [
+      "Yes",
+      "Partially reachable",
+      "No",
+      "Cannot be determined"
+    ],
+    "correct_answer_index": 2,
+    "correct_answer_text": "No",
+    "task_description": "Is there any obstacle blocking the robot from reaching bottle?"
+  },
+  {
+    "filename": "tabletop/robo2vlm_004.jpg",
+    "scene_type": "tabletop",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_place_blue_plastic_bottle_into_middle_drawer_5769_q15",
+    "question": "The robot is to place blue plastic bottle into middle drawer. Has the robot successfully completed the task?",
+    "choices": [
+      "Yes",
+      "Task was not attempted",
+      "Cannot be determined",
+      "No"
+    ],
+    "correct_answer_index": 3,
+    "correct_answer_text": "No",
+    "task_description": "The robot is to place blue plastic bottle into middle drawer. Has the robot successfully completed the task?"
+  },
+  {
+    "filename": "drawer-cabinet/robo2vlm_005.jpg",
+    "scene_type": "drawer-cabinet",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_place_blue_plastic_bottle_into_top_drawer_2750_q45",
+    "question": "The robot is tasked to releasing the bottle by opening gripper with the bottle. After Releasing the bottle by opening gripper, what will be the robot's NEXT action phase?",
+    "choices": [
+      "Approaching the bottle with open gripper",
+      "Firmly grasping the bottle",
+      "Closing gripper to grasp the bottle",
+      "Moving away with open gripper after releasing the bottle",
+      "Releasing the bottle by opening gripper"
+    ],
+    "correct_answer_index": 3,
+    "correct_answer_text": "Moving away with open gripper after releasing the bottle",
+    "task_description": "The robot is tasked to releasing the bottle by opening gripper with the bottle. After Releasing the bottle by opening gripper, what will be the robot's NEXT action phase?"
+  },
+  {
+    "filename": "drawer-cabinet/robo2vlm_006.jpg",
+    "scene_type": "drawer-cabinet",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_move_sponge_near_brown_chip_bag_3267_q30",
+    "question": "The robot is tasked to move sponge near brown chip bag. The robot is interacting with the sponge. Which phase of the grasp action is shown in the image?",
+    "choices": [
+      "Releasing the sponge by opening gripper",
+      "Closing gripper to grasp the sponge",
+      "Moving away with open gripper after releasing the sponge",
+      "None of the above",
+      "Firmly grasping the sponge"
+    ],
+    "correct_answer_index": 3,
+    "correct_answer_text": "None of the above",
+    "task_description": "The robot is tasked to move sponge near brown chip bag. The robot is interacting with the sponge. Which phase of the grasp action is shown in the image?"
+  },
+  {
+    "filename": "drawer-cabinet/robo2vlm_007.jpg",
+    "scene_type": "drawer-cabinet",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_move_sponge_near_green_can_272_q5",
+    "question": "The robot is tasked to move sponge near green can. The robot is interacting with the sponge. Which phase of the grasp action is shown in the image?",
+    "choices": [
+      "Approaching the sponge with open gripper",
+      "Firmly grasping the sponge",
+      "Closing gripper to grasp the sponge",
+      "Releasing the sponge by opening gripper",
+      "Moving away with open gripper after releasing the sponge"
+    ],
+    "correct_answer_index": 0,
+    "correct_answer_text": "Approaching the sponge with open gripper",
+    "task_description": "The robot is tasked to move sponge near green can. The robot is interacting with the sponge. Which phase of the grasp action is shown in the image?"
+  },
+  {
+    "filename": "drawer-cabinet/robo2vlm_008.jpg",
+    "scene_type": "drawer-cabinet",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "fractal20220817_data_move_sponge_near_green_can_2832_q12",
+    "question": "The robot is tasked to approaching the sponge with open gripper with the sponge. After Approaching the sponge with open gripper, what will be the robot's NEXT action phase?",
+    "choices": [
+      "Releasing the sponge by opening gripper",
+      "Approaching the sponge with open gripper",
+      "Closing gripper to grasp the sponge",
+      "Moving away with open gripper after releasing the sponge",
+      "Firmly grasping the sponge"
+    ],
+    "correct_answer_index": 2,
+    "correct_answer_text": "Closing gripper to grasp the sponge",
+    "task_description": "The robot is tasked to approaching the sponge with open gripper with the sponge. After Approaching the sponge with open gripper, what will be the robot's NEXT action phase?"
+  },
+  {
+    "filename": "kitchen/robo2vlm_009.jpg",
+    "scene_type": "kitchen",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "viola_pick_up_the_bowl_from_the_lazy_susan_and_put_bowl_on_the_plate_104_q37",
+    "question": "Is the robot's gripper open?",
+    "choices": [
+      "Partially open",
+      "No",
+      "Cannot be determined",
+      "Yes"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "No",
+    "task_description": "Is the robot's gripper open?"
+  },
+  {
+    "filename": "assembly/robo2vlm_010.jpg",
+    "scene_type": "assembly",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "stanford_kuka_multimodal_dataset_converted_externally_to_rlds_insert_the_peg_into_the_hole_140_q66",
+    "question": "The robot is tasked to approaching the peg with open gripper with the peg. After Approaching the peg with open gripper, what will be the robot's NEXT action phase?",
+    "choices": [
+      "None of the above",
+      "Firmly grasping the peg",
+      "Approaching the peg with open gripper",
+      "Moving away with open gripper after releasing the peg",
+      "Releasing the peg by opening gripper"
+    ],
+    "correct_answer_index": 0,
+    "correct_answer_text": "None of the above",
+    "task_description": "The robot is tasked to approaching the peg with open gripper with the peg. After Approaching the peg with open gripper, what will be the robot's NEXT action phase?"
+  },
+  {
+    "filename": "assembly/robo2vlm_011.jpg",
+    "scene_type": "assembly",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "stanford_kuka_multimodal_dataset_converted_externally_to_rlds_insert_the_peg_into_the_hole_141_q27",
+    "question": "Is the robot's grasp of the peg stable?",
+    "choices": [
+      "Partially stable",
+      "No",
+      "Yes",
+      "Cannot be determined"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "No",
+    "task_description": "Is the robot's grasp of the peg stable?"
+  },
+  {
+    "filename": "assembly/robo2vlm_012.jpg",
+    "scene_type": "assembly",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "stanford_kuka_multimodal_dataset_converted_externally_to_rlds_insert_the_peg_into_the_hole_142_q8",
+    "question": "The robot is to insert the peg into the hole. Has the robot successfully completed the task?",
+    "choices": [
+      "Task was not attempted",
+      "No",
+      "Yes",
+      "Cannot be determined"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "No",
+    "task_description": "The robot is to insert the peg into the hole. Has the robot successfully completed the task?"
+  },
+  {
+    "filename": "assembly/robo2vlm_013.jpg",
+    "scene_type": "assembly",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "stanford_kuka_multimodal_dataset_converted_externally_to_rlds_insert_the_peg_into_the_hole_143_q6",
+    "question": "The robot is tasked to approaching the peg with open gripper with the peg. After Approaching the peg with open gripper, what will be the robot's NEXT action phase?",
+    "choices": [
+      "Firmly grasping the peg",
+      "Closing gripper to grasp the peg",
+      "Moving away with open gripper after releasing the peg",
+      "Releasing the peg by opening gripper",
+      "Approaching the peg with open gripper"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "Closing gripper to grasp the peg",
+    "task_description": "The robot is tasked to approaching the peg with open gripper with the peg. After Approaching the peg with open gripper, what will be the robot's NEXT action phase?"
+  },
+  {
+    "filename": "kitchen/robo2vlm_014.jpg",
+    "scene_type": "kitchen",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_open_the_lid_on_the_cup_816_q8",
+    "question": "In the image from ext2, which colored point is FARTHEST from the camera?",
+    "choices": [
+      "Purple",
+      "Green",
+      "Blue",
+      "Yellow",
+      "Red"
+    ],
+    "correct_answer_index": 4,
+    "correct_answer_text": "Red",
+    "task_description": "In the image from ext2, which colored point is FARTHEST from the camera?"
+  },
+  {
+    "filename": "kitchen/robo2vlm_015.jpg",
+    "scene_type": "kitchen",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_move_the_mug_backwards_then_forwards_7476_q62",
+    "question": "The robot's task is to move the mug backwards then forwards. Which configuration shows the goal state that the robot should achieve?",
+    "choices": [
+      "None of the above",
+      "Configuration C",
+      "Configuration B",
+      "Configuration D",
+      "Configuration E"
+    ],
+    "correct_answer_index": 0,
+    "correct_answer_text": "None of the above",
+    "task_description": "The robot's task is to move the mug backwards then forwards. Which configuration shows the goal state that the robot should achieve?"
+  },
+  {
+    "filename": "kitchen/robo2vlm_016.jpg",
+    "scene_type": "kitchen",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_put_the_marker_inside_the_cup_7432_q23",
+    "question": "The robot is to put the marker inside the cup. Has the robot successfully completed the task?",
+    "choices": [
+      "No",
+      "Yes",
+      "Cannot be determined",
+      "Task was not attempted"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "Yes",
+    "task_description": "The robot is to put the marker inside the cup. Has the robot successfully completed the task?"
+  },
+  {
+    "filename": "bin-picking/robo2vlm_017.jpg",
+    "scene_type": "bin-picking",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_put_the_carrot_plush_toy_on_the_pan_1565_q4",
+    "question": "The robot's task is to put the carrot plush toy on the pan. Which configuration shows the goal state that the robot should achieve?",
+    "choices": [
+      "Configuration B",
+      "Configuration A",
+      "Configuration C",
+      "Configuration E",
+      "Configuration D"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "Configuration A",
+    "task_description": "The robot's task is to put the carrot plush toy on the pan. Which configuration shows the goal state that the robot should achieve?"
+  },
+  {
+    "filename": "bin-picking/robo2vlm_018.jpg",
+    "scene_type": "bin-picking",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_put_the_carton_box_from_the_cabinet_on_the_counter_top_10282_q4",
+    "question": "The robot's task is to put the carton box from the cabinet on the counter top. Which configuration shows the goal state that the robot should achieve?",
+    "choices": [
+      "Configuration D",
+      "Configuration B",
+      "Configuration A",
+      "Configuration C",
+      "Configuration E"
+    ],
+    "correct_answer_index": 2,
+    "correct_answer_text": "Configuration A",
+    "task_description": "The robot's task is to put the carton box from the cabinet on the counter top. Which configuration shows the goal state that the robot should achieve?"
+  },
+  {
+    "filename": "bin-picking/robo2vlm_019.jpg",
+    "scene_type": "bin-picking",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_remove_all_the_plush_toys_from_the_basket_1572_q21",
+    "question": "The robot task is to remove all the plush toys from the basket. Which colored arrow correctly shows the direction the robot will move next?",
+    "choices": [
+      "Blue",
+      "Red",
+      "Green",
+      "Yellow",
+      "Purple"
+    ],
+    "correct_answer_index": 1,
+    "correct_answer_text": "Red",
+    "task_description": "The robot task is to remove all the plush toys from the basket. Which colored arrow correctly shows the direction the robot will move next?"
+  },
+  {
+    "filename": "bin-picking/robo2vlm_020.jpg",
+    "scene_type": "bin-picking",
+    "source_dataset": "Robo2VLM-1",
+    "source_license": "Apache-2.0",
+    "source_id": "droid_remove_all_the_plush_toys_from_the_basket_1572_q106",
+    "question": "In the left image (ext1 camera), a red dot is marked. Which point is the closest point in the right image (ext2 camera) corresponding to the same 3D location?",
+    "choices": [
+      "B",
+      "C",
+      "E",
+      "D",
+      "A"
+    ],
+    "correct_answer_index": 4,
+    "correct_answer_text": "A",
+    "task_description": "In the left image (ext1 camera), a red dot is marked. Which point is the closest point in the right image (ext2 camera) corresponding to the same 3D location?"
+  }
+]

@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROVE — Robot Observation &amp; Vision Evaluation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @keyframes pulse-blue {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.5); }
+      50% { box-shadow: 0 0 12px 4px rgba(59,130,246,0.35); }
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes typing-dot {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40% { opacity: 1; transform: scale(1); }
+    }
+    .animate-slide-in { animation: slide-in 0.4s ease-out forwards; }
+    .pulse-blue { animation: pulse-blue 1.5s ease-in-out infinite; }
+    .typing-dot { animation: typing-dot 1.4s ease-in-out infinite; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    /* Dropdown styling */
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center; }
+    select option { background: #1a1a2e; color: #fff; }
+
+    /* Transition for expandable JSON */
+    .json-expand { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+    .json-expand.open { max-height: 600px; overflow-y: auto; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'rove-bg': '#09090b',
+            'rove-card': '#1a1a2e',
+            'rove-user': '#16163a',
+            'rove-border': '#2a2a3e',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full bg-rove-bg text-white flex flex-col overflow-hidden">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="flex items-center gap-3 px-5 py-3 border-b border-rove-border bg-rove-bg/90 backdrop-blur-sm shrink-0 z-20">
+    <div class="flex items-center gap-2">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
+        <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#3b82f6"/><circle cx="4" cy="12" r="1" fill="#3b82f6"/>
+        <circle cx="20" cy="12" r="1" fill="#3b82f6"/><circle cx="12" cy="22" r="1" fill="#3b82f6"/>
+      </svg>
+      <h1 class="text-xl font-bold tracking-tight">ROVE</h1>
+    </div>
+    <span class="text-xs text-gray-400 hidden sm:inline">Robot Observation &amp; Vision Evaluation</span>
+    <div class="ml-auto flex items-center gap-2 text-xs text-gray-500">
+      <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600"></span>
+      <span id="connectionLabel">Disconnected</span>
+    </div>
+  </header>
+
+  <!-- ============ MAIN LAYOUT ============ -->
+  <div class="flex flex-1 min-h-0">
+
+    <!-- ---- Left Sidebar: Pipeline Workflow Progress ---- -->
+    <aside class="w-[72px] shrink-0 border-r border-rove-border flex flex-col items-center pt-4 bg-rove-bg">
+      <span class="text-[9px] uppercase tracking-widest text-gray-600 font-semibold mb-4">Pipeline</span>
+
+      <div class="flex flex-col items-center">
+        <!-- Perceive -->
+        <div id="sidebar-perceive" class="sidebar-icon group relative" data-stage="perceive">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
+            <i data-lucide="eye" class="w-5 h-5"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Perceive</span>
+        </div>
+        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="perceive"></div>
+
+        <!-- Plan -->
+        <div id="sidebar-plan" class="sidebar-icon group relative" data-stage="plan">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
+            <i data-lucide="brain" class="w-5 h-5"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Plan</span>
+        </div>
+        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="plan"></div>
+
+        <!-- Act -->
+        <div id="sidebar-act" class="sidebar-icon group relative" data-stage="act">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
+            <i data-lucide="bot" class="w-5 h-5"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Act</span>
+        </div>
+        <div class="w-px h-5 bg-gray-700 sidebar-connector" data-after="act"></div>
+
+        <!-- Verify -->
+        <div id="sidebar-verify" class="sidebar-icon group relative" data-stage="verify">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+          </div>
+          <span class="absolute left-16 top-1/2 -translate-y-1/2 bg-gray-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity z-30">Verify</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ---- Chat Main Area ---- -->
+    <main class="flex-1 flex flex-col min-h-0">
+
+      <!-- Chat messages scroll area -->
+      <div id="chatArea" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        <!-- Welcome screen -->
+        <div id="welcomeMsg" class="flex flex-col items-center justify-center h-full text-center px-4">
+          <!-- Logo + title -->
+          <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/20 flex items-center justify-center mb-5">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
+              <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#3b82f6"/><circle cx="4" cy="12" r="1" fill="#3b82f6"/>
+              <circle cx="20" cy="12" r="1" fill="#3b82f6"/><circle cx="12" cy="22" r="1" fill="#3b82f6"/>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-bold mb-2">Welcome to ROVE</h2>
+          <p class="text-gray-400 text-sm max-w-lg mb-8">Robot Observation & Vision Evaluation — a model evaluation framework that benchmarks VLM/VLA pipelines for robotics manipulation tasks.</p>
+
+          <!-- Capability cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full mb-8">
+            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <i data-lucide="eye" class="w-4 h-4 text-blue-400"></i>
+                </div>
+                <span class="text-sm font-semibold text-gray-200">Scene Perception</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">VLMs analyze workspace images to detect objects, spatial relationships, and task-relevant features.</p>
+            </div>
+            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <i data-lucide="brain" class="w-4 h-4 text-purple-400"></i>
+                </div>
+                <span class="text-sm font-semibold text-gray-200">Task Planning</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">VLMs, LLMs, or Foundry agents reason about how to accomplish the task with step-by-step strategies.</p>
+            </div>
+            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <i data-lucide="bot" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <span class="text-sm font-semibold text-gray-200">Action Execution</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">VLAs, LLMs with tools, or Foundry agents execute the planned actions via trajectories or tool calls.</p>
+            </div>
+            <div class="bg-rove-card border border-rove-border rounded-xl p-4 text-left">
+              <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-amber-400"></i>
+                </div>
+                <span class="text-sm font-semibold text-gray-200">Automated Verification</span>
+              </div>
+              <p class="text-xs text-gray-500 leading-relaxed">VLMs compare before/after images to verify task completion with confidence scores and reasoning.</p>
+            </div>
+          </div>
+
+          <!-- How to use -->
+          <div class="bg-rove-card/50 border border-rove-border rounded-xl p-4 max-w-lg w-full">
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 font-semibold mb-3">Get Started</p>
+            <div class="flex flex-col gap-2 text-left">
+              <div class="flex items-center gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                <span class="text-xs text-gray-400">Upload a robotics workspace image using the camera button</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                <span class="text-xs text-gray-400">Describe a manipulation task (e.g., "Pick the red bracket and place it in bin A")</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                <span class="text-xs text-gray-400">Configure which model runs each pipeline stage (perceive, plan, act, verify)</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">4</span>
+                <span class="text-xs text-gray-400">Click Evaluate and watch the pipeline execute stage by stage</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- Bottom Input Bar ---- -->
+      <div class="shrink-0 border-t border-rove-border bg-rove-bg px-4 py-3">
+
+        <!-- Pipeline config panel (collapsible) -->
+        <div id="configPanel" class="mb-3">
+          <button id="configToggle" class="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full">
+            <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+            <span>Pipeline Configuration</span>
+            <i data-lucide="chevron-up" id="configChevron" class="w-3 h-3 ml-auto transition-transform duration-200"></i>
+          </button>
+
+          <div id="configContent">
+            <!-- Quick config: Mock toggle + Same VLM shortcut -->
+            <div class="flex items-center gap-4 mb-2">
+              <!-- Mock toggle -->
+              <label class="flex items-center gap-2 cursor-pointer">
+                <div class="relative">
+                  <input type="checkbox" id="mockToggle" class="sr-only peer" />
+                  <div class="w-8 h-4 bg-gray-700 peer-checked:bg-blue-600 rounded-full transition-colors"></div>
+                  <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+                </div>
+                <span class="text-[10px] text-gray-400 font-medium">Simulation Mode</span>
+              </label>
+
+              <!-- Same VLM shortcut -->
+              <div class="flex items-center gap-1.5">
+                <label class="text-[10px] text-gray-500 font-medium whitespace-nowrap">Same model for VLM stages</label>
+                <select id="sameVlmSelect" class="bg-rove-card border border-rove-border rounded text-[10px] text-gray-400 px-1.5 py-0.5 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">— Independent —</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Stage model selectors — 4 cards in a row -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+              <!-- Perceive -->
+              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <i data-lucide="eye" class="w-3.5 h-3.5 text-blue-400"></i>
+                  <span class="text-[10px] uppercase tracking-wider text-blue-400 font-semibold">Perceive</span>
+                </div>
+                <select id="selPerceive" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">Loading...</option>
+                </select>
+                <p class="text-[9px] text-gray-600 mt-1">Analyze scene image</p>
+              </div>
+
+              <!-- Plan -->
+              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400"></i>
+                  <span class="text-[10px] uppercase tracking-wider text-purple-400 font-semibold">Plan</span>
+                </div>
+                <select id="selPlan" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">Loading...</option>
+                </select>
+                <p class="text-[9px] text-gray-600 mt-1">Generate task strategy</p>
+              </div>
+
+              <!-- Act -->
+              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
+                  <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Act</span>
+                </div>
+                <select id="selAct" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">Loading...</option>
+                </select>
+                <p class="text-[9px] text-gray-600 mt-1">Predict motor commands</p>
+              </div>
+
+              <!-- Verify -->
+              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
+                <div class="flex items-center gap-1.5 mb-1.5">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Verify</span>
+                </div>
+                <select id="selVerify" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">Loading...</option>
+                </select>
+                <p class="text-[9px] text-gray-600 mt-1">Check task success</p>
+              </div>
+            </div>
+
+            <!-- Environment row -->
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-1.5">
+                <i data-lucide="box" class="w-3 h-3 text-gray-500"></i>
+                <label class="text-[9px] uppercase tracking-wider text-gray-600 font-medium">Environment</label>
+                <select id="selSim" class="bg-rove-card border border-rove-border rounded text-[11px] text-gray-300 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+              <span class="text-[9px] text-gray-600 italic">Simulation for action execution</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image preview -->
+        <div id="imagePreview" class="hidden mb-3">
+          <div class="relative inline-block">
+            <img id="previewImg" class="h-20 rounded-lg border border-rove-border object-cover" />
+            <button id="removeImage" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">&times;</button>
+          </div>
+        </div>
+
+        <!-- Input row -->
+        <div class="flex items-end gap-2">
+          <label class="shrink-0 cursor-pointer w-10 h-10 rounded-lg bg-rove-card border border-rove-border flex items-center justify-center hover:border-blue-500 transition-colors">
+            <i data-lucide="camera" class="w-5 h-5 text-gray-400"></i>
+            <input type="file" id="imageInput" accept="image/*" class="hidden" />
+          </label>
+          <div class="flex-1 relative">
+            <textarea id="taskInput" rows="1" placeholder="Describe the manipulation task..."
+              class="w-full bg-rove-card border border-rove-border rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-none focus:border-blue-500 placeholder-gray-500 transition-colors"
+              style="max-height:120px"></textarea>
+          </div>
+          <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center justify-center transition-colors">
+            <i data-lucide="send" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ JAVASCRIPT ============ -->
+  <script>
+    const API_BASE = "http://localhost:5001";
+
+    // ---- State ----
+    let selectedFile = null;
+    let isRunning = false;
+    let currentEventSource = null;
+
+    // ---- DOM refs ----
+    const chatArea      = document.getElementById("chatArea");
+    const welcomeMsg    = document.getElementById("welcomeMsg");
+    const imageInput    = document.getElementById("imageInput");
+    const imagePreview  = document.getElementById("imagePreview");
+    const previewImg    = document.getElementById("previewImg");
+    const removeImageBtn = document.getElementById("removeImage");
+    const taskInput     = document.getElementById("taskInput");
+    const evalBtn       = document.getElementById("evalBtn");
+    const selPerceive   = document.getElementById("selPerceive");
+    const selPlan       = document.getElementById("selPlan");
+    const selAct        = document.getElementById("selAct");
+    const selVerify     = document.getElementById("selVerify");
+    const selSim        = document.getElementById("selSim");
+    const connDot       = document.getElementById("connectionDot");
+    const connLabel     = document.getElementById("connectionLabel");
+    const configToggle  = document.getElementById("configToggle");
+    const configContent = document.getElementById("configContent");
+    const configChevron = document.getElementById("configChevron");
+
+    // ---- Stage metadata ----
+    const STAGES = {
+      perceive: { label: "Scene Analysis",     icon: "eye",          sidebar: "sidebar-perceive" },
+      plan:     { label: "Task Planning",       icon: "brain",        sidebar: "sidebar-plan"     },
+      act:      { label: "Action Execution",    icon: "bot",          sidebar: "sidebar-act"      },
+      verify:   { label: "Verification",        icon: "check-circle", sidebar: "sidebar-verify"   },
+    };
+
+    // ---- Utility: safe text node creation ----
+    function createTextSpan(text, className) {
+      const span = document.createElement("span");
+      if (className) span.className = className;
+      span.textContent = text;
+      return span;
+    }
+
+    function escapeForAttr(str) {
+      if (typeof str !== "string") str = String(str != null ? str : "");
+      return str.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    }
+
+    // ---- Initialize ----
+    document.addEventListener("DOMContentLoaded", async () => {
+      lucide.createIcons();
+      await loadModels();
+      autoResizeTextarea();
+      initConfigPanel();
+    });
+
+    // ---- Config panel toggle ----
+    function initConfigPanel() {
+      let collapsed = false;
+      configToggle.addEventListener("click", function() {
+        collapsed = !collapsed;
+        configContent.style.display = collapsed ? "none" : "";
+        configChevron.style.transform = collapsed ? "rotate(180deg)" : "";
+      });
+    }
+
+    // ---- Mock toggle ----
+    const mockToggle = document.getElementById("mockToggle");
+    let savedSelections = {};
+
+    mockToggle.addEventListener("change", async function() {
+      const selectors = { perceive: selPerceive, plan: selPlan, act: selAct, verify: selVerify, sim: selSim };
+      if (mockToggle.checked) {
+        // Save current selections
+        Object.keys(selectors).forEach(function(k) { savedSelections[k] = selectors[k].value; });
+        // Fetch mock model IDs from server
+        try {
+          const res = await fetch(API_BASE + "/api/mock-models");
+          if (res.ok) {
+            const mockIds = await res.json();
+            Object.keys(mockIds).forEach(function(stage) {
+              if (selectors[stage]) selectors[stage].value = mockIds[stage];
+            });
+          }
+        } catch (e) { console.error("Failed to fetch mock models:", e); }
+      } else {
+        // Restore previous selections
+        Object.keys(savedSelections).forEach(function(k) {
+          if (selectors[k] && savedSelections[k]) selectors[k].value = savedSelections[k];
+        });
+      }
+    });
+
+    // ---- Same VLM shortcut ----
+    const sameVlmSelect = document.getElementById("sameVlmSelect");
+
+    function populateSameVlmOptions() {
+      sameVlmSelect.textContent = "";
+      var defaultOpt = document.createElement("option");
+      defaultOpt.value = "";
+      defaultOpt.textContent = "\u2014 Independent \u2014";
+      sameVlmSelect.appendChild(defaultOpt);
+
+      // Find models that appear in perceive, plan, AND verify
+      var pIds = new Set(); var plIds = new Set(); var vIds = new Set();
+      Array.from(selPerceive.options).forEach(function(o) { if (o.value) pIds.add(o.value); });
+      Array.from(selPlan.options).forEach(function(o) { if (o.value) plIds.add(o.value); });
+      Array.from(selVerify.options).forEach(function(o) { if (o.value) vIds.add(o.value); });
+
+      pIds.forEach(function(id) {
+        if (plIds.has(id) && vIds.has(id)) {
+          var opt = document.createElement("option");
+          opt.value = id;
+          var srcOpt = Array.from(selPerceive.options).find(function(o) { return o.value === id; });
+          opt.textContent = srcOpt ? srcOpt.textContent : id;
+          sameVlmSelect.appendChild(opt);
+        }
+      });
+    }
+
+    sameVlmSelect.addEventListener("change", function() {
+      var val = sameVlmSelect.value;
+      if (val) {
+        selPerceive.value = val;
+        selPlan.value = val;
+        selVerify.value = val;
+      }
+    });
+
+    // ---- Load models ----
+    async function loadModels() {
+      try {
+        const res = await fetch(API_BASE + "/api/models");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        setConnection(true);
+        var stages = data.stages || {};
+        populateDropdown(selPerceive, stages.perceive || []);
+        populateDropdown(selPlan, stages.plan || []);
+        populateDropdown(selAct, stages.act || []);
+        populateDropdown(selVerify, stages.verify || []);
+        populateDropdown(selSim, data.sim || []);
+        populateSameVlmOptions();
+      } catch (e) {
+        console.error("Failed to load models:", e);
+        setConnection(false);
+        [selPerceive, selPlan, selAct, selVerify, selSim].forEach(function(sel) {
+          sel.textContent = "";
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "Unavailable";
+          sel.appendChild(opt);
+        });
+      }
+    }
+
+    function populateDropdown(select, models) {
+      select.textContent = "";
+      const available = models.filter(function(m) { return m.available; });
+      if (available.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No models available";
+        select.appendChild(opt);
+        return;
+      }
+      available.forEach(function(m) {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        var label = m.display_name;
+        if (m.model_type === "agent") label += " (Agent)";
+        opt.textContent = label;
+        select.appendChild(opt);
+      });
+    }
+
+    function setConnection(ok) {
+      connDot.className = "inline-block w-2 h-2 rounded-full " + (ok ? "bg-green-500" : "bg-red-500");
+      connLabel.textContent = ok ? "Connected" : "Disconnected";
+    }
+
+    // ---- Image handling ----
+    imageInput.addEventListener("change", function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      selectedFile = file;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        previewImg.src = ev.target.result;
+        imagePreview.classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+    });
+
+    removeImageBtn.addEventListener("click", function() {
+      selectedFile = null;
+      imageInput.value = "";
+      imagePreview.classList.add("hidden");
+    });
+
+    // ---- Auto-resize textarea ----
+    function autoResizeTextarea() {
+      taskInput.addEventListener("input", function() {
+        taskInput.style.height = "auto";
+        taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
+      });
+      taskInput.addEventListener("keydown", function(e) {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          evalBtn.click();
+        }
+      });
+    }
+
+    // ---- Evaluate ----
+    evalBtn.addEventListener("click", async function() {
+      const task = taskInput.value.trim();
+      if (!task || !selectedFile || isRunning) return;
+      const perceiveId = selPerceive.value;
+      const planId     = selPlan.value;
+      const actId      = selAct.value;
+      const verifyId   = selVerify.value;
+      const simId      = selSim.value;
+      if (!perceiveId || !planId || !actId || !verifyId || !simId) return;
+
+      setRunning(true);
+      hideWelcome();
+      resetSidebar();
+
+      // Get display names
+      function getDisplayName(sel) {
+        return sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : sel.value;
+      }
+      var stageModels = {
+        perceive: { id: perceiveId, name: getDisplayName(selPerceive) },
+        plan:     { id: planId,     name: getDisplayName(selPlan) },
+        act:      { id: actId,      name: getDisplayName(selAct) },
+        verify:   { id: verifyId,   name: getDisplayName(selVerify) },
+      };
+
+      addUserBubble(previewImg.src, task, stageModels);
+
+      taskInput.value = "";
+      taskInput.style.height = "auto";
+
+      // POST evaluate with per-stage model IDs
+      const form = new FormData();
+      form.append("image", selectedFile);
+      form.append("task", task);
+      form.append("perceive_model_id", perceiveId);
+      form.append("plan_model_id", planId);
+      form.append("act_model_id", actId);
+      form.append("verify_model_id", verifyId);
+      form.append("sim_id", simId);
+
+      try {
+        const res = await fetch(API_BASE + "/api/evaluate", { method: "POST", body: form });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const body = await res.json();
+        connectSSE(body.eval_id);
+      } catch (e) {
+        console.error("Evaluate failed:", e);
+        addErrorBubble("Failed to start evaluation: " + e.message);
+        setRunning(false);
+      }
+    });
+
+    // ---- SSE connection ----
+    function connectSSE(evalId) {
+      if (currentEventSource) currentEventSource.close();
+
+      const es = new EventSource(API_BASE + "/api/evaluate/" + evalId + "/stream");
+      currentEventSource = es;
+      let typingEl = null;
+
+      es.addEventListener("stage", function(e) {
+        const data = JSON.parse(e.data);
+        const stage = data.stage;
+        const status = data.status;
+        const latencyMs = data.latency_ms;
+        const output = data.output;
+        const error = data.error;
+        const modelId = data.model_id;
+
+        // Update sidebar
+        updateSidebar(stage, status);
+
+        if (status === "running") {
+          if (typingEl) typingEl.remove();
+          typingEl = addTypingIndicator(stage);
+        }
+
+        if (status === "completed" || status === "error") {
+          if (typingEl) { typingEl.remove(); typingEl = null; }
+          addStageBubble(stage, status, latencyMs, output, error, modelId);
+        }
+      });
+
+      es.addEventListener("complete", function() {
+        if (typingEl) typingEl.remove();
+        es.close();
+        currentEventSource = null;
+        setRunning(false);
+      });
+
+      es.addEventListener("error", function(e) {
+        if (typingEl) typingEl.remove();
+        if (es.readyState === EventSource.CLOSED) {
+          setRunning(false);
+          return;
+        }
+        var errMsg = "Connection lost";
+        try {
+          if (e.data) {
+            var parsed = JSON.parse(e.data);
+            if (parsed.message) errMsg = parsed.message;
+          }
+        } catch (_) {}
+        addErrorBubble(errMsg);
+        es.close();
+        currentEventSource = null;
+        setRunning(false);
+      });
+    }
+
+    // ---- UI helpers ----
+    function setRunning(val) {
+      isRunning = val;
+      evalBtn.disabled = val;
+    }
+
+    function hideWelcome() {
+      if (welcomeMsg && welcomeMsg.parentNode) welcomeMsg.remove();
+    }
+
+    function resetSidebar() {
+      Object.values(STAGES).forEach(function(s) {
+        var el = document.getElementById(s.sidebar);
+        var inner = el.querySelector("div");
+        inner.className = "w-10 h-10 rounded-xl flex items-center justify-center bg-rove-card text-gray-500 transition-all duration-300";
+      });
+      document.querySelectorAll(".sidebar-connector").forEach(function(c) {
+        c.className = "w-px h-5 bg-gray-700 sidebar-connector";
+      });
+    }
+
+    function updateSidebar(stage, status) {
+      var meta = STAGES[stage];
+      if (!meta) return;
+      var el = document.getElementById(meta.sidebar);
+      var inner = el.querySelector("div");
+
+      inner.classList.remove("text-gray-500", "text-blue-400", "text-green-400", "text-red-400", "pulse-blue", "border", "border-blue-500", "border-green-500", "border-red-500");
+
+      if (status === "running") {
+        inner.classList.add("text-blue-400", "pulse-blue", "border", "border-blue-500");
+      } else if (status === "completed") {
+        inner.classList.add("text-green-400", "border", "border-green-500");
+        // Color the connector line after this stage
+        var connector = document.querySelector('.sidebar-connector[data-after="' + stage + '"]');
+        if (connector) connector.className = "w-px h-5 bg-green-500/50 sidebar-connector transition-colors duration-500";
+      } else if (status === "error") {
+        inner.classList.add("text-red-400", "border", "border-red-500");
+        var connector = document.querySelector('.sidebar-connector[data-after="' + stage + '"]');
+        if (connector) connector.className = "w-px h-5 bg-red-500/50 sidebar-connector transition-colors duration-500";
+      }
+    }
+
+    function scrollToBottom() {
+      requestAnimationFrame(function() {
+        chatArea.scrollTop = chatArea.scrollHeight;
+      });
+    }
+
+    // ---- Bubble builders using DOM API ----
+
+    function addUserBubble(imgSrc, task, stageModels) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "flex justify-end animate-slide-in";
+
+      var bubble = document.createElement("div");
+      bubble.className = "max-w-lg bg-rove-user border border-rove-border rounded-2xl rounded-br-md p-4 space-y-3";
+
+      var img = document.createElement("img");
+      img.src = imgSrc;
+      img.className = "w-full max-h-48 object-cover rounded-lg";
+      bubble.appendChild(img);
+
+      var taskP = document.createElement("p");
+      taskP.className = "text-sm text-gray-100";
+      taskP.textContent = task;
+      bubble.appendChild(taskP);
+
+      // Per-stage model badges
+      var stageColors = {
+        perceive: { bg: "bg-blue-500/15", text: "text-blue-300", label: "Perceive" },
+        plan:     { bg: "bg-purple-500/15", text: "text-purple-300", label: "Plan" },
+        act:      { bg: "bg-emerald-500/15", text: "text-emerald-300", label: "Act" },
+        verify:   { bg: "bg-amber-500/15", text: "text-amber-300", label: "Verify" },
+      };
+
+      var badges = document.createElement("div");
+      badges.className = "flex flex-wrap gap-1.5";
+
+      Object.keys(stageColors).forEach(function(stage) {
+        var colors = stageColors[stage];
+        var model = stageModels[stage];
+        if (!model) return;
+        var badge = document.createElement("span");
+        badge.className = "text-[10px] " + colors.bg + " " + colors.text + " px-2 py-0.5 rounded-full";
+        badge.textContent = colors.label + ": " + model.name;
+        badges.appendChild(badge);
+      });
+
+      bubble.appendChild(badges);
+      wrapper.appendChild(bubble);
+      chatArea.appendChild(wrapper);
+      scrollToBottom();
+    }
+
+    function addTypingIndicator(stage) {
+      var meta = STAGES[stage];
+      var wrapper = document.createElement("div");
+      wrapper.className = "flex justify-start animate-slide-in";
+
+      var bubble = document.createElement("div");
+      bubble.className = "max-w-lg bg-rove-card border border-rove-border rounded-2xl rounded-bl-md p-4";
+
+      var header = document.createElement("div");
+      header.className = "flex items-center gap-2 mb-2";
+      var icon = document.createElement("i");
+      icon.setAttribute("data-lucide", meta.icon);
+      icon.className = "w-4 h-4 text-blue-400";
+      header.appendChild(icon);
+      var label = document.createElement("span");
+      label.className = "text-xs font-semibold text-blue-400";
+      label.textContent = meta.label;
+      header.appendChild(label);
+      bubble.appendChild(header);
+
+      var dots = document.createElement("div");
+      dots.className = "flex items-center gap-1.5 py-1";
+      for (var i = 0; i < 3; i++) {
+        var dot = document.createElement("div");
+        dot.className = "w-2 h-2 bg-blue-400 rounded-full typing-dot";
+        dots.appendChild(dot);
+      }
+      bubble.appendChild(dots);
+
+      wrapper.appendChild(bubble);
+      chatArea.appendChild(wrapper);
+      lucide.createIcons({ nodes: [wrapper] });
+      scrollToBottom();
+      return wrapper;
+    }
+
+    function addStageBubble(stage, status, latencyMs, output, error, modelId) {
+      var meta = STAGES[stage];
+      var isOk = status === "completed";
+      var accentColor = isOk ? "green" : "red";
+      var bubbleId = "bubble-" + stage + "-" + Date.now();
+
+      var wrapper = document.createElement("div");
+      wrapper.className = "flex justify-start animate-slide-in";
+
+      var bubble = document.createElement("div");
+      bubble.className = "max-w-xl bg-rove-card border border-rove-border rounded-2xl rounded-bl-md p-4 space-y-3 w-full";
+
+      // Header row
+      var headerRow = document.createElement("div");
+      headerRow.className = "flex items-center justify-between";
+
+      var headerLeft = document.createElement("div");
+      headerLeft.className = "flex items-center gap-2";
+      var icon = document.createElement("i");
+      icon.setAttribute("data-lucide", meta.icon);
+      icon.className = "w-4 h-4 text-" + accentColor + "-400";
+      headerLeft.appendChild(icon);
+      var labelSpan = document.createElement("span");
+      labelSpan.className = "text-xs font-semibold text-" + accentColor + "-400";
+      labelSpan.textContent = meta.label;
+      headerLeft.appendChild(labelSpan);
+
+      // Success/fail badge for verify
+      if (stage === "verify" && output && output.success != null) {
+        var badge = document.createElement("span");
+        if (output.success) {
+          badge.className = "text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full ml-2";
+          badge.textContent = "SUCCESS";
+        } else {
+          badge.className = "text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full ml-2";
+          badge.textContent = "FAILED";
+        }
+        headerLeft.appendChild(badge);
+      }
+
+      headerRow.appendChild(headerLeft);
+
+      var headerRight = document.createElement("div");
+      headerRight.className = "flex items-center gap-1.5";
+      if (latencyMs != null) {
+        var latBadge = document.createElement("span");
+        latBadge.className = "text-[10px] bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full";
+        latBadge.textContent = latencyMs + "ms";
+        headerRight.appendChild(latBadge);
+      }
+      if (modelId) {
+        var modBadge = document.createElement("span");
+        modBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded-full";
+        modBadge.textContent = modelId;
+        headerRight.appendChild(modBadge);
+      }
+      headerRow.appendChild(headerRight);
+      bubble.appendChild(headerRow);
+
+      // Body content
+      var body = document.createElement("div");
+      body.className = "text-sm text-gray-300 space-y-1.5";
+      if (error) {
+        var errP = document.createElement("p");
+        errP.className = "text-sm text-red-400";
+        errP.textContent = error;
+        body.appendChild(errP);
+      } else if (output) {
+        renderStageOutput(body, stage, output);
+      }
+      bubble.appendChild(body);
+
+      // Expandable raw JSON
+      if (output) {
+        var toggleBtn = document.createElement("button");
+        toggleBtn.className = "flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors";
+        var chevron = document.createElement("i");
+        chevron.setAttribute("data-lucide", "chevron-down");
+        chevron.className = "w-3 h-3";
+        toggleBtn.appendChild(chevron);
+        var toggleText = document.createElement("span");
+        toggleText.textContent = "Raw output";
+        toggleBtn.appendChild(toggleText);
+        bubble.appendChild(toggleBtn);
+
+        var jsonPanel = document.createElement("div");
+        jsonPanel.id = bubbleId;
+        jsonPanel.className = "json-expand";
+        var pre = document.createElement("pre");
+        pre.className = "text-[11px] text-gray-500 bg-black/30 rounded-lg p-3 overflow-x-auto";
+        pre.textContent = JSON.stringify(output, null, 2);
+        jsonPanel.appendChild(pre);
+        bubble.appendChild(jsonPanel);
+
+        toggleBtn.addEventListener("click", function() {
+          jsonPanel.classList.toggle("open");
+        });
+      }
+
+      wrapper.appendChild(bubble);
+      chatArea.appendChild(wrapper);
+      lucide.createIcons({ nodes: [wrapper] });
+      scrollToBottom();
+    }
+
+    function addErrorBubble(message) {
+      var wrapper = document.createElement("div");
+      wrapper.className = "flex justify-start animate-slide-in";
+
+      var bubble = document.createElement("div");
+      bubble.className = "max-w-lg bg-red-500/10 border border-red-500/30 rounded-2xl rounded-bl-md p-4";
+
+      var inner = document.createElement("div");
+      inner.className = "flex items-center gap-2";
+      var icon = document.createElement("i");
+      icon.setAttribute("data-lucide", "alert-circle");
+      icon.className = "w-4 h-4 text-red-400";
+      inner.appendChild(icon);
+      var msg = document.createElement("span");
+      msg.className = "text-sm text-red-400";
+      msg.textContent = message;
+      inner.appendChild(msg);
+
+      bubble.appendChild(inner);
+      wrapper.appendChild(bubble);
+      chatArea.appendChild(wrapper);
+      lucide.createIcons({ nodes: [wrapper] });
+      scrollToBottom();
+    }
+
+    // ---- Stage-specific rendering (DOM-based) ----
+
+    function renderStageOutput(container, stage, output) {
+      switch (stage) {
+        case "perceive": renderPerceive(container, output); break;
+        case "plan":     renderPlan(container, output);     break;
+        case "act":      renderAct(container, output);      break;
+        case "verify":   renderVerify(container, output);   break;
+        default:
+          var pre = document.createElement("pre");
+          pre.className = "text-xs text-gray-400";
+          pre.textContent = JSON.stringify(output, null, 2);
+          container.appendChild(pre);
+      }
+    }
+
+    function renderPerceive(container, o) {
+      var rendered = false;
+      // Detected objects
+      if (o.objects && o.objects.length) {
+        rendered = true;
+        var section = document.createElement("div");
+        section.className = "space-y-1";
+        var heading = document.createElement("p");
+        heading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
+        heading.textContent = "Detected Objects";
+        section.appendChild(heading);
+
+        var tagWrap = document.createElement("div");
+        tagWrap.className = "flex flex-wrap gap-1.5";
+        o.objects.forEach(function(obj) {
+          var name = typeof obj === "string" ? obj : (obj.label || obj.name || JSON.stringify(obj));
+          var conf = (typeof obj === "object" && obj.confidence != null) ? " (" + (obj.confidence * 100).toFixed(0) + "%)" : "";
+          var tag = document.createElement("span");
+          tag.className = "text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded-md";
+          tag.textContent = name + conf;
+          tagWrap.appendChild(tag);
+        });
+        section.appendChild(tagWrap);
+        container.appendChild(section);
+      }
+
+      // Spatial relations
+      var rels = o.spatial_relations || o.relations;
+      if (rels) {
+        rendered = true;
+        var relSection = document.createElement("div");
+        relSection.className = "mt-2 space-y-1";
+        var relHeading = document.createElement("p");
+        relHeading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
+        relHeading.textContent = "Spatial Relations";
+        relSection.appendChild(relHeading);
+
+        if (Array.isArray(rels)) {
+          rels.forEach(function(r) {
+            var text = typeof r === "string" ? r : JSON.stringify(r);
+            var p = document.createElement("p");
+            p.className = "text-xs text-gray-400 ml-2";
+            p.textContent = "- " + text;
+            relSection.appendChild(p);
+          });
+        } else if (typeof rels === "string") {
+          var p2 = document.createElement("p");
+          p2.className = "text-xs text-gray-400 ml-2";
+          p2.textContent = rels;
+          relSection.appendChild(p2);
+        }
+        container.appendChild(relSection);
+      }
+
+      // Scene description
+      if (o.scene_description || o.description) {
+        rendered = true;
+        var desc = document.createElement("p");
+        desc.className = "text-xs text-gray-400 mt-2 italic";
+        desc.textContent = o.scene_description || o.description;
+        container.appendChild(desc);
+      }
+
+      if (!rendered) {
+        var fallback = document.createElement("pre");
+        fallback.className = "text-xs text-gray-400";
+        fallback.textContent = JSON.stringify(o, null, 2);
+        container.appendChild(fallback);
+      }
+    }
+
+    function renderPlan(container, o) {
+      var rendered = false;
+
+      if (o.strategy) {
+        rendered = true;
+        var row = document.createElement("div");
+        row.className = "flex items-center gap-2";
+        var lbl = document.createElement("span");
+        lbl.className = "text-[11px] text-gray-500 w-28 shrink-0";
+        lbl.textContent = "Strategy";
+        row.appendChild(lbl);
+        var val = document.createElement("span");
+        val.className = "text-xs text-gray-200";
+        val.textContent = o.strategy;
+        row.appendChild(val);
+        container.appendChild(row);
+      }
+
+      if (o.target_object) {
+        rendered = true;
+        var row2 = document.createElement("div");
+        row2.className = "flex items-center gap-2";
+        var lbl2 = document.createElement("span");
+        lbl2.className = "text-[11px] text-gray-500 w-28 shrink-0";
+        lbl2.textContent = "Target";
+        row2.appendChild(lbl2);
+        var val2 = document.createElement("span");
+        val2.className = "text-xs text-gray-200";
+        val2.textContent = o.target_object;
+        row2.appendChild(val2);
+        container.appendChild(row2);
+      }
+
+      if (o.reasoning) {
+        rendered = true;
+        var reason = document.createElement("div");
+        reason.className = "mt-2 text-xs text-gray-400 italic border-l-2 border-gray-600 pl-3";
+        reason.textContent = o.reasoning;
+        container.appendChild(reason);
+      }
+
+      if (o.steps && Array.isArray(o.steps) && o.steps.length > 0) {
+        rendered = true;
+        var stepsSection = document.createElement("div");
+        stepsSection.className = "mt-2 space-y-1";
+        var stepsHeading = document.createElement("p");
+        stepsHeading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
+        stepsHeading.textContent = "Steps";
+        stepsSection.appendChild(stepsHeading);
+
+        o.steps.forEach(function(step, i) {
+          var text = typeof step === "string" ? step : (step.description || step.action || JSON.stringify(step));
+          var stepRow = document.createElement("div");
+          stepRow.className = "flex items-start gap-2 ml-1";
+          var num = document.createElement("span");
+          num.className = "text-[10px] bg-gray-700 text-gray-300 w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5";
+          num.textContent = String(i + 1);
+          stepRow.appendChild(num);
+          var stepText = document.createElement("span");
+          stepText.className = "text-xs text-gray-300";
+          stepText.textContent = text;
+          stepRow.appendChild(stepText);
+          stepsSection.appendChild(stepRow);
+        });
+        container.appendChild(stepsSection);
+      }
+
+      if (!rendered) {
+        var fallback = document.createElement("pre");
+        fallback.className = "text-xs text-gray-400";
+        fallback.textContent = JSON.stringify(o, null, 2);
+        container.appendChild(fallback);
+      }
+    }
+
+    function renderAct(container, o) {
+      var rendered = false;
+
+      // Action type badge
+      if (o.action_type) {
+        rendered = true;
+        var typeBadge = document.createElement("span");
+        typeBadge.className = "text-[10px] bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded-full mb-2 inline-block";
+        typeBadge.textContent = o.action_type === "tool_calls" ? "Tool Calls" : "Trajectory";
+        container.appendChild(typeBadge);
+      }
+
+      // Tool calls rendering
+      if (o.action_type === "tool_calls" && o.tool_calls && Array.isArray(o.tool_calls)) {
+        rendered = true;
+        var heading = document.createElement("p");
+        heading.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium mt-1";
+        heading.textContent = "Tool Invocations";
+        container.appendChild(heading);
+
+        o.tool_calls.forEach(function(tc, i) {
+          var card = document.createElement("div");
+          card.className = "flex items-center gap-2 ml-1 mt-1 bg-black/20 rounded-md px-2 py-1.5";
+          var num = document.createElement("span");
+          num.className = "text-[10px] bg-gray-700 text-gray-300 w-5 h-5 rounded-full flex items-center justify-center shrink-0";
+          num.textContent = String(i + 1);
+          card.appendChild(num);
+          var toolName = document.createElement("span");
+          toolName.className = "text-xs text-emerald-300 font-mono";
+          toolName.textContent = tc.tool || "unknown";
+          card.appendChild(toolName);
+          if (tc.args) {
+            var argsSpan = document.createElement("span");
+            argsSpan.className = "text-[10px] text-gray-500 font-mono";
+            argsSpan.textContent = JSON.stringify(tc.args);
+            card.appendChild(argsSpan);
+          }
+          container.appendChild(card);
+        });
+      }
+
+      // Trajectory actions
+      var actions = o.actions || o.action_steps;
+      if (o.action_type !== "tool_calls" && actions && Array.isArray(actions)) {
+        rendered = true;
+        var heading2 = document.createElement("p");
+        heading2.className = "text-[11px] uppercase tracking-wider text-gray-500 font-medium";
+        heading2.textContent = "Action Sequence";
+        container.appendChild(heading2);
+
+        actions.forEach(function(a, i) {
+          var text = typeof a === "string" ? a : (a.description || JSON.stringify(a));
+          var p = document.createElement("p");
+          p.className = "text-xs text-gray-300 ml-2";
+          p.textContent = (i + 1) + ". " + text;
+          container.appendChild(p);
+        });
+      }
+
+      // Actions executed count
+      if (o.actions_executed != null) {
+        rendered = true;
+        var traj = document.createElement("p");
+        traj.className = "text-xs text-gray-500 mt-1";
+        traj.textContent = "Actions executed: " + o.actions_executed + " steps";
+        container.appendChild(traj);
+      }
+
+      var res = o.sim_result || o.result;
+      if (res) {
+        rendered = true;
+        var resRow = document.createElement("div");
+        resRow.className = "mt-2 flex items-center gap-2";
+        var resLabel = document.createElement("span");
+        resLabel.className = "text-[11px] text-gray-500";
+        resLabel.textContent = "Sim result:";
+        resRow.appendChild(resLabel);
+        var resVal = document.createElement("span");
+        resVal.className = "text-xs text-gray-200";
+        resVal.textContent = typeof res === "string" ? res : JSON.stringify(res);
+        resRow.appendChild(resVal);
+        container.appendChild(resRow);
+      }
+
+      if (!rendered) {
+        var fallback = document.createElement("pre");
+        fallback.className = "text-xs text-gray-400";
+        fallback.textContent = JSON.stringify(o, null, 2);
+        container.appendChild(fallback);
+      }
+    }
+
+    function renderVerify(container, o) {
+      var rendered = false;
+
+      if (o.confidence != null) {
+        rendered = true;
+        var pct = (o.confidence * 100).toFixed(1);
+        var color = o.confidence >= 0.7 ? "green" : (o.confidence >= 0.4 ? "yellow" : "red");
+
+        var row = document.createElement("div");
+        row.className = "flex items-center gap-3";
+        var lbl = document.createElement("span");
+        lbl.className = "text-[11px] text-gray-500";
+        lbl.textContent = "Confidence";
+        row.appendChild(lbl);
+
+        var barOuter = document.createElement("div");
+        barOuter.className = "flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden max-w-[200px]";
+        var barInner = document.createElement("div");
+        barInner.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
+        barInner.style.width = pct + "%";
+        barOuter.appendChild(barInner);
+        row.appendChild(barOuter);
+
+        var pctSpan = document.createElement("span");
+        pctSpan.className = "text-xs font-mono text-" + color + "-400";
+        pctSpan.textContent = pct + "%";
+        row.appendChild(pctSpan);
+        container.appendChild(row);
+      }
+
+      if (o.reasoning || o.explanation) {
+        rendered = true;
+        var reason = document.createElement("p");
+        reason.className = "text-xs text-gray-400 italic border-l-2 border-gray-600 pl-3 mt-2";
+        reason.textContent = o.reasoning || o.explanation;
+        container.appendChild(reason);
+      }
+
+      if (!rendered) {
+        var fallback = document.createElement("pre");
+        fallback.className = "text-xs text-gray-400";
+        fallback.textContent = JSON.stringify(o, null, 2);
+        container.appendChild(fallback);
+      }
+    }
+  </script>
+
+</body>
+</html>

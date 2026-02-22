@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rove-eval"
+version = "0.1.0"
+description = "Robot Observation & Vision Evaluation — agent pipeline evaluation for robotics VLM/VLA/LLM systems"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "azure-ai-inference>=1.0.0b9",
+    "azure-identity>=1.19.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "httpx"]
+data = ["datasets>=3.0", "huggingface-hub>=0.25", "Pillow>=10.0"]
+foundry = [
+    "azure-ai-projects>=1.0.0",
+    "azure-ai-agents>=1.1.0",
+]
+foundry-preview = [
+    "azure-ai-projects>=2.0.0b3",
+]
+
+[project.scripts]
+rove = "rove.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["rove"]
