@@ -42,39 +42,58 @@ class MockVLMAdapter:
         self, image_base64: str, task: str, scene: SceneAnalysis
     ) -> TaskPlan:
         await self._simulate_latency()
+        # Use scene data to inform plan
+        target = scene.task_relevant[0] if scene.task_relevant else "target object"
         return TaskPlan(
-            strategy="Approach target from above",
+            strategy=f"Approach {target} from above",
             reasoning=(
-                "The target object is accessible from above with no obstructions. "
+                f"The {target} is accessible from above with no obstructions. "
                 "A direct top-down approach minimizes collision risk and allows "
-                "precise alignment with the target."
+                f"precise alignment with the {target}."
             ),
             steps=[
-                "Identify target object in scene",
-                "Move gripper above target",
-                "Lower and grasp target",
+                f"Identify {target} in scene",
+                f"Move gripper above {target}",
+                f"Lower and grasp {target}",
                 "Lift to destination",
             ],
-            target_object="red bracket",
+            target_object=target,
             confidence=0.88,
             raw_response='{"mock": true}',
         )
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str
+        self, before_image_base64: str, after_image_base64: str, task: str,
+        context: dict | None = None,
     ) -> VerificationResult:
         await self._simulate_latency()
         success = random.random() < self._quality
+
+        # Use pipeline context for richer reasoning
+        target = "the object"
+        plan_strategy = ""
+        if context:
+            plan = context.get("plan", {})
+            target = plan.get("target_object") or target
+            plan_strategy = plan.get("strategy", "")
+
+        if success:
+            reasoning = (
+                f"The {target} has been successfully moved to its destination. "
+                f"The {target} is no longer at its original position."
+            )
+            if plan_strategy:
+                reasoning += f" Strategy '{plan_strategy}' executed correctly."
+        else:
+            reasoning = (
+                f"The {target} appears to have been dropped during transfer. "
+                "It is not visible at the destination."
+            )
+
         return VerificationResult(
             success=success,
             confidence=random.uniform(0.7, 0.95) if success else random.uniform(0.3, 0.6),
-            reasoning=(
-                "The red bracket has been successfully moved to bin A. "
-                "The bracket is no longer at its original position and is now visible inside the bin."
-                if success
-                else "The bracket appears to have been dropped during transfer. "
-                "It is not visible in bin A."
-            ),
+            reasoning=reasoning,
             raw_response='{"mock": true}',
         )
 

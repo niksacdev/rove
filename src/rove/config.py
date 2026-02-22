@@ -22,7 +22,7 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         search_paths = [
             Path.cwd() / "rove.yaml",
             Path.cwd() / "config" / "rove.yaml",
-            Path(__file__).parent.parent / "rove.yaml",
+            Path(__file__).parent.parent.parent / "rove.yaml",
         ]
         for p in search_paths:
             if p.exists():
@@ -82,6 +82,28 @@ def find_model_config(model_id: str) -> tuple[str, dict[str, Any]]:
         f"Model '{model_id}' not found in any models section. "
         f"Available sections: {list(models.keys())}"
     )
+
+
+def get_strategies() -> dict[str, "Strategy"]:
+    """Load all strategies from rove.yaml."""
+    from rove.models import Strategy
+
+    config = load_config()
+    raw = config.get("strategies", {})
+    strategies: dict[str, Strategy] = {}
+    for sid, entry in raw.items():
+        strategies[sid] = Strategy(
+            id=sid,
+            display_name=entry.get("display_name", sid),
+            description=entry.get("description", ""),
+            perceive=entry["perceive"],
+            plan=entry["plan"],
+            act=entry["act"],
+            verify=entry["verify"],
+            sim=entry["sim"],
+            tags=entry.get("tags", []),
+        )
+    return strategies
 
 
 def reset_config_cache() -> None:

@@ -1,50 +1,89 @@
 # ROVE Demo Gallery — Sample Robot Workspace Images
 
-Sample images for testing ROVE's VLM/VLA evaluation pipeline. Organized by scene type for the demo image gallery.
+Sample images for testing ROVE's evaluation pipeline. Organized by scene type with two data files serving different purposes.
+
+## Data Files
+
+| File | Purpose | Used by |
+|------|---------|---------|
+| `manifest.json` | **Demo tasks** — image + imperative task description for pipeline input | Dashboard gallery, `POST /api/evaluate` |
+| `eval_qa.json` | **Benchmark QA** — VQA questions with ground truth answers for scoring | Automated evaluation, verify stage benchmarking |
+
+### manifest.json (Demo Tasks)
+
+Each entry maps an image to a manipulation task that feeds the pipeline:
+
+```json
+{
+  "filename": "kitchen/robo2vlm_016.jpg",
+  "scene_type": "kitchen",
+  "task": "Put the marker inside the cup",
+  "source": {
+    "dataset": "Robo2VLM-1",
+    "license": "Apache-2.0",
+    "id": "droid_put_the_marker_inside_the_cup_7432_q23"
+  }
+}
+```
+
+### eval_qa.json (Benchmark QA)
+
+Each entry has a VQA question with ground truth for scoring VLM accuracy:
+
+```json
+{
+  "filename": "kitchen/robo2vlm_016.jpg",
+  "question": "The robot is to put the marker inside the cup. Has the robot successfully completed the task?",
+  "choices": ["No", "Yes", "Cannot be determined", "Task was not attempted"],
+  "correct_answer_index": 1,
+  "correct_answer_text": "Yes",
+  "task": "Put the marker inside the cup",
+  "source_id": "droid_put_the_marker_inside_the_cup_7432_q23"
+}
+```
 
 ## Scene Types
 
 | Folder | Description | Count |
 |--------|-------------|-------|
 | `tabletop/` | Flat surface manipulation — pick, place, push objects | 4 |
-| `kitchen/` | Kitchen environment — mugs, cups, markers | 4 |
+| `kitchen/` | Kitchen environment — mugs, cups, bowls, markers | 4 |
 | `drawer-cabinet/` | Drawer/cabinet interaction — open, close, reach into | 4 |
-| `bin-picking/` | Container sorting — boxes, bins, baskets | 4 |
-| `assembly/` | Assembly tasks — peg-in-hole, insertion | 4 |
+| `bin-picking/` | Container sorting — boxes, bins, baskets, plush toys | 4 |
+| `assembly/` | Assembly tasks — peg-in-hole insertion | 4 |
 
-## Usage
+## Demo Flow
 
-Each image has a paired task description in `manifest.json`. Load the manifest to get image paths and tasks:
+1. User picks an image from the gallery (loaded from `manifest.json`)
+2. Task field is auto-populated with the imperative task description
+3. User selects strategies (pipeline configurations from `rove.yaml`)
+4. Pipeline runs: perceive → plan → act → verify
+5. Results compared across strategies
 
-```python
-import json
-from pathlib import Path
+## Benchmark Flow
 
-data_dir = Path("data")
-manifest = json.loads((data_dir / "manifest.json").read_text())
-
-for entry in manifest:
-    print(f"{entry['filename']} — {entry['task_description']}")
-```
+1. Load `eval_qa.json` entries
+2. For each entry, send image + question to VLM
+3. Compare VLM answer against `correct_answer_text`
+4. Score accuracy across question types (task success, grasp stability, action phase, spatial reasoning)
 
 ## Attribution
 
-All images in this directory are sourced from publicly available robotics research datasets. Proper attribution is required when using these images.
+All images sourced from publicly available robotics research datasets.
 
 ### Robo2VLM-1
 
 - **Source**: [keplerccc/Robo2VLM-1](https://huggingface.co/datasets/keplerccc/Robo2VLM-1) on HuggingFace
 - **License**: Apache 2.0
-- **Paper**: [Robo2VLM: Visual Question Answering from Robotic Observations](https://arxiv.org/abs/2505.15517)
-- **Authors**: Kepler Cite et al.
+- **Paper**: [Robo2VLM: Visual Question Answering from Large-Scale In-the-Wild Robot Manipulation Datasets](https://arxiv.org/abs/2505.15517)
 - **Images used**: 20 samples from the test split, classified by scene type
-- **Usage**: Demo gallery for ROVE evaluation pipeline testing
+- **Original data sources**: DROID, Fractal, Stanford KUKA, VIOLA datasets
 
-If you use these images in publications or derived works, please cite the original dataset:
+If you use these images in publications or derived works, please cite:
 
 ```bibtex
 @article{robo2vlm2025,
-  title={Robo2VLM: Visual Question Answering from Robotic Observations},
+  title={Robo2VLM: Visual Question Answering from Large-Scale In-the-Wild Robot Manipulation Datasets},
   author={Cite, Kepler and others},
   journal={arXiv preprint arXiv:2505.15517},
   year={2025}
@@ -53,9 +92,8 @@ If you use these images in publications or derived works, please cite the origin
 
 ## Adding More Images
 
-To add images from additional datasets, update `manifest.json` with entries containing:
-- `filename`: relative path from `data/` (e.g., `tabletop/new_image.jpg`)
-- `scene_type`: one of `tabletop`, `kitchen`, `drawer-cabinet`, `bin-picking`, `assembly`
-- `source_dataset`: dataset name for attribution
-- `source_license`: license identifier (e.g., `Apache-2.0`, `CC-BY-4.0`)
-- `task_description`: natural language task for the demo pipeline
+Add entries to both `manifest.json` and `eval_qa.json`. Required fields:
+
+**manifest.json**: `filename`, `scene_type`, `task`, `source.dataset`, `source.license`
+
+**eval_qa.json**: `filename`, `question`, `choices`, `correct_answer_index`, `correct_answer_text`, `task`

@@ -16,7 +16,8 @@ models:
       deployment_type: azure_managed
       config:
         endpoint_env: AZURE_OPENAI_ENDPOINT
-        api_key_env: AZURE_OPENAI_KEY
+        auth_mode: default_credential
+        api_key_env: AZURE_OPENAI_KEY  # fallback only
         deployment_name: gpt-4o
         api_version: "2025-04-01-preview"
       capabilities: [scene_analysis, task_planning, verification]
@@ -113,7 +114,8 @@ models:
       deployment_type: azure_serverless
       config:
         endpoint_env: AZURE_AI_FOUNDRY_ENDPOINT
-        api_key_env: AZURE_AI_FOUNDRY_KEY
+        auth_mode: default_credential
+        api_key_env: AZURE_AI_FOUNDRY_KEY  # fallback only
         model_name: "Qwen2.5-VL-7B-Instruct"
       capabilities: [scene_analysis, task_planning, verification]
       cost: { type: per_token, input_per_1k: 0.0003, output_per_1k: 0.001 }
@@ -125,7 +127,8 @@ models:
       deployment_type: azure_serverless
       config:
         endpoint_env: AZURE_AI_FOUNDRY_ENDPOINT
-        api_key_env: AZURE_AI_FOUNDRY_KEY
+        auth_mode: default_credential
+        api_key_env: AZURE_AI_FOUNDRY_KEY  # fallback only
         model_name: "Phi-4-multimodal-instruct"
       capabilities: [scene_analysis, verification]
       cost: { type: per_token, input_per_1k: 0.0002, output_per_1k: 0.0008 }
@@ -354,78 +357,49 @@ models:
       display_name: "Mock Sim"
 
 # =============================================================================
-# Evaluations — Named evaluation configs (reference models by ID)
+# Strategies — Named pipeline configurations (map models to stages)
 # =============================================================================
 
-evaluations:
-  pick_bracket:
-    description: "Evaluate pick-and-place for red bracket — full model sweep"
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket_scene.jpg
-    vlms: [gpt-4o, qwen3-vl-8b, phi-4-multimodal]
-    vlas: [pi0, openvla-oft-7b, smolvla-450m]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 5
-    mode: full
-    tags: [pick-place, industrial]
-
-  edge_models_only:
-    description: "Evaluate edge-deployable models only (all local, no cloud)"
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket_scene.jpg
-    vlms: [qwen3-vl-2b, phi-4-multimodal, ministral-3-3b]
-    vlas: [smolvla-450m, octo-base]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 5
-    mode: full
-    tags: [edge, on-device, latency]
-
-  vla_comparison:
-    description: "Compare all VLAs with GPT-4o as fixed VLM"
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket_scene.jpg
-    vlms: [gpt-4o]
-    vlas: [pi0, pi0-fast, openvla-oft-7b, smolvla-450m, cogact-7b, octo-base]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 10
-    mode: full
-    tags: [vla-benchmark]
-
-  bracket_variations:
-    description: "Test robustness across task variations"
-    tasks:
-      - "Pick the red bracket and place it in bin A"
-      - "Pick the blue bolt and place it in bin B"
-      - "Pick the green bracket from the cluttered area"
-    image: scenes/multi_part_scene.jpg
-    vlms: [gpt-4o, qwen3-vl-8b]
-    vlas: [pi0, smolvla-450m]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 10
-    tags: [variation-study, robustness]
-
-  vlm_only_perception:
-    description: "Compare VLM scene understanding without sim"
-    task: "Identify all graspable objects on the workbench"
-    image: scenes/cluttered_bench.jpg
-    vlms: [gpt-4o, qwen3-vl-8b, qwen3-vl-2b, phi-4-multimodal, ministral-3-3b]
-    vlas: []
-    mode: vlm_only
-    trials: 3
-
-  mock_test:
-    description: "End-to-end test with mock models"
-    task: "Pick the red bracket from bin A"
-    vlms: [mock-vlm]
-    vlas: [mock-vla]
-    grounding: mock-grounding
+strategies:
+  mock:
+    display_name: "Mock (Simulation)"
+    description: "All mock adapters for testing"
+    perceive: mock-vlm
+    plan: mock-vlm
+    act: mock-vla
+    verify: mock-vlm
     sim: mock-sim
-    trials: 1
     tags: [test, mock]
+
+  cloud-fast:
+    display_name: "Cloud Fast"
+    description: "GPT-4o for vision + π0-FAST for action"
+    perceive: gpt-4o
+    plan: gpt-4o
+    act: pi0-fast
+    verify: gpt-4o
+    sim: mujoco-libero
+    tags: [cloud, fast]
+
+  edge-local:
+    display_name: "Edge Local"
+    description: "All on-device models for offline deployment"
+    perceive: qwen3-vl-2b
+    plan: qwen3-vl-2b
+    act: smolvla-450m
+    verify: qwen3-vl-2b
+    sim: mujoco-libero
+    tags: [edge, local]
+
+  agent-pipeline:
+    display_name: "Foundry Agent"
+    description: "Mock agent handles plan + act, VLM for perceive/verify"
+    perceive: mock-vlm
+    plan: mock-agent
+    act: mock-agent
+    verify: mock-vlm
+    sim: mock-sim
+    tags: [agent]
 
 # =============================================================================
 # Defaults — Global settings

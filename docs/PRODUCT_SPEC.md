@@ -10,11 +10,10 @@
 
 A robot that manipulates objects in the real world needs to:
 
-1. **See** — understand what is in the scene (VLM)
-2. **Locate** — find the target object precisely (Grounding model)
-3. **Plan** — decide how to accomplish the task (VLM, LLM, or Foundry agent)
-4. **Act** — predict physical movements to execute the plan (VLA)
-5. **Verify** — confirm the task succeeded (VLM)
+1. **See** (perceive) — understand what is in the scene, including object localization (VLM, with grounding folded in)
+2. **Plan** — decide how to accomplish the task (VLM, LLM, or Foundry agent)
+3. **Act** — predict physical movements to execute the plan (VLA)
+4. **Verify** — confirm the task succeeded (VLM)
 
 This is not one model's job. It is an agent pipeline — multiple models orchestrated together. The right combination of VLM, VLA, LLM, and grounding model depends entirely on the task, the environment, and the deployment constraints (latency, cost, hardware).
 
@@ -73,13 +72,13 @@ Responsible for AI infrastructure. Registers tools in Foundry for development te
 ROVE uses a single YAML file (`rove.yaml`) that defines:
 
 - **Models** (like SHIVA resources): Atomic model configurations — one entry per model with adapter type, credentials, cost, and capabilities.
-- **Evaluations** (like SHIVA experiments): Named pipeline evaluation configurations that reference models by ID, specify tasks, and set trial counts.
+- **Strategies** (like SHIVA experiments): Named pipeline configurations that map one model per stage (perceive, plan, act, verify, sim). Each strategy is a complete agent pipeline configuration ready to run.
 - **Defaults**: Global settings for concurrency, timeouts, retries.
 
 This pattern means:
 - Adding a model = one YAML entry + one adapter class
-- Creating an evaluation = one YAML block referencing existing models for each pipeline stage
-- Running an evaluation = `rove evaluate --evaluation pick_bracket`
+- Creating a strategy = one YAML block mapping models to pipeline stages
+- Running an evaluation = `rove evaluate --strategy mock`
 - Reproducing an evaluation = share the YAML file
 
 The YAML is the single source of truth. CLI, Python library, API, and dashboard all read from it.
@@ -96,9 +95,9 @@ VLMs are text-in, text-out systems with no robotics-specific output format. The 
 
 **Qwen2.5-VL-32B**: No native JSON mode. Adapter prompts for JSON and uses fallback parsing. Has native grounding — can return bounding boxes directly via `<|box_start|>(x,y),(x,y)<|box_end|>` tokens in 1000x1000 normalized space.
 
-**Cosmos-Reason2 2B**: Unreliable JSON output from a 2B model. Adapter MUST implement robust parsing with fallbacks (direct JSON → markdown code block extraction → regex brace matching). Expect 20-30% malformed responses.
+**Cosmos-Reason2 2B**: Removed from rove.yaml due to unreliable JSON output (20-30% malformed responses from a 2B model). Not recommended for pipeline evaluation.
 
-**Key constraint**: VLMs operating on a single 2D image cannot provide metric 3D coordinates. `SceneAnalysis` deliberately omits pixel bounding boxes — those come from the grounding step. VLMs contribute semantic understanding; grounding contributes spatial localization.
+**Key constraint**: VLMs operating on a single 2D image cannot provide metric 3D coordinates. `SceneAnalysis` uses simple structured fields (`objects: list[dict]`, `spatial_relations: list[str]`, `task_relevant: list[str]`). VLMs with native grounding (e.g., Qwen) can return bounding boxes directly, folding localization into the perceive stage.
 
 ### VLAs Return Actions in Incompatible Formats
 
@@ -149,10 +148,9 @@ sim_success = info['success']               # physics ground truth
 
 ### VLM-Only Mode (No Simulator)
 
-When no sim is configured, ROVE evaluates steps 1-3 only. This produces:
+When no sim is configured, ROVE evaluates stages 1-2 only (perceive and plan). This produces:
 - VLM scene understanding quality (object detection, spatial reasoning)
-- Grounding accuracy (if ground-truth annotations available)
-- Planning quality (approach direction, confidence)
+- Planning quality (strategy, reasoning, confidence)
 - Latency and cost comparisons
 - **NOT** success rate (requires execution)
 
@@ -185,7 +183,7 @@ Change `model_id` in the MCP call (or change the default in `rove.yaml`) — age
 
 ### Why MCP Is Separate from the Evaluation Path
 
-The evaluation engine calls adapters directly (in-process Python). 45 adapter calls per 9-combination evaluation through HTTP would add 225-2250ms of overhead. MCP servers are for external agent integration only — a different use case with different latency tolerance.
+The evaluation engine calls adapters directly (in-process Python). Routing adapter calls through HTTP for multi-strategy evaluation would add significant overhead. MCP servers are for external agent integration only — a different use case with different latency tolerance.
 
 ### Image Size Constraint
 
@@ -195,71 +193,88 @@ MCP has a 1MB binary payload limit. MCP server handlers resize images to <750KB 
 
 ## 8. Key Workflows
 
-### Workflow 1: Single Task Evaluation
+### Workflow 1: Single Strategy Evaluation
 
 ```yaml
 # In rove.yaml
-evaluations:
-  pick_bracket:
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket.jpg
-    vlms: [gpt-4o, qwen25-vl-32b]
-    vlas: [cogact-7b, smolvla-450m]
-    trials: 5
+strategies:
+  cloud-fast:
+    display_name: "Cloud Fast"
+    perceive: gpt-4o
+    plan: gpt-4o
+    act: pi0-fast
+    verify: gpt-4o
+    sim: mujoco-libero
 ```
 
 ```bash
-rove evaluate --config rove.yaml --evaluation pick_bracket
+rove evaluate --strategy cloud-fast --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
 ```
 
-### Workflow 2: Task Variation Study
+### Workflow 2: Multi-Strategy Comparison
 
 ```yaml
-evaluations:
-  bracket_robustness:
-    tasks:
-      - "Pick the red bracket and place it in bin A"
-      - "Pick the blue bolt and place it in bin B"
-      - "Pick the green bracket from the cluttered area"
-    vlms: [gpt-4o, qwen25-vl-32b]
-    vlas: [cogact-7b]
-    trials: 10
-    tags: [robustness]
+strategies:
+  cloud-fast:
+    display_name: "Cloud Fast"
+    perceive: gpt-4o
+    plan: gpt-4o
+    act: pi0-fast
+    verify: gpt-4o
+    sim: mujoco-libero
+
+  local-only:
+    display_name: "Local Only"
+    perceive: qwen3-vl-8b
+    plan: qwen3-8b
+    act: smolvla-450m
+    verify: qwen3-vl-8b
+    sim: mujoco-libero
+
+  mock:
+    display_name: "Mock (Testing)"
+    perceive: mock-vlm
+    plan: mock-vlm
+    act: mock-vla
+    verify: mock-vlm
+    sim: mock-sim
 ```
-
-Reports which models maintain rankings across variations and which degrade.
-
-### Workflow 3: Benchmark Suite
 
 ```bash
-rove evaluate-suite --config rove.yaml --suite libero-spatial-10 \
-  --vlms gpt-4o,qwen25-vl-32b --vlas cogact-7b,smolvla-450m --trials 5
+rove evaluate --strategy cloud-fast,local-only --task "Pick the red bracket" --trials 5
 ```
 
-Runs against a predefined LIBERO task set. Aggregates into a suite-level leaderboard.
+Reports which strategy performs best on your task, with per-stage latency and cost breakdowns.
+
+### Workflow 3: Task Variation Study
+
+```bash
+rove evaluate --strategy cloud-fast --tasks tasks/bracket_variations.yaml --trials 10
+```
+
+Runs a single strategy against multiple task descriptions. Reports which tasks the strategy handles well and where it degrades.
 
 ---
 
 ## 9. Phased Delivery
 
 ### Phase 1: Mock-First Foundation
-- Mock adapters for VLM, VLA, Grounding, Sim
-- Full 5-step orchestrator
+- Mock adapters for VLM, VLA, Agent, Sim
+- Full 4-stage pipeline (perceive, plan, act, verify)
 - CLI: `rove evaluate`, `rove models`, `rove export`, `rove serve`
 - FastAPI with async job queue + SSE streaming
 - Static HTML+JS dashboard (no npm)
 - SQLite persistence + JSONL export
-- Named evaluations from `rove.yaml`
+- Named strategies from `rove.yaml`
 
-**Success criteria**: `rove evaluate --evaluation mock_test` completes in <5s. CLI, library, and dashboard produce identical results.
+**Success criteria**: `rove evaluate --strategy mock` completes in <5s. CLI, library, and dashboard produce identical results.
 
 ### Phase 2: Local Models
 - SmolVLA (LeRobot/MPS), OpenVLA-OFT (MLX), GroundingDINO, SAM2 (CoreML)
 - MuJoCo + LIBERO integration
-- Cosmos-Reason2 (local MLX)
 - Real success rate from sim ground truth
 
-**Success criteria**: Full 5-step evaluation with real models on Apple Silicon. Sim-based success rate operational.
+**Success criteria**: Full 4-stage evaluation with real models on Apple Silicon. Sim-based success rate operational.
 
 ### Phase 3: Cloud Models
 - GPT-4o (Azure OpenAI), Qwen2.5-VL (Azure HF), CogACT (Azure GPU)
@@ -295,10 +310,10 @@ These will not be built:
 
 | Constraint | Impact | Mitigation |
 |-----------|--------|------------|
-| Cosmos-Reason-1 deprecated 2026-03-18 | Not supported | Use Cosmos-Reason2 2B (local MLX) |
+| Cosmos-Reason-1 deprecated 2026-03-18 | Not supported | Removed from rove.yaml. Cosmos-Reason2 2B also removed due to 20-30% malformed JSON output |
 | SAM2 PyTorch MPS broken | Cannot use PyTorch path | CoreML version only (`apple/coreml-sam2-large`) |
 | OpenVLA int4: bitsandbytes incompatible with MPS | Cannot use standard quantization | MLX quantization required |
-| GR00T N1.6 weights not public | Cannot implement adapter | Stub adapter, `health_check()` returns False |
+| GR00T N1.6 non-commercial license | N1/N1.5 weights ARE public (`nvidia/GR00T-N1-2B`, `nvidia/GR00T-N1.5-3B`). N1.6 available on GitHub (non-commercial) | Implement adapter for N1/N1.5 first |
 | MCP 1MB binary limit | Large images fail | Resize to <750KB in MCP server layer |
 | VLM confidence scores not calibrated across models | Cannot compare GPT-4o confidence to Qwen confidence | Report as model-specific, track judge calibration vs sim |
 | Local model concurrency on MPS | Single device queue | Per-adapter semaphores, serialize MPS calls |
@@ -310,9 +325,9 @@ These will not be built:
 | Term | Definition |
 |------|-----------|
 | adapter | Model-specific implementation of a Protocol |
-| orchestrator | The 5-step pipeline executor |
-| evaluation | Top-level assessment session with one or more combinations over N trials |
-| combination | A specific VLM + VLA pairing |
-| trial | A single execution of a combination on a task |
+| orchestrator | The 4-stage pipeline executor |
+| evaluation | Top-level assessment session with one or more strategies over N trials |
+| strategy | A named pipeline configuration mapping models to stages (perceive, plan, act, verify, sim) |
+| trial | A single execution of a strategy on a task |
 | variation study | Evaluation across related but distinct task descriptions |
-| perceive, ground, plan, execute, verify | The five pipeline steps (always lowercase) |
+| perceive, plan, act, verify | The four pipeline stages (always lowercase) |

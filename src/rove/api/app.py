@@ -16,8 +16,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
+from rove.config import get_strategies
 from rove.models import PipelineStage, PipelineStageResult, StageStatus
 from rove.orchestrator.pipeline import EvaluationPipeline
+from rove.orchestrator.run_manager import RunManager
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,47 @@ def _stage_to_dict(stage: PipelineStageResult) -> dict:
     }
 
 
+async def _run_multi_strategy(
+    eval_id: str,
+    task: str,
+    image_base64: str,
+    strategy_ids: list[str],
+):
+    """Background task that runs multiple strategies concurrently via RunManager."""
+    queue = _eval_queues[eval_id]
+    try:
+        all_strategies = get_strategies()
+        strategies = []
+        for sid in strategy_ids:
+            if sid not in all_strategies:
+                raise ValueError(f"Strategy '{sid}' not found in rove.yaml")
+            strategies.append(all_strategies[sid])
+
+        run_manager = RunManager(registry)
+
+        async def on_event(strategy_id: str, event_type: str, data: dict) -> None:
+            await queue.put({"event": event_type, "data": data})
+
+        results = await run_manager.run_strategies(strategies, task, image_base64, on_event)
+
+        complete_data = {
+            "eval_id": eval_id,
+            "status": "completed",
+            "task": task,
+            "results": results,
+        }
+        _evaluations[eval_id] = complete_data
+        await queue.put({"event": "complete", "data": complete_data})
+
+    except Exception as e:
+        logger.exception(f"Evaluation {eval_id} failed")
+        error_result = {"eval_id": eval_id, "status": "error", "error": str(e)}
+        _evaluations[eval_id] = error_result
+        await queue.put({"event": "error", "data": error_result})
+    finally:
+        await queue.put(None)  # sentinel to end SSE stream
+
+
 async def _run_evaluation(
     eval_id: str,
     task: str,
@@ -57,7 +100,7 @@ async def _run_evaluation(
     verify_model_id: str,
     sim_id: str,
 ):
-    """Background task that runs the pipeline and pushes events to the SSE queue."""
+    """Background task that runs a single pipeline and pushes events to the SSE queue."""
     queue = _eval_queues[eval_id]
     try:
         perceive = registry.get_adapter_for_stage(PipelineStage.PERCEIVE, perceive_model_id)
@@ -112,10 +155,33 @@ async def _run_evaluation(
         await queue.put(None)  # sentinel to end SSE stream
 
 
+@app.get("/api/strategies")
+async def list_strategies():
+    """Return all strategies with their model assignments."""
+    strategies = get_strategies()
+    return {
+        "strategies": [
+            {
+                "id": s.id,
+                "display_name": s.display_name,
+                "description": s.description,
+                "perceive": s.perceive,
+                "plan": s.plan,
+                "act": s.act,
+                "verify": s.verify,
+                "sim": s.sim,
+                "tags": s.tags,
+            }
+            for s in strategies.values()
+        ]
+    }
+
+
 @app.post("/api/evaluate", status_code=202)
 async def create_evaluation(
     image: UploadFile = File(...),
     task: str = Form(...),
+    strategy_ids: str = Form(default=""),
     perceive_model_id: str = Form(default="mock-vlm"),
     plan_model_id: str = Form(default="mock-vlm"),
     act_model_id: str = Form(default="mock-vla"),
@@ -129,6 +195,13 @@ async def create_evaluation(
     _eval_queues[eval_id] = asyncio.Queue()
     _evaluations[eval_id] = {"eval_id": eval_id, "status": "running"}
 
+    # If strategy_ids provided, use multi-strategy RunManager path
+    if strategy_ids:
+        ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
+        asyncio.create_task(_run_multi_strategy(eval_id, task, image_base64, ids))
+        return {"eval_id": eval_id, "status": "running", "strategies": ids}
+
+    # Legacy single-pipeline path
     asyncio.create_task(_run_evaluation(
         eval_id, task, image_base64,
         perceive_model_id, plan_model_id, act_model_id, verify_model_id, sim_id,
@@ -188,7 +261,7 @@ async def get_mock_models():
 
 
 # Serve frontend
-_frontend_dir = Path(__file__).parent.parent.parent / "frontend"
+_frontend_dir = Path(__file__).parent.parent.parent.parent / "frontend"
 
 
 @app.get("/", response_class=HTMLResponse)

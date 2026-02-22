@@ -30,14 +30,17 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-    /* Dropdown styling */
-    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 8px center; }
-    select option { background: #1a1a2e; color: #fff; }
-
     /* Transition for expandable JSON */
     .json-expand { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
     .json-expand.open { max-height: 600px; overflow-y: auto; }
+
+    /* Strategy card selection */
+    .strategy-card { transition: all 0.2s ease; }
+    .strategy-card.selected { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
+
+    /* Tab styling */
+    .strategy-tab { transition: all 0.2s ease; }
+    .strategy-tab.active { border-bottom-color: #3b82f6; color: #fff; }
   </style>
   <script>
     tailwind.config = {
@@ -121,6 +124,9 @@
     <!-- ---- Chat Main Area ---- -->
     <main class="flex-1 flex flex-col min-h-0">
 
+      <!-- Tab bar (hidden until evaluation runs) -->
+      <div id="tabBar" class="hidden shrink-0 border-b border-rove-border bg-rove-bg px-4 flex items-end gap-0 overflow-x-auto"></div>
+
       <!-- Chat messages scroll area -->
       <div id="chatArea" class="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         <!-- Welcome screen -->
@@ -134,7 +140,7 @@
             </svg>
           </div>
           <h2 class="text-2xl font-bold mb-2">Welcome to ROVE</h2>
-          <p class="text-gray-400 text-sm max-w-lg mb-8">Robot Observation & Vision Evaluation — a model evaluation framework that benchmarks VLM/VLA pipelines for robotics manipulation tasks.</p>
+          <p class="text-gray-400 text-sm max-w-lg mb-8">Robot Observation & Vision Evaluation — evaluate robotics agent pipelines by running VLM+VLA+Agent combinations on manipulation tasks.</p>
 
           <!-- Capability cards -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl w-full mb-8">
@@ -190,11 +196,11 @@
               </div>
               <div class="flex items-center gap-3">
                 <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                <span class="text-xs text-gray-400">Configure which model runs each pipeline stage (perceive, plan, act, verify)</span>
+                <span class="text-xs text-gray-400">Select one or more strategies (pipeline configurations) to evaluate</span>
               </div>
               <div class="flex items-center gap-3">
                 <span class="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 text-xs font-bold flex items-center justify-center shrink-0">4</span>
-                <span class="text-xs text-gray-400">Click Evaluate and watch the pipeline execute stage by stage</span>
+                <span class="text-xs text-gray-400">Click Evaluate and compare pipeline results across strategies</span>
               </div>
             </div>
           </div>
@@ -204,97 +210,31 @@
       <!-- ---- Bottom Input Bar ---- -->
       <div class="shrink-0 border-t border-rove-border bg-rove-bg px-4 py-3">
 
-        <!-- Pipeline config panel (collapsible) -->
+        <!-- Strategy selector panel (collapsible) -->
         <div id="configPanel" class="mb-3">
           <button id="configToggle" class="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full">
-            <i data-lucide="settings" class="w-3.5 h-3.5"></i>
-            <span>Pipeline Configuration</span>
+            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+            <span>Strategies</span>
+            <span id="selectedCount" class="text-blue-400 ml-1">(0 selected)</span>
             <i data-lucide="chevron-up" id="configChevron" class="w-3 h-3 ml-auto transition-transform duration-200"></i>
           </button>
 
           <div id="configContent">
-            <!-- Quick config: Mock toggle + Same VLM shortcut -->
+            <!-- Mock toggle -->
             <div class="flex items-center gap-4 mb-2">
-              <!-- Mock toggle -->
               <label class="flex items-center gap-2 cursor-pointer">
                 <div class="relative">
                   <input type="checkbox" id="mockToggle" class="sr-only peer" />
                   <div class="w-8 h-4 bg-gray-700 peer-checked:bg-blue-600 rounded-full transition-colors"></div>
                   <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
                 </div>
-                <span class="text-[10px] text-gray-400 font-medium">Simulation Mode</span>
+                <span class="text-[10px] text-gray-400 font-medium">Simulation Mode (mock only)</span>
               </label>
-
-              <!-- Same VLM shortcut -->
-              <div class="flex items-center gap-1.5">
-                <label class="text-[10px] text-gray-500 font-medium whitespace-nowrap">Same model for VLM stages</label>
-                <select id="sameVlmSelect" class="bg-rove-card border border-rove-border rounded text-[10px] text-gray-400 px-1.5 py-0.5 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">— Independent —</option>
-                </select>
-              </div>
             </div>
 
-            <!-- Stage model selectors — 4 cards in a row -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-              <!-- Perceive -->
-              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
-                <div class="flex items-center gap-1.5 mb-1.5">
-                  <i data-lucide="eye" class="w-3.5 h-3.5 text-blue-400"></i>
-                  <span class="text-[10px] uppercase tracking-wider text-blue-400 font-semibold">Perceive</span>
-                </div>
-                <select id="selPerceive" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">Loading...</option>
-                </select>
-                <p class="text-[9px] text-gray-600 mt-1">Analyze scene image</p>
-              </div>
-
-              <!-- Plan -->
-              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
-                <div class="flex items-center gap-1.5 mb-1.5">
-                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400"></i>
-                  <span class="text-[10px] uppercase tracking-wider text-purple-400 font-semibold">Plan</span>
-                </div>
-                <select id="selPlan" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">Loading...</option>
-                </select>
-                <p class="text-[9px] text-gray-600 mt-1">Generate task strategy</p>
-              </div>
-
-              <!-- Act -->
-              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
-                <div class="flex items-center gap-1.5 mb-1.5">
-                  <i data-lucide="bot" class="w-3.5 h-3.5 text-emerald-400"></i>
-                  <span class="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold">Act</span>
-                </div>
-                <select id="selAct" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">Loading...</option>
-                </select>
-                <p class="text-[9px] text-gray-600 mt-1">Predict motor commands</p>
-              </div>
-
-              <!-- Verify -->
-              <div class="bg-rove-card border border-rove-border rounded-lg p-2.5">
-                <div class="flex items-center gap-1.5 mb-1.5">
-                  <i data-lucide="check-circle" class="w-3.5 h-3.5 text-amber-400"></i>
-                  <span class="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Verify</span>
-                </div>
-                <select id="selVerify" class="w-full bg-rove-bg border border-rove-border rounded text-[11px] text-gray-200 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">Loading...</option>
-                </select>
-                <p class="text-[9px] text-gray-600 mt-1">Check task success</p>
-              </div>
-            </div>
-
-            <!-- Environment row -->
-            <div class="flex items-center gap-3">
-              <div class="flex items-center gap-1.5">
-                <i data-lucide="box" class="w-3 h-3 text-gray-500"></i>
-                <label class="text-[9px] uppercase tracking-wider text-gray-600 font-medium">Environment</label>
-                <select id="selSim" class="bg-rove-card border border-rove-border rounded text-[11px] text-gray-300 px-1.5 py-1 pr-5 appearance-none focus:outline-none focus:border-blue-500">
-                  <option value="">Loading...</option>
-                </select>
-              </div>
-              <span class="text-[9px] text-gray-600 italic">Simulation for action execution</span>
+            <!-- Strategy cards grid -->
+            <div id="strategyGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+              <div class="text-xs text-gray-500">Loading strategies...</div>
             </div>
           </div>
         </div>
@@ -335,6 +275,10 @@
     let selectedFile = null;
     let isRunning = false;
     let currentEventSource = null;
+    let strategies = [];            // loaded from API
+    let selectedStrategyIds = new Set();
+    let activeTabId = null;         // currently visible tab
+    let tabData = {};               // { strategyId: { el, typingEl, stages } }
 
     // ---- DOM refs ----
     const chatArea      = document.getElementById("chatArea");
@@ -345,16 +289,14 @@
     const removeImageBtn = document.getElementById("removeImage");
     const taskInput     = document.getElementById("taskInput");
     const evalBtn       = document.getElementById("evalBtn");
-    const selPerceive   = document.getElementById("selPerceive");
-    const selPlan       = document.getElementById("selPlan");
-    const selAct        = document.getElementById("selAct");
-    const selVerify     = document.getElementById("selVerify");
-    const selSim        = document.getElementById("selSim");
     const connDot       = document.getElementById("connectionDot");
     const connLabel     = document.getElementById("connectionLabel");
     const configToggle  = document.getElementById("configToggle");
     const configContent = document.getElementById("configContent");
     const configChevron = document.getElementById("configChevron");
+    const strategyGrid  = document.getElementById("strategyGrid");
+    const selectedCount = document.getElementById("selectedCount");
+    const tabBar        = document.getElementById("tabBar");
 
     // ---- Stage metadata ----
     const STAGES = {
@@ -364,30 +306,24 @@
       verify:   { label: "Verification",        icon: "check-circle", sidebar: "sidebar-verify"   },
     };
 
-    // ---- Utility: safe text node creation ----
-    function createTextSpan(text, className) {
-      const span = document.createElement("span");
-      if (className) span.className = className;
-      span.textContent = text;
-      return span;
-    }
-
-    function escapeForAttr(str) {
-      if (typeof str !== "string") str = String(str != null ? str : "");
-      return str.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    }
+    const STAGE_COLORS = {
+      perceive: { bg: "bg-blue-500/15", text: "text-blue-300" },
+      plan:     { bg: "bg-purple-500/15", text: "text-purple-300" },
+      act:      { bg: "bg-emerald-500/15", text: "text-emerald-300" },
+      verify:   { bg: "bg-amber-500/15", text: "text-amber-300" },
+    };
 
     // ---- Initialize ----
-    document.addEventListener("DOMContentLoaded", async () => {
+    document.addEventListener("DOMContentLoaded", async function() {
       lucide.createIcons();
-      await loadModels();
+      await loadStrategies();
       autoResizeTextarea();
       initConfigPanel();
     });
 
     // ---- Config panel toggle ----
     function initConfigPanel() {
-      let collapsed = false;
+      var collapsed = false;
       configToggle.addEventListener("click", function() {
         collapsed = !collapsed;
         configContent.style.display = collapsed ? "none" : "";
@@ -396,113 +332,119 @@
     }
 
     // ---- Mock toggle ----
-    const mockToggle = document.getElementById("mockToggle");
-    let savedSelections = {};
-
-    mockToggle.addEventListener("change", async function() {
-      const selectors = { perceive: selPerceive, plan: selPlan, act: selAct, verify: selVerify, sim: selSim };
+    var mockToggle = document.getElementById("mockToggle");
+    mockToggle.addEventListener("change", function() {
       if (mockToggle.checked) {
-        // Save current selections
-        Object.keys(selectors).forEach(function(k) { savedSelections[k] = selectors[k].value; });
-        // Fetch mock model IDs from server
-        try {
-          const res = await fetch(API_BASE + "/api/mock-models");
-          if (res.ok) {
-            const mockIds = await res.json();
-            Object.keys(mockIds).forEach(function(stage) {
-              if (selectors[stage]) selectors[stage].value = mockIds[stage];
-            });
-          }
-        } catch (e) { console.error("Failed to fetch mock models:", e); }
+        selectedStrategyIds.clear();
+        selectedStrategyIds.add("mock");
       } else {
-        // Restore previous selections
-        Object.keys(savedSelections).forEach(function(k) {
-          if (selectors[k] && savedSelections[k]) selectors[k].value = savedSelections[k];
-        });
+        selectedStrategyIds.delete("mock");
       }
+      updateStrategyCards();
+      updateSelectedCount();
     });
 
-    // ---- Same VLM shortcut ----
-    const sameVlmSelect = document.getElementById("sameVlmSelect");
+    // ---- Load strategies from API ----
+    async function loadStrategies() {
+      try {
+        var res = await fetch(API_BASE + "/api/strategies");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        var data = await res.json();
+        strategies = data.strategies || [];
+        setConnection(true);
+        renderStrategyCards();
+        // Default: select mock
+        selectedStrategyIds.add("mock");
+        mockToggle.checked = true;
+        updateStrategyCards();
+        updateSelectedCount();
+      } catch (e) {
+        console.error("Failed to load strategies:", e);
+        setConnection(false);
+        strategyGrid.textContent = "";
+        var msg = document.createElement("div");
+        msg.className = "text-xs text-red-400 col-span-4";
+        msg.textContent = "Failed to load strategies";
+        strategyGrid.appendChild(msg);
+      }
+    }
 
-    function populateSameVlmOptions() {
-      sameVlmSelect.textContent = "";
-      var defaultOpt = document.createElement("option");
-      defaultOpt.value = "";
-      defaultOpt.textContent = "\u2014 Independent \u2014";
-      sameVlmSelect.appendChild(defaultOpt);
+    function renderStrategyCards() {
+      strategyGrid.textContent = "";
+      strategies.forEach(function(s) {
+        var card = document.createElement("div");
+        card.className = "strategy-card bg-rove-card border border-rove-border rounded-lg p-2.5 cursor-pointer";
+        card.setAttribute("data-strategy-id", s.id);
 
-      // Find models that appear in perceive, plan, AND verify
-      var pIds = new Set(); var plIds = new Set(); var vIds = new Set();
-      Array.from(selPerceive.options).forEach(function(o) { if (o.value) pIds.add(o.value); });
-      Array.from(selPlan.options).forEach(function(o) { if (o.value) plIds.add(o.value); });
-      Array.from(selVerify.options).forEach(function(o) { if (o.value) vIds.add(o.value); });
+        // Header
+        var header = document.createElement("div");
+        header.className = "flex items-center justify-between mb-1.5";
+        var nameSpan = document.createElement("span");
+        nameSpan.className = "text-[11px] font-semibold text-gray-200";
+        nameSpan.textContent = s.display_name;
+        header.appendChild(nameSpan);
+        // Tags
+        if (s.tags && s.tags.length) {
+          var tagWrap = document.createElement("div");
+          tagWrap.className = "flex gap-1";
+          s.tags.slice(0, 2).forEach(function(t) {
+            var tag = document.createElement("span");
+            tag.className = "text-[8px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full";
+            tag.textContent = t;
+            tagWrap.appendChild(tag);
+          });
+          header.appendChild(tagWrap);
+        }
+        card.appendChild(header);
 
-      pIds.forEach(function(id) {
-        if (plIds.has(id) && vIds.has(id)) {
-          var opt = document.createElement("option");
-          opt.value = id;
-          var srcOpt = Array.from(selPerceive.options).find(function(o) { return o.value === id; });
-          opt.textContent = srcOpt ? srcOpt.textContent : id;
-          sameVlmSelect.appendChild(opt);
+        // Description
+        var desc = document.createElement("p");
+        desc.className = "text-[9px] text-gray-500 mb-2";
+        desc.textContent = s.description;
+        card.appendChild(desc);
+
+        // Model badges
+        var badges = document.createElement("div");
+        badges.className = "flex flex-wrap gap-1";
+        ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+          var colors = STAGE_COLORS[stage];
+          var badge = document.createElement("span");
+          badge.className = "text-[8px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded-full";
+          badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
+          badges.appendChild(badge);
+        });
+        card.appendChild(badges);
+
+        // Click handler
+        card.addEventListener("click", function() {
+          if (selectedStrategyIds.has(s.id)) {
+            selectedStrategyIds.delete(s.id);
+          } else {
+            selectedStrategyIds.add(s.id);
+          }
+          // Keep mock toggle in sync
+          mockToggle.checked = selectedStrategyIds.has("mock") && selectedStrategyIds.size === 1;
+          updateStrategyCards();
+          updateSelectedCount();
+        });
+
+        strategyGrid.appendChild(card);
+      });
+    }
+
+    function updateStrategyCards() {
+      document.querySelectorAll(".strategy-card").forEach(function(card) {
+        var sid = card.getAttribute("data-strategy-id");
+        if (selectedStrategyIds.has(sid)) {
+          card.classList.add("selected");
+        } else {
+          card.classList.remove("selected");
         }
       });
     }
 
-    sameVlmSelect.addEventListener("change", function() {
-      var val = sameVlmSelect.value;
-      if (val) {
-        selPerceive.value = val;
-        selPlan.value = val;
-        selVerify.value = val;
-      }
-    });
-
-    // ---- Load models ----
-    async function loadModels() {
-      try {
-        const res = await fetch(API_BASE + "/api/models");
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
-        setConnection(true);
-        var stages = data.stages || {};
-        populateDropdown(selPerceive, stages.perceive || []);
-        populateDropdown(selPlan, stages.plan || []);
-        populateDropdown(selAct, stages.act || []);
-        populateDropdown(selVerify, stages.verify || []);
-        populateDropdown(selSim, data.sim || []);
-        populateSameVlmOptions();
-      } catch (e) {
-        console.error("Failed to load models:", e);
-        setConnection(false);
-        [selPerceive, selPlan, selAct, selVerify, selSim].forEach(function(sel) {
-          sel.textContent = "";
-          const opt = document.createElement("option");
-          opt.value = "";
-          opt.textContent = "Unavailable";
-          sel.appendChild(opt);
-        });
-      }
-    }
-
-    function populateDropdown(select, models) {
-      select.textContent = "";
-      const available = models.filter(function(m) { return m.available; });
-      if (available.length === 0) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "No models available";
-        select.appendChild(opt);
-        return;
-      }
-      available.forEach(function(m) {
-        const opt = document.createElement("option");
-        opt.value = m.id;
-        var label = m.display_name;
-        if (m.model_type === "agent") label += " (Agent)";
-        opt.textContent = label;
-        select.appendChild(opt);
-      });
+    function updateSelectedCount() {
+      selectedCount.textContent = "(" + selectedStrategyIds.size + " selected)";
     }
 
     function setConnection(ok) {
@@ -512,10 +454,10 @@
 
     // ---- Image handling ----
     imageInput.addEventListener("change", function(e) {
-      const file = e.target.files[0];
+      var file = e.target.files[0];
       if (!file) return;
       selectedFile = file;
-      const reader = new FileReader();
+      var reader = new FileReader();
       reader.onload = function(ev) {
         previewImg.src = ev.target.result;
         imagePreview.classList.remove("hidden");
@@ -545,97 +487,224 @@
 
     // ---- Evaluate ----
     evalBtn.addEventListener("click", async function() {
-      const task = taskInput.value.trim();
-      if (!task || !selectedFile || isRunning) return;
-      const perceiveId = selPerceive.value;
-      const planId     = selPlan.value;
-      const actId      = selAct.value;
-      const verifyId   = selVerify.value;
-      const simId      = selSim.value;
-      if (!perceiveId || !planId || !actId || !verifyId || !simId) return;
+      var task = taskInput.value.trim();
+      if (!task || !selectedFile || isRunning || selectedStrategyIds.size === 0) return;
 
       setRunning(true);
       hideWelcome();
       resetSidebar();
 
-      // Get display names
-      function getDisplayName(sel) {
-        return sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : sel.value;
-      }
-      var stageModels = {
-        perceive: { id: perceiveId, name: getDisplayName(selPerceive) },
-        plan:     { id: planId,     name: getDisplayName(selPlan) },
-        act:      { id: actId,      name: getDisplayName(selAct) },
-        verify:   { id: verifyId,   name: getDisplayName(selVerify) },
-      };
+      // Prepare tabs
+      var ids = Array.from(selectedStrategyIds);
+      setupTabs(ids);
 
-      addUserBubble(previewImg.src, task, stageModels);
+      // Add user bubble
+      addUserBubble(previewImg.src, task, ids);
 
       taskInput.value = "";
       taskInput.style.height = "auto";
 
-      // POST evaluate with per-stage model IDs
-      const form = new FormData();
+      // POST evaluate with strategy_ids
+      var form = new FormData();
       form.append("image", selectedFile);
       form.append("task", task);
-      form.append("perceive_model_id", perceiveId);
-      form.append("plan_model_id", planId);
-      form.append("act_model_id", actId);
-      form.append("verify_model_id", verifyId);
-      form.append("sim_id", simId);
+      form.append("strategy_ids", ids.join(","));
 
       try {
-        const res = await fetch(API_BASE + "/api/evaluate", { method: "POST", body: form });
+        var res = await fetch(API_BASE + "/api/evaluate", { method: "POST", body: form });
         if (!res.ok) throw new Error("HTTP " + res.status);
-        const body = await res.json();
+        var body = await res.json();
         connectSSE(body.eval_id);
       } catch (e) {
         console.error("Evaluate failed:", e);
-        addErrorBubble("Failed to start evaluation: " + e.message);
+        addErrorToActiveTab("Failed to start evaluation: " + e.message);
         setRunning(false);
       }
     });
+
+    // ---- Tab management ----
+    function setupTabs(strategyIds) {
+      tabBar.textContent = "";
+      tabData = {};
+      activeTabId = null;
+
+      if (strategyIds.length <= 1) {
+        // Single strategy — no tab bar needed
+        tabBar.classList.add("hidden");
+        var sid = strategyIds[0];
+        var container = createTabContainer(sid);
+        chatArea.textContent = "";
+        chatArea.appendChild(container);
+        tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
+        activeTabId = sid;
+        return;
+      }
+
+      tabBar.classList.remove("hidden");
+
+      strategyIds.forEach(function(sid, i) {
+        // Create tab button
+        var tab = document.createElement("button");
+        tab.className = "strategy-tab px-4 py-2 text-xs text-gray-400 border-b-2 border-transparent whitespace-nowrap";
+        tab.setAttribute("data-tab-id", sid);
+
+        var strat = strategies.find(function(s) { return s.id === sid; });
+        var displayName = strat ? strat.display_name : sid;
+
+        var nameSpan = document.createElement("span");
+        nameSpan.textContent = displayName;
+        tab.appendChild(nameSpan);
+
+        var statusBadge = document.createElement("span");
+        statusBadge.className = "ml-2 text-[9px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-full";
+        statusBadge.textContent = "running";
+        statusBadge.id = "tab-status-" + sid;
+        tab.appendChild(statusBadge);
+
+        var latencyBadge = document.createElement("span");
+        latencyBadge.className = "ml-1 text-[9px] text-gray-500 hidden";
+        latencyBadge.id = "tab-latency-" + sid;
+        tab.appendChild(latencyBadge);
+
+        tab.addEventListener("click", function() { switchTab(sid); });
+        tabBar.appendChild(tab);
+
+        // Create tab content container
+        var container = createTabContainer(sid);
+        tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
+
+        if (i === 0) {
+          activeTabId = sid;
+          tab.classList.add("active");
+          chatArea.textContent = "";
+          chatArea.appendChild(container);
+        }
+      });
+    }
+
+    function createTabContainer(sid) {
+      var div = document.createElement("div");
+      div.className = "space-y-4";
+      div.id = "tab-content-" + sid;
+      return div;
+    }
+
+    function switchTab(sid) {
+      if (sid === activeTabId) return;
+
+      // Update tab buttons
+      document.querySelectorAll(".strategy-tab").forEach(function(t) {
+        if (t.getAttribute("data-tab-id") === sid) {
+          t.classList.add("active");
+        } else {
+          t.classList.remove("active");
+        }
+      });
+
+      // Swap content
+      chatArea.textContent = "";
+      if (tabData[sid]) {
+        chatArea.appendChild(tabData[sid].el);
+      }
+      activeTabId = sid;
+
+      // Update sidebar for this tab
+      resetSidebar();
+      if (tabData[sid]) {
+        Object.keys(tabData[sid].stages).forEach(function(stage) {
+          updateSidebar(stage, tabData[sid].stages[stage]);
+        });
+      }
+
+      scrollToBottom();
+    }
+
+    function updateTabStatus(sid, status, latencyMs) {
+      var badge = document.getElementById("tab-status-" + sid);
+      if (badge) {
+        badge.textContent = status;
+        if (status === "completed") {
+          badge.className = "ml-2 text-[9px] bg-green-500/20 text-green-300 px-1.5 py-0.5 rounded-full";
+        } else if (status === "error" || status === "failed") {
+          badge.className = "ml-2 text-[9px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded-full";
+        }
+      }
+      if (latencyMs != null) {
+        var lat = document.getElementById("tab-latency-" + sid);
+        if (lat) {
+          lat.textContent = Math.round(latencyMs) + "ms";
+          lat.classList.remove("hidden");
+        }
+      }
+      if (tabData[sid]) tabData[sid].status = status;
+    }
 
     // ---- SSE connection ----
     function connectSSE(evalId) {
       if (currentEventSource) currentEventSource.close();
 
-      const es = new EventSource(API_BASE + "/api/evaluate/" + evalId + "/stream");
+      var es = new EventSource(API_BASE + "/api/evaluate/" + evalId + "/stream");
       currentEventSource = es;
-      let typingEl = null;
 
       es.addEventListener("stage", function(e) {
-        const data = JSON.parse(e.data);
-        const stage = data.stage;
-        const status = data.status;
-        const latencyMs = data.latency_ms;
-        const output = data.output;
-        const error = data.error;
-        const modelId = data.model_id;
+        var data = JSON.parse(e.data);
+        var sid = data.strategy_id || activeTabId;
+        var stage = data.stage;
+        var status = data.status;
 
-        // Update sidebar
-        updateSidebar(stage, status);
+        if (!tabData[sid]) return;
+
+        // Track stage status for sidebar
+        tabData[sid].stages[stage] = status;
+
+        // Update sidebar only if this is the active tab
+        if (sid === activeTabId) {
+          updateSidebar(stage, status);
+        }
 
         if (status === "running") {
-          if (typingEl) typingEl.remove();
-          typingEl = addTypingIndicator(stage);
+          if (tabData[sid].typingEl) tabData[sid].typingEl.remove();
+          tabData[sid].typingEl = addTypingIndicator(stage, tabData[sid].el);
         }
 
         if (status === "completed" || status === "error") {
-          if (typingEl) { typingEl.remove(); typingEl = null; }
-          addStageBubble(stage, status, latencyMs, output, error, modelId);
+          if (tabData[sid].typingEl) { tabData[sid].typingEl.remove(); tabData[sid].typingEl = null; }
+          addStageBubble(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el);
         }
       });
 
+      es.addEventListener("strategy_complete", function(e) {
+        var data = JSON.parse(e.data);
+        var sid = data.strategy_id;
+        if (tabData[sid] && tabData[sid].typingEl) {
+          tabData[sid].typingEl.remove();
+          tabData[sid].typingEl = null;
+        }
+        updateTabStatus(sid, "completed", data.total_latency_ms);
+      });
+
+      es.addEventListener("strategy_error", function(e) {
+        var data = JSON.parse(e.data);
+        var sid = data.strategy_id;
+        if (tabData[sid] && tabData[sid].typingEl) {
+          tabData[sid].typingEl.remove();
+          tabData[sid].typingEl = null;
+        }
+        updateTabStatus(sid, "error");
+        addErrorBubble(data.error || "Strategy failed", tabData[sid] ? tabData[sid].el : chatArea);
+      });
+
       es.addEventListener("complete", function() {
-        if (typingEl) typingEl.remove();
         es.close();
         currentEventSource = null;
         setRunning(false);
       });
 
       es.addEventListener("error", function(e) {
-        if (typingEl) typingEl.remove();
+        // Clean up typing indicators
+        Object.values(tabData).forEach(function(td) {
+          if (td.typingEl) { td.typingEl.remove(); td.typingEl = null; }
+        });
         if (es.readyState === EventSource.CLOSED) {
           setRunning(false);
           return;
@@ -647,7 +716,7 @@
             if (parsed.message) errMsg = parsed.message;
           }
         } catch (_) {}
-        addErrorBubble(errMsg);
+        addErrorBubble(errMsg, chatArea);
         es.close();
         currentEventSource = null;
         setRunning(false);
@@ -687,7 +756,6 @@
         inner.classList.add("text-blue-400", "pulse-blue", "border", "border-blue-500");
       } else if (status === "completed") {
         inner.classList.add("text-green-400", "border", "border-green-500");
-        // Color the connector line after this stage
         var connector = document.querySelector('.sidebar-connector[data-after="' + stage + '"]');
         if (connector) connector.className = "w-px h-5 bg-green-500/50 sidebar-connector transition-colors duration-500";
       } else if (status === "error") {
@@ -703,9 +771,17 @@
       });
     }
 
+    function addErrorToActiveTab(message) {
+      var container = tabData[activeTabId] ? tabData[activeTabId].el : chatArea;
+      addErrorBubble(message, container);
+    }
+
     // ---- Bubble builders using DOM API ----
 
-    function addUserBubble(imgSrc, task, stageModels) {
+    function addUserBubble(imgSrc, task, strategyIds) {
+      // Add user bubble to the first tab (or the active one)
+      var container = tabData[activeTabId] ? tabData[activeTabId].el : chatArea;
+
       var wrapper = document.createElement("div");
       wrapper.className = "flex justify-end animate-slide-in";
 
@@ -722,34 +798,29 @@
       taskP.textContent = task;
       bubble.appendChild(taskP);
 
-      // Per-stage model badges
-      var stageColors = {
-        perceive: { bg: "bg-blue-500/15", text: "text-blue-300", label: "Perceive" },
-        plan:     { bg: "bg-purple-500/15", text: "text-purple-300", label: "Plan" },
-        act:      { bg: "bg-emerald-500/15", text: "text-emerald-300", label: "Act" },
-        verify:   { bg: "bg-amber-500/15", text: "text-amber-300", label: "Verify" },
-      };
-
+      // Strategy badges
       var badges = document.createElement("div");
       badges.className = "flex flex-wrap gap-1.5";
-
-      Object.keys(stageColors).forEach(function(stage) {
-        var colors = stageColors[stage];
-        var model = stageModels[stage];
-        if (!model) return;
+      strategyIds.forEach(function(sid) {
+        var strat = strategies.find(function(s) { return s.id === sid; });
         var badge = document.createElement("span");
-        badge.className = "text-[10px] " + colors.bg + " " + colors.text + " px-2 py-0.5 rounded-full";
-        badge.textContent = colors.label + ": " + model.name;
+        badge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded-full";
+        badge.textContent = strat ? strat.display_name : sid;
         badges.appendChild(badge);
       });
-
       bubble.appendChild(badges);
+
       wrapper.appendChild(bubble);
-      chatArea.appendChild(wrapper);
+
+      // Add to all tabs
+      Object.values(tabData).forEach(function(td) {
+        td.el.appendChild(wrapper.cloneNode(true));
+      });
+
       scrollToBottom();
     }
 
-    function addTypingIndicator(stage) {
+    function addTypingIndicator(stage, container) {
       var meta = STAGES[stage];
       var wrapper = document.createElement("div");
       wrapper.className = "flex justify-start animate-slide-in";
@@ -779,13 +850,13 @@
       bubble.appendChild(dots);
 
       wrapper.appendChild(bubble);
-      chatArea.appendChild(wrapper);
+      container.appendChild(wrapper);
       lucide.createIcons({ nodes: [wrapper] });
       scrollToBottom();
       return wrapper;
     }
 
-    function addStageBubble(stage, status, latencyMs, output, error, modelId) {
+    function addStageBubble(stage, status, latencyMs, output, error, modelId, container) {
       var meta = STAGES[stage];
       var isOk = status === "completed";
       var accentColor = isOk ? "green" : "red";
@@ -885,12 +956,12 @@
       }
 
       wrapper.appendChild(bubble);
-      chatArea.appendChild(wrapper);
+      container.appendChild(wrapper);
       lucide.createIcons({ nodes: [wrapper] });
       scrollToBottom();
     }
 
-    function addErrorBubble(message) {
+    function addErrorBubble(message, container) {
       var wrapper = document.createElement("div");
       wrapper.className = "flex justify-start animate-slide-in";
 
@@ -910,7 +981,7 @@
 
       bubble.appendChild(inner);
       wrapper.appendChild(bubble);
-      chatArea.appendChild(wrapper);
+      container.appendChild(wrapper);
       lucide.createIcons({ nodes: [wrapper] });
       scrollToBottom();
     }
@@ -933,7 +1004,6 @@
 
     function renderPerceive(container, o) {
       var rendered = false;
-      // Detected objects
       if (o.objects && o.objects.length) {
         rendered = true;
         var section = document.createElement("div");
@@ -957,7 +1027,6 @@
         container.appendChild(section);
       }
 
-      // Spatial relations
       var rels = o.spatial_relations || o.relations;
       if (rels) {
         rendered = true;
@@ -985,7 +1054,6 @@
         container.appendChild(relSection);
       }
 
-      // Scene description
       if (o.scene_description || o.description) {
         rendered = true;
         var desc = document.createElement("p");
@@ -1080,7 +1148,6 @@
     function renderAct(container, o) {
       var rendered = false;
 
-      // Action type badge
       if (o.action_type) {
         rendered = true;
         var typeBadge = document.createElement("span");
@@ -1089,7 +1156,6 @@
         container.appendChild(typeBadge);
       }
 
-      // Tool calls rendering
       if (o.action_type === "tool_calls" && o.tool_calls && Array.isArray(o.tool_calls)) {
         rendered = true;
         var heading = document.createElement("p");
@@ -1118,7 +1184,6 @@
         });
       }
 
-      // Trajectory actions
       var actions = o.actions || o.action_steps;
       if (o.action_type !== "tool_calls" && actions && Array.isArray(actions)) {
         rendered = true;
@@ -1136,7 +1201,6 @@
         });
       }
 
-      // Actions executed count
       if (o.actions_executed != null) {
         rendered = true;
         var traj = document.createElement("p");

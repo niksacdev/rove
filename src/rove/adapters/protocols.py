@@ -31,7 +31,8 @@ class VLMAdapter(Protocol):
         ...
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str
+        self, before_image_base64: str, after_image_base64: str, task: str,
+        context: dict | None = None,
     ) -> VerificationResult:
         """Verify step: compare before/after images to check task success."""
         ...

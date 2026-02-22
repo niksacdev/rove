@@ -12,6 +12,7 @@ from typing import Any
 from rove.adapters.protocols import AgentAdapter, PolicyAdapter, SimAdapter, StageAdapter, VLMAdapter
 from rove.models import (
     ActionPrediction,
+    PipelineContext,
     PipelineStageResult,
     SceneAnalysis,
     StageStatus,
@@ -102,7 +103,9 @@ class EvaluationPipeline:
     ) -> Any:
         """Dispatch to the appropriate adapter method based on adapter type and stage."""
         if isinstance(adapter, AgentAdapter):
-            raw = await adapter.run_stage(stage, image_base64, task, context or None)
+            # Serialize dataclass objects in context for agent adapters
+            agent_context = {k: _to_dict(v) for k, v in context.items()} if context else None
+            raw = await adapter.run_stage(stage, image_base64, task, agent_context)
             converters = {
                 "perceive": _dict_to_scene,
                 "plan": _dict_to_plan,
@@ -117,11 +120,18 @@ class EvaluationPipeline:
         elif stage == "plan":
             scene = context.get("scene")
             return await adapter.plan_task(image_base64, task, scene)
+        elif stage == "act":
+            return await adapter.predict_action(
+                image_base64, task,
+                proprioception=context.get("proprioception"),
+                plan=context.get("plan"),
+            )
         elif stage == "verify":
             after_image = context.get("after_image", image_base64)
-            return await adapter.verify_success(image_base64, after_image, task)
-        elif stage == "act":
-            return await adapter.predict_action(image_base64, task)
+            return await adapter.verify_success(
+                image_base64, after_image, task,
+                context=context.get("pipeline_context"),
+            )
         else:
             raise ValueError(f"Unknown stage: {stage}")
 
@@ -136,14 +146,15 @@ class EvaluationPipeline:
     ) -> AsyncGenerator[PipelineStageResult, None]:
         """Run a full trial, yielding stage results as they complete."""
         eval_id = eval_id or str(uuid.uuid4())
+        ctx = PipelineContext(task=task, image_base64=image_base64)
 
         # --- PERCEIVE ---
-        scene = None
         perceive_model = self._get_model_id(self.perceive_adapter)
         yield PipelineStageResult(stage="perceive", status=StageStatus.RUNNING, model_id=perceive_model)
         t0 = time.monotonic()
         try:
             scene = await self._call_adapter("perceive", self.perceive_adapter, image_base64, task)
+            ctx.scene = scene
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="perceive", status=StageStatus.COMPLETED,
@@ -158,13 +169,24 @@ class EvaluationPipeline:
             )
             return
 
+        # --- SIM RESET + PROPRIOCEPTION ---
+        try:
+            reset_obs = await self.sim.reset(task)
+            ctx.proprioception = reset_obs.proprioception
+        except Exception as e:
+            logger.warning(f"sim.reset failed: {e}")
+
         # --- PLAN ---
         plan = None
         plan_model = self._get_model_id(self.plan_adapter)
         yield PipelineStageResult(stage="plan", status=StageStatus.RUNNING, model_id=plan_model)
         t0 = time.monotonic()
         try:
-            plan = await self._call_adapter("plan", self.plan_adapter, image_base64, task, scene=scene)
+            plan = await self._call_adapter(
+                "plan", self.plan_adapter, image_base64, task,
+                scene=scene,
+            )
+            ctx.plan = plan
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="plan", status=StageStatus.COMPLETED,
@@ -184,21 +206,19 @@ class EvaluationPipeline:
         yield PipelineStageResult(stage="act", status=StageStatus.RUNNING, model_id=act_model)
         t0 = time.monotonic()
         try:
-            obs = await self.sim.reset(task)
-
             action_pred = await self._call_adapter(
-                "act", self.act_adapter, image_base64, task, scene=scene, plan=plan,
+                "act", self.act_adapter, image_base64, task,
+                scene=scene, plan=plan, proprioception=ctx.proprioception,
             )
+            ctx.action = action_pred
 
-            last_obs = obs
+            last_obs = reset_obs
             if action_pred.action_type == "trajectory" and action_pred.actions:
-                # VLA trajectory — step through sim
                 for action in action_pred.actions:
                     last_obs = await self.sim.step(action)
                     if last_obs.done:
                         break
             elif action_pred.action_type == "tool_calls":
-                # Agent already executed tools — get final observation from sim
                 last_obs = await self.sim.get_observation()
 
             latency = (time.monotonic() - t0) * 1000
@@ -235,8 +255,12 @@ class EvaluationPipeline:
         try:
             after_obs = await self.sim.get_observation()
             after_image = after_obs.image_base64 or image_base64
+            ctx.after_image_base64 = after_image
+
             verification = await self._call_adapter(
-                "verify", self.verify_adapter, image_base64, task, after_image=after_image,
+                "verify", self.verify_adapter, image_base64, task,
+                after_image=after_image,
+                pipeline_context=ctx.to_dict(),
             )
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(

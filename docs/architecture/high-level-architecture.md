@@ -3,13 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-02-18
 **Authors**: System Architect
-**Version**: 1.0 — Post-founder-review
+**Version**: 1.1 — 4-stage pipeline, strategies, src layout
 
 ---
 
 ## 1. Executive Summary
 
-ROVE evaluates robotics agent pipelines by running real inference through VLM+VLA+LLM combinations on your specific task. The user starts from a task description and a scene image, selects candidate models for each pipeline stage, and ROVE runs the full perceive-ground-plan-execute-verify pipeline across every combination in parallel, producing a ranked comparison of agent configurations.
+ROVE evaluates robotics agent pipelines by running real inference through VLM+VLA+LLM+Agent combinations on your specific task. The user starts from a task description and a scene image, selects candidate models for each pipeline stage, and ROVE runs the full perceive-plan-act-verify pipeline across every strategy in parallel, producing a ranked comparison of agent configurations.
 
 ROVE is inference-only — it does not train, fine-tune, or modify models. It orchestrates them into agent pipelines and measures the outcomes.
 
@@ -56,19 +56,18 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 |  |                     EvaluationEngine                                |
 |  |                                                                     |
 |  |  RunManager                                                         |
-|  |    asyncio.gather(                                                  |
-|  |      RoveOrchestrator(vlm_1, vla_1),   <-- combination 1          |
-|  |      RoveOrchestrator(vlm_1, vla_2),   <-- combination 2          |
-|  |      RoveOrchestrator(vlm_2, vla_1),   <-- combination 3          |
+|  |    asyncio.TaskGroup(                                               |
+|  |      EvaluationPipeline(strategy_1),   <-- strategy 1             |
+|  |      EvaluationPipeline(strategy_2),   <-- strategy 2             |
+|  |      EvaluationPipeline(strategy_3),   <-- strategy 3             |
 |  |      ...                                                            |
 |  |    )                                                                |
 |  |                                                                     |
-|  |  RoveOrchestrator (per combination, deterministic 5-step)         |
+|  |  EvaluationPipeline (per strategy, deterministic 4-stage)          |
 |  |    1. perceive  --> VLMAdapter.analyze_scene()                     |
-|  |    2. ground    --> GroundingAdapter.localize()                    |
-|  |    3. plan      --> VLMAdapter.plan_grasp()                        |
-|  |    4. execute   --> VLAAdapter.predict_action() + SimAdapter.step()|
-|  |    5. verify    --> VLMAdapter.verify_success()                    |
+|  |    2. plan      --> VLMAdapter.plan_task()                         |
+|  |    3. act       --> PolicyAdapter.predict_action() + SimAdapter.step()|
+|  |    4. verify    --> VLMAdapter.verify_success()                    |
 |  |                                                                     |
 |  +--------+------------------------------------------------------------+
 |           |                                                            |
@@ -76,19 +75,18 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 |  +---------------------------------------------------------------------+
 |  |                      Adapter Registry                               |
 |  |                                                                     |
-|  |  models.yaml --> AdapterRegistry --> resolves model_id to adapter  |
+|  |  rove.yaml --> AdapterRegistry --> resolves model_id to adapter    |
 |  |                                                                     |
-|  |  VLMAdapter Protocol:      VLAAdapter Protocol:                    |
+|  |  VLMAdapter Protocol:      PolicyAdapter Protocol:                 |
 |  |    mock_vlm                  mock_vla                              |
 |  |    azure_openai_vlm          local_smolvla                         |
 |  |    azure_nim_vlm             local_openvla                         |
 |  |    azure_hf_vlm              azure_gpu_cogact                      |
 |  |    local_mlx_vlm             azure_gpu_groot                       |
 |  |                                                                     |
-|  |  GroundingAdapter Protocol:  SimAdapter Protocol:                  |
-|  |    mock_grounding             mock_sim                             |
-|  |    local_groundingdino        local_mujoco                         |
-|  |    local_coreml_sam2                                               |
+|  |  AgentAdapter Protocol:     SimAdapter Protocol:                   |
+|  |    mock_agent                 mock_sim                             |
+|  |    azure_foundry_agent        local_mujoco                         |
 |  |                                                                     |
 |  +--------+------------------------------------------------------------+
 |           |                                                            |
@@ -96,8 +94,8 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 |  +---------------------------------------------------------------------+
 |  |                    Evaluation Store (SQLite)                        |
 |  |                                                                     |
-|  |  evaluations table    combination_results table                    |
-|  |  step_results table   leaderboard (aggregated view)                |
+|  |  evaluations table    strategy_results table                       |
+|  |  stage_results table  leaderboard (aggregated view)                |
 |  |  JSONL export (Foundry-compatible: query/response/context)         |
 |  |                                                                     |
 |  +---------------------------------------------------------------------+
@@ -111,7 +109,7 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
   | Port 8081         |  | Port 8082         |  | MCP Server        |
   |                   |  |                   |  | Port 8083         |
   | analyze_scene()   |  | predict_action()  |  | localize()        |
-  | plan_grasp()      |  | list_vlas()       |  | segment()         |
+  | plan_task()       |  | list_vlas()       |  | segment()         |
   | verify_success()  |  |                   |  | sim_reset()       |
   | list_vlms()       |  |                   |  | sim_step()        |
   +--------+----------+  +--------+----------+  +--------+----------+
@@ -133,13 +131,13 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 
 ## 3. Async Job Pattern
 
-The evaluation API is fully non-blocking. This is essential because an N×M evaluation (e.g., 3 VLMs × 3 VLAs = 9 combinations) can take 10–120 seconds depending on model latency.
+The evaluation API is fully non-blocking. This is essential because an evaluation with multiple strategies can take 10-120 seconds depending on model latency.
 
 ```
 Client                      FastAPI                     BackgroundJobRunner
   |                            |                                |
   | POST /api/evaluations      |                                |
-  | {task, image, vlms, vlas}  |                                |
+  | {task, image, strategies}  |                                |
   |-------------------------->|                                |
   |                            | 1. validate request           |
   |                            | 2. create EvalRecord          |
@@ -157,22 +155,22 @@ Client                      FastAPI                     BackgroundJobRunner
   | (poll every 2s)            |                                |
   |-------------------------->|                                |
   |<--------------------------|  {status: "running",           |
-  |  running + partial results |   completed_combinations: 2,  |
-  |                            |   total_combinations: 9}      |
+  |  running + partial results |   completed_strategies: 2,    |
+  |                            |   total_strategies: 3}        |
   |                            |                                |
   |                            |         [background work]      |
   |                            |         RunManager runs       |
-  |                            |         9 orchestrators       |
-  |                            |         asyncio.gather()      |
+  |                            |         3 pipelines           |
+  |                            |         asyncio.TaskGroup     |
   |                            |         each completes and    |
   |                            |         writes to SQLite      |
   |                            |                               |
   | OR: subscribe to SSE       |                               |
   | GET /evaluations/{id}/stream                               |
   |-------------------------->|                               |
-  |<-- event: step_complete --|<-- SSEQueue.put(event) -------|
-  |<-- event: step_complete --|                               |
-  |<-- event: combination_done|                               |
+  |<-- event: stage_complete --|<-- SSEQueue.put(event) ------|
+  |<-- event: stage_complete --|                              |
+  |<-- event: strategy_done   |                               |
   |<-- event: evaluation_done-|                               |
   |                            |                               |
   | GET /evaluations/{id}      |                               |
@@ -190,49 +188,48 @@ queued --> running --> complete
                   \--> failed
 ```
 
-Each combination within an evaluation has its own state:
+Each strategy within an evaluation has its own state:
 
 ```
 pending --> running --> success
-                   \--> failed (step_name, error_message)
+                   \--> failed (stage_name, error_message)
 ```
 
-Partial failure is non-fatal: if combination 3 of 9 fails, the other 8 complete and are ranked. The failed combination is recorded with its failure step.
+Partial failure is non-fatal: if strategy 2 of 3 fails, the other 2 complete and are ranked. The failed strategy is recorded with its failure stage.
 
 ---
 
-## 4. The 5-Step Pipeline in Detail
+## 4. The 4-Stage Pipeline in Detail
 
 ```
-INPUT: task_description (str), scene_image (bytes), vlm_id, vla_id
+INPUT: task_description (str), scene_image (bytes), strategy config (perceive_model_id, plan_model_id, act_model_id, verify_model_id, sim_id)
 
-+-------------+     +-------------+     +-------------+
-|   perceive  |     |   ground    |     |    plan     |
-|             |     |             |     |             |
-| VLM sees    | --> | Grounding   | --> | VLM plans   |
-| scene image |     | model       |     | grasp       |
-| + task      |     | localizes   |     | given bbox  |
-| description |     | target      |     | + scene     |
-|             |     | object      |     | analysis    |
-+------+------+     +------+------+     +------+------+
-       |                   |                   |
-       v                   v                   v
-  SceneAnalysis       Localization         GraspPlan
-  (see §5.A)         (see §5.B)           (see §5.C)
-       |                   |                   |
-       +-------------------+-------------------+
++-------------+                +-------------+
+|   perceive  |                |    plan     |
+|             |                |             |
+| VLM sees    | ------------>  | VLM plans   |
+| scene image |                | task given  |
+| + task      |                | scene       |
+| description |                | analysis    |
+|             |                |             |
++------+------+                +------+------+
+       |                              |
+       v                              v
+  SceneAnalysis                   TaskPlan
+  (see §5.A)                     (see §5.C)
+       |                              |
+       +------------------------------+
                            |
                            v
               +------------+------------+
               |                         |
-              |         execute         |
+              |          act            |
               |                         |
-              |  VLA predicts action    |
-              |  chunk given:           |
+              |  PolicyAdapter predicts |
+              |  action chunk given:    |
               |  - scene image          |
               |  - task description     |
-              |  - GraspPlan (optional, |
-              |    if VLA accepts it)   |
+              |  - proprioception       |
               |                         |
               |  Sim steps through      |
               |  each action in chunk   |
@@ -254,6 +251,7 @@ INPUT: task_description (str), scene_image (bytes), vlm_id, vla_id
               |  - initial scene image  |
               |  - post_exec_obs image  |
               |  - task description     |
+              |  - context (dict)       |
               |                         |
               |  Returns:               |
               |  - vlm_success (bool)   |
@@ -269,18 +267,18 @@ INPUT: task_description (str), scene_image (bytes), vlm_id, vla_id
               +------------+------------+
                            |
                            v
-                     CombinationResult
+                     StrategyResult
                      (saved to SQLite)
 
-OUTPUT: ranked list of CombinationResult across all VLM×VLA combinations
+OUTPUT: ranked list of StrategyResult across all strategies
 ```
 
-### VLM-Only Mode (no sim, no VLA)
+### VLM-Only Mode (no sim, no PolicyAdapter)
 
-When no VLA is specified OR when `--mode vlm-only` is passed, the pipeline runs steps 1-3 only. This is valid for evaluating perception and planning quality without action execution. Step 4 is skipped; step 5 runs a "counterfactual" verify using only the initial image and the plan.
+When no PolicyAdapter is specified OR when `--mode vlm-only` is passed, the pipeline runs stages 1-2 only (perceive, plan). This is valid for evaluating perception and planning quality without action execution. Stage 3 (act) is skipped; stage 4 runs a "counterfactual" verify using only the initial image and the plan.
 
 ```
-perceive --> ground --> plan --> [skip execute] --> verify(plan quality)
+perceive --> plan --> [skip act] --> verify(plan quality)
 ```
 
 ---
@@ -309,7 +307,7 @@ class DetectedObject:
     description: str | None       # "metallic, rectangular"
     spatial_hint: str | None      # "center-left" — natural language, not coordinates
     # NOTE: VLMs cannot give metric coordinates from a single 2D image.
-    # Pixel coordinates come from the Grounding step, not here.
+    # Pixel coordinates come from grounding models (folded into perceive), not here.
 
 @dataclass
 class SceneAnalysis:
@@ -322,7 +320,7 @@ class SceneAnalysis:
     model_id: str
 ```
 
-**Key constraint**: VLMs operating on a single 2D image WITHOUT depth data cannot provide metric 3D coordinates. `SceneAnalysis` deliberately omits pixel bounding boxes — those are the Grounding model's job. The VLM contributes semantic understanding and object identification; the Grounding model contributes spatial localization.
+**Key constraint**: VLMs operating on a single 2D image WITHOUT depth data cannot provide metric 3D coordinates. `SceneAnalysis` captures semantic understanding and object identification. Grounding (bounding boxes, segmentation) is folded into the perceive stage when the VLM or a dedicated grounding model supports it, rather than being a separate pipeline stage.
 
 ### 5.B What Grounding Models Return: Localization
 
@@ -354,36 +352,25 @@ class Localization:
 
 **Coordinate convention**: All bounding boxes are normalized [0,1] relative to image dimensions. Adapters are responsible for converting from model-native formats (e.g., GroundingDINO outputs absolute pixel coordinates — the adapter normalizes them). This is a hard invariant enforced by the Protocol type annotations.
 
-### 5.C What VLMs Return for Planning: GraspPlan
+### 5.C What VLMs Return for Planning: TaskPlan
 
-The planning step is where VLMs are asked to reason about HOW to grasp an object. The VLM receives the scene analysis, the bounding box, and the task description. It returns a structured plan.
-
-**The depth problem**: VLMs cannot compute metric 3D grasp poses from a single 2D image. They can reason about approach direction (from above, from the side), grip orientation, and relative positioning. The adapter captures this as:
+The planning stage is where VLMs are asked to reason about HOW to accomplish a task. The VLM receives the scene analysis and the task description. It returns a structured plan.
 
 ```python
 @dataclass
-class GraspApproach:
-    direction: str           # "top-down", "side-left", "side-right", "front"
-    # This is intentionally NOT a 3D vector here.
-    # Metric approach vectors require depth. The sim provides the metric transform.
-    # The VLM contributes the semantic choice; the sim converts to robot frame.
-
-@dataclass
-class GraspPlan:
+class TaskPlan:
     target_object: str            # "red bracket"
-    grasp_approach: GraspApproach
-    pre_grasp_description: str    # natural language: "move above the bracket"
-    grasp_description: str        # "close gripper on the bracket body"
-    post_grasp_description: str   # "lift and move to bin A"
+    strategy: str                 # "top-down-grasp", "push-slide", etc.
+    reasoning: str                # VLM's chain-of-thought reasoning
+    steps: list[str]              # ordered natural language steps
     confidence: float             # VLM's self-reported confidence
-    bbox_used: BoundingBox        # the bbox from Localization that was used
     raw_response: str
     latency_ms: float
     cost_usd: float
     model_id: str
 ```
 
-**Design rationale**: The sim adapter translates `GraspApproach.direction` ("top-down") into a metric approach vector in robot base frame using the sim's known camera intrinsics and object depth from the physics engine. This keeps the VLM interface clean while preserving the ability to execute the plan.
+**Design rationale**: `TaskPlan` is deliberately higher-level than a grasp pose. VLMs reason about strategy and sequencing; the PolicyAdapter and sim handle metric execution. Grounding (bounding boxes, segmentation) is folded into the perceive stage when the VLM or a grounding model supports it, rather than being a separate pipeline stage.
 
 ### 5.D What VLAs Return: ActionPrediction
 
@@ -479,8 +466,7 @@ class SimStepResult:
                           USER INPUT
                     task: "Pick red bracket, place in bin A"
                     image: scene.jpg (bytes)
-                    vlms: [gpt-4o, qwen25-vl]
-                    vlas: [smolvla, cogact]
+                    strategies: [mock, cloud-fast, cloud-accurate]
 
                               |
                               | HTTP POST or CLI call
@@ -493,53 +479,45 @@ class SimStepResult:
                               |
                               | asyncio.create_task()
                               v
-                      +--------------+
-                      |  RunManager  |
-                      |  4 combos:   |
-                      |  gpt4o+smol  |
-                      |  gpt4o+cog   |
-                      |  qwen+smol   |
-                      |  qwen+cog    |
-                      +--------------+
+                      +------------------+
+                      |   RunManager     |
+                      |   3 strategies:  |
+                      |   mock           |
+                      |   cloud-fast     |
+                      |   cloud-accurate |
+                      +------------------+
                               |
-                   asyncio.gather() -- all 4 run concurrently
+                   asyncio.TaskGroup -- all 3 run concurrently
                               |
           +-------------------+-------------------+
           |                   |                   |
           v                   v                   v
-  Orchestrator(1)     Orchestrator(2)     Orchestrator(3) ...
-  gpt4o + smolvla     gpt4o + cogact      qwen + smolvla
+  Pipeline(mock)      Pipeline(cloud-fast) Pipeline(cloud-accurate) ...
           |
-          | [STEP 1: perceive]
+          | [STAGE 1: perceive]
           | image bytes  -------> VLMAdapter.analyze_scene(image, task)
           |               <------  SceneAnalysis
           |                           objects: [{label, confidence, spatial_hint}]
           |                           task_relevant: ["red bracket"]
           |
-          | [STEP 2: ground]
-          | image bytes  -------> GroundingAdapter.localize(image, "red bracket")
-          |               <------  Localization
-          |                           bbox: {x_min, y_min, x_max, y_max} [0,1]
-          |                           segmentation: mask (optional)
+          | [STAGE 2: plan]
+          | image+analysis ------> VLMAdapter.plan_task(image, task, scene)
+          |               <------  TaskPlan
+          |                           strategy: "top-down-grasp"
+          |                           steps: ["move above", "descend", "grasp", "lift"]
           |
-          | [STEP 3: plan]
-          | image+analysis+bbox -> VLMAdapter.plan_grasp(image, task, scene, bbox)
-          |               <------  GraspPlan
-          |                           approach: "top-down"
-          |                           grasp_description: "..."
-          |
-          | [STEP 4: execute]
+          | [STAGE 3: act]
           |
           |   sim.reset(task_id)  --------> SimAdapter
           |                        <-------  SimObservation (initial)
           |                                    joint_positions: [q0..q6]
           |                                    rgb_image: bytes
           |
-          |   VLAAdapter.predict_action(
+          |   PolicyAdapter.predict_action(
           |     image=sim_initial_image,      -- NOTE: uses sim's initial obs,
           |     task=task_description,            not the user's input image
           |     proprioception=joint_positions    (sim is ground truth)
-          |   ) --------------------------->  VLAAdapter
+          |   ) --------------------------->  PolicyAdapter
           |                        <--------  ActionPrediction
           |                                    actions: [ActionStep x 8]
           |
@@ -552,26 +530,26 @@ class SimStepResult:
           |   final_obs = last SimObservation
           |   sim_success = any(step.success for step in steps)
           |
-          | [STEP 5: verify]
+          | [STAGE 4: verify]
           | VLMAdapter.verify_success(
           |   initial_image=user_scene_image,     -- original user image
           |   final_image=final_obs.rgb_image,    -- sim post-execution render
-          |   task=task_description
+          |   task=task_description,
+          |   context=context                     -- accumulated pipeline context
           | ) --------------------------->  VLMAdapter
           |                        <------  VerificationResult
           |                                    vlm_success: bool
           |                                    confidence: float
           |                                    reasoning: str
           |
-          | CombinationResult assembled:
-          |   eval_id, vlm_id, vla_id
-          |   step_results: [perceive, ground, plan, execute, verify]
+          | StrategyResult assembled:
+          |   eval_id, strategy_id
+          |   stage_results: [perceive, plan, act, verify]
           |   success: vlm_success (primary)
           |   sim_success: sim_success (ground truth)
           |   judge_calibration: vlm_success == sim_success
-          |   total_latency_ms: sum of all step latencies
-          |   total_cost_usd: sum of all VLM/VLA costs
-          |   action_quality: verification confidence
+          |   total_latency_ms: sum of all stage latencies
+          |   total_cost_usd: sum of all VLM/PolicyAdapter costs
           |
           v
     +------------+
@@ -580,7 +558,7 @@ class SimStepResult:
     +------------+
           |
           v
-    RunManager collects all CombinationResult objects
+    RunManager collects all StrategyResult objects
     Leaderboard.rank(results) sorts by:
       1. success (True > False)
       2. total_latency_ms (ascending)
@@ -601,7 +579,7 @@ class SimStepResult:
 
 ### Decision 1: Plain HTML+JS dashboard, no frontend build
 
-**Decision**: Dashboard is `rove/dashboard/index.html` + `rove/dashboard/app.js` served by FastAPI's `StaticFiles` mount. No npm, no Vite, no TypeScript, no React.
+**Decision**: Dashboard is `frontend/index.html` + `frontend/app.js` served by FastAPI's `StaticFiles` mount. No npm, no Vite, no TypeScript, no React.
 
 **Alternatives considered**:
 - React + Vite + TypeScript (as in original CLAUDE.md): Richer component model, type safety, better ecosystem for complex UIs.
@@ -634,13 +612,13 @@ class SimStepResult:
 - MCP servers run the evaluations: MCP tool calls have token/response limits that make streaming evaluation results awkward.
 - Single process with MCP embedded: Mixing request/response semantics of MCP with the streaming job model of evaluations.
 
-**Why direct adapter calls for evaluation**: Evaluation throughput matters. A 9-combination evaluation running 5 pipeline steps each = 45 adapter calls. Each via HTTP would add ~5-50ms overhead per call = 225-2250ms of pure network overhead. Direct Python calls eliminate this entirely. MCP servers exist for a different use case: an AI agent (Claude Desktop, Copilot) building a robotics pipeline who wants to call `analyze_scene` as a tool in their agent loop. These are interactive, low-volume calls where the MCP tool abstraction has high value. They are architecturally separate concerns.
+**Why direct adapter calls for evaluation**: Evaluation throughput matters. An evaluation running 3 strategies with 4 pipeline stages each = 12 adapter calls. Each via HTTP would add ~5-50ms overhead per call = 60-600ms of pure network overhead. Direct Python calls eliminate this entirely. MCP servers exist for a different use case: an AI agent (Claude Desktop, Copilot) building a robotics pipeline who wants to call `analyze_scene` as a tool in their agent loop. These are interactive, low-volume calls where the MCP tool abstraction has high value. They are architecturally separate concerns.
 
 **Consequences**: MCP servers and the FastAPI backend must both import from the same adapter registry. This is straightforward since they share the same Python package. The registry is stateless (returns adapter instances configured from YAML), so sharing it is safe.
 
 ### Decision 4: SimAdapter is gated — evaluation has a sim-required mode and sim-optional mode
 
-**Decision**: If no `SimAdapter` is configured or `--mode vlm-only` is passed, ROVE evaluates steps 1-3 (perceive, ground, plan) and runs a planning-quality verification in step 5. Steps 4 (execute) is skipped entirely. The system does not fail; it produces a valid (but scoped) evaluation.
+**Decision**: If no `SimAdapter` is configured or `--mode vlm-only` is passed, ROVE evaluates stages 1-2 (perceive, plan) and runs a planning-quality verification in stage 4. Stage 3 (act) is skipped entirely. The system does not fail; it produces a valid (but scoped) evaluation.
 
 **Alternatives considered**:
 - Always require sim: Forces users to install MuJoCo/LIBERO even for pure VLM evaluation tasks.
@@ -660,7 +638,7 @@ class SimStepResult:
 
 ### Decision 6: VLM judge calibration as a first-class metric
 
-**Decision**: `CombinationResult` includes `judge_calibration: bool` indicating whether the VLM verification result matched the sim ground truth. This is tracked and surfaced in the leaderboard.
+**Decision**: `StrategyResult` includes `judge_calibration: bool` indicating whether the VLM verification result matched the sim ground truth. This is tracked and surfaced in the leaderboard.
 
 **Alternatives considered**:
 - Use only sim success: Ignores VLM verification quality, which is part of the pipeline evaluation.
@@ -668,9 +646,9 @@ class SimStepResult:
 
 **Why both + calibration**: The RAI-ADR-003 (VLM-as-judge risk) documents this concern. A VLM that verifies its own plan outputs creates a feedback loop risk. By tracking `sim_success` independently and computing `judge_calibration`, ROVE surfaces when a VLM is a poor judge of its own outputs. This is a system-level evaluation insight that can't be obtained by looking at either metric alone. The primary ranking uses `vlm_success` (because in production without a sim, only VLM verification is available), but `judge_calibration` is displayed and exported.
 
-### Decision 7: models.yaml is the single source of truth; Foundry migration path is additive
+### Decision 7: rove.yaml is the single source of truth; Foundry migration path is additive
 
-**Decision**: Model registration stays in `models.yaml` through Phase 3. Phase 4 adds `AdapterRegistry.from_foundry(project_client)` that can supplement or replace YAML with `project_client.deployments.list()`. Both sources can coexist.
+**Decision**: Model and strategy registration stays in `rove.yaml` through Phase 3. Phase 4 adds `AdapterRegistry.from_foundry(project_client)` that can supplement or replace YAML with `project_client.deployments.list()`. Both sources can coexist.
 
 **Alternatives considered**:
 - Start with Foundry API directly: Requires Azure credentials from day 1, blocks local/offline development.
@@ -685,142 +663,150 @@ class SimStepResult:
 ```
 rove/                                  # git root
 ├── pyproject.toml                     # package: rove-eval, entry points
-├── models.yaml                        # single source of truth: all model configs
-├── rove/                              # Python package (import rove)
-│   │
-│   ├── __init__.py                    # public API: EvaluationEngine, run_evaluation()
-│   ├── models.py                      # ALL shared dataclasses + Pydantic models
-│   │                                  # SceneAnalysis, GraspPlan, ActionPrediction,
-│   │                                  # Localization, SimObservation, CombinationResult,
-│   │                                  # EvaluationRequest, EvaluationResult
-│   │
-│   ├── config.py                      # load models.yaml, read env vars
-│   │                                  # no global state: Config is a dataclass
-│   │
-│   ├── adapters/
-│   │   ├── protocols.py               # Protocol definitions ONLY
-│   │   │                              # VLMAdapter, VLAAdapter, GroundingAdapter,
-│   │   │                              # SimAdapter — all @runtime_checkable
-│   │   │                              # CHANGE CAREFULLY: this is the contract
-│   │   │
-│   │   ├── registry.py                # AdapterRegistry
-│   │   │                              # .from_yaml(path) -> AdapterRegistry
-│   │   │                              # .get_vlm(model_id) -> VLMAdapter
-│   │   │                              # .get_vla(model_id) -> VLAAdapter
-│   │   │                              # .get_grounding(model_id) -> GroundingAdapter
-│   │   │                              # .get_sim(model_id) -> SimAdapter
-│   │   │                              # .health_check(model_id) -> bool
-│   │   │
-│   │   ├── vlm/
-│   │   │   ├── __init__.py
-│   │   │   ├── mock.py                # MockVLMAdapter — Phase 1 testing
-│   │   │   ├── azure_openai.py        # GPT-4o via Azure OpenAI API
-│   │   │   ├── azure_nim.py           # NIM-hosted VLMs (Cosmos-Reason2, etc.)
-│   │   │   ├── azure_hf.py            # HF Managed Endpoints (Qwen2.5-VL)
-│   │   │   └── local_mlx.py           # Local Apple Silicon MLX inference
-│   │   │
-│   │   ├── vla/
-│   │   │   ├── __init__.py
-│   │   │   ├── mock.py                # MockVLAAdapter — Phase 1 testing
-│   │   │   ├── local_smolvla.py       # SmolVLA via LeRobot, MPS backend
-│   │   │   ├── local_openvla.py       # OpenVLA-OFT via HF Transformers + MLX
-│   │   │   ├── azure_gpu_cogact.py    # CogACT on Azure GPU VM via HTTP
-│   │   │   └── azure_gpu_groot.py     # GR00T N1.6 (awaiting public weights)
-│   │   │
-│   │   ├── grounding/
-│   │   │   ├── __init__.py
-│   │   │   ├── mock.py                # MockGroundingAdapter
-│   │   │   ├── local_groundingdino.py # GroundingDINO, PyTorch MPS+CPU fallback
-│   │   │   └── local_coreml_sam2.py   # SAM2 via CoreML (NOT PyTorch MPS — broken)
-│   │   │
-│   │   └── sim/
-│   │       ├── __init__.py
-│   │       ├── mock.py                # MockSimAdapter
-│   │       └── local_mujoco.py        # MuJoCo + LIBERO task suite
-│   │
-│   ├── orchestrator/
-│   │   ├── __init__.py
-│   │   ├── agent.py                   # RoveOrchestrator
-│   │   │                              # .run(task, image, vlm, vla, grounding, sim)
-│   │   │                              #   -> CombinationResult (async)
-│   │   │                              # 5-step pipeline: perceive/ground/plan/
-│   │   │                              #   execute/verify
-│   │   │                              # DETERMINISTIC: no LLM decisions here
-│   │   │
-│   │   └── run_manager.py             # RunManager
-│   │                                  # .run_evaluation(request, registry, store,
-│   │                                  #   event_queue) -> EvaluationResult
-│   │                                  # asyncio.gather() over N×M combinations
-│   │                                  # writes step events to event_queue for SSE
-│   │
-│   ├── evaluation/
-│   │   ├── __init__.py
-│   │   ├── store.py                   # EvaluationStore (SQLite)
-│   │   │                              # .create_evaluation(request) -> eval_id
-│   │   │                              # .save_combination_result(result)
-│   │   │                              # .get_evaluation(eval_id) -> EvaluationResult
-│   │   │                              # .list_evaluations() -> list[EvalSummary]
-│   │   │                              # .export_jsonl(eval_id) -> str (Foundry format)
-│   │   │
-│   │   └── leaderboard.py             # Leaderboard
-│   │                                  # .rank(results) -> list[CombinationResult]
-│   │                                  # sort: success > latency > cost
-│   │                                  # .aggregate(eval_ids) -> AggregatedLeaderboard
-│   │
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── app.py                     # FastAPI app factory
-│   │   │                              # create_app(config) -> FastAPI
-│   │   │                              # mounts: /api router, /static, /
-│   │   │                              # no global state: registry/store injected
-│   │   │
-│   │   ├── routes.py                  # all API route handlers
-│   │   │                              # POST /api/evaluations
-│   │   │                              # GET  /api/evaluations/{id}
-│   │   │                              # GET  /api/evaluations/{id}/stream  (SSE)
-│   │   │                              # GET  /api/evaluations
-│   │   │                              # GET  /api/models
-│   │   │                              # GET  /api/leaderboard
-│   │   │                              # POST /api/export
-│   │   │
-│   │   └── sse.py                     # SSEQueue and StreamingResponse helper
-│   │                                  # event types: step_complete,
-│   │                                  #   combination_done, evaluation_done,
-│   │                                  #   combination_failed
-│   │
-│   ├── mcp_servers/
-│   │   ├── __init__.py
-│   │   ├── vlm_server.py              # FastMCP server, port 8081
-│   │   │                              # tool: analyze_scene(image_b64, task, model_id)
-│   │   │                              # tool: plan_grasp(image_b64, task, scene, bbox)
-│   │   │                              # tool: verify_success(before_b64, after_b64, task)
-│   │   │                              # tool: list_vlms()
-│   │   │
-│   │   ├── vla_server.py              # FastMCP server, port 8082
-│   │   │                              # tool: predict_action(image_b64, task, model_id,
-│   │   │                              #          proprioception?)
-│   │   │                              # tool: list_vlas()
-│   │   │
-│   │   └── grounding_sim_server.py    # FastMCP server, port 8083
-│   │                                  # tool: localize(image_b64, query, model_id)
-│   │                                  # tool: segment(image_b64, bbox, model_id)
-│   │                                  # tool: sim_reset(task_id)
-│   │                                  # tool: sim_step(action)
-│   │
-│   ├── dashboard/                     # Plain HTML+JS static files
-│   │   ├── index.html                 # Single page: task input + results table
-│   │   ├── app.js                     # fetch() calls to FastAPI, EventSource for SSE
-│   │   └── style.css                  # Dark theme (#09090b background)
-│   │
-│   └── cli.py                         # Click CLI
+├── rove.yaml                          # single source of truth: all model + strategy configs
+├── src/
+│   └── rove/                          # Python package (import rove)
+│       │
+│       ├── __init__.py                # public API: EvaluationEngine, run_evaluation()
+│       ├── models.py                  # ALL shared dataclasses + Pydantic models
+│       │                              # SceneAnalysis, TaskPlan, ActionPrediction,
+│       │                              # SimObservation, StrategyResult,
+│       │                              # EvaluationRequest, EvaluationResult
+│       │
+│       ├── config.py                  # load rove.yaml, read env vars
+│       │                              # no global state: Config is a dataclass
+│       │
+│       ├── adapters/
+│       │   ├── protocols.py           # Protocol definitions ONLY
+│       │   │                          # VLMAdapter, PolicyAdapter, AgentAdapter,
+│       │   │                          # SimAdapter — all @runtime_checkable
+│       │   │                          # CHANGE CAREFULLY: this is the contract
+│       │   │
+│       │   ├── registry.py            # AdapterRegistry
+│       │   │                          # .from_yaml(path) -> AdapterRegistry
+│       │   │                          # .get_vlm(model_id) -> VLMAdapter
+│       │   │                          # .get_policy(model_id) -> PolicyAdapter
+│       │   │                          # .get_agent(model_id) -> AgentAdapter
+│       │   │                          # .get_sim(model_id) -> SimAdapter
+│       │   │                          # .health_check(model_id) -> bool
+│       │   │
+│       │   ├── vlm/
+│       │   │   ├── __init__.py
+│       │   │   ├── mock.py            # MockVLMAdapter — Phase 1 testing
+│       │   │   ├── azure_openai.py    # GPT-4o via Azure OpenAI API
+│       │   │   ├── azure_nim.py       # NIM-hosted VLMs (Cosmos-Reason2, etc.)
+│       │   │   ├── azure_hf.py        # HF Managed Endpoints (Qwen2.5-VL)
+│       │   │   └── local_mlx.py       # Local Apple Silicon MLX inference
+│       │   │
+│       │   ├── vla/
+│       │   │   ├── __init__.py
+│       │   │   ├── mock.py            # MockPolicyAdapter — Phase 1 testing
+│       │   │   ├── local_smolvla.py   # SmolVLA via LeRobot, MPS backend
+│       │   │   ├── local_openvla.py   # OpenVLA-OFT via HF Transformers + MLX
+│       │   │   ├── azure_gpu_cogact.py # CogACT on Azure GPU VM via HTTP
+│       │   │   └── azure_gpu_groot.py # GR00T N1.6 (awaiting public weights)
+│       │   │
+│       │   ├── agent/
+│       │   │   ├── __init__.py
+│       │   │   ├── mock.py            # MockAgentAdapter — Phase 1 testing
+│       │   │   └── azure_foundry.py   # Azure Foundry agent adapter (stubbed)
+│       │   │
+│       │   ├── grounding/
+│       │   │   ├── __init__.py
+│       │   │   ├── mock.py            # MockGroundingAdapter
+│       │   │   ├── local_groundingdino.py # GroundingDINO, PyTorch MPS+CPU fallback
+│       │   │   └── local_coreml_sam2.py   # SAM2 via CoreML (NOT PyTorch MPS — broken)
+│       │   │
+│       │   └── sim/
+│       │       ├── __init__.py
+│       │       ├── mock.py            # MockSimAdapter
+│       │       └── local_mujoco.py    # MuJoCo + LIBERO task suite
+│       │
+│       ├── orchestrator/
+│       │   ├── __init__.py
+│       │   ├── pipeline.py            # EvaluationPipeline
+│       │   │                          # .run(task, image, adapters, sim)
+│       │   │                          #   -> StrategyResult (async)
+│       │   │                          # 4-stage pipeline: perceive/plan/act/verify
+│       │   │                          # DETERMINISTIC: no LLM decisions here
+│       │   │
+│       │   └── run_manager.py         # RunManager — concurrent multi-strategy
+│       │                              #   execution with TaskGroup + Semaphore
+│       │                              # .run_evaluation(request, registry, store,
+│       │                              #   event_queue) -> EvaluationResult
+│       │                              # asyncio.TaskGroup over strategies
+│       │                              # writes stage events to event_queue for SSE
+│       │
+│       ├── evaluation/
+│       │   ├── __init__.py
+│       │   ├── store.py               # EvaluationStore (SQLite)
+│       │   │                          # .create_evaluation(request) -> eval_id
+│       │   │                          # .save_strategy_result(result)
+│       │   │                          # .get_evaluation(eval_id) -> EvaluationResult
+│       │   │                          # .list_evaluations() -> list[EvalSummary]
+│       │   │                          # .export_jsonl(eval_id) -> str (Foundry format)
+│       │   │
+│       │   └── leaderboard.py         # Leaderboard
+│       │                              # .rank(results) -> list[StrategyResult]
+│       │                              # sort: success > latency > cost
+│       │                              # .aggregate(eval_ids) -> AggregatedLeaderboard
+│       │
+│       ├── api/
+│       │   ├── __init__.py
+│       │   ├── app.py                 # FastAPI app factory
+│       │   │                          # create_app(config) -> FastAPI
+│       │   │                          # mounts: /api router, /static, /
+│       │   │                          # no global state: registry/store injected
+│       │   │
+│       │   ├── routes.py              # all API route handlers
+│       │   │                          # POST /api/evaluations
+│       │   │                          # GET  /api/evaluations/{id}
+│       │   │                          # GET  /api/evaluations/{id}/stream  (SSE)
+│       │   │                          # GET  /api/evaluations
+│       │   │                          # GET  /api/models
+│       │   │                          # GET  /api/strategies
+│       │   │                          # GET  /api/leaderboard
+│       │   │                          # POST /api/export
+│       │   │
+│       │   └── sse.py                 # SSEQueue and StreamingResponse helper
+│       │                              # event types: stage_complete,
+│       │                              #   strategy_done, evaluation_done,
+│       │                              #   strategy_failed
+│       │
+│       ├── mcp_servers/
+│       │   ├── __init__.py
+│       │   ├── vlm_server.py          # FastMCP server, port 8081
+│       │   │                          # tool: analyze_scene(image_b64, task, model_id)
+│       │   │                          # tool: plan_task(image_b64, task, scene, model_id)
+│       │   │                          # tool: verify_success(before_b64, after_b64, task)
+│       │   │                          # tool: list_vlms()
+│       │   │
+│       │   ├── vla_server.py          # FastMCP server, port 8082
+│       │   │                          # tool: predict_action(image_b64, task, model_id,
+│       │   │                          #          proprioception?)
+│       │   │                          # tool: list_vlas()
+│       │   │
+│       │   └── grounding_sim_server.py  # FastMCP server, port 8083
+│       │                              # tool: localize(image_b64, query, model_id)
+│       │                              # tool: segment(image_b64, bbox, model_id)
+│       │                              # tool: sim_reset(task_id)
+│       │                              # tool: sim_step(action)
+│       │
+│       └── cli.py                     # Click CLI
 │                                      # rove evaluate [options]
 │                                      # rove models [list|health]
 │                                      # rove export [eval_id]
 │                                      # rove serve [--port]
 │                                      # rove mcp [vlm|vla|grounding]
 │
+├── frontend/                          # Plain HTML+JS static files
+│   ├── index.html                     # Single page: task input + results table
+│   ├── app.js                         # fetch() calls to FastAPI, EventSource for SSE
+│   └── style.css                      # Dark theme (#09090b background)
+│
 ├── tests/
 │   ├── conftest.py                    # pytest fixtures: mock registry, temp store
+│   ├── test_models.py                 # shared model tests
 │   ├── test_orchestrator.py           # end-to-end pipeline with mock adapters
 │   ├── test_adapters/                 # per-adapter unit tests
 │   ├── test_api.py                    # FastAPI route tests (TestClient)
@@ -836,7 +822,7 @@ rove/                                  # git root
 
 ## 9. rove.yaml Structure (SHIVA-Inspired Configuration)
 
-The YAML follows the SHIVA pattern: **models** (atomic resources) + **evaluations** (named experiments referencing models by ID) + **defaults**. Everything is declared; evaluations are reproducible by sharing the YAML.
+The YAML follows the SHIVA pattern: **models** (atomic resources) + **strategies** (named pipeline configurations referencing models by ID) + **defaults**. Everything is declared; evaluations are reproducible by sharing the YAML.
 
 ```yaml
 # rove.yaml — single source of truth for models AND evaluations
@@ -859,7 +845,7 @@ models:
         api_key_env: AZURE_OPENAI_KEY
         deployment_name: gpt-4o
         api_version: "2025-04-01-preview"
-      capabilities: [scene_analysis, grasp_planning, verification]
+      capabilities: [scene_analysis, task_planning, verification]
       cost: { type: per_token, input_per_1k: 0.005, output_per_1k: 0.015 }
 
     qwen25-vl-32b:
@@ -869,7 +855,7 @@ models:
       config:
         endpoint_env: AZURE_QWEN_ENDPOINT
         api_key_env: AZURE_QWEN_KEY
-      capabilities: [scene_analysis, native_grounding, grasp_planning, verification]
+      capabilities: [scene_analysis, native_grounding, task_planning, verification]
       cost: { type: per_token, input_per_1k: 0.002, output_per_1k: 0.006 }
 
     cosmos-reason2-2b:
@@ -889,7 +875,7 @@ models:
       config:
         mock_quality: 0.85
         mock_latency_ms: [200, 500]
-      capabilities: [scene_analysis, grasp_planning, verification]
+      capabilities: [scene_analysis, task_planning, verification]
 
   vla:
     smolvla-450m:
@@ -941,97 +927,83 @@ models:
       adapter: mock_sim
 
 # =============================================================================
-# Evaluations — Named evaluation configs (reference models by ID)
+# Strategies — Named pipeline configurations (reference models by ID)
 # =============================================================================
-# Pattern mirrors SHIVA experiments: strategies reference resources by name.
-# Each evaluation is reproducible — share the YAML to reproduce.
+# Each strategy defines which model handles each pipeline stage.
+# Evaluations reference strategies by name.
 
-evaluations:
-  pick_bracket:
-    description: "Evaluate pick-and-place for red bracket"
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket_scene.jpg
-    vlms: [gpt-4o, qwen25-vl-32b, cosmos-reason2-2b]
-    vlas: [cogact-7b, smolvla-450m]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 5
-    mode: full
-    tags: [pick-place, industrial]
-
-  bracket_variations:
-    description: "Test robustness across task variations"
-    tasks:
-      - "Pick the red bracket and place it in bin A"
-      - "Pick the blue bolt and place it in bin B"
-      - "Pick the green bracket from the cluttered area"
-    image: scenes/multi_part_scene.jpg
-    vlms: [gpt-4o, qwen25-vl-32b]
-    vlas: [cogact-7b]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 10
-    tags: [variation-study, robustness]
-
-  vlm_only_perception:
-    description: "Compare VLM scene understanding without sim"
-    task: "Identify all graspable objects on the workbench"
-    image: scenes/cluttered_bench.jpg
-    vlms: [gpt-4o, qwen25-vl-32b, cosmos-reason2-2b]
-    vlas: []                               # empty = VLM-only mode
-    mode: vlm_only
-    trials: 3
-
-  mock_test:
-    description: "End-to-end test with mock models"
-    task: "Pick the red bracket from bin A"
-    vlms: [mock-vlm]
-    vlas: [mock-vla]
-    grounding: mock-grounding
+strategies:
+  mock:
+    display_name: "Mock (Simulation)"
+    perceive: mock-vlm
+    plan: mock-vlm
+    act: mock-vla
+    verify: mock-vlm
     sim: mock-sim
-    trials: 1
     tags: [test, mock]
+
+  cloud-fast:
+    display_name: "Cloud Fast (GPT-4o + SmolVLA)"
+    perceive: gpt-4o
+    plan: gpt-4o
+    act: smolvla-450m
+    verify: gpt-4o
+    sim: mujoco-libero
+    tags: [cloud, low-latency]
+
+  cloud-accurate:
+    display_name: "Cloud Accurate (GPT-4o + CogACT)"
+    perceive: gpt-4o
+    plan: gpt-4o
+    act: cogact-7b
+    verify: gpt-4o
+    sim: mujoco-libero
+    tags: [cloud, high-accuracy]
+
+  local-only:
+    display_name: "Local Only (Qwen + SmolVLA)"
+    perceive: qwen25-vl-32b
+    plan: qwen25-vl-32b
+    act: smolvla-450m
+    verify: qwen25-vl-32b
+    sim: mujoco-libero
+    tags: [local, offline]
 
 # =============================================================================
 # Defaults — Global settings
 # =============================================================================
 defaults:
-  grounding: mock-grounding
   sim: mock-sim
   trials: 1
   mode: full                              # full | vlm_only
-  max_concurrent_combinations: 9
-  timeout_per_step_ms: 30000
-  max_retries_per_step: 2
+  max_concurrent_strategies: 9
+  timeout_per_stage_ms: 30000
+  max_retries_per_stage: 2
 ```
 
 ### How the YAML is consumed
 
 ```python
 # CLI reads the YAML and dispatches:
-# rove evaluate --config rove.yaml --evaluation pick_bracket
+# rove evaluate --config rove.yaml --strategies mock,cloud-fast
 
 config = RoveConfig.from_yaml("rove.yaml")
-eval_config = config.evaluations["pick_bracket"]
+strategies = [config.strategies[s] for s in ["mock", "cloud-fast"]]
 registry = AdapterRegistry(config.models)
 
-# The RunManager resolves model IDs from the evaluation config:
-vlms = [registry.get_vlm(id) for id in eval_config.vlms]
-vlas = [registry.get_vla(id) for id in eval_config.vlas]
-grounding = registry.get_grounding(eval_config.grounding or config.defaults.grounding)
-sim = registry.get_sim(eval_config.sim or config.defaults.sim)
-
-# RunManager creates N×M orchestrators and runs them:
-results = await run_manager.execute(eval_config, vlms, vlas, grounding, sim)
+# The RunManager resolves model IDs from each strategy config:
+# Each strategy specifies perceive, plan, act, verify, sim model IDs
+# RunManager creates one EvaluationPipeline per strategy and runs them:
+results = await run_manager.execute(strategies, registry)
 ```
 
-The API endpoint accepts either a named `evaluation_id` (referencing `rove.yaml`) or inline parameters (for ad hoc evaluation from the dashboard).
+The API endpoint accepts either named `strategy_ids` (referencing `rove.yaml`) or inline parameters (for ad hoc evaluation from the dashboard).
 
 ---
 
 ## 10. Protocol Definitions (Canonical Reference)
 
-These are the contracts. They live in `rove/adapters/protocols.py`. Every adapter implements one of these Protocols. No adapter inherits from a base class; all use `@runtime_checkable Protocol`.
+These are the contracts. They live in `src/rove/adapters/protocols.py`. Every adapter implements one of these Protocols. No adapter inherits from a base class; all use `@runtime_checkable Protocol`.
 
 ```python
 from typing import Protocol, runtime_checkable
@@ -1046,26 +1018,26 @@ class VLMAdapter(Protocol):
         task: str,
     ) -> SceneAnalysis: ...
 
-    async def plan_grasp(
+    async def plan_task(
         self,
         image: bytes,
         task: str,
         scene: SceneAnalysis,
-        bbox: BoundingBox,
-    ) -> GraspPlan: ...
+    ) -> TaskPlan: ...
 
     async def verify_success(
         self,
         initial_image: bytes,
         final_image: bytes,
         task: str,
+        context: dict | None = None,
     ) -> VerificationResult: ...
 
     async def health_check(self) -> bool: ...
 
 
 @runtime_checkable
-class VLAAdapter(Protocol):
+class PolicyAdapter(Protocol):
     model_id: str
     action_space: str              # "ee_delta" after normalization
 
@@ -1080,20 +1052,16 @@ class VLAAdapter(Protocol):
 
 
 @runtime_checkable
-class GroundingAdapter(Protocol):
+class AgentAdapter(Protocol):
     model_id: str
 
-    async def localize(
+    async def run_stage(
         self,
-        image: bytes,
-        query: str,
-    ) -> Localization: ...
-
-    async def segment(
-        self,
-        image: bytes,
-        bbox: BoundingBox,
-    ) -> SegmentationMask | None: ...
+        stage: str,
+        image_base64: str,
+        task: str,
+        context: dict | None = None,
+    ) -> dict: ...
 
     async def health_check(self) -> bool: ...
 
@@ -1109,7 +1077,7 @@ class SimAdapter(Protocol):
 
     async def step(
         self,
-        action: ActionStep,
+        action: list[float],
     ) -> SimStepResult: ...
 
     async def get_observation(self) -> SimObservation: ...
@@ -1128,10 +1096,7 @@ Request:
 {
   "task": "Pick the red bracket and place it in bin A",
   "image_b64": "<base64-encoded JPEG>",
-  "vlm_ids": ["gpt-4o", "qwen25-vl-32b"],
-  "vla_ids": ["smolvla-450m", "cogact-7b"],
-  "grounding_id": "groundingdino",
-  "sim_id": "mujoco-libero",
+  "strategy_ids": ["mock", "cloud-fast", "cloud-accurate"],
   "mode": "full"
 }
 ```
@@ -1141,12 +1106,12 @@ Response (202 Accepted):
 {
   "evaluation_id": "eval_abc123",
   "status": "queued",
-  "total_combinations": 4,
+  "total_strategies": 3,
   "created_at": "2026-02-18T10:00:00Z"
 }
 ```
 
-`mode` values: `"full"` (all 5 steps, requires sim), `"vlm-only"` (steps 1-3 + verify plan quality, no sim required)
+`mode` values: `"full"` (all 4 stages, requires sim), `"vlm-only"` (stages 1-2 + verify plan quality, no sim required)
 
 ### GET /api/evaluations/{id}
 
@@ -1156,20 +1121,18 @@ Response (200 OK, running):
   "evaluation_id": "eval_abc123",
   "status": "running",
   "task": "Pick the red bracket...",
-  "completed_combinations": 2,
-  "total_combinations": 4,
+  "completed_strategies": 1,
+  "total_strategies": 3,
   "partial_results": [
     {
-      "vlm_id": "gpt-4o",
-      "vla_id": "smolvla-450m",
+      "strategy_id": "mock",
       "status": "complete",
       "success": true,
       "sim_success": true,
       "judge_calibration": true,
       "total_latency_ms": 1842,
       "total_cost_usd": 0.021,
-      "action_quality": 0.94,
-      "step_results": { ... }
+      "stage_results": { ... }
     }
   ]
 }
@@ -1177,23 +1140,43 @@ Response (200 OK, running):
 
 Response (200 OK, complete) adds `"ranked_results": [...]` sorted by success > latency > cost.
 
+### GET /api/strategies
+
+Response (200 OK):
+```json
+{
+  "strategies": [
+    {
+      "id": "mock",
+      "display_name": "Mock (Simulation)",
+      "perceive": "mock-vlm",
+      "plan": "mock-vlm",
+      "act": "mock-vla",
+      "verify": "mock-vlm",
+      "sim": "mock-sim",
+      "tags": ["test", "mock"]
+    }
+  ]
+}
+```
+
 ### GET /api/evaluations/{id}/stream
 
 Content-Type: `text/event-stream`
 
 Event types:
 ```
-event: step_complete
-data: {"combination": "gpt-4o+smolvla", "step": "perceive", "latency_ms": 412}
+event: stage_complete
+data: {"strategy_id": "mock", "stage": "perceive", "latency_ms": 412}
 
-event: combination_done
-data: {"vlm_id": "gpt-4o", "vla_id": "smolvla-450m", "success": true, "total_latency_ms": 1842}
+event: strategy_done
+data: {"strategy_id": "mock", "success": true, "total_latency_ms": 1842}
 
-event: combination_failed
-data: {"vlm_id": "qwen25-vl-32b", "vla_id": "cogact-7b", "failed_step": "execute", "error": "timeout"}
+event: strategy_failed
+data: {"strategy_id": "cloud-fast", "failed_stage": "act", "error": "timeout"}
 
 event: evaluation_done
-data: {"evaluation_id": "eval_abc123", "total_combinations": 4, "successful": 3}
+data: {"evaluation_id": "eval_abc123", "total_strategies": 3, "successful": 2}
 ```
 
 ---
@@ -1209,9 +1192,9 @@ MCP tools use base64-encoded images to stay within the 1MB MCP binary limit. Ima
 Input:  {"image_b64": str, "task": str, "model_id": str}
 Output: SceneAnalysis as JSON
 
-# Tool: plan_grasp
-Input:  {"image_b64": str, "task": str, "scene": dict, "bbox": dict, "model_id": str}
-Output: GraspPlan as JSON
+# Tool: plan_task
+Input:  {"image_b64": str, "task": str, "scene": dict, "model_id": str}
+Output: TaskPlan as JSON
 
 # Tool: verify_success
 Input:  {"before_b64": str, "after_b64": str, "task": str, "model_id": str}
@@ -1260,12 +1243,12 @@ Output: SimStepResult as JSON
 
 | Phase | What Ships | Dependencies |
 |-------|-----------|--------------|
-| 1 | Mock adapters, full orchestrator, CLI, FastAPI, dashboard (HTML+JS), SQLite store, leaderboard, SSE streaming | Python stdlib + FastAPI + PyYAML + Pydantic + Click |
+| 1 | Mock adapters, full 4-stage pipeline, CLI, FastAPI, dashboard (HTML+JS), SQLite store, leaderboard, SSE streaming | Python stdlib + FastAPI + PyYAML + Pydantic + Click |
 | 2 | SmolVLA (LeRobot/MPS), GroundingDINO, CoreML SAM2, MuJoCo+LIBERO | torch, lerobot, coremltools, mujoco |
 | 3 | GPT-4o (Azure OpenAI), Qwen2.5-VL (Azure HF), CogACT (Azure GPU HTTP) | azure-ai-inference, openai SDK |
 | 4 | MCP servers (FastMCP), Azure Foundry JSONL export, AdapterRegistry.from_foundry() | fastmcp, azure-ai-evaluation |
 
-Phase 1 has zero ML dependencies. The entire evaluation pipeline architecture is testable with mock adapters before any model is connected.
+Phase 1 has zero ML dependencies. The entire 4-stage evaluation pipeline is testable with mock adapters before any model is connected.
 
 ---
 
@@ -1278,9 +1261,9 @@ Phase 1 has zero ML dependencies. The entire evaluation pipeline architecture is
 | OpenVLA int4: bitsandbytes no MPS | `local_openvla.py` uses MLX quantization, not bitsandbytes. |
 | GR00T N1.6: weights not public | `azure_gpu_groot.py` adapter is a stub until weights release. Protocol compliance enforced but health_check returns False. |
 | MCP binary limit: 1MB | All image encoding in MCP tool handlers must resize to <750KB JPEG. The evaluation path (FastAPI → adapters directly) is not subject to this limit. |
-| VLM stateless per-call | No persistent context across pipeline steps. The orchestrator explicitly passes SceneAnalysis and GraspPlan as context to subsequent VLM calls. Context accumulates as a dictionary passed through the pipeline. |
+| VLM stateless per-call | No persistent context across pipeline stages. The pipeline explicitly passes SceneAnalysis and TaskPlan as context to subsequent VLM calls. Context accumulates as a dictionary passed through the pipeline. |
 
 ---
 
-*Document version 1.0 — System Architect, 2026-02-18*
+*Document version 1.1 — System Architect, 2026-02-22*
 *Next review: after Phase 1 implementation complete*

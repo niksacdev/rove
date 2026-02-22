@@ -1,6 +1,6 @@
 # ADR-002: ROVE as a LeRobot Plugin — Feasibility, Interface Bridging, and Dual-Mode Architecture
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-02-21
 **Authors**: System Architect
 **Related Docs**:

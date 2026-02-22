@@ -49,28 +49,43 @@ class MockAgentAdapter:
         }
 
     def _mock_plan(self, task: str, context: dict | None) -> dict:
+        # Use scene data from upstream if available
+        target = "target object"
+        if context:
+            scene = context.get("scene", {})
+            relevant = scene.get("task_relevant", [])
+            if relevant:
+                target = relevant[0]
+
         return {
-            "strategy": "Approach target and execute task via tool calls",
+            "strategy": f"Approach {target} and execute task via tool calls",
             "reasoning": (
-                "The agent will use available tools to perceive the workspace, "
-                "plan a manipulation sequence, and execute it step by step."
+                f"The agent identified {target} in the scene. "
+                "It will use available tools to plan a manipulation sequence "
+                "and execute it step by step."
             ),
             "steps": [
-                "Locate target object using vision",
+                f"Locate {target} using vision",
                 "Plan approach trajectory",
                 "Execute manipulation via move_to tool",
                 "Verify task completion",
             ],
-            "target_object": "target object",
+            "target_object": target,
             "confidence": 0.85,
             "raw_response": '{"mock_agent": true}',
         }
 
     def _mock_act(self, task: str, context: dict | None) -> dict:
+        # Use plan data from upstream if available
+        target = "target"
+        if context:
+            plan = context.get("plan", {})
+            target = plan.get("target_object") or target
+
         return {
             "action_type": "tool_calls",
             "tool_calls": [
-                {"tool": "move_to", "args": {"x": 0.3, "y": 0.1, "z": 0.2}},
+                {"tool": "move_to", "args": {"target": target, "x": 0.3, "y": 0.1, "z": 0.2}},
                 {"tool": "grasp", "args": {"force": 0.5}},
                 {"tool": "move_to", "args": {"x": 0.6, "y": 0.3, "z": 0.2}},
                 {"tool": "release", "args": {}},
@@ -82,13 +97,20 @@ class MockAgentAdapter:
 
     def _mock_verify(self, task: str, context: dict | None) -> dict:
         success = random.random() < 0.85
+
+        # Use pipeline context for richer reasoning
+        target = "target object"
+        if context:
+            plan = context.get("plan", {})
+            target = plan.get("target_object") or target
+
         return {
             "success": success,
             "confidence": random.uniform(0.7, 0.95) if success else random.uniform(0.3, 0.6),
             "reasoning": (
-                "Task completed successfully — target object moved to destination."
+                f"Task completed successfully — {target} moved to destination."
                 if success
-                else "Task may not have completed — target object position unclear."
+                else f"Task may not have completed — {target} position unclear."
             ),
             "raw_response": '{"mock_agent": true}',
         }

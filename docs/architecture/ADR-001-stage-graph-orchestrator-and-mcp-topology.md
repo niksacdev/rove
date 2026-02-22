@@ -1,6 +1,6 @@
 # ADR-001: Stage-Graph Orchestrator and Revised MCP Topology
 
-**Status**: Proposed
+**Status**: Accepted (partially superseded by ADR-004 for pipeline implementation)
 **Date**: 2026-02-21
 **Authors**: System Architect
 **Related Docs**: `docs/architecture/high-level-architecture.md`

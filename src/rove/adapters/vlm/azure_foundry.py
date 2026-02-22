@@ -70,18 +70,39 @@ class AzureFoundryVLMAdapter:
         if self._client is not None:
             return self._client
 
-        if not self._endpoint or not self._api_key:
+        if not self._endpoint:
             raise RuntimeError(
-                f"Azure AI Foundry not configured. Set AZURE_AI_FOUNDRY_ENDPOINT and AZURE_AI_FOUNDRY_KEY env vars."
+                f"Azure AI Foundry not configured. Set endpoint env var."
             )
 
         from azure.ai.inference import ChatCompletionsClient
-        from azure.core.credentials import AzureKeyCredential
 
-        self._client = ChatCompletionsClient(
-            endpoint=self._endpoint,
-            credential=AzureKeyCredential(self._api_key),
-        )
+        # Try DefaultAzureCredential first, fall back to API key
+        try:
+            from azure.identity import DefaultAzureCredential
+            credential = DefaultAzureCredential()
+            kwargs = {}
+            if ".openai.azure.com" in self._endpoint:
+                kwargs["credential_scopes"] = ["https://cognitiveservices.azure.com/.default"]
+            self._client = ChatCompletionsClient(
+                endpoint=self._endpoint,
+                credential=credential,
+                **kwargs,
+            )
+            logger.info(f"Using DefaultAzureCredential for {self.model_id}")
+        except Exception:
+            if not self._api_key:
+                raise RuntimeError(
+                    "Azure auth failed: DefaultAzureCredential unavailable and no API key set. "
+                    "Run 'az login' or set API key env var."
+                )
+            from azure.core.credentials import AzureKeyCredential
+            self._client = ChatCompletionsClient(
+                endpoint=self._endpoint,
+                credential=AzureKeyCredential(self._api_key),
+            )
+            logger.info(f"Using API key fallback for {self.model_id}")
+
         return self._client
 
     def _build_image_content(self, image_base64: str) -> dict:
@@ -185,13 +206,27 @@ class AzureFoundryVLMAdapter:
         )
 
     async def verify_success(
-        self, before_image_base64: str, after_image_base64: str, task: str
+        self, before_image_base64: str, after_image_base64: str, task: str,
+        context: dict | None = None,
     ) -> VerificationResult:
         from azure.ai.inference.models import SystemMessage, UserMessage
 
+        # Build context-aware prompt
+        context_info = ""
+        if context:
+            plan = context.get("plan", {})
+            if plan:
+                target = plan.get("target_object", "")
+                strategy = plan.get("strategy", "")
+                if target:
+                    context_info += f"Target object: {target}\n"
+                if strategy:
+                    context_info += f"Planned strategy: {strategy}\n"
+
         prompt = (
             "You are a robotics verification system.\n"
-            f"Task: {task}\n\n"
+            f"Task: {task}\n"
+            f"{context_info}\n"
             "You are given two images: BEFORE (first) and AFTER (second) executing the task.\n"
             "Determine if the task was completed successfully.\n\n"
             "Return a JSON object with:\n"

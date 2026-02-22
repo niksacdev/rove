@@ -46,31 +46,31 @@ ROVE is inference-only. It does not train, fine-tune, or modify models. It runs 
 ## Project Structure
 
 ```
-rove/                              # Python package (import rove)
-├── adapters/
-│   ├── protocols.py               # THE contracts — VLMAdapter, PolicyAdapter, AgentAdapter, SimAdapter
-│   ├── registry.py                # YAML → adapter resolution + health checks
-│   ├── vlm/                       # mock, azure_openai, azure_nim, azure_hf, local_mlx
-│   ├── vla/                       # mock, local_lerobot, local_hf, azure_gpu_http
-│   ├── agent/                     # mock, azure_foundry (Foundry agents)
-│   ├── grounding/                 # mock, local_groundingdino, local_coreml_sam2
-│   └── sim/                       # mock, local_mujoco
-├── orchestrator/
-│   ├── agent.py                   # RoveOrchestrator (5-step pipeline)
-│   └── run_manager.py             # Parallel VLM × VLA execution
-├── evaluation/
-│   ├── store.py                   # SQLite + JSONL export (Foundry-compatible)
-│   └── leaderboard.py             # Ranking aggregation
-├── mcp_servers/                   # 3 MCP servers (FastMCP)
-│   ├── vlm_server.py              # Port 8081
-│   ├── vla_server.py              # Port 8082
-│   └── grounding_sim_server.py    # Port 8083
-├── api/
-│   ├── app.py                     # FastAPI app factory
-│   └── websocket.py               # WebSocket handler
-├── models.py                      # Pydantic + dataclass shared models
-├── config.py                      # Load models.yaml, env vars
-└── cli.py                         # Click CLI entry point
+src/
+└── rove/                          # Python package (import rove) — src layout
+    ├── adapters/
+    │   ├── protocols.py           # THE contracts — VLMAdapter, PolicyAdapter, AgentAdapter, SimAdapter
+    │   ├── registry.py            # YAML → adapter resolution + health checks
+    │   ├── vlm/                   # mock, azure_openai, azure_foundry, local_mlx
+    │   ├── policy/                # mock, local_lerobot, local_hf
+    │   ├── agent/                 # mock, azure_foundry (Foundry agents)
+    │   └── sim/                   # mock, local_mujoco
+    ├── orchestrator/
+    │   ├── pipeline.py            # EvaluationPipeline (4-step pipeline)
+    │   └── run_manager.py         # Parallel multi-strategy execution
+    ├── api/
+    │   └── app.py                 # FastAPI app + SSE streaming
+    ├── models.py                  # Dataclass shared models
+    ├── config.py                  # Load rove.yaml, env vars, strategies
+    └── cli.py                     # CLI entry point
+tests/                             # pytest test suite
+├── conftest.py                    # Shared fixtures
+├── test_models.py
+├── test_config.py
+├── test_pipeline.py
+├── test_run_manager.py
+├── test_mock_adapters.py
+└── test_api.py
 ```
 
 ## Coding Conventions
@@ -98,10 +98,11 @@ rove/                              # Python package (import rove)
 
 | File | Purpose |
 |------|---------|
-| `rove.yaml` | Single source of truth for models and evaluation configurations |
-| `rove/adapters/protocols.py` | Adapter contracts — change these carefully |
-| `rove/orchestrator/pipeline.py` | 4-step pipeline — deterministic, no LLM decisions |
-| `rove/models.py` | Shared data models (Pydantic + dataclass) |
+| `rove.yaml` | Single source of truth for models and strategies |
+| `src/rove/adapters/protocols.py` | Adapter contracts — change these carefully |
+| `src/rove/orchestrator/pipeline.py` | 4-step pipeline — deterministic, no LLM decisions |
+| `src/rove/orchestrator/run_manager.py` | Concurrent multi-strategy execution |
+| `src/rove/models.py` | Shared data models (dataclasses) |
 | `docs/PRODUCT_SPEC.md` | Full product specification and reference |
 
 ## What NOT to Build

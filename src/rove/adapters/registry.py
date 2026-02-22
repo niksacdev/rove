@@ -111,6 +111,20 @@ class AdapterRegistry:
     def get_sim(self, model_id: str) -> SimAdapter:
         return _build_adapter("sim", model_id, _SIM_ADAPTERS, self._sim_cache)
 
+    def create_sim(self, model_id: str) -> SimAdapter:
+        """Create a fresh (uncached) sim instance — for concurrent isolation."""
+        model_cfg = get_model_config("sim", model_id)
+        adapter_name = model_cfg.get("adapter", "")
+        if adapter_name not in _SIM_ADAPTERS:
+            raise ValueError(
+                f"No sim adapter implementation for '{adapter_name}'. "
+                f"Available: {list(_SIM_ADAPTERS.keys())}"
+            )
+        cls = _import_class(_SIM_ADAPTERS[adapter_name])
+        config = model_cfg.get("config", {})
+        config["display_name"] = model_cfg.get("display_name", model_id)
+        return cls(model_id=model_id, config=config)
+
     def get_adapter_for_stage(
         self, stage: PipelineStage, model_id: str
     ) -> StageAdapter:

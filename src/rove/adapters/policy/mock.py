@@ -25,19 +25,24 @@ class MockPolicyAdapter:
         lo, hi = self._latency_range
         await asyncio.sleep(random.uniform(lo, hi) / 1000.0)
 
-        # Generate 5 synthetic 7-DOF action steps
-        num_steps = 5
+        # Use plan steps to determine trajectory length
+        num_steps = len(plan.steps) + 1 if plan and plan.steps else 5
+
+        # Bias first action using proprioception if available
+        start_bias = proprioception[0] if proprioception else 0.0
+
         actions = []
         for i in range(num_steps):
             t = i / num_steps
+            dx = round(random.uniform(-0.02, 0.02) + (start_bias * 0.01 if i == 0 else 0), 4)
             actions.append([
-                round(random.uniform(-0.02, 0.02), 4),  # dx
-                round(random.uniform(-0.02, 0.02), 4),  # dy
-                round(-0.01 * (1 - t), 4),               # dz (moving down)
-                round(random.uniform(-0.05, 0.05), 4),   # rx
-                round(random.uniform(-0.05, 0.05), 4),   # ry
-                round(random.uniform(-0.05, 0.05), 4),   # rz
-                round(1.0 if i < num_steps - 1 else 0.0, 1),  # gripper (close at end)
+                dx,                                              # dx
+                round(random.uniform(-0.02, 0.02), 4),          # dy
+                round(-0.01 * (1 - t), 4),                      # dz (moving down)
+                round(random.uniform(-0.05, 0.05), 4),          # rx
+                round(random.uniform(-0.05, 0.05), 4),          # ry
+                round(random.uniform(-0.05, 0.05), 4),          # rz
+                round(1.0 if i < num_steps - 1 else 0.0, 1),   # gripper (close at end)
             ])
 
         return ActionPrediction(

@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+azure = ["azure-ai-inference>=1.0.0b9", "azure-identity>=1.19.0"]
 dev = ["pytest", "pytest-asyncio", "httpx"]
 data = ["datasets>=3.0", "huggingface-hub>=0.25", "Pillow>=10.0"]
 foundry = [
@@ -33,4 +34,8 @@ foundry-preview = [
 rove = "rove.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rove"]
+packages = ["src/rove"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

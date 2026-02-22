@@ -87,6 +87,62 @@ class StageAssignment:
 
 
 @dataclass
+class PipelineContext:
+    """Accumulates stage outputs as the pipeline progresses."""
+
+    task: str = ""
+    image_base64: str = ""
+    scene: SceneAnalysis | None = None
+    plan: TaskPlan | None = None
+    action: ActionPrediction | None = None
+    proprioception: list[float] = field(default_factory=list)
+    after_image_base64: str = ""
+
+    def to_dict(self) -> dict:
+        """Serialize non-empty fields for adapter context bags."""
+        d: dict = {"task": self.task}
+        if self.scene:
+            d["scene"] = {
+                "objects": self.scene.objects,
+                "spatial_relations": self.scene.spatial_relations,
+                "task_relevant": self.scene.task_relevant,
+            }
+        if self.plan:
+            d["plan"] = {
+                "strategy": self.plan.strategy,
+                "target_object": self.plan.target_object,
+                "steps": self.plan.steps,
+                "confidence": self.plan.confidence,
+            }
+        if self.action:
+            d["action"] = {
+                "action_type": self.action.action_type,
+                "num_steps": self.action.num_steps,
+                "confidence": self.action.confidence,
+            }
+        if self.proprioception:
+            d["proprioception"] = self.proprioception
+        if self.after_image_base64:
+            d["after_image_base64"] = self.after_image_base64
+        return d
+
+
+@dataclass
+class Strategy:
+    """A named pipeline configuration mapping models to stages."""
+
+    id: str
+    display_name: str
+    description: str
+    perceive: str  # model_id
+    plan: str  # model_id
+    act: str  # model_id
+    verify: str  # model_id
+    sim: str  # sim_id
+    tags: list[str] = field(default_factory=list)
+
+
+@dataclass
 class TrialResult:
     eval_id: str
     task: str
