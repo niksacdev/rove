@@ -116,7 +116,8 @@
 
     /* Transition for expandable JSON */
     .json-expand { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
-    .json-expand.open { max-height: 600px; overflow-y: auto; }
+    .json-expand.open { max-height: 600px; overflow-y: auto; overflow-x: hidden; }
+    .json-expand pre { white-space: pre-wrap; word-break: break-word; }
 
     /* Strategy chip selection */
     .strategy-chip { transition: all 0.15s ease; position: relative; }
@@ -641,9 +642,11 @@
       settingsView.classList.add("hidden");
       tabBar.classList.add("hidden");
 
-      // Clear non-persistent content
+      // Clear non-persistent content (eval-content AND tab-content elements)
       var dynamicEls = chatArea.querySelectorAll(".eval-content");
       dynamicEls.forEach(function(el) { el.remove(); });
+      var tabEls = chatArea.querySelectorAll("[id^='tab-content-']");
+      tabEls.forEach(function(el) { el.remove(); });
 
       // Update sidebar nav active state
       document.querySelectorAll(".sidebar-nav-link").forEach(function(link) {
@@ -2164,7 +2167,8 @@
 
       // Body content
       var body = document.createElement("div");
-      body.className = "text-sm text-gray-300 space-y-1.5";
+      body.className = "text-sm text-gray-300 space-y-1.5 max-w-full";
+      body.style.wordBreak = "break-word";
       if (error) {
         var errP = document.createElement("p");
         errP.className = "text-sm text-red-400";

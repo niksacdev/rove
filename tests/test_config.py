@@ -7,7 +7,6 @@ import pytest
 from rove.config import (
     EndpointConfig,
     RoveConfig,
-    StrategyConfig,
     find_model_config,
     get_endpoint_config,
     get_strategies,
@@ -77,9 +76,9 @@ class TestGetStrategies:
     def test_loads_all_strategies(self):
         strategies = get_strategies()
         assert "mock" in strategies
-        assert "scene_plan_act" in strategies
-        assert "e2e_edge" in strategies
-        assert "agent_orchestrated" in strategies
+        assert "scene_detect" in strategies
+        assert "scene_plan" in strategies
+        assert "full_local" in strategies
 
     def test_mock_strategy_models(self):
         strategies = get_strategies()
@@ -93,74 +92,84 @@ class TestGetStrategies:
     def test_strategy_tags(self):
         strategies = get_strategies()
         assert "test" in strategies["mock"].tags
-        assert "agent" in strategies["agent_orchestrated"].tags
+        assert "scene" in strategies["scene_detect"].tags
+        assert "plan" in strategies["scene_plan"].tags
+        assert "full" in strategies["full_local"].tags
 
-    def test_agent_strategy_uses_agent_model(self):
+    def test_scene_detect_is_partial(self):
+        """scene_detect has only perceive + verify (plan/act omitted)."""
         strategies = get_strategies()
-        agent = strategies["agent_orchestrated"]
-        assert agent.plan == "mock-agent"
-        assert agent.act == "mock-agent"
+        sd = strategies["scene_detect"]
+        assert sd.perceive == "qwen3-vl-8b"
+        assert sd.plan is None
+        assert sd.act is None
+        assert sd.verify == "qwen3-vl-8b"
 
-    def test_partial_strategy_loads(self):
-        """Strategy with only act + verify (perceive/plan omitted) loads correctly."""
+    def test_full_local_strategy(self):
+        """full_local has all four stages."""
         strategies = get_strategies()
-        e2e = strategies["e2e_vla_pi0"]
-        assert e2e.perceive is None
-        assert e2e.plan is None
-        assert e2e.act == "pi0-fast"
-        assert e2e.verify == "gpt-4o"
-        assert e2e.sim == "mujoco-libero"
+        fl = strategies["full_local"]
+        assert fl.perceive == "qwen3-vl-8b"
+        assert fl.plan == "qwen3-vl-8b"
+        assert fl.act == "mock-vla"
+        assert fl.verify == "qwen3-vl-8b"
 
 
 class TestOptionalStageValidation:
     def test_no_optional_stages_raises(self):
         """Strategy with only verify + sim (no perceive/plan/act) raises ValueError."""
         with pytest.raises(ValueError, match="must define at least one"):
-            RoveConfig.model_validate({
-                "endpoints": {
-                    "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
-                    "mock-sim": {"type": "sim", "adapter": "mock_sim"},
-                },
-                "strategies": {
-                    "bad": {
-                        "verify": "mock-vlm",
-                        "sim": "mock-sim",
-                    }
-                },
-            })
+            RoveConfig.model_validate(
+                {
+                    "endpoints": {
+                        "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
+                        "mock-sim": {"type": "sim", "adapter": "mock_sim"},
+                    },
+                    "strategies": {
+                        "bad": {
+                            "verify": "mock-vlm",
+                            "sim": "mock-sim",
+                        }
+                    },
+                }
+            )
 
     def test_invalid_ref_on_present_stage_raises(self):
         """Validation catches invalid endpoint refs on present (non-None) stages."""
         with pytest.raises(ValueError, match="not defined in endpoints"):
-            RoveConfig.model_validate({
+            RoveConfig.model_validate(
+                {
+                    "endpoints": {
+                        "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
+                        "mock-sim": {"type": "sim", "adapter": "mock_sim"},
+                    },
+                    "strategies": {
+                        "bad": {
+                            "perceive": "nonexistent",
+                            "verify": "mock-vlm",
+                            "sim": "mock-sim",
+                        }
+                    },
+                }
+            )
+
+    def test_none_stages_skip_ref_validation(self):
+        """None stages are not validated against endpoints."""
+        config = RoveConfig.model_validate(
+            {
                 "endpoints": {
                     "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
                     "mock-sim": {"type": "sim", "adapter": "mock_sim"},
                 },
                 "strategies": {
-                    "bad": {
-                        "perceive": "nonexistent",
+                    "partial": {
+                        "perceive": "mock-vlm",
                         "verify": "mock-vlm",
                         "sim": "mock-sim",
                     }
                 },
-            })
-
-    def test_none_stages_skip_ref_validation(self):
-        """None stages are not validated against endpoints."""
-        config = RoveConfig.model_validate({
-            "endpoints": {
-                "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
-                "mock-sim": {"type": "sim", "adapter": "mock_sim"},
-            },
-            "strategies": {
-                "partial": {
-                    "perceive": "mock-vlm",
-                    "verify": "mock-vlm",
-                    "sim": "mock-sim",
-                }
-            },
-        })
+            }
+        )
         strat = config.strategies["partial"]
         assert strat.perceive == "mock-vlm"
         assert strat.plan is None

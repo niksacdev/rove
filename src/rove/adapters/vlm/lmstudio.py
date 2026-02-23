@@ -123,7 +123,8 @@ class LMStudioVLMAdapter:
                 return output
             if isinstance(output, list):
                 parts = [
-                    item.get("content", "") for item in output
+                    item.get("content", "")
+                    for item in output
                     if isinstance(item, dict) and item.get("content")
                 ]
                 return "".join(parts)
@@ -135,7 +136,8 @@ class LMStudioVLMAdapter:
 
     async def analyze_scene(self, image_base64: str, task: str) -> SceneAnalysis:
         prompt = (
-            "You are a robotics vision system analyzing a workspace image.\n"
+            "You are the PERCEIVE stage of a robotics evaluation pipeline. "
+            "Your job is to analyze the workspace image and identify all objects, their positions, and spatial relationships.\n\n"
             f"Task: {task}\n\n"
             "Analyze the scene and return a JSON object with these fields:\n"
             '- "objects": list of objects, each with "name" (string), "bbox" [x,y,w,h] (approx pixel coords), "confidence" (0-1)\n'
@@ -160,7 +162,8 @@ class LMStudioVLMAdapter:
             f"Task-relevant: {', '.join(scene.task_relevant)}."
         )
         prompt = (
-            "You are a robotics task planner.\n"
+            "You are the PLAN stage of a robotics evaluation pipeline. "
+            "Given the scene analysis from the previous perceive stage, your job is to create a step-by-step manipulation plan.\n\n"
             f"Task: {task}\n"
             f"Scene analysis: {scene_summary}\n\n"
             "Plan a strategy to accomplish the task. Return a JSON object with:\n"
@@ -201,7 +204,8 @@ class LMStudioVLMAdapter:
                     context_info += f"Planned strategy: {strategy}\n"
 
         prompt = (
-            "You are a robotics verification system.\n"
+            "You are the VERIFY stage of a robotics evaluation pipeline. "
+            "Your job is to compare before/after images to determine if the task succeeded.\n\n"
             f"Task: {task}\n"
             f"{context_info}\n"
             "You are given two images: BEFORE (first) and AFTER (second) executing the task.\n"

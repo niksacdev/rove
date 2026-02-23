@@ -400,114 +400,35 @@ strategies:
     sim: mock-sim
     tags: [test, mock]
 
-  # --- Scene Detection ---
-  # Select multiple scene_detect_* strategies together to compare VLM perception
-  # in parallel via RunManager (e.g. "Which VLM finds more objects?")
-  scene_detect_gpt4o:
-    display_name: "Scene Detection (GPT-4o)"
-    description: "GPT-4o perceives the scene and verifies — no planning or action"
-    perceive: gpt-4o
-    verify: gpt-4o
-    sim: mock-sim
-    tags: [scene, vlm, cloud]
-
-  scene_detect_qwen:
-    display_name: "Scene Detection (Qwen3-VL 8B)"
-    description: "Qwen3-VL 8B perceives the scene locally via LM Studio"
+  # --- Scene Detection (perceive → verify only) ---
+  scene_detect:
+    display_name: "Scene Detection"
+    description: "Qwen3-VL 8B perceives the scene and verifies — no planning or action"
     perceive: qwen3-vl-8b
     verify: qwen3-vl-8b
     sim: mock-sim
     tags: [scene, vlm, local]
 
-  scene_detect_phi4:
-    display_name: "Scene Detection (Phi-4)"
-    description: "Phi-4 Multimodal perceives the scene — smallest cloud VLM"
-    perceive: phi-4-multimodal-azure
-    verify: phi-4-multimodal-azure
-    sim: mock-sim
-    tags: [scene, vlm, cloud]
-
-  # --- Full Pipeline (perceive → plan → act → verify) ---
-  scene_plan_act:
-    display_name: "Full Pipeline (GPT-4o + π0)"
-    description: "GPT-4o perceives and plans, π0-FAST executes actions, GPT-4o verifies"
-    perceive: gpt-4o
-    plan: gpt-4o
-    act: pi0-fast
-    verify: gpt-4o
-    sim: mujoco-libero
-    tags: [full, cloud, vla]
-
-  scene_plan_act_local:
-    display_name: "Full Pipeline (Qwen + SmolVLA)"
-    description: "Qwen3-VL 8B perceives and plans locally, SmolVLA executes, Qwen verifies"
+  # --- Scene + Plan (perceive → plan → verify) ---
+  scene_plan:
+    display_name: "Scene + Plan"
+    description: "Qwen3-VL 8B perceives the scene, plans a strategy, and verifies"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    act: smolvla-450m
     verify: qwen3-vl-8b
-    sim: mujoco-libero
-    tags: [full, local, vla]
-
-  # --- End-to-End VLA ---
-  # VLA handles act directly from image+task (no separate perceive/plan stage).
-  # VLM only used for independent verification.
-  e2e_vla_pi0:
-    display_name: "E2E VLA (π0-FAST)"
-    description: "π0-FAST acts directly from image — VLM only verifies the result"
-    act: pi0-fast
-    verify: gpt-4o
-    sim: mujoco-libero
-    tags: [e2e, vla, cloud]
-
-  e2e_vla_smolvla:
-    display_name: "E2E VLA (SmolVLA)"
-    description: "SmolVLA acts directly from image — smallest VLA, edge-deployable"
-    act: smolvla-450m
-    verify: qwen3-vl-2b
-    sim: mujoco-libero
-    tags: [e2e, vla, edge]
-
-  e2e_vla_openvla:
-    display_name: "E2E VLA (OpenVLA-OFT)"
-    description: "OpenVLA-OFT acts directly — autoregressive VLA with confidence scores"
-    act: openvla-oft-7b
-    verify: qwen3-vl-8b
-    sim: mujoco-libero
-    tags: [e2e, vla, local]
-
-  # --- Edge / Offline ---
-  # All models run on-device, no cloud dependency
-  e2e_edge:
-    display_name: "Edge (All Local)"
-    description: "Qwen3-VL 2B + SmolVLA — fully offline, runs on Apple Silicon"
-    perceive: qwen3-vl-2b
-    plan: qwen3-vl-2b
-    act: smolvla-450m
-    verify: qwen3-vl-2b
-    sim: mujoco-libero
-    tags: [edge, local, offline]
-
-  e2e_edge_phi4:
-    display_name: "Edge (Phi-4 + SmolVLA)"
-    description: "Phi-4 Multimodal for perception + SmolVLA for action — all on-device"
-    perceive: phi-4-multimodal
-    plan: phi-4-multimodal
-    act: smolvla-450m
-    verify: phi-4-multimodal
-    sim: mujoco-libero
-    tags: [edge, local, offline]
-
-  # --- Agent-Orchestrated ---
-  # Agent adapter handles multiple stages via tool calls (plan + act)
-  agent_orchestrated:
-    display_name: "Agent Orchestrated"
-    description: "Agent plans and acts via tool calls — VLM perceives and verifies"
-    perceive: mock-vlm
-    plan: mock-agent
-    act: mock-agent
-    verify: mock-vlm
     sim: mock-sim
-    tags: [agent, tool-use]
+    tags: [scene, plan, vlm, local]
+
+  # --- Full Pipeline (perceive → plan → act → verify) ---
+  full_local:
+    display_name: "Full Pipeline (Local)"
+    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [full, local, vla]
 
 # =============================================================================
 # Defaults — Global settings
