@@ -322,6 +322,10 @@
 
       <!-- Navigation links -->
       <div class="flex flex-col px-2 gap-0.5 pb-4">
+        <a href="#" data-view="examples" class="sidebar-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-[13px] text-gray-400 hover:text-white hover:bg-f-surface">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          <span>Examples</span>
+        </a>
         <a href="#" data-view="settings" class="sidebar-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-[13px] text-gray-400 hover:text-white hover:bg-f-surface">
           <i data-lucide="settings" class="w-4 h-4"></i>
           <span>Settings</span>
@@ -415,6 +419,9 @@
 
         <!-- Models view (hidden by default) -->
         <div id="modelsView" class="hidden"></div>
+
+        <!-- Examples view (hidden by default) -->
+        <div id="examplesView" class="hidden"></div>
 
         <!-- Settings view (hidden by default) -->
         <div id="settingsView" class="hidden"></div>
@@ -531,6 +538,7 @@
     const historyList   = document.getElementById("historyList");
     const strategiesView = document.getElementById("strategiesView");
     const modelsView    = document.getElementById("modelsView");
+    const examplesView  = document.getElementById("examplesView");
     const settingsView  = document.getElementById("settingsView");
 
     // ---- Stage metadata ----
@@ -639,6 +647,7 @@
       welcomeMsg.classList.add("hidden");
       strategiesView.classList.add("hidden");
       modelsView.classList.add("hidden");
+      examplesView.classList.add("hidden");
       settingsView.classList.add("hidden");
       tabBar.classList.add("hidden");
 
@@ -658,7 +667,7 @@
       });
 
       // Update top nav active state
-      var navMap = { home: "evaluate", strategies: "strategies", models: "models", settings: "evaluate" };
+      var navMap = { home: "evaluate", strategies: "strategies", models: "models", examples: "evaluate", settings: "evaluate" };
       updateTopNav(navMap[view] || "evaluate");
 
       // Update history active state
@@ -677,6 +686,10 @@
         case "models":
           renderModelsView();
           modelsView.classList.remove("hidden");
+          break;
+        case "examples":
+          renderExamplesView();
+          examplesView.classList.remove("hidden");
           break;
         case "settings":
           renderSettingsView();
@@ -916,6 +929,146 @@
       span.textContent = text;
       h.appendChild(span);
       return h;
+    }
+
+    // ---- Examples view ----
+    var _examplesCache = null;
+
+    async function renderExamplesView() {
+      examplesView.textContent = "";
+
+      if (!_examplesCache) {
+        try {
+          var resp = await fetch(API_BASE + "/api/examples");
+          _examplesCache = await resp.json();
+        } catch (e) {
+          var errP = document.createElement("p");
+          errP.className = "text-gray-400 text-sm p-4";
+          errP.textContent = "Failed to load examples.";
+          examplesView.appendChild(errP);
+          return;
+        }
+      }
+
+      var examples = Array.isArray(_examplesCache) ? _examplesCache : (_examplesCache.examples || []);
+      if (!examples.length) {
+        var emptyP = document.createElement("p");
+        emptyP.className = "text-gray-400 text-sm p-4";
+        emptyP.textContent = "No examples available.";
+        examplesView.appendChild(emptyP);
+        return;
+      }
+
+      // Group by scene_type
+      var groups = {};
+      examples.forEach(function(ex) {
+        var key = ex.scene_type || "other";
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(ex);
+      });
+
+      var wrapper = document.createElement("div");
+      wrapper.className = "max-w-3xl mx-auto";
+
+      var title = document.createElement("h2");
+      title.className = "text-lg font-semibold text-gray-100 mb-1";
+      title.textContent = "Example Tasks";
+      wrapper.appendChild(title);
+
+      var subtitle = document.createElement("p");
+      subtitle.className = "text-xs text-gray-400 mb-6";
+      subtitle.textContent = "Robo2VLM-1 dataset \u2014 click an example to auto-fill the evaluation form.";
+      wrapper.appendChild(subtitle);
+
+      Object.keys(groups).sort().forEach(function(sceneType) {
+        var section = document.createElement("div");
+        section.className = "mb-6";
+
+        var header = document.createElement("button");
+        header.className = "flex items-center gap-2 w-full text-left text-sm font-semibold text-gray-300 mb-3 hover:text-white transition-colors";
+
+        var chevronIcon = document.createElement("i");
+        chevronIcon.setAttribute("data-lucide", "chevron-down");
+        chevronIcon.className = "w-4 h-4 transition-transform";
+        header.appendChild(chevronIcon);
+
+        var label = document.createElement("span");
+        label.textContent = sceneType.replace(/-/g, " ").replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        header.appendChild(label);
+
+        var countSpan = document.createElement("span");
+        countSpan.className = "text-xs text-gray-500 font-normal ml-1";
+        countSpan.textContent = "(" + groups[sceneType].length + ")";
+        header.appendChild(countSpan);
+
+        var grid = document.createElement("div");
+        grid.className = "grid grid-cols-1 sm:grid-cols-2 gap-2 ml-6";
+
+        header.addEventListener("click", function() {
+          var isHidden = grid.style.display === "none";
+          grid.style.display = isHidden ? "" : "none";
+          chevronIcon.style.transform = isHidden ? "" : "rotate(-90deg)";
+        });
+
+        groups[sceneType].forEach(function(ex) {
+          var card = document.createElement("button");
+          card.className = "flex items-center gap-3 p-2 rounded-lg border border-f-border bg-f-surface hover:border-f-purple hover:bg-f-surface/80 transition-colors text-left group";
+
+          var thumb = document.createElement("img");
+          thumb.src = API_BASE + "/data/" + ex.filename;
+          thumb.alt = ex.task;
+          thumb.className = "w-16 h-16 rounded-md object-cover border border-f-border shrink-0";
+          thumb.loading = "lazy";
+
+          var info = document.createElement("div");
+          info.className = "flex-1 min-w-0";
+
+          var taskText = document.createElement("p");
+          taskText.className = "text-xs text-gray-200 group-hover:text-white truncate";
+          taskText.textContent = ex.task;
+
+          var meta = document.createElement("p");
+          meta.className = "text-[10px] text-gray-500 mt-0.5";
+          meta.textContent = ex.filename.split("/").pop();
+
+          info.appendChild(taskText);
+          info.appendChild(meta);
+          card.appendChild(thumb);
+          card.appendChild(info);
+
+          card.addEventListener("click", function() {
+            loadExample(ex.task, ex.filename);
+          });
+
+          grid.appendChild(card);
+        });
+
+        section.appendChild(header);
+        section.appendChild(grid);
+        wrapper.appendChild(section);
+      });
+
+      examplesView.appendChild(wrapper);
+      if (typeof lucide !== "undefined") lucide.createIcons();
+    }
+
+    async function loadExample(task, filename) {
+      try {
+        var resp = await fetch(API_BASE + "/data/" + filename);
+        var blob = await resp.blob();
+        var name = filename.split("/").pop();
+        selectedFile = new File([blob], name, { type: blob.type });
+
+        previewImg.src = URL.createObjectURL(blob);
+        imagePreview.classList.remove("hidden");
+
+        taskInput.value = task;
+        taskInput.dispatchEvent(new Event("input"));
+
+        switchView("home");
+      } catch (e) {
+        console.error("Failed to load example:", e);
+      }
     }
 
     function renderSettingsView() {
@@ -1193,6 +1346,7 @@
       welcomeMsg.classList.add("hidden");
       strategiesView.classList.add("hidden");
       modelsView.classList.add("hidden");
+      examplesView.classList.add("hidden");
       settingsView.classList.add("hidden");
 
       // Restore tab data
@@ -1548,6 +1702,7 @@
       welcomeMsg.classList.add("hidden");
       strategiesView.classList.add("hidden");
       modelsView.classList.add("hidden");
+      examplesView.classList.add("hidden");
       settingsView.classList.add("hidden");
       document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
 
@@ -1607,6 +1762,7 @@
       chatArea.appendChild(welcomeMsg);
       chatArea.appendChild(strategiesView);
       chatArea.appendChild(modelsView);
+      chatArea.appendChild(examplesView);
       chatArea.appendChild(settingsView);
 
       if (strategyIds.length <= 1) {
