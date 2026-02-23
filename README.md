@@ -47,169 +47,87 @@ ROVE uses a single YAML configuration file — inspired by infrastructure-as-cod
 # rove.yaml — single source of truth
 version: "1.0"
 
-# Models — atomic model configurations (one model per entry)
-models:
-  vlm:
-    gpt-4o:
-      adapter: azure_openai
-      display_name: "GPT-4o"
-      deployment_type: azure_managed
-      config:
-        endpoint_env: AZURE_OPENAI_ENDPOINT
-        api_key_env: AZURE_OPENAI_KEY
-        deployment_name: gpt-4o
-        api_version: "2025-04-01-preview"
-      cost: { type: per_token, input_per_1k: 0.005, output_per_1k: 0.015 }
+# Endpoints — flat list of model configurations (one model per entry)
+endpoints:
+  # VLMs
+  qwen3-vl-8b:
+    type: vlm
+    adapter: lmstudio
+    display_name: "Qwen3-VL 8B"
+    deployment_type: local
+    config:
+      endpoint: "http://127.0.0.1:1234"
+      model_id: "qwen3-vl-8b"
 
-    qwen25-vl-32b:
-      adapter: azure_hf_managed
-      display_name: "Qwen2.5-VL 32B"
-      deployment_type: azure_managed
-      config:
-        endpoint_env: AZURE_QWEN_ENDPOINT
-        api_key_env: AZURE_QWEN_KEY
-      capabilities: [scene_analysis, native_grounding, verification]
-      cost: { type: per_token, input_per_1k: 0.002, output_per_1k: 0.006 }
+  mock-vlm:
+    type: vlm
+    adapter: mock_vlm
+    display_name: "Mock VLM"
+    deployment_type: local
 
-    cosmos-reason2-2b:
-      adapter: local_mlx
-      display_name: "Cosmos-Reason2 2B"
-      deployment_type: local
-      config:
-        model_path: "mlx-community/cosmos-reason2-2b-4bit"
-        max_tokens: 1024
-      cost: { type: fixed, per_call: 0.00 }
+  # VLAs
+  mock-vla:
+    type: vla
+    adapter: mock_vla
+    deployment_type: local
 
-    mock-vlm:
-      adapter: mock_vlm
-      display_name: "Mock VLM"
-      deployment_type: local
-      config:
-        mock_quality: 0.85
-        mock_latency_ms: [200, 500]
+  # Sim
+  mock-sim:
+    type: sim
+    adapter: mock_sim
 
-  vla:
-    smolvla-450m:
-      adapter: local_lerobot
-      display_name: "SmolVLA 450M"
-      deployment_type: local
-      config:
-        model_id: "HuggingFaceTB/SmolVLA-base"
-        device: mps
-        action_space: ee_delta
-        chunk_size: 10
-      cost: { type: fixed, per_call: 0.00 }
-
-    cogact-7b:
-      adapter: azure_gpu_http
-      display_name: "CogACT 7B"
-      deployment_type: azure_gpu
-      config:
-        endpoint_env: AZURE_GPU_COGACT_ENDPOINT
-        denoising_steps: 10
-        action_space: ee_delta
-        chunk_size: 16
-      cost: { type: per_second, rate: 0.0012 }
-
-    mock-vla:
-      adapter: mock_vla
-      deployment_type: local
-      config:
-        mock_success_rate: 0.80
-        mock_latency_ms: [50, 150]
-
-  grounding:
-    groundingdino:
-      adapter: local_groundingdino
-      config: { device: mps }
-    mock-grounding:
-      adapter: mock_grounding
-
-  sim:
-    mujoco-libero:
-      adapter: local_mujoco
-      config:
-        task_suite: libero_spatial
-        render_size: [640, 480]
-    mock-sim:
-      adapter: mock_sim
-
-# Evaluations — named evaluation configurations (reference models by ID)
-evaluations:
-  pick_bracket:
-    description: "Evaluate pick-and-place for red bracket"
-    task: "Pick the red bracket and place it in bin A"
-    image: scenes/bracket_scene.jpg
-    vlms: [gpt-4o, qwen25-vl-32b, cosmos-reason2-2b]
-    vlas: [cogact-7b, smolvla-450m]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 5
-    mode: full  # full | vlm_only
-    tags: [pick-place, industrial]
-
-  bracket_variations:
-    description: "Test robustness across task variations"
-    tasks:
-      - "Pick the red bracket and place it in bin A"
-      - "Pick the blue bolt and place it in bin B"
-      - "Pick the green bracket and place it in bin C"
-    image: scenes/multi_part_scene.jpg
-    vlms: [gpt-4o, qwen25-vl-32b]
-    vlas: [cogact-7b]
-    grounding: groundingdino
-    sim: mujoco-libero
-    trials: 10
-    tags: [variation-study, robustness]
-
-  vlm_perception_only:
-    description: "Compare VLM scene understanding (no sim needed)"
-    task: "Identify all graspable objects on the workbench"
-    image: scenes/cluttered_bench.jpg
-    vlms: [gpt-4o, qwen25-vl-32b, cosmos-reason2-2b]
-    vlas: []
-    mode: vlm_only
-    trials: 3
-    tags: [perception, vlm-only]
-
-  mock_test:
-    description: "End-to-end test with mock models"
-    task: "Pick the red bracket from bin A"
-    vlms: [mock-vlm]
-    vlas: [mock-vla]
-    grounding: mock-grounding
+# Strategies — named pipeline configurations (map endpoints to stages)
+strategies:
+  mock:
+    display_name: "Mock (Test)"
+    description: "All mock adapters — for testing pipeline plumbing"
+    perceive: mock-vlm
+    plan: mock-vlm
+    act: mock-vla
+    verify: mock-vlm
     sim: mock-sim
-    trials: 1
     tags: [test, mock]
+
+  scene_detect:
+    display_name: "Scene Detection"
+    description: "Perceive + verify only — no planning or action"
+    perceive: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, vlm, local]
+
+  scene_plan:
+    display_name: "Scene + Plan"
+    description: "Perceive, plan a strategy, and verify"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, plan, vlm, local]
+
+  full_local:
+    display_name: "Full Pipeline (Local)"
+    description: "All 4 stages with local VLM + mock VLA"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [full, local, vla]
 
 # Defaults
 defaults:
-  grounding: mock-grounding
   sim: mock-sim
   trials: 1
   mode: full
-  max_concurrent_combinations: 9
-  timeout_per_step_ms: 30000
-  max_retries_per_step: 2
 ```
 
-Run any named evaluation:
+Run strategies:
 
 ```bash
-rove evaluate --config rove.yaml --evaluation pick_bracket
-rove evaluate --config rove.yaml --evaluation bracket_variations
-rove evaluate --config rove.yaml --evaluation mock_test
-```
-
-Or override from the command line:
-
-```bash
-rove evaluate \
-  --config rove.yaml \
-  --task "Pick the red bracket" \
-  --vlms gpt-4o,qwen25-vl-32b \
-  --vlas cogact-7b \
-  --trials 10
+rove evaluate --config rove.yaml --strategies mock
+rove evaluate --config rove.yaml --strategies scene_detect,scene_plan
+rove evaluate --config rove.yaml --strategies full_local
 ```
 
 ---
@@ -218,7 +136,7 @@ rove evaluate \
 
 Robots that interact with the physical world need a stack of AI models working together as an agent system: perception, reasoning, planning, and action. Today, building and testing these agent pipelines is manual work — writing custom scripts for each model combination, wiring them together, running a simulator, measuring what happened.
 
-For a single VLM+VLA combination, this means coordinating five inference steps, a simulator, and repeated trials. For three VLMs and three VLAs, that is nine complete agent configurations. Nobody does this systematically.
+For a single VLM+VLA combination, this means coordinating four inference stages, a simulator, and repeated trials. For three VLMs and three VLAs, that is nine complete agent configurations. Nobody does this systematically.
 
 ROVE evaluates these agent pipelines. You describe your task, select candidate models for each pipeline stage, and ROVE runs the full inference pipeline across every combination — measuring success rate, latency, and cost on *your* task, in *your* environment.
 
@@ -228,36 +146,35 @@ ROVE evaluates these agent pipelines. You describe your task, select candidate m
 
 ## How It Works
 
-Every pipeline run follows a fixed five-step inference sequence. The pipeline is deterministic — no LLM decides which steps to run. Models only participate inside their designated steps.
+Every pipeline run follows a fixed four-stage inference sequence. The pipeline is deterministic — no LLM decides which stages to run. Models only participate inside their designated stages. Stages are optional: a strategy can define only the stages it needs (e.g. perceive + verify for scene detection).
 
 ```
- ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
- │ perceive │───>│  ground  │───>│   plan   │───>│ execute  │───>│  verify  │
- │   (VLM)  │    │(Grounding│    │  (VLM)   │    │  (VLA +  │    │  (VLM)   │
- │          │    │  Model)  │    │          │    │   Sim)   │    │          │
- └──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-  Scene image     Bounding box    Grasp plan      Action chunk    Before/after
-  → objects,      + segmentation  approach,       7-DOF deltas    comparison
-  spatial         mask for        orientation,    executed in     → success/fail
-  relationships   target object   confidence      simulator       + confidence
+ ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+ │ perceive │───>│   plan   │───>│   act    │───>│  verify  │
+ │   (VLM)  │    │  (VLM)   │    │  (VLA +  │    │  (VLM)   │
+ │          │    │          │    │   Sim)   │    │          │
+ └──────────┘    └──────────┘    └──────────┘    └──────────┘
+  Scene image     Task plan:      Action chunk    Before/after
+  → objects,      strategy,       7-DOF deltas    comparison
+  spatial         steps,          executed in     → success/fail
+  relationships   confidence      simulator       + confidence
 ```
 
-| Step | Model Type | Input | Output |
-|------|-----------|-------|--------|
+| Stage | Model Type | Input | Output |
+|-------|-----------|-------|--------|
 | perceive | VLM | Scene image + task description | Objects, spatial relationships, task-relevant observations |
-| ground | Grounding | Image + target object name | Bounding box (normalized 0-1) + segmentation mask |
-| plan | VLM | Image + scene analysis + bounding box | Grasp approach direction, strategy, confidence |
-| execute | VLA + Sim | Sim observation + task + proprioception | 7-DOF action chunk → sim execution → post-execution observation |
+| plan | VLM | Image + scene analysis + task | Strategy, reasoning, ordered steps, confidence |
+| act | VLA + Sim | Sim observation + task + proprioception | Action chunk → sim execution → post-execution observation |
 | verify | VLM | Initial image vs post-execution image | Success (bool), confidence (0-1), reasoning |
 
-When you specify 3 VLMs and 2 VLAs, ROVE creates 6 orchestrator instances and runs them concurrently via `asyncio.gather()`. Each streams progress in real time.
+Strategies define which stages to run and which model handles each. ROVE runs selected strategies concurrently via `asyncio.TaskGroup()`, streaming progress in real time.
 
-### VLM-Only Mode
+### Partial Pipelines
 
-When no simulator is configured, ROVE runs steps 1-3 only (perceive, ground, plan). This tests VLM scene understanding and planning quality without action execution. Useful for comparing VLM perception before investing in sim setup.
+Strategies can omit stages. For example, `scene_detect` runs only perceive + verify (no planning or action). `scene_plan` adds planning. This lets you evaluate VLM perception and planning quality without a full simulation loop.
 
 ```bash
-rove evaluate --config rove.yaml --evaluation vlm_perception_only
+rove evaluate --config rove.yaml --strategies scene_detect,scene_plan
 ```
 
 ---
@@ -288,28 +205,29 @@ Phase 1 ships with mock adapters for pipeline development. Real model adapters a
 | Model | Parameters | Hosting | Phase |
 |-------|-----------|---------|-------|
 | GPT-4o | — | Azure OpenAI | 3 |
-| Qwen2.5-VL | 32B | Azure HF Managed Endpoints | 3 |
-| Cosmos-Reason2 | 2B | Local (MLX, Apple Silicon) | 2 |
+| Qwen3-VL | 8B / 2B | Local (LM Studio) | 2 |
+| Phi-4 Multimodal | 14B | Azure AI Foundry / local | 2 |
+| Ministral 3 | 3B | Local (LM Studio) | 2 |
 | Mock VLM | — | In-process | 1 (now) |
 
 ### Vision-Language-Action Models (VLAs)
 
 | Model | Parameters | Hosting | Phase | Notes |
 |-------|-----------|---------|-------|-------|
+| pi0-FAST | — | Local (openpi) | 2 | Most advanced open-source VLA |
+| pi0 | — | Local (openpi) | 2 | Flow matching |
 | SmolVLA | 450M | Local (LeRobot, MPS) | 2 | Flow matching, 10-step chunks |
-| OpenVLA-OFT | 7B | Local (MLX quantization) | 2 | Autoregressive, 1 step/call. MLX required (bitsandbytes incompatible with MPS) |
-| CogACT | 7B | Azure GPU VM | 3 | Diffusion, 10-100 denoising steps, 16-step chunks |
-| GR00T N1.6 | 3B | Azure GPU VM | Blocked | Weights not yet public |
+| OpenVLA-OFT | 7B | Local (MLX quantization) | 2 | Autoregressive. MLX required (bitsandbytes incompatible with MPS) |
+| CogACT | 7B | Azure GPU VM | 3 | Diffusion, 2-10s inference, 16-step chunks |
+| Octo-Base | 93M | Local | 2 | Smallest VLA |
 | Mock VLA | — | In-process | 1 (now) | |
 
-### Grounding and Simulation
+### Simulation
 
 | Component | Hosting | Phase | Notes |
 |-----------|---------|-------|-------|
-| GroundingDINO | Local (PyTorch, CPU fallback) | 2 | MPS partially supported |
-| SAM2 | Local (CoreML) | 2 | PyTorch MPS broken — CoreML only (`apple/coreml-sam2-large`) |
 | MuJoCo + LIBERO | Local (native ARM) | 2 | 130+ manipulation tasks |
-| Mock Grounding / Sim | In-process | 1 (now) | |
+| Mock Sim | In-process | 1 (now) | |
 
 Adding a new model = implement one Protocol + add a YAML entry. No changes to orchestrator, API, or dashboard.
 
@@ -326,13 +244,13 @@ pip install rove-eval
 ### Run with mocks (zero dependencies)
 
 ```bash
-rove evaluate --task "Pick the red bracket" --vlms mock-vlm --vlas mock-vla
+rove evaluate --config rove.yaml --strategies mock
 ```
 
-### Run a named evaluation from config
+### Run a strategy from config
 
 ```bash
-rove evaluate --config rove.yaml --evaluation pick_bracket
+rove evaluate --config rove.yaml --strategies scene_detect
 ```
 
 ### List models and check health
@@ -539,7 +457,7 @@ MCP servers ship in Phase 4. The evaluation pipeline calls adapters directly (no
 Key decisions:
 - **The API is the product.** Delete the dashboard — evaluation still works.
 - **Adapters are Protocols, not base classes.** Structural typing via `@runtime_checkable`.
-- **The orchestrator is deterministic.** Five fixed steps. LLMs execute inside adapters only.
+- **The orchestrator is deterministic.** Four fixed stages. LLMs execute inside adapters only.
 - **Configuration over code.** `rove.yaml` is the single source of truth.
 - **Async jobs.** `POST /api/evaluations` returns immediately. SSE streams progress.
 - **Plain HTML+JS dashboard.** No npm, no build step, no frontend dependencies.
@@ -549,38 +467,28 @@ Key decisions:
 ## Project Structure
 
 ```
-rove/                              # Python package (import rove)
-├── __init__.py                    # Public API: evaluate(), serve()
-├── models.py                      # Shared dataclasses: SceneAnalysis, ActionPrediction, etc.
-├── config.py                      # Load rove.yaml, resolve env vars
-├── cli.py                         # Click CLI: evaluate, models, export, serve
-├── adapters/
-│   ├── protocols.py               # THE contracts: VLMAdapter, VLAAdapter, etc.
-│   ├── registry.py                # YAML → adapter resolution + health checks
-│   ├── vlm/                       # mock, azure_openai, azure_hf, local_mlx
-│   ├── vla/                       # mock, local_lerobot, local_openvla, azure_gpu
-│   ├── grounding/                 # mock, local_groundingdino, local_coreml_sam2
-│   └── sim/                       # mock, local_mujoco
-├── orchestrator/
-│   ├── agent.py                   # RoveOrchestrator — 5-step pipeline
-│   └── run_manager.py             # Parallel VLM×VLA execution
-├── evaluation/
-│   ├── store.py                   # SQLite + JSONL export (Foundry-compatible)
-│   └── leaderboard.py             # Ranking and aggregation
-├── api/
-│   ├── app.py                     # FastAPI app factory
-│   ├── routes.py                  # All API endpoints
-│   └── sse.py                     # Server-Sent Events helper
-├── mcp_servers/                   # Phase 4: FastMCP servers
-│   ├── vlm_server.py              # Port 8081
-│   ├── vla_server.py              # Port 8082
-│   └── grounding_sim_server.py    # Port 8083
-└── dashboard/                     # Static HTML+JS (no build step)
-    ├── index.html
-    ├── app.js
-    └── style.css
-
-rove.yaml                          # Model registry + evaluation configs
+src/
+└── rove/                          # Python package (import rove) — src layout
+    ├── __init__.py
+    ├── models.py                  # Shared dataclasses + Pydantic models
+    ├── config.py                  # Load rove.yaml, Pydantic-validated config
+    ├── cli.py                     # Click CLI entry point
+    ├── adapters/
+    │   ├── protocols.py           # THE contracts: VLMAdapter, PolicyAdapter, AgentAdapter, SimAdapter
+    │   ├── registry.py            # YAML → adapter resolution + health checks
+    │   ├── vlm/                   # mock, lmstudio, azure_foundry
+    │   ├── policy/                # mock (+ local_lerobot, local_hf in Phase 2)
+    │   ├── agent/                 # mock (+ azure_foundry in Phase 4)
+    │   └── sim/                   # mock (+ local_mujoco in Phase 2)
+    ├── orchestrator/
+    │   ├── pipeline.py            # EvaluationPipeline — deterministic 4-stage pipeline
+    │   └── run_manager.py         # Concurrent multi-strategy execution
+    └── api/
+        └── app.py                 # FastAPI app + SSE streaming
+frontend/
+    └── index.html                 # Dashboard — single HTML file, no build step
+tests/                             # pytest + pytest-asyncio
+rove.yaml                          # Single source of truth: endpoints + strategies
 pyproject.toml                     # Package: rove-eval
 ```
 

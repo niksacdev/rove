@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-02-18
 **Authors**: System Architect
-**Version**: 1.1 — 4-stage pipeline, strategies, src layout
+**Version**: 1.2 — simplified strategies, optional stages
 
 ---
 
@@ -466,7 +466,7 @@ class SimStepResult:
                           USER INPUT
                     task: "Pick red bracket, place in bin A"
                     image: scene.jpg (bytes)
-                    strategies: [mock, cloud-fast, cloud-accurate]
+                    strategies: [mock, scene_detect, full_local]
 
                               |
                               | HTTP POST or CLI call
@@ -483,8 +483,8 @@ class SimStepResult:
                       |   RunManager     |
                       |   3 strategies:  |
                       |   mock           |
-                      |   cloud-fast     |
-                      |   cloud-accurate |
+                      |   scene_detect   |
+                      |   full_local     |
                       +------------------+
                               |
                    asyncio.TaskGroup -- all 3 run concurrently
@@ -492,7 +492,7 @@ class SimStepResult:
           +-------------------+-------------------+
           |                   |                   |
           v                   v                   v
-  Pipeline(mock)      Pipeline(cloud-fast) Pipeline(cloud-accurate) ...
+  Pipeline(mock)      Pipeline(scene_detect) Pipeline(full_local) ...
           |
           | [STAGE 1: perceive]
           | image bytes  -------> VLMAdapter.analyze_scene(image, task)
@@ -934,7 +934,8 @@ models:
 
 strategies:
   mock:
-    display_name: "Mock (Simulation)"
+    display_name: "Mock (Test)"
+    description: "All mock adapters — for testing pipeline plumbing"
     perceive: mock-vlm
     plan: mock-vlm
     act: mock-vla
@@ -942,32 +943,32 @@ strategies:
     sim: mock-sim
     tags: [test, mock]
 
-  cloud-fast:
-    display_name: "Cloud Fast (GPT-4o + SmolVLA)"
-    perceive: gpt-4o
-    plan: gpt-4o
-    act: smolvla-450m
-    verify: gpt-4o
-    sim: mujoco-libero
-    tags: [cloud, low-latency]
+  scene_detect:
+    display_name: "Scene Detection"
+    description: "Perceive + verify only — no planning or action"
+    perceive: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, vlm, local]
 
-  cloud-accurate:
-    display_name: "Cloud Accurate (GPT-4o + CogACT)"
-    perceive: gpt-4o
-    plan: gpt-4o
-    act: cogact-7b
-    verify: gpt-4o
-    sim: mujoco-libero
-    tags: [cloud, high-accuracy]
+  scene_plan:
+    display_name: "Scene + Plan"
+    description: "Perceive, plan a strategy, and verify"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, plan, vlm, local]
 
-  local-only:
-    display_name: "Local Only (Qwen + SmolVLA)"
-    perceive: qwen25-vl-32b
-    plan: qwen25-vl-32b
-    act: smolvla-450m
-    verify: qwen25-vl-32b
-    sim: mujoco-libero
-    tags: [local, offline]
+  full_local:
+    display_name: "Full Pipeline (Local)"
+    description: "All 4 stages with local VLM + mock VLA"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [full, local, vla]
 
 # =============================================================================
 # Defaults — Global settings
@@ -985,14 +986,15 @@ defaults:
 
 ```python
 # CLI reads the YAML and dispatches:
-# rove evaluate --config rove.yaml --strategies mock,cloud-fast
+# rove evaluate --config rove.yaml --strategies mock,scene_detect
 
 config = RoveConfig.from_yaml("rove.yaml")
-strategies = [config.strategies[s] for s in ["mock", "cloud-fast"]]
-registry = AdapterRegistry(config.models)
+strategies = [config.strategies[s] for s in ["mock", "scene_detect"]]
+registry = AdapterRegistry(config.endpoints)
 
 # The RunManager resolves model IDs from each strategy config:
 # Each strategy specifies perceive, plan, act, verify, sim model IDs
+# Stages set to None are skipped (e.g. scene_detect has no plan or act)
 # RunManager creates one EvaluationPipeline per strategy and runs them:
 results = await run_manager.execute(strategies, registry)
 ```
@@ -1265,5 +1267,5 @@ Phase 1 has zero ML dependencies. The entire 4-stage evaluation pipeline is test
 
 ---
 
-*Document version 1.1 — System Architect, 2026-02-22*
+*Document version 1.2 — System Architect, 2026-02-22*
 *Next review: after Phase 1 implementation complete*
