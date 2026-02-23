@@ -85,10 +85,11 @@ class EvaluationPipeline:
         """Inner dispatch — actual adapter call without semaphore."""
         if isinstance(adapter, AgentAdapter):
             # Serialize Pydantic objects in context for agent adapters
-            agent_context = {
-                k: v.model_dump() if hasattr(v, "model_dump") else v
-                for k, v in context.items()
-            } if context else None
+            agent_context = (
+                {k: v.model_dump() if hasattr(v, "model_dump") else v for k, v in context.items()}
+                if context
+                else None
+            )
             raw = await adapter.run_stage(stage, image_base64, task, agent_context)
             model_cls = _STAGE_MODELS.get(stage)
             if model_cls is None:
@@ -181,9 +182,7 @@ class EvaluationPipeline:
         # --- PLAN (optional) ---
         if self.plan_adapter is not None:
             plan_model = self._get_model_id(self.plan_adapter)
-            yield PipelineStageResult(
-                stage="plan", status=StageStatus.RUNNING, model_id=plan_model
-            )
+            yield PipelineStageResult(stage="plan", status=StageStatus.RUNNING, model_id=plan_model)
             t0 = time.monotonic()
             try:
                 plan = await self._call_adapter(
@@ -217,9 +216,7 @@ class EvaluationPipeline:
         # --- ACT (optional) ---
         if self.act_adapter is not None:
             act_model = self._get_model_id(self.act_adapter)
-            yield PipelineStageResult(
-                stage="act", status=StageStatus.RUNNING, model_id=act_model
-            )
+            yield PipelineStageResult(stage="act", status=StageStatus.RUNNING, model_id=act_model)
             t0 = time.monotonic()
             try:
                 action_pred = await self._call_adapter(
@@ -277,9 +274,7 @@ class EvaluationPipeline:
 
         # --- VERIFY (always runs) ---
         verify_model = self._get_model_id(self.verify_adapter)
-        yield PipelineStageResult(
-            stage="verify", status=StageStatus.RUNNING, model_id=verify_model
-        )
+        yield PipelineStageResult(stage="verify", status=StageStatus.RUNNING, model_id=verify_model)
         t0 = time.monotonic()
         try:
             # Get post-action observation if sim was used, otherwise compare same image

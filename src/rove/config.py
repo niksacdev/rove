@@ -96,9 +96,7 @@ class RoveConfig(BaseModel):
             # At least one optional stage must be present
             optional = [getattr(strat, f) for f in ("perceive", "plan", "act")]
             if not any(optional):
-                raise ValueError(
-                    f"Strategy '{sid}' must define at least one of perceive/plan/act"
-                )
+                raise ValueError(f"Strategy '{sid}' must define at least one of perceive/plan/act")
         return self
 
 

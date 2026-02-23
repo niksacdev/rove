@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 azure = ["azure-ai-inference>=1.0.0b9", "azure-identity>=1.19.0"]
-dev = ["pytest", "pytest-asyncio", "httpx"]
+dev = ["pytest", "pytest-asyncio", "httpx", "pre-commit", "bandit[toml]"]
 data = ["datasets>=3.0", "huggingface-hub>=0.25", "Pillow>=10.0"]
 foundry = [
     "azure-ai-projects>=1.0.0",
@@ -40,6 +40,10 @@ packages = ["src/rove"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B311"]
 
 [tool.ruff]
 target-version = "py311"
