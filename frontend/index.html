@@ -42,8 +42,8 @@
       --f-text: #1a1b1e;
       --f-text-secondary: #374151;
       --f-text-muted: #6b7280;
-      --f-text-faint: #9ca3af;
-      --f-text-dim: #c0c4cc;
+      --f-text-faint: #6b7280;
+      --f-text-dim: #6b7280;
       --f-scrollbar: #c0c4cc;
       --f-popover-bg: #ffffff;
       --f-popover-border: #e2e4e8;
@@ -60,8 +60,8 @@
     [data-theme="light"] .text-gray-200 { color: #4b5563 !important; }
     [data-theme="light"] .text-gray-300 { color: #6b7280 !important; }
     [data-theme="light"] .text-gray-400 { color: #9ca3af !important; }
-    [data-theme="light"] .text-gray-500 { color: #9ca3af !important; }
-    [data-theme="light"] .text-gray-600 { color: #c0c4cc !important; }
+    [data-theme="light"] .text-gray-500 { color: #6b7280 !important; }
+    [data-theme="light"] .text-gray-600 { color: #9ca3af !important; }
     [data-theme="light"] .hover\:text-white:hover { color: var(--f-text) !important; }
     [data-theme="light"] .bg-gray-700 { background-color: #d1d5db !important; }
     [data-theme="light"] .bg-gray-600 { background-color: #d1d5db !important; }
@@ -228,6 +228,16 @@
     /* Theme toggle */
     .theme-toggle { transition: all 0.2s ease; }
     .theme-toggle:hover { color: var(--f-text); }
+
+    /* Accessibility: screen-reader-only utility */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+
+    /* Skip navigation link */
+    .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; z-index: 100; }
+    .skip-link:focus { position: fixed; top: 4px; left: 4px; width: auto; height: auto; padding: 8px 16px; background: #7c3aed; color: #fff; border-radius: 6px; font-size: 14px; font-weight: 600; z-index: 100; outline: 2px solid #fff; outline-offset: 2px; }
+
+    /* Strategy popover: keyboard accessible via focus-within */
+    .strategy-chip:focus-within .chip-popover { display: block; }
   </style>
   <script>
     tailwind.config = {
@@ -252,17 +262,23 @@
 </head>
 <body class="h-full bg-f-bg text-white flex flex-col overflow-hidden">
 
+  <!-- Skip navigation link (M1) -->
+  <a href="#chatArea" class="skip-link">Skip to main content</a>
+
+  <!-- Live announcer for screen readers (M3) -->
+  <div id="liveAnnouncer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
   <!-- ============ TOP NAV BAR (Foundry-style) ============ -->
   <header class="flex items-center h-12 px-4 border-b border-f-border bg-f-bg shrink-0 z-20">
     <!-- Left: Logo + breadcrumb -->
     <div class="flex items-center gap-2 shrink-0">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
         <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
         <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
       </svg>
       <span class="text-sm font-semibold tracking-tight">ROVE</span>
-      <span class="text-gray-600 mx-1">/</span>
+      <span class="text-gray-600 mx-1" aria-hidden="true">/</span>
       <span class="text-xs text-gray-500">Evaluation</span>
     </div>
 
@@ -275,12 +291,12 @@
 
     <!-- Right: Theme toggle + Status -->
     <div class="ml-auto flex items-center gap-3">
-      <button id="themeToggle" class="theme-toggle w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-f-surface" title="Toggle light/dark mode">
-        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4"></i>
-        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 hidden"></i>
+      <button id="themeToggle" class="theme-toggle w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-f-surface" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4" aria-hidden="true"></i>
+        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 hidden" aria-hidden="true"></i>
       </button>
-      <div class="flex items-center gap-1.5 text-xs text-gray-500">
-        <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600"></span>
+      <div class="flex items-center gap-1.5 text-xs text-gray-500" role="status" aria-live="polite">
+        <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span>
         <span id="connectionLabel">Disconnected</span>
       </div>
     </div>
@@ -290,7 +306,7 @@
   <div class="flex flex-1 min-h-0">
 
     <!-- ---- Left Sidebar: History + Navigation ---- -->
-    <aside class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg">
+    <aside class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg" aria-label="Evaluation history and navigation">
 
       <!-- History section -->
       <div class="flex-1 overflow-y-auto pt-4">
@@ -316,7 +332,7 @@
     <main class="flex-1 flex flex-col min-h-0">
 
       <!-- Sub-tab bar (hidden until evaluation runs) -->
-      <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto"></div>
+      <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist"></div>
 
       <!-- Content scroll area -->
       <div id="chatArea" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
@@ -325,7 +341,7 @@
         <div id="welcomeMsg" class="flex flex-col items-center justify-center h-full text-center px-4">
           <!-- Logo + title -->
           <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-f-purple/20 to-purple-600/10 border border-f-purple/20 flex items-center justify-center mb-5">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
               <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
               <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
@@ -343,7 +359,7 @@
               <span class="text-sm font-semibold text-gray-100 block">Perceive</span>
               <p class="text-[10px] text-gray-400 mt-1">Analyze the scene</p>
             </div>
-            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-arrow shrink-0 mx-1" aria-hidden="true"></div>
             <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
               <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
                 <i data-lucide="brain" class="w-5 h-5 text-purple-400"></i>
@@ -351,7 +367,7 @@
               <span class="text-sm font-semibold text-gray-100 block">Plan</span>
               <p class="text-[10px] text-gray-400 mt-1">Reason about actions</p>
             </div>
-            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-arrow shrink-0 mx-1" aria-hidden="true"></div>
             <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
               <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
                 <i data-lucide="bot" class="w-5 h-5 text-purple-400"></i>
@@ -359,7 +375,7 @@
               <span class="text-sm font-semibold text-gray-100 block">Act</span>
               <p class="text-[10px] text-gray-400 mt-1">Execute in simulation</p>
             </div>
-            <div class="pipeline-arrow shrink-0 mx-1"></div>
+            <div class="pipeline-arrow shrink-0 mx-1" aria-hidden="true"></div>
             <div class="pipeline-stage gradient-card border rounded-xl p-4 text-center w-36 shrink-0">
               <div class="w-10 h-10 rounded-lg bg-f-purple/15 flex items-center justify-center mx-auto mb-2">
                 <i data-lucide="check-circle" class="w-5 h-5 text-purple-400"></i>
@@ -408,7 +424,7 @@
 
         <!-- Strategy selector panel (collapsible) -->
         <div id="configPanel" class="mb-3">
-          <button id="configToggle" class="flex items-center gap-1.5 text-[11px] text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full">
+          <button id="configToggle" class="flex items-center gap-1.5 text-[11px] text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full" aria-expanded="false" aria-controls="configContent">
             <i data-lucide="layers" class="w-3.5 h-3.5"></i>
             <span>Strategies</span>
             <span id="selectedCount" class="text-f-purple ml-1">(0 selected)</span>
@@ -424,7 +440,7 @@
                   <div class="w-8 h-4 bg-gray-700 peer-checked:bg-f-purple rounded-full transition-colors"></div>
                   <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
                 </div>
-                <span class="text-[11px] text-gray-400 font-medium">Simulation mode (mock only)</span>
+                <span class="text-[11px] text-gray-400 font-medium" title="Use mock adapters for all stages (no real model inference)">Simulation mode (mock only)</span>
               </label>
             </div>
 
@@ -439,27 +455,27 @@
         <div id="imagePreview" class="hidden mb-3">
           <div class="relative inline-block">
             <img id="previewImg" class="h-20 rounded-lg border border-f-border object-cover" />
-            <button id="removeImage" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors">&times;</button>
+            <button id="removeImage" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors" title="Remove image" aria-label="Remove uploaded image">&times;</button>
           </div>
         </div>
 
         <!-- Input row -->
         <div class="flex items-center gap-2">
-          <label class="shrink-0 cursor-pointer w-10 h-10 rounded-lg bg-f-surface border border-f-border-strong flex items-center justify-center hover:border-f-purple transition-colors">
-            <i data-lucide="camera" class="w-5 h-5 text-gray-400"></i>
+          <label class="shrink-0 cursor-pointer w-10 h-10 rounded-lg bg-f-surface border border-f-border-strong flex items-center justify-center hover:border-f-purple transition-colors" title="Upload workspace image" aria-label="Upload workspace image">
+            <i data-lucide="camera" class="w-5 h-5 text-gray-400" aria-hidden="true"></i>
             <input type="file" id="imageInput" accept="image/*" class="hidden" />
           </label>
           <div class="flex-1 relative">
             <textarea id="taskInput" rows="1" placeholder="Describe the manipulation task..."
-              class="w-full bg-f-surface border border-f-border-strong rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-none focus:border-f-purple placeholder-gray-600 transition-colors"
+              class="w-full bg-f-surface border border-f-border-strong rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-2 focus:outline-purple-500 focus:outline-offset-1 focus:border-f-purple placeholder-gray-600 transition-colors"
               style="max-height:120px"></textarea>
           </div>
-          <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-r from-f-purple to-f-purple-hover hover:opacity-90 disabled:bg-gray-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center transition-all">
-            <i data-lucide="send" class="w-5 h-5"></i>
+          <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-r from-f-purple to-f-purple-hover hover:opacity-90 disabled:bg-gray-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center transition-all" title="Run evaluation" aria-label="Run evaluation">
+            <i data-lucide="send" class="w-5 h-5" aria-hidden="true"></i>
           </button>
         </div>
         <!-- Keyboard hint -->
-        <div class="text-[10px] text-gray-600 mt-1.5 ml-12">Tab to fill sample &middot; Enter to send</div>
+        <div class="text-[10px] text-gray-500 mt-1.5 ml-12">Tab to fill sample &middot; Enter to send</div>
       </div>
 
     </main>
@@ -606,8 +622,10 @@
         var t = link.textContent.trim().toLowerCase();
         if (t === activeText) {
           link.classList.add("active");
+          link.setAttribute("aria-current", "page");
         } else {
           link.classList.remove("active");
+          link.removeAttribute("aria-current");
         }
       });
     }
@@ -725,7 +743,7 @@
           tagWrap.className = "flex gap-1";
           s.tags.forEach(function(t) {
             var tag = document.createElement("span");
-            tag.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded";
+            tag.className = "text-[10px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded";
             tag.textContent = t;
             tagWrap.appendChild(tag);
           });
@@ -746,13 +764,13 @@
           if (!s[stage]) return;
           var colors = STAGE_COLORS[stage];
           var badge = document.createElement("span");
-          badge.className = "text-[9px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
+          badge.className = "text-[10px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
           badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
           badges.appendChild(badge);
         });
         if (s.sim) {
           var simBadge = document.createElement("span");
-          simBadge.className = "text-[9px] bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded";
+          simBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-1.5 py-0.5 rounded";
           simBadge.textContent = "Sim: " + s.sim;
           badges.appendChild(simBadge);
         }
@@ -867,7 +885,7 @@
 
           if (m.adapter) {
             var adapterBadge = document.createElement("span");
-            adapterBadge.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded inline-block";
+            adapterBadge.className = "text-[10px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded inline-block";
             adapterBadge.textContent = m.adapter;
             card.appendChild(adapterBadge);
           }
@@ -987,7 +1005,7 @@
             row.appendChild(nameSpan);
             if (m.adapter) {
               var adBadge = document.createElement("span");
-              adBadge.className = "text-[9px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded shrink-0";
+              adBadge.className = "text-[10px] bg-f-elevated text-gray-400 px-1.5 py-0.5 rounded shrink-0";
               adBadge.textContent = m.adapter;
               row.appendChild(adBadge);
             }
@@ -1032,7 +1050,7 @@
             if (!s[stage]) return;
             var colors = STAGE_COLORS[stage] || { bg: "bg-blue-500/15", text: "text-blue-300" };
             var badge = document.createElement("span");
-            badge.className = "text-[9px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
+            badge.className = "text-[10px] " + colors.bg + " " + colors.text + " px-1.5 py-0.5 rounded";
             badge.textContent = stage.charAt(0).toUpperCase() + ": " + s[stage];
             badges.appendChild(badge);
           });
@@ -1108,6 +1126,8 @@
         var idx = runHistory.length - 1 - reversedIdx;
         var item = document.createElement("div");
         item.className = "history-item sidebar-item flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[12px]";
+        item.setAttribute("role", "button");
+        item.setAttribute("tabindex", "0");
         if (idx === activeHistoryIndex) {
           item.classList.add("active", "bg-f-surface");
         }
@@ -1117,6 +1137,7 @@
         var dotColor = entry.status === "running" ? "bg-purple-500 pulse-purple" :
                        entry.status === "completed" ? "bg-green-500" : "bg-red-500";
         dot.className = "w-2 h-2 rounded-full shrink-0 " + dotColor;
+        dot.setAttribute("aria-hidden", "true");
         item.appendChild(dot);
 
         // Task text (truncated)
@@ -1136,6 +1157,9 @@
 
         item.addEventListener("click", function() {
           showHistoryEntry(idx);
+        });
+        item.addEventListener("keydown", function(e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showHistoryEntry(idx); }
         });
 
         historyList.appendChild(item);
@@ -1179,6 +1203,9 @@
         var summaryTab = document.createElement("button");
         summaryTab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
         summaryTab.setAttribute("data-tab-id", "__summary__");
+        summaryTab.setAttribute("role", "tab");
+        summaryTab.setAttribute("aria-selected", "false");
+        summaryTab.setAttribute("aria-controls", "tab-content-__summary__");
         var sIcon = document.createElement("i");
         sIcon.setAttribute("data-lucide", "layout-grid");
         sIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
@@ -1193,6 +1220,9 @@
           var tab = document.createElement("button");
           tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
           tab.setAttribute("data-tab-id", sid);
+          tab.setAttribute("role", "tab");
+          tab.setAttribute("aria-selected", "false");
+          tab.setAttribute("aria-controls", "tab-content-" + sid);
 
           var strat = strategies.find(function(s) { return s.id === sid; });
           var displayName = strat ? strat.display_name : sid;
@@ -1224,7 +1254,11 @@
         // Default to summary tab
         var showSid = activeTabId || "__summary__";
         document.querySelectorAll(".strategy-tab").forEach(function(t) {
-          if (t.getAttribute("data-tab-id") === showSid) t.classList.add("active");
+          var isActive = t.getAttribute("data-tab-id") === showSid;
+          if (isActive) {
+            t.classList.add("active");
+            t.setAttribute("aria-selected", "true");
+          }
         });
         chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
         if (showSid === "__summary__" && summaryEl) {
@@ -1253,7 +1287,17 @@
         collapsed = !collapsed;
         configContent.style.display = collapsed ? "none" : "";
         configChevron.style.transform = collapsed ? "rotate(180deg)" : "";
+        configToggle.setAttribute("aria-expanded", String(!collapsed));
       });
+    }
+
+    // ---- Live announcer helper (M3) ----
+    var liveAnnouncer = document.getElementById("liveAnnouncer");
+    function announce(message) {
+      if (liveAnnouncer) {
+        liveAnnouncer.textContent = "";
+        requestAnimationFrame(function() { liveAnnouncer.textContent = message; });
+      }
     }
 
     // ---- Mock toggle ----
@@ -1262,8 +1306,10 @@
       if (mockToggle.checked) {
         selectedStrategyIds.clear();
         selectedStrategyIds.add("mock");
+        announce("Simulation mode enabled — mock strategy selected");
       } else {
         selectedStrategyIds.delete("mock");
+        announce("Simulation mode disabled");
       }
       updateStrategyCards();
       updateSelectedCount();
@@ -1300,6 +1346,10 @@
         var chip = document.createElement("div");
         chip.className = "strategy-chip bg-f-surface border border-f-border rounded-full px-3 py-1.5 cursor-pointer flex items-center gap-1.5";
         chip.setAttribute("data-strategy-id", s.id);
+        chip.setAttribute("role", "checkbox");
+        chip.setAttribute("tabindex", "0");
+        chip.setAttribute("aria-checked", "false");
+        chip.setAttribute("title", s.description || s.display_name);
 
         // Checkmark (hidden when not selected)
         var checkWrap = document.createElement("span");
@@ -1330,7 +1380,7 @@
           tagDot.className = "w-1.5 h-1.5 rounded-full bg-gray-600 shrink-0";
           chip.appendChild(tagDot);
           var tagSpan = document.createElement("span");
-          tagSpan.className = "text-[9px] text-gray-500";
+          tagSpan.className = "text-[10px] text-gray-500";
           tagSpan.textContent = s.tags[0];
           chip.appendChild(tagSpan);
         }
@@ -1367,7 +1417,7 @@
           else dot.style.background = "#f59e0b";
           row.appendChild(dot);
           var label = document.createElement("span");
-          label.className = "text-[9px] uppercase tracking-wider w-[38px] shrink-0 " + colors.text;
+          label.className = "text-[10px] uppercase tracking-wider w-[38px] shrink-0 " + colors.text;
           label.textContent = stage.slice(0, 4);
           row.appendChild(label);
           var model = document.createElement("span");
@@ -1384,7 +1434,7 @@
           simDot.style.background = "#3b82f6";
           simRow.appendChild(simDot);
           var simLabel = document.createElement("span");
-          simLabel.className = "text-[9px] uppercase tracking-wider w-[38px] shrink-0 text-blue-300";
+          simLabel.className = "text-[10px] uppercase tracking-wider w-[38px] shrink-0 text-blue-300";
           simLabel.textContent = "sim";
           simRow.appendChild(simLabel);
           var simModel = document.createElement("span");
@@ -1398,7 +1448,7 @@
         chip.appendChild(popover);
 
         // Click handler
-        chip.addEventListener("click", function() {
+        function toggleStrategy() {
           if (selectedStrategyIds.has(s.id)) {
             selectedStrategyIds.delete(s.id);
           } else {
@@ -1407,6 +1457,10 @@
           mockToggle.checked = selectedStrategyIds.has("mock") && selectedStrategyIds.size === 1;
           updateStrategyCards();
           updateSelectedCount();
+        }
+        chip.addEventListener("click", toggleStrategy);
+        chip.addEventListener("keydown", function(e) {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleStrategy(); }
         });
 
         strategyGrid.appendChild(chip);
@@ -1416,11 +1470,13 @@
     function updateStrategyCards() {
       document.querySelectorAll(".strategy-chip").forEach(function(chip) {
         var sid = chip.getAttribute("data-strategy-id");
-        if (selectedStrategyIds.has(sid)) {
+        var isSelected = selectedStrategyIds.has(sid);
+        if (isSelected) {
           chip.classList.add("selected");
         } else {
           chip.classList.remove("selected");
         }
+        chip.setAttribute("aria-checked", String(isSelected));
       });
     }
 
@@ -1441,6 +1497,7 @@
       var reader = new FileReader();
       reader.onload = function(ev) {
         previewImg.src = ev.target.result;
+        previewImg.alt = "Preview of uploaded image";
         imagePreview.classList.remove("hidden");
       };
       reader.readAsDataURL(file);
@@ -1463,7 +1520,7 @@
           e.preventDefault();
           evalBtn.click();
         }
-        // Tab to fill sample question
+        // Tab to fill sample question when input is empty
         if (e.key === "Tab" && taskInput.value.trim() === "") {
           e.preventDefault();
           taskInput.value = SAMPLE_QUESTIONS[sampleIndex % SAMPLE_QUESTIONS.length];
@@ -1528,12 +1585,17 @@
 
       // Initialize summary results for each strategy
       strategyIds.forEach(function(sid) {
+        var strat = strategies.find(function(s) { return s.id === sid; });
+        var stageStatuses = { verify: "pending" };
+        ["perceive", "plan", "act"].forEach(function(stage) {
+          stageStatuses[stage] = (strat && strat[stage]) ? "pending" : "skipped";
+        });
         summaryResults[sid] = {
           status: "running",
           success: null,
           latency_ms: null,
           currentStage: null,
-          stageStatuses: { perceive: "pending", plan: "pending", act: "pending", verify: "pending" }
+          stageStatuses: stageStatuses
         };
       });
 
@@ -1560,6 +1622,9 @@
       var summaryTab = document.createElement("button");
       summaryTab.className = "strategy-tab active px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
       summaryTab.setAttribute("data-tab-id", "__summary__");
+      summaryTab.setAttribute("role", "tab");
+      summaryTab.setAttribute("aria-selected", "true");
+      summaryTab.setAttribute("aria-controls", "tab-content-__summary__");
       var summaryIcon = document.createElement("i");
       summaryIcon.setAttribute("data-lucide", "layout-grid");
       summaryIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
@@ -1574,12 +1639,17 @@
       summaryEl = document.createElement("div");
       summaryEl.className = "space-y-3";
       summaryEl.id = "tab-content-__summary__";
+      summaryEl.setAttribute("role", "tabpanel");
+      summaryEl.setAttribute("tabindex", "0");
 
       // Strategy tabs
       strategyIds.forEach(function(sid) {
         var tab = document.createElement("button");
         tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
         tab.setAttribute("data-tab-id", sid);
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("aria-selected", "false");
+        tab.setAttribute("aria-controls", "tab-content-" + sid);
 
         var strat = strategies.find(function(s) { return s.id === sid; });
         var displayName = strat ? strat.display_name : sid;
@@ -1617,6 +1687,8 @@
       var div = document.createElement("div");
       div.className = "space-y-3";
       div.id = "tab-content-" + sid;
+      div.setAttribute("role", "tabpanel");
+      div.setAttribute("tabindex", "0");
       return div;
     }
 
@@ -1624,10 +1696,13 @@
       if (sid === activeTabId) return;
 
       document.querySelectorAll(".strategy-tab").forEach(function(t) {
-        if (t.getAttribute("data-tab-id") === sid) {
+        var isActive = t.getAttribute("data-tab-id") === sid;
+        if (isActive) {
           t.classList.add("active");
+          t.setAttribute("aria-selected", "true");
         } else {
           t.classList.remove("active");
+          t.setAttribute("aria-selected", "false");
         }
       });
 
@@ -1753,17 +1828,20 @@
         var dotsCell = document.createElement("div");
         dotsCell.className = "flex items-center gap-2";
         ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+          var stageStatus = sr.stageStatuses[stage];
+          if (stageStatus === "skipped") return; // omit dot for skipped stages
           var dotWrap = document.createElement("div");
           dotWrap.className = "flex items-center gap-1";
           var dot = document.createElement("span");
-          var stageStatus = sr.stageStatuses[stage];
           dot.className = "stage-dot";
           if (stageStatus === "running") dot.classList.add("running");
           else if (stageStatus === "completed") dot.classList.add("done");
           else if (stageStatus === "error") dot.classList.add("error");
+          dot.setAttribute("title", stage + ": " + stageStatus);
+          dot.setAttribute("aria-label", stage + " " + stageStatus);
           dotWrap.appendChild(dot);
           var dotLabel = document.createElement("span");
-          dotLabel.className = "text-[9px] text-gray-600";
+          dotLabel.className = "text-[10px] text-gray-600";
           dotLabel.textContent = stage.charAt(0).toUpperCase();
           dotWrap.appendChild(dotLabel);
           dotsCell.appendChild(dotWrap);
@@ -1818,6 +1896,8 @@
           }
           var stageIndex = ["perceive", "plan", "act", "verify"].indexOf(stage);
           addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el, stageIndex);
+          var stageLabel = STAGES[stage] ? STAGES[stage].label : stage;
+          announce(stageLabel + " " + status);
         }
       });
 
@@ -1934,6 +2014,7 @@
 
       var img = document.createElement("img");
       img.src = imgSrc;
+      img.alt = "Uploaded workspace image";
       img.className = "w-full max-h-56 object-contain w-auto mx-auto rounded-lg";
       card.appendChild(img);
 

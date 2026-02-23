@@ -152,12 +152,8 @@ class AzureFoundryVLMAdapter:
             self._total_tokens += response.usage.total_tokens
 
         data = _extract_json(raw)
-        return SceneAnalysis(
-            objects=data.get("objects", []),
-            spatial_relations=data.get("spatial_relations", []),
-            task_relevant=data.get("task_relevant", []),
-            raw_response=raw,
-        )
+        data["raw_response"] = raw
+        return SceneAnalysis.model_validate(data)
 
     async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
         from azure.ai.inference.models import SystemMessage, UserMessage
@@ -203,14 +199,8 @@ class AzureFoundryVLMAdapter:
             self._total_tokens += response.usage.total_tokens
 
         data = _extract_json(raw)
-        return TaskPlan(
-            strategy=data.get("strategy", ""),
-            reasoning=data.get("reasoning", ""),
-            steps=data.get("steps", []),
-            target_object=data.get("target_object", ""),
-            confidence=float(data.get("confidence", 0.0)),
-            raw_response=raw,
-        )
+        data["raw_response"] = raw
+        return TaskPlan.model_validate(data)
 
     async def verify_success(
         self,
@@ -271,12 +261,8 @@ class AzureFoundryVLMAdapter:
             self._total_tokens += response.usage.total_tokens
 
         data = _extract_json(raw)
-        return VerificationResult(
-            success=data.get("success", False),
-            confidence=float(data.get("confidence", 0.5)),
-            reasoning=data.get("reasoning", ""),
-            raw_response=raw,
-        )
+        data["raw_response"] = raw
+        return VerificationResult.model_validate(data)
 
     async def health_check(self) -> bool:
         try:

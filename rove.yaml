@@ -28,14 +28,16 @@ endpoints:
   # --- Open-weight VLMs (local + cloud) ---
   qwen3-vl-8b:
     type: vlm
-    adapter: local_transformers
-    display_name: "Qwen3-VL 8B"
+    adapter: lmstudio
+    display_name: "Qwen3-VL 8B (LM Studio)"
     deployment_type: local
+    endpoint: "http://127.0.0.1:1234"
     config:
-      model_id: "Qwen/Qwen3-VL-8B-Instruct"
-      device: mps
+      model_id: "qwen/qwen3-vl-8b"
       max_tokens: 2048
-      quantization: fp16
+      context_length: 4096
+      temperature: 0.1
+      api_key_env: LM_API_TOKEN
     capabilities: [scene_analysis, native_grounding, task_planning, verification, 3d_grounding]
     cost: { type: fixed, per_call: 0.00 }
     max_concurrent: 1
@@ -45,8 +47,8 @@ endpoints:
       unsloth: true
       ollama: true
     notes: >
-      Successor to Qwen2.5-VL. Superior spatial perception, 3D grounding for embodied AI,
-      native bounding box output. Best open-weight VLM for robotics scene understanding.
+      Qwen3-VL 8B running locally via LM Studio at http://127.0.0.1:1234.
+      Superior spatial perception, 3D grounding for embodied AI.
 
   qwen3-vl-2b:
     type: vlm
@@ -426,6 +428,24 @@ strategies:
     verify: mock-vlm
     sim: mock-sim
     tags: [agent]
+
+  lmstudio-local:
+    display_name: "LM Studio Local"
+    description: "Qwen3-VL 8B via LM Studio for vision + mock VLA for action"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [local, lmstudio, live]
+
+  vlm-compare:
+    display_name: "VLM Compare (Scene Only)"
+    description: "Compare VLMs on scene analysis — perceive + verify only"
+    perceive: mock-vlm
+    verify: mock-vlm
+    sim: mock-sim
+    tags: [compare, vlm-only]
 
 # =============================================================================
 # Defaults — Global settings

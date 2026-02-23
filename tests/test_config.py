@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
 from rove.config import (
     EndpointConfig,
     RoveConfig,
+    StrategyConfig,
     find_model_config,
     get_endpoint_config,
     get_strategies,
@@ -97,3 +100,68 @@ class TestGetStrategies:
         agent = strategies["agent-pipeline"]
         assert agent.plan == "mock-agent"
         assert agent.act == "mock-agent"
+
+    def test_partial_strategy_loads(self):
+        """Strategy with only perceive + verify (plan/act omitted) loads correctly."""
+        strategies = get_strategies()
+        vlm_compare = strategies["vlm-compare"]
+        assert vlm_compare.perceive == "mock-vlm"
+        assert vlm_compare.plan is None
+        assert vlm_compare.act is None
+        assert vlm_compare.verify == "mock-vlm"
+        assert vlm_compare.sim == "mock-sim"
+
+
+class TestOptionalStageValidation:
+    def test_no_optional_stages_raises(self):
+        """Strategy with only verify + sim (no perceive/plan/act) raises ValueError."""
+        with pytest.raises(ValueError, match="must define at least one"):
+            RoveConfig.model_validate({
+                "endpoints": {
+                    "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
+                    "mock-sim": {"type": "sim", "adapter": "mock_sim"},
+                },
+                "strategies": {
+                    "bad": {
+                        "verify": "mock-vlm",
+                        "sim": "mock-sim",
+                    }
+                },
+            })
+
+    def test_invalid_ref_on_present_stage_raises(self):
+        """Validation catches invalid endpoint refs on present (non-None) stages."""
+        with pytest.raises(ValueError, match="not defined in endpoints"):
+            RoveConfig.model_validate({
+                "endpoints": {
+                    "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
+                    "mock-sim": {"type": "sim", "adapter": "mock_sim"},
+                },
+                "strategies": {
+                    "bad": {
+                        "perceive": "nonexistent",
+                        "verify": "mock-vlm",
+                        "sim": "mock-sim",
+                    }
+                },
+            })
+
+    def test_none_stages_skip_ref_validation(self):
+        """None stages are not validated against endpoints."""
+        config = RoveConfig.model_validate({
+            "endpoints": {
+                "mock-vlm": {"type": "vlm", "adapter": "mock_vlm"},
+                "mock-sim": {"type": "sim", "adapter": "mock_sim"},
+            },
+            "strategies": {
+                "partial": {
+                    "perceive": "mock-vlm",
+                    "verify": "mock-vlm",
+                    "sim": "mock-sim",
+                }
+            },
+        })
+        strat = config.strategies["partial"]
+        assert strat.perceive == "mock-vlm"
+        assert strat.plan is None
+        assert strat.act is None

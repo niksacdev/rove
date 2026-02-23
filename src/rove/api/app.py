@@ -17,7 +17,7 @@ from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
 from rove.config import get_strategies, load_config
-from rove.models import PipelineStage, PipelineStageResult, StageStatus
+from rove.models import PipelineStage, StageStatus
 from rove.orchestrator.pipeline import EvaluationPipeline
 from rove.orchestrator.run_manager import RunManager
 
@@ -37,17 +37,6 @@ registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
 _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
-
-
-def _stage_to_dict(stage: PipelineStageResult) -> dict:
-    return {
-        "stage": stage.stage,
-        "status": stage.status.value,
-        "latency_ms": stage.latency_ms,
-        "output": stage.output,
-        "error": stage.error,
-        "model_id": stage.model_id,
-    }
 
 
 async def _run_multi_strategy(
@@ -121,7 +110,7 @@ async def _run_evaluation(
         stages: list[dict] = []
 
         async for stage_result in pipeline.run_trial(task, image_base64, eval_id):
-            stage_dict = _stage_to_dict(stage_result)
+            stage_dict = stage_result.model_dump()
             if stage_result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
                 stages.append(stage_dict)
             await queue.put({"event": "stage", "data": stage_dict})
@@ -166,20 +155,7 @@ async def list_strategies():
     """Return all strategies with their model assignments."""
     strategies = get_strategies()
     return {
-        "strategies": [
-            {
-                "id": s.id,
-                "display_name": s.display_name,
-                "description": s.description,
-                "perceive": s.perceive,
-                "plan": s.plan,
-                "act": s.act,
-                "verify": s.verify,
-                "sim": s.sim,
-                "tags": s.tags,
-            }
-            for s in strategies.values()
-        ]
+        "strategies": [s.model_dump() for s in strategies.values()]
     }
 
 

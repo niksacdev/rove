@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _VLM_ADAPTERS = {
     "mock_vlm": "rove.adapters.vlm.mock:MockVLMAdapter",
     "azure_foundry": "rove.adapters.vlm.azure_foundry:AzureFoundryVLMAdapter",
+    "lmstudio": "rove.adapters.vlm.lmstudio:LMStudioVLMAdapter",
 }
 
 _POLICY_ADAPTERS = {
@@ -87,6 +88,8 @@ def _build_adapter(
     cls = _import_class(adapter_map[adapter_name])
     config = dict(ep.config)
     config["display_name"] = ep.display_name or model_id
+    if ep.endpoint:
+        config["endpoint"] = ep.endpoint
     instance = cls(model_id=model_id, config=config)
     cache[model_id] = instance
     return instance

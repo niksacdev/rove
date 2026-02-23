@@ -13,17 +13,6 @@ from rove.orchestrator.pipeline import EvaluationPipeline
 logger = logging.getLogger(__name__)
 
 
-def _stage_to_dict(stage: PipelineStageResult) -> dict:
-    return {
-        "stage": stage.stage,
-        "status": stage.status.value,
-        "latency_ms": stage.latency_ms,
-        "output": stage.output,
-        "error": stage.error,
-        "model_id": stage.model_id,
-    }
-
-
 class RunManager:
     """Execute multiple strategies concurrently with bounded parallelism."""
 
@@ -69,7 +58,7 @@ class RunManager:
                 stages: list[dict] = []
 
                 async for stage_result in pipeline.run_trial(task, image_base64):
-                    stage_dict = _stage_to_dict(stage_result)
+                    stage_dict = stage_result.model_dump()
                     stage_dict["strategy_id"] = strategy.id
                     await on_event(strategy.id, "stage", stage_dict)
                     if stage_result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
@@ -90,11 +79,15 @@ class RunManager:
                     "total_latency_ms": round(total_latency, 1),
                     "stages": stages,
                     "models": {
-                        "perceive": strategy.perceive,
-                        "plan": strategy.plan,
-                        "act": strategy.act,
-                        "verify": strategy.verify,
-                        "sim": strategy.sim,
+                        k: v
+                        for k, v in {
+                            "perceive": strategy.perceive,
+                            "plan": strategy.plan,
+                            "act": strategy.act,
+                            "verify": strategy.verify,
+                            "sim": strategy.sim,
+                        }.items()
+                        if v is not None
                     },
                 }
                 await on_event(strategy.id, "strategy_complete", result)
@@ -116,11 +109,23 @@ class RunManager:
         """Build pipeline for a strategy. Creates fresh sim instances for isolation."""
         from rove.models import PipelineStage
 
-        perceive = self.registry.get_adapter_for_stage(PipelineStage.PERCEIVE, strategy.perceive)
-        plan = self.registry.get_adapter_for_stage(PipelineStage.PLAN, strategy.plan)
-        act = self.registry.get_adapter_for_stage(PipelineStage.ACT, strategy.act)
+        perceive = (
+            self.registry.get_adapter_for_stage(PipelineStage.PERCEIVE, strategy.perceive)
+            if strategy.perceive
+            else None
+        )
+        plan = (
+            self.registry.get_adapter_for_stage(PipelineStage.PLAN, strategy.plan)
+            if strategy.plan
+            else None
+        )
+        act = (
+            self.registry.get_adapter_for_stage(PipelineStage.ACT, strategy.act)
+            if strategy.act
+            else None
+        )
         verify = self.registry.get_adapter_for_stage(PipelineStage.VERIFY, strategy.verify)
-        sim = self.registry.create_sim(strategy.sim)
+        sim = self.registry.create_sim(strategy.sim) if strategy.act else None
 
         return EvaluationPipeline(
             perceive_adapter=perceive,

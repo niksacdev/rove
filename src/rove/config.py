@@ -58,9 +58,9 @@ class EndpointConfig(BaseModel):
 class StrategyConfig(BaseModel):
     display_name: str = ""
     description: str = ""
-    perceive: str
-    plan: str
-    act: str
+    perceive: str | None = None
+    plan: str | None = None
+    act: str | None = None
     verify: str
     sim: str
     tags: list[str] = []
@@ -88,11 +88,17 @@ class RoveConfig(BaseModel):
         for sid, strat in self.strategies.items():
             for field in ("perceive", "plan", "act", "verify", "sim"):
                 ref = getattr(strat, field)
-                if ref not in self.endpoints:
+                if ref is not None and ref not in self.endpoints:
                     raise ValueError(
                         f"Strategy '{sid}' references endpoint '{ref}' "
                         f"in '{field}' but it is not defined in endpoints."
                     )
+            # At least one optional stage must be present
+            optional = [getattr(strat, f) for f in ("perceive", "plan", "act")]
+            if not any(optional):
+                raise ValueError(
+                    f"Strategy '{sid}' must define at least one of perceive/plan/act"
+                )
         return self
 
 
