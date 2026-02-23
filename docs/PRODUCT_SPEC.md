@@ -198,50 +198,65 @@ MCP has a 1MB binary payload limit. MCP server handlers resize images to <750KB 
 ```yaml
 # In rove.yaml
 strategies:
-  cloud-fast:
-    display_name: "Cloud Fast"
-    perceive: gpt-4o
-    plan: gpt-4o
-    act: pi0-fast
-    verify: gpt-4o
-    sim: mujoco-libero
+  full_local:
+    display_name: "Full Pipeline (Local)"
+    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [full, local, vla]
 ```
 
 ```bash
-rove evaluate --strategy cloud-fast --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
+rove evaluate --strategy full_local --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
 ```
 
 ### Workflow 2: Multi-Strategy Comparison
 
 ```yaml
 strategies:
-  cloud-fast:
-    display_name: "Cloud Fast"
-    perceive: gpt-4o
-    plan: gpt-4o
-    act: pi0-fast
-    verify: gpt-4o
-    sim: mujoco-libero
-
-  local-only:
-    display_name: "Local Only"
-    perceive: qwen3-vl-8b
-    plan: qwen3-8b
-    act: smolvla-450m
-    verify: qwen3-vl-8b
-    sim: mujoco-libero
-
   mock:
-    display_name: "Mock (Testing)"
+    display_name: "Mock (Test)"
+    description: "All mock adapters — for testing pipeline plumbing without real models"
     perceive: mock-vlm
     plan: mock-vlm
     act: mock-vla
     verify: mock-vlm
     sim: mock-sim
+    tags: [test, mock]
+
+  scene_detect:
+    display_name: "Scene Detection"
+    description: "Qwen3-VL 8B perceives the scene and verifies — no planning or action"
+    perceive: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, vlm, local]
+
+  scene_plan:
+    display_name: "Scene + Plan"
+    description: "Qwen3-VL 8B perceives the scene, plans a strategy, and verifies"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [scene, plan, vlm, local]
+
+  full_local:
+    display_name: "Full Pipeline (Local)"
+    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: mock-vla
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [full, local, vla]
 ```
 
 ```bash
-rove evaluate --strategy cloud-fast,local-only --task "Pick the red bracket" --trials 5
+rove evaluate --strategy scene_plan,full_local --task "Pick the red bracket" --trials 5
 ```
 
 Reports which strategy performs best on your task, with per-stage latency and cost breakdowns.

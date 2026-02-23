@@ -1,0 +1,29 @@
+name: Claude Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-review:
+    name: Claude Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Perform a security-focused review of this PR. Check for:
+            1. OWASP Top 10 vulnerabilities (injection, XSS, SSRF)
+            2. Hardcoded secrets or API keys
+            3. Insecure deserialization (especially YAML/JSON parsing)
+            4. MCP binary payload handling (1MB limit, base64 encoding)
+            5. SQL injection in SQLite eval store
+            6. Command injection in CLI arguments

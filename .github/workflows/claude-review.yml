@@ -1,0 +1,29 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this PR using the project context in CLAUDE.md and the review
+            expertise in .claude/agents/code-reviewer.md. Focus on:
+            1. Adapter protocol compliance (VLMAdapter, PolicyAdapter, AgentAdapter, SimAdapter)
+            2. Async safety — no blocking calls in async methods
+            3. Pipeline determinism — orchestrator must not use LLM for step decisions
+            4. API key handling — env var refs only, no hardcoded secrets
+            5. YAML config consistency with rove.yaml

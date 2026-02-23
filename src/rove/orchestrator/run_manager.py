@@ -7,7 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from rove.adapters.registry import AdapterRegistry
-from rove.models import PipelineStageResult, StageStatus, Strategy
+from rove.models import StageStatus, Strategy
 from rove.orchestrator.pipeline import EvaluationPipeline
 
 logger = logging.getLogger(__name__)
@@ -44,15 +44,23 @@ class RunManager:
         results: list[dict],
         on_event: Callable[[str, str, dict], Awaitable[None]],
     ) -> None:
-        await on_event(strategy.id, "strategy_queued", {
-            "strategy_id": strategy.id,
-            "display_name": strategy.display_name,
-        })
-        async with self._semaphore:
-            await on_event(strategy.id, "strategy_started", {
+        await on_event(
+            strategy.id,
+            "strategy_queued",
+            {
                 "strategy_id": strategy.id,
                 "display_name": strategy.display_name,
-            })
+            },
+        )
+        async with self._semaphore:
+            await on_event(
+                strategy.id,
+                "strategy_started",
+                {
+                    "strategy_id": strategy.id,
+                    "display_name": strategy.display_name,
+                },
+            )
             try:
                 pipeline = self._build_pipeline(strategy)
                 stages: list[dict] = []

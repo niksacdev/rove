@@ -38,8 +38,12 @@ class StageStatus(StrEnum):
 
 
 class SceneAnalysis(BaseModel):
-    objects: list[dict] = Field(default_factory=list)  # [{"name": "red bracket", "bbox": [x,y,w,h], "confidence": 0.9}]
-    spatial_relations: list[str] = Field(default_factory=list)  # ["red bracket is to the left of bin A"]
+    objects: list[dict] = Field(
+        default_factory=list
+    )  # [{"name": "red bracket", "bbox": [x,y,w,h], "confidence": 0.9}]
+    spatial_relations: list[str] = Field(
+        default_factory=list
+    )  # ["red bracket is to the left of bin A"]
     task_relevant: list[str] = Field(default_factory=list)  # ["red bracket", "bin A"]
     raw_response: str = ""
 
@@ -120,9 +124,7 @@ class PipelineContext(BaseModel):
                 include={"strategy", "target_object", "steps", "confidence"}
             )
         if self.action:
-            d["action"] = self.action.model_dump(
-                include={"action_type", "num_steps", "confidence"}
-            )
+            d["action"] = self.action.model_dump(include={"action_type", "num_steps", "confidence"})
         if self.proprioception:
             d["proprioception"] = self.proprioception
         if self.after_image_base64:

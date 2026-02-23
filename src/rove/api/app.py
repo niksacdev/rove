@@ -56,7 +56,9 @@ async def _run_multi_strategy(
             strategies.append(all_strategies[sid])
 
         config = load_config()
-        run_manager = RunManager(registry, max_concurrent=config.defaults.max_concurrent_combinations)
+        run_manager = RunManager(
+            registry, max_concurrent=config.defaults.max_concurrent_combinations
+        )
 
         async def on_event(strategy_id: str, event_type: str, data: dict) -> None:
             await queue.put({"event": event_type, "data": data})
@@ -154,9 +156,7 @@ async def _run_evaluation(
 async def list_strategies():
     """Return all strategies with their model assignments."""
     strategies = get_strategies()
-    return {
-        "strategies": [s.model_dump() for s in strategies.values()]
-    }
+    return {"strategies": [s.model_dump() for s in strategies.values()]}
 
 
 @app.post("/api/evaluate", status_code=202)

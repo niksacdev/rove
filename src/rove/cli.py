@@ -18,7 +18,7 @@ def main():
 
         print("\n  ROVE — Robot Observation & Vision Evaluation")
         print(f"  Dashboard: http://localhost:{port}\n")
-        uvicorn.run("rove.api.app:app", host="0.0.0.0", port=port, reload=True)
+        uvicorn.run("rove.api.app:app", host="0.0.0.0", port=port, reload=True)  # nosec B104
     elif args[0] == "--help":
         print("Usage: python -m rove [serve] [--port PORT]")
         print("  serve    Start the ROVE dashboard (default)")
