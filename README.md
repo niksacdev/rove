@@ -5,37 +5,13 @@
 
 **ROVE evaluates robotics AI pipelines — running real inference through VLM+VLA+LLM combinations to find the best agent stack for your specific task.**
 
----
+![ROVE Dashboard](docs/images/rove-welcome.png)
 
-A robot that can pick, place, or assemble needs multiple AI models working together as an agent system. A Vision-Language Model sees the scene. A grounding model locates the target object. An LLM or VLM plans the approach. A Vision-Language-Action model predicts the physical movements. And a VLM verifies the result.
+Upload a scene image, describe a manipulation task, select strategies, and ROVE runs the full inference pipeline — comparing success rate, latency, and cost across agent configurations in real time.
+
+A robot that can pick, place, or assemble needs multiple AI models working together as an agent system. A Vision-Language Model sees the scene. An LLM or VLM plans the approach. A Vision-Language-Action model predicts the physical movements. And a VLM verifies the result.
 
 No single model does all of this. The right combination depends on your task, your environment, and your constraints — latency, cost, accuracy. ROVE evaluates these combinations by running the full inference pipeline end-to-end, on your task, measuring what actually works before you deploy to a real robot.
-
-```bash
-rove evaluate --config rove.yaml --evaluation pick_bracket
-
-# ROVE: Running evaluation 'pick_bracket'
-# Task: Pick the red bracket and place it in bin A
-# Models: 3 VLMs x 2 VLAs = 6 combinations x 5 trials = 30 runs
-#
-# Results (ranked by success rate > latency > cost):
-#
-#  1. gpt-4o + cogact-7b
-#     92% success (46/50) | Avg: 1842ms | Cost: $0.021/run | Quality: 0.94
-#
-#  2. qwen25-vl-32b + cogact-7b
-#     88% success (44/50) | Avg: 2105ms | Cost: $0.008/run | Quality: 0.91
-#
-#  3. gpt-4o + smolvla-450m
-#     78% success (39/50) | Avg: 1203ms | Cost: $0.020/run | Quality: 0.87
-#
-#  4. cosmos-reason2-2b + cogact-7b
-#     72% success (36/50) | Avg:  890ms | Cost: $0.000/run | Quality: 0.85
-#  ...
-#
-# Results saved to results.jsonl
-# Dashboard: http://localhost:8000/evaluations/eval_20260218_001
-```
 
 ---
 
@@ -241,33 +217,39 @@ Adding a new model = implement one Protocol + add a YAML entry. No changes to or
 pip install rove-eval
 ```
 
-### Run with mocks (zero dependencies)
-
-```bash
-rove evaluate --config rove.yaml --strategies mock
-```
-
-### Run a strategy from config
-
-```bash
-rove evaluate --config rove.yaml --strategies scene_detect
-```
-
-### List models and check health
-
-```bash
-rove models --config rove.yaml
-rove models --config rove.yaml --check-health
-```
-
 ### Launch the dashboard
 
 ```bash
-rove serve --config rove.yaml
-# Open http://localhost:8000
+rove serve
+# Open http://localhost:5001
 ```
 
-### Use as a Python library
+From the dashboard:
+1. Upload a robotics workspace image using the camera button
+2. Describe a manipulation task (e.g., "Pick the red bracket and place it in bin A")
+3. Select one or more strategies (pipeline configurations) to evaluate
+4. Click Evaluate and compare pipeline results across strategies
+
+### CLI (batch processing)
+
+The CLI is designed for scripted runs, CI pipelines, and batch evaluation:
+
+```bash
+# Run with mock adapters (zero dependencies)
+rove evaluate --config rove.yaml --strategies mock
+
+# Compare multiple strategies
+rove evaluate --config rove.yaml --strategies scene_detect,scene_plan
+
+# List models and check health
+rove models --config rove.yaml
+rove models --config rove.yaml --check-health
+
+# Export results
+rove export --evaluation-id eval_001 --format jsonl --output results.jsonl
+```
+
+### Python library
 
 ```python
 import rove
@@ -281,27 +263,19 @@ for r in results.ranked:
     print(f"{r.vlm_id} + {r.vla_id}: {r.success_rate:.0%} success, {r.avg_latency_ms:.0f}ms")
 ```
 
-### Export results
-
-```bash
-rove export --evaluation-id eval_20260218_001 --format jsonl --output results.jsonl
-```
-
-Exported JSONL uses Foundry-compatible field names (`query`, `response`, `context`) for `azure-ai-evaluation` SDK compatibility.
-
 ---
 
 ## Access Modes
 
-ROVE has three equal access modes sharing the same pipeline engine.
+ROVE has three access modes sharing the same pipeline engine.
 
 | Mode | Best For | How |
 |------|----------|-----|
-| **CLI** | Scripted runs, CI pipelines, batch processing | `rove evaluate --config rove.yaml --evaluation pick_bracket` |
+| **Web dashboard** | Interactive testing, exploration, team demos | `rove serve` → `http://localhost:5001` |
+| **CLI** | Batch processing, scripted runs, CI pipelines | `rove evaluate --strategies mock,scene_plan` |
 | **Python library** | Jupyter notebooks, programmatic analysis | `await rove.evaluate(config_path="rove.yaml", ...)` |
-| **Web dashboard** | Interactive exploration, team demos | `rove serve` → `http://localhost:8000` |
 
-The dashboard is **static HTML + vanilla JavaScript** served by FastAPI. No React, no npm, no build step. It calls the API via `fetch()` and streams progress via `EventSource` (SSE). Zero frontend dependencies — works anywhere FastAPI runs.
+The dashboard is **static HTML + vanilla JavaScript** served by FastAPI. No React, no npm, no build step. It streams pipeline progress in real time via SSE (Server-Sent Events). Zero frontend dependencies — works anywhere FastAPI runs.
 
 ---
 
