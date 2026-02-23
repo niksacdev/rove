@@ -15,14 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_json(text: str) -> dict:
-    """Extract JSON from VLM response — handles raw JSON, markdown code blocks, and brace matching."""
+    """Extract JSON from VLM response.
+
+    Handles: raw JSON, <think>...</think> blocks (Qwen3), markdown code blocks,
+    and brace-matching fallback.
+    """
     text = text.strip()
 
+    # Strip Qwen3 thinking tags
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+    # Try direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
+    # Try markdown code block
     md_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if md_match:
         try:
@@ -30,6 +39,7 @@ def _extract_json(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
+    # Brace matching — find first { ... }
     start = text.find("{")
     if start != -1:
         depth = 0
@@ -44,6 +54,7 @@ def _extract_json(text: str) -> dict:
                     except json.JSONDecodeError:
                         break
 
+    logger.error(f"Could not extract JSON from response: {text[:500]}")
     raise ValueError(f"Could not extract JSON from response: {text[:200]}")
 
 
@@ -102,13 +113,23 @@ class LMStudioVLMAdapter:
             response.raise_for_status()
 
         data = response.json()
+        logger.debug(f"LM Studio raw response keys: {list(data.keys())}")
 
-        # LM Studio response format: {"choices": [{"message": {"content": "..."}}]}
-        # or direct {"content": "..."} depending on version
+        # LM Studio /api/v1/chat response: {"output": [...], "model_instance_id", "stats", "response_id"}
+        # output is a list of content blocks: [{"type": "message", "content": "..."}]
+        if "output" in data:
+            output = data["output"]
+            if isinstance(output, str):
+                return output
+            if isinstance(output, list):
+                parts = [
+                    item.get("content", "") for item in output
+                    if isinstance(item, dict) and item.get("content")
+                ]
+                return "".join(parts)
+        # OpenAI-compatible /v1/chat/completions format
         if "choices" in data:
             return data["choices"][0]["message"]["content"]
-        if "content" in data:
-            return data["content"]
 
         raise ValueError(f"Unexpected LM Studio response format: {list(data.keys())}")
 

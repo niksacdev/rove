@@ -43,9 +43,9 @@ def mock_strategy():
 @pytest.fixture
 def agent_strategy():
     return Strategy(
-        id="agent-pipeline",
-        display_name="Foundry Agent",
-        description="Mock agent handles plan + act, VLM for perceive/verify",
+        id="agent_orchestrated",
+        display_name="Agent Orchestrated",
+        description="Agent plans and acts via tool calls — VLM perceives and verifies",
         perceive="mock-vlm",
         plan="mock-agent",
         act="mock-agent",

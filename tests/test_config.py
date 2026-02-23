@@ -77,9 +77,9 @@ class TestGetStrategies:
     def test_loads_all_strategies(self):
         strategies = get_strategies()
         assert "mock" in strategies
-        assert "cloud-fast" in strategies
-        assert "edge-local" in strategies
-        assert "agent-pipeline" in strategies
+        assert "scene_plan_act" in strategies
+        assert "e2e_edge" in strategies
+        assert "agent_orchestrated" in strategies
 
     def test_mock_strategy_models(self):
         strategies = get_strategies()
@@ -93,23 +93,23 @@ class TestGetStrategies:
     def test_strategy_tags(self):
         strategies = get_strategies()
         assert "test" in strategies["mock"].tags
-        assert "agent" in strategies["agent-pipeline"].tags
+        assert "agent" in strategies["agent_orchestrated"].tags
 
     def test_agent_strategy_uses_agent_model(self):
         strategies = get_strategies()
-        agent = strategies["agent-pipeline"]
+        agent = strategies["agent_orchestrated"]
         assert agent.plan == "mock-agent"
         assert agent.act == "mock-agent"
 
     def test_partial_strategy_loads(self):
-        """Strategy with only perceive + verify (plan/act omitted) loads correctly."""
+        """Strategy with only act + verify (perceive/plan omitted) loads correctly."""
         strategies = get_strategies()
-        vlm_compare = strategies["vlm-compare"]
-        assert vlm_compare.perceive == "mock-vlm"
-        assert vlm_compare.plan is None
-        assert vlm_compare.act is None
-        assert vlm_compare.verify == "mock-vlm"
-        assert vlm_compare.sim == "mock-sim"
+        e2e = strategies["e2e_vla_pi0"]
+        assert e2e.perceive is None
+        assert e2e.plan is None
+        assert e2e.act == "pi0-fast"
+        assert e2e.verify == "gpt-4o"
+        assert e2e.sim == "mujoco-libero"
 
 
 class TestOptionalStageValidation:

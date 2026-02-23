@@ -27,7 +27,7 @@ class TestRunManager:
 
         assert len(results) == 2
         strategy_ids = {r["strategy_id"] for r in results}
-        assert strategy_ids == {"mock", "agent-pipeline"}
+        assert strategy_ids == {"mock", "agent_orchestrated"}
 
     @pytest.mark.asyncio
     async def test_each_strategy_has_four_stages(self, mock_strategy, agent_strategy):
@@ -64,7 +64,7 @@ class TestRunManager:
             on_event,
         )
 
-        assert set(complete_events) == {"mock", "agent-pipeline"}
+        assert set(complete_events) == {"mock", "agent_orchestrated"}
 
     @pytest.mark.asyncio
     async def test_sim_instances_are_isolated(self, registry):
