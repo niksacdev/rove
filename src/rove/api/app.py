@@ -33,6 +33,7 @@ app.add_middleware(
 )
 
 # Global state (no database for demo)
+_data_dir = Path(__file__).parent.parent.parent.parent / "data"
 registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
@@ -243,6 +244,15 @@ async def list_models():
     return registry.list_models_by_stage()
 
 
+@app.get("/api/examples")
+async def list_examples():
+    """Return example tasks from data/manifest.json."""
+    manifest = _data_dir / "manifest.json"
+    if not manifest.exists():
+        return {"examples": []}
+    return json.loads(manifest.read_text())
+
+
 @app.get("/api/mock-models")
 async def get_mock_models():
     """Return mock model IDs per stage — server-driven, so dashboard doesn't hardcode."""
@@ -259,6 +269,12 @@ async def get_mock_models():
             break
     return mock_ids
 
+
+# Serve example data
+if _data_dir.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/data", StaticFiles(directory=str(_data_dir)), name="data")
 
 # Serve frontend
 _frontend_dir = Path(__file__).parent.parent.parent.parent / "frontend"
