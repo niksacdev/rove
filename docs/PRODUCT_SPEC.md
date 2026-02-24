@@ -198,19 +198,19 @@ MCP has a 1MB binary payload limit. MCP server handlers resize images to <750KB 
 ```yaml
 # In rove.yaml
 strategies:
-  full_local:
-    display_name: "Full Pipeline (Local)"
-    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
+  scene_plan_action:
+    display_name: "Scene + Plan + Action (pi0.5)"
+    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes 7-DOF trajectory, Qwen verifies"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    act: mock-vla
+    act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
-    tags: [full, local, vla]
+    tags: [full, local, vla, lerobot, pi05]
 ```
 
 ```bash
-rove evaluate --strategy full_local --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
+rove evaluate --strategy scene_plan_action --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
 ```
 
 ### Workflow 2: Multi-Strategy Comparison
@@ -244,19 +244,19 @@ strategies:
     sim: mock-sim
     tags: [scene, plan, vlm, local]
 
-  full_local:
-    display_name: "Full Pipeline (Local)"
-    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
+  scene_plan_action:
+    display_name: "Scene + Plan + Action (pi0.5)"
+    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes 7-DOF trajectory, Qwen verifies"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    act: mock-vla
+    act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
-    tags: [full, local, vla]
+    tags: [full, local, vla, lerobot, pi05]
 ```
 
 ```bash
-rove evaluate --strategy scene_plan,full_local --task "Pick the red bracket" --trials 5
+rove evaluate --strategy scene_plan,scene_plan_action --task "Pick the red bracket" --trials 5
 ```
 
 Reports which strategy performs best on your task, with per-stage latency and cost breakdowns.
@@ -285,8 +285,10 @@ Runs a single strategy against multiple task descriptions. Reports which tasks t
 **Success criteria**: `rove evaluate --strategy mock` completes in <5s. CLI, library, and dashboard produce identical results.
 
 ### Phase 2: Local Models
-- SmolVLA (LeRobot/MPS), OpenVLA-OFT (MLX), GroundingDINO, SAM2 (CoreML)
-- MuJoCo + LIBERO integration
+- pi0.5 and SmolVLA via LeRobot adapter (MPS) — **implemented**
+- LIBERO dataset examples with proprioception — **implemented**
+- OpenVLA-OFT (MLX), GroundingDINO, SAM2 (CoreML)
+- MuJoCo + LIBERO simulation integration
 - Real success rate from sim ground truth
 
 **Success criteria**: Full 4-stage evaluation with real models on Apple Silicon. Sim-based success rate operational.

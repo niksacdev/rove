@@ -301,7 +301,7 @@
     <nav class="hidden md:flex items-center gap-1 ml-8">
       <a href="#" class="nav-link active text-[13px] text-gray-400 hover:text-white px-3 py-3">Evaluate</a>
       <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Strategies</a>
-      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Models</a>
+      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Endpoints</a>
     </nav>
 
     <!-- Right: Theme toggle + Status -->
@@ -431,7 +431,7 @@
         <!-- Strategies view (hidden by default) -->
         <div id="strategiesView" class="hidden"></div>
 
-        <!-- Models view (hidden by default) -->
+        <!-- Endpoints view (hidden by default) -->
         <div id="modelsView" class="hidden"></div>
 
         <!-- Examples view (hidden by default) -->
@@ -832,7 +832,7 @@
 
       var heading = document.createElement("h2");
       heading.className = "text-lg font-semibold mb-1";
-      heading.textContent = "Model Registry";
+      heading.textContent = "Endpoint Registry";
       wrapper.appendChild(heading);
 
       var endpoints = configData && configData.endpoints ? configData.endpoints : null;
