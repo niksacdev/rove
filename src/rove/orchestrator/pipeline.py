@@ -10,9 +10,9 @@ from typing import Any
 
 from rove.adapters.protocols import (
     AgentAdapter,
-    PolicyAdapter,
     SimAdapter,
     StageAdapter,
+    VLAAdapter,
 )
 from rove.adapters.registry import AdapterRegistry
 from rove.models import (
@@ -40,14 +40,14 @@ class EvaluationPipeline:
     """Runs the 4-stage pipeline: perceive → plan → act → verify.
 
     Each stage has its own adapter — they can be the same model or different models.
-    Supports VLM, VLA (Policy), and Agent adapters.
+    Supports VLM, VLA, and Agent adapters.
     """
 
     def __init__(
         self,
         perceive_adapter: StageAdapter | None = None,
         plan_adapter: StageAdapter | None = None,
-        act_adapter: PolicyAdapter | AgentAdapter | None = None,
+        act_adapter: VLAAdapter | AgentAdapter | None = None,
         verify_adapter: StageAdapter | None = None,
         sim: SimAdapter | None = None,
         registry: AdapterRegistry | None = None,
@@ -96,7 +96,7 @@ class EvaluationPipeline:
                 raise ValueError(f"Unknown stage: {stage}")
             return model_cls.model_validate(raw)
 
-        # Type-specific calls for VLM/Policy adapters
+        # Type-specific calls for VLM/VLA adapters
         if stage == "perceive":
             return await adapter.analyze_scene(image_base64, task)
         elif stage == "plan":
@@ -128,13 +128,14 @@ class EvaluationPipeline:
         task: str,
         image_base64: str,
         eval_id: str | None = None,
+        ground_truth: dict | None = None,
     ) -> AsyncGenerator[PipelineStageResult, None]:
         """Run a trial, yielding stage results as they complete.
 
         Stages with None adapters are skipped. verify is always required.
         """
         eval_id = eval_id or str(uuid.uuid4())
-        ctx = PipelineContext(task=task, image_base64=image_base64)
+        ctx = PipelineContext(task=task, image_base64=image_base64, ground_truth=ground_truth)
         scene = None
         plan = None
         reset_obs = None
@@ -151,6 +152,7 @@ class EvaluationPipeline:
                     "perceive", self.perceive_adapter, image_base64, task
                 )
                 ctx.scene = scene
+                ctx.completed_stages.append("perceive")
                 latency = (time.monotonic() - t0) * 1000
                 yield PipelineStageResult(
                     stage="perceive",
@@ -193,6 +195,7 @@ class EvaluationPipeline:
                     scene=scene,
                 )
                 ctx.plan = plan
+                ctx.completed_stages.append("plan")
                 latency = (time.monotonic() - t0) * 1000
                 yield PipelineStageResult(
                     stage="plan",
@@ -229,6 +232,7 @@ class EvaluationPipeline:
                     proprioception=ctx.proprioception,
                 )
                 ctx.action = action_pred
+                ctx.completed_stages.append("act")
 
                 last_obs = reset_obs
                 if action_pred.action_type == "trajectory" and action_pred.actions:

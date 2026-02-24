@@ -5,12 +5,14 @@ from __future__ import annotations
 __all__ = [
     "ActionPrediction",
     "GraspPlan",
+    "GroundTruthCheck",
     "PipelineContext",
     "PipelineStage",
     "PipelineStageResult",
     "SceneAnalysis",
     "SimObservation",
     "StageAssignment",
+    "StageCheck",
     "StageStatus",
     "Strategy",
     "TaskPlan",
@@ -76,11 +78,30 @@ class SimObservation(BaseModel):
     done: bool = False
 
 
+class StageCheck(BaseModel):
+    stage: str  # "perceive" | "plan" | "act"
+    passed: bool
+    confidence: float
+    reasoning: str
+
+
+class GroundTruthCheck(BaseModel):
+    question: str
+    choices: list[str]
+    correct_answer: str
+    pipeline_answer: str  # VLM judge's answer from pipeline outputs
+    correct: bool
+    confidence: float
+
+
 class VerificationResult(BaseModel):
     success: bool
     confidence: float  # 0.0 - 1.0
     reasoning: str
     raw_response: str = ""
+    completed_stages: list[str] = Field(default_factory=list)
+    stage_checks: list[StageCheck] = Field(default_factory=list)
+    ground_truth: GroundTruthCheck | None = None
 
 
 class PipelineStageResult(BaseModel):
@@ -110,6 +131,8 @@ class PipelineContext(BaseModel):
     action: ActionPrediction | None = None
     proprioception: list[float] = Field(default_factory=list)
     after_image_base64: str = ""
+    completed_stages: list[str] = Field(default_factory=list)
+    ground_truth: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize non-empty fields for adapter context bags.
@@ -129,6 +152,10 @@ class PipelineContext(BaseModel):
             d["proprioception"] = self.proprioception
         if self.after_image_base64:
             d["after_image_base64"] = self.after_image_base64
+        if self.completed_stages:
+            d["completed_stages"] = self.completed_stages
+        if self.ground_truth:
+            d["ground_truth"] = self.ground_truth
         return d
 
 

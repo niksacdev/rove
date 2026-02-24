@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from rove.adapters.registry import AdapterRegistry
-from rove.config import reset_config_cache
 from rove.models import Strategy
+from rove.models.config import reset_config_cache
 
 # Minimal 1x1 white PNG base64
 MOCK_IMAGE_B64 = (

@@ -1,5 +1,5 @@
 """Allow running as `python -m rove`."""
 
-from rove.cli import main
+from rove.ui.cli import main
 
 main()

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from rove.adapters.agent.mock import MockAgentAdapter
-from rove.adapters.policy.mock import MockPolicyAdapter
-from rove.adapters.sim.mock import MockSimAdapter
-from rove.adapters.vlm.mock import MockVLMAdapter
+from rove.adapters.mock_agent import MockAgentAdapter
+from rove.adapters.mock_sim import MockSimAdapter
+from rove.adapters.mock_vla import MockVLAAdapter
+from rove.adapters.mock_vlm import MockVLMAdapter
 from rove.models import SceneAnalysis, TaskPlan
 
 
@@ -75,10 +75,54 @@ class TestMockVLMAdapter:
         assert result.reasoning  # should still produce reasoning
 
 
-class TestMockPolicyAdapter:
+class TestMockVLMVerifyStageAware:
+    @pytest.mark.asyncio
+    async def test_verify_stage_checks(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0})
+        ctx = {
+            "completed_stages": ["perceive", "plan"],
+            "plan": {"target_object": "bolt", "strategy": "top-down"},
+        }
+        result = await vlm.verify_success("before", "after", "test", context=ctx)
+        assert result.completed_stages == ["perceive", "plan"]
+        assert len(result.stage_checks) == 2
+        assert result.stage_checks[0].stage == "perceive"
+        assert result.stage_checks[1].stage == "plan"
+        # With quality=1.0, all should pass
+        assert all(sc.passed for sc in result.stage_checks)
+
+    @pytest.mark.asyncio
+    async def test_verify_ground_truth(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0})
+        ctx = {
+            "completed_stages": ["perceive"],
+            "ground_truth": {
+                "question": "Is the bottle reachable?",
+                "choices": ["Yes", "No"],
+                "correct_answer_index": 0,
+                "correct_answer_text": "Yes",
+            },
+        }
+        result = await vlm.verify_success("before", "after", "test", context=ctx)
+        assert result.ground_truth is not None
+        assert result.ground_truth.question == "Is the bottle reachable?"
+        assert result.ground_truth.correct_answer == "Yes"
+        # With quality=1.0, should be correct
+        assert result.ground_truth.correct is True
+        assert result.ground_truth.pipeline_answer == "Yes"
+
+    @pytest.mark.asyncio
+    async def test_verify_no_ground_truth(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0})
+        ctx = {"completed_stages": ["perceive"]}
+        result = await vlm.verify_success("before", "after", "test", context=ctx)
+        assert result.ground_truth is None
+
+
+class TestMockVLAAdapter:
     @pytest.mark.asyncio
     async def test_uses_plan_steps_for_trajectory_length(self):
-        vla = MockPolicyAdapter(config={"mock_latency_ms": [1, 2]})
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
         plan = TaskPlan(
             strategy="test",
             reasoning="test",
@@ -90,7 +134,7 @@ class TestMockPolicyAdapter:
 
     @pytest.mark.asyncio
     async def test_default_steps_without_plan(self):
-        vla = MockPolicyAdapter(config={"mock_latency_ms": [1, 2]})
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
         pred = await vla.predict_action("img", "task")
         assert pred.num_steps == 5  # default
 

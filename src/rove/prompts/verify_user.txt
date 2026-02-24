@@ -1,0 +1,23 @@
+You are the VERIFY stage of a robotics evaluation pipeline.
+Evaluate the quality of each completed pipeline stage's outputs.
+
+Task: {task}
+Completed stages: {completed_stages}
+
+{stage_sections}
+
+{ground_truth_section}
+
+Return a JSON object with:
+- "success": boolean (overall pipeline success)
+- "confidence": float 0-1
+- "reasoning": string explaining your overall assessment
+- "stage_checks": list of objects, one per completed stage, each with:
+    - "stage": string ("perceive" | "plan" | "act")
+    - "passed": boolean
+    - "confidence": float 0-1
+    - "reasoning": string
+- "completed_stages": list of stage name strings that were evaluated
+{ground_truth_output_spec}
+
+Return ONLY valid JSON, no markdown.

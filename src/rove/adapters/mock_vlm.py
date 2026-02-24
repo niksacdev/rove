@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import random
 
-from rove.models import SceneAnalysis, TaskPlan, VerificationResult
+from rove.models import GroundTruthCheck, SceneAnalysis, StageCheck, TaskPlan, VerificationResult
 
 
 class MockVLMAdapter:
@@ -68,15 +68,64 @@ class MockVLMAdapter:
         context: dict | None = None,
     ) -> VerificationResult:
         await self._simulate_latency()
-        success = random.random() < self._quality
 
-        # Use pipeline context for richer reasoning
+        # Read completed stages and ground truth from context
+        completed_stages: list[str] = []
+        ground_truth_data: dict | None = None
         target = "the object"
         plan_strategy = ""
         if context:
+            completed_stages = context.get("completed_stages", [])
+            ground_truth_data = context.get("ground_truth")
             plan = context.get("plan", {})
             target = plan.get("target_object") or target
             plan_strategy = plan.get("strategy", "")
+
+        # Generate per-stage checks
+        stage_checks: list[StageCheck] = []
+        all_passed = True
+        for stage in completed_stages:
+            passed = random.random() < self._quality
+            if not passed:
+                all_passed = False
+            stage_checks.append(
+                StageCheck(
+                    stage=stage,
+                    passed=passed,
+                    confidence=random.uniform(0.7, 0.95) if passed else random.uniform(0.3, 0.6),
+                    reasoning=f"{stage} stage output is {'consistent with' if passed else 'inconsistent with'} task requirements.",
+                )
+            )
+
+        # Ground truth QA check
+        gt_check: GroundTruthCheck | None = None
+        if ground_truth_data:
+            correct_answer = ground_truth_data.get("correct_answer_text", "")
+            choices = ground_truth_data.get("choices", [])
+            is_correct = random.random() < self._quality
+            pipeline_answer = (
+                correct_answer
+                if is_correct
+                else (
+                    choices[0]
+                    if choices and choices[0] != correct_answer
+                    else choices[-1]
+                    if choices
+                    else "Unknown"
+                )
+            )
+            if not is_correct:
+                all_passed = False
+            gt_check = GroundTruthCheck(
+                question=ground_truth_data.get("question", ""),
+                choices=choices,
+                correct_answer=correct_answer,
+                pipeline_answer=pipeline_answer,
+                correct=is_correct,
+                confidence=random.uniform(0.7, 0.95) if is_correct else random.uniform(0.3, 0.6),
+            )
+
+        success = all_passed if (stage_checks or gt_check) else random.random() < self._quality
 
         if success:
             reasoning = (
@@ -96,6 +145,9 @@ class MockVLMAdapter:
             confidence=random.uniform(0.7, 0.95) if success else random.uniform(0.3, 0.6),
             reasoning=reasoning,
             raw_response='{"mock": true}',
+            completed_stages=completed_stages,
+            stage_checks=stage_checks,
+            ground_truth=gt_check,
         )
 
     async def health_check(self) -> bool:

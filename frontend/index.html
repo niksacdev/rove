@@ -139,15 +139,14 @@
     }
     .strategy-chip:hover .chip-popover { display: block; }
 
-    /* Tab styling — pill tabs with accent */
+    /* Tab styling — pill tabs with per-strategy accent color */
     .strategy-tab {
       transition: all 0.2s ease; position: relative;
       border-radius: 6px 6px 0 0;
     }
-    .strategy-tab:hover { color: var(--f-text-secondary); background: rgba(124,58,237,0.05); }
+    .strategy-tab:hover { color: var(--f-text-secondary); background: rgba(255,255,255,0.03); }
     .strategy-tab.active {
       color: var(--f-text);
-      background: rgba(124,58,237,0.1);
     }
     .strategy-tab.active::after {
       content: '';
@@ -156,8 +155,12 @@
       left: 0;
       right: 0;
       height: 2px;
-      background: #7c3aed;
+      background: var(--tab-color, #7c3aed);
       border-radius: 1px 1px 0 0;
+    }
+    .strategy-tab .tab-color-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+      vertical-align: middle; margin-right: 6px; flex-shrink: 0;
     }
 
     /* Nav link active indicator */
@@ -451,18 +454,6 @@
           </button>
 
           <div id="configContent" style="display:none">
-            <!-- Mock toggle -->
-            <div class="flex items-center gap-4 mb-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <div class="relative">
-                  <input type="checkbox" id="mockToggle" class="sr-only peer" />
-                  <div class="w-8 h-4 bg-gray-700 peer-checked:bg-f-purple rounded-full transition-colors"></div>
-                  <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-                </div>
-                <span class="text-[11px] text-gray-400 font-medium" title="Use mock adapters for all stages (no real model inference)">Simulation mode (mock only)</span>
-              </label>
-            </div>
-
             <!-- Strategy chips -->
             <div id="strategyGrid" class="flex flex-wrap gap-2 mb-2">
               <div class="text-xs text-gray-500">Loading strategies...</div>
@@ -503,7 +494,7 @@
   <!-- ============ JAVASCRIPT ============ -->
   <script>
     "use strict";
-    const API_BASE = "http://localhost:5001";
+    const API_BASE = window.location.origin;
 
     // ---- State ----
     let selectedFile = null;
@@ -566,6 +557,19 @@
       act:      { bg: "bg-emerald-500/15", text: "text-emerald-300" },
       verify:   { bg: "bg-amber-500/15", text: "text-amber-300" },
     };
+
+    // Distinct colors for strategy tabs (up to 8 strategies)
+    const STRATEGY_COLORS = [
+      "#7c3aed", // purple
+      "#3b82f6", // blue
+      "#10b981", // emerald
+      "#f59e0b", // amber
+      "#ef4444", // red
+      "#ec4899", // pink
+      "#06b6d4", // cyan
+      "#84cc16", // lime
+    ];
+    var strategyColorMap = {}; // strategy_id → color hex
 
     // ---- Theme ----
     function initTheme() {
@@ -1066,6 +1070,7 @@
     async function loadExample(task, filename) {
       try {
         var resp = await fetch(API_BASE + "/data/" + filename);
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
         var blob = await resp.blob();
         var name = filename.split("/").pop();
         selectedFile = new File([blob], name, { type: blob.type });
@@ -1079,6 +1084,7 @@
         switchView("home");
       } catch (e) {
         console.error("Failed to load example:", e);
+        alert("Failed to load example image: " + e.message);
       }
     }
 
@@ -1385,15 +1391,23 @@
         tabBar.appendChild(summaryTab);
 
         ids.forEach(function(sid, i) {
+          var color = strategyColorMap[sid] || STRATEGY_COLORS[i % STRATEGY_COLORS.length];
           var tab = document.createElement("button");
-          tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
+          tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap flex items-center";
           tab.setAttribute("data-tab-id", sid);
           tab.setAttribute("role", "tab");
           tab.setAttribute("aria-selected", "false");
           tab.setAttribute("aria-controls", "tab-content-" + sid);
+          tab.style.setProperty("--tab-color", color);
 
           var strat = strategies.find(function(s) { return s.id === sid; });
           var displayName = strat ? strat.display_name : sid;
+
+          var colorDot = document.createElement("span");
+          colorDot.className = "tab-color-dot";
+          colorDot.style.background = color;
+          tab.appendChild(colorDot);
+
           var nameSpan = document.createElement("span");
           nameSpan.textContent = displayName;
           tab.appendChild(nameSpan);
@@ -1409,7 +1423,8 @@
               statusBadge.className += " bg-red-500/15 text-red-400";
               statusBadge.textContent = "error";
             } else {
-              statusBadge.className += " bg-f-purple/20 text-purple-300";
+              statusBadge.style.background = color + "20";
+              statusBadge.style.color = color;
               statusBadge.textContent = "running";
             }
             tab.appendChild(statusBadge);
@@ -1468,21 +1483,6 @@
       }
     }
 
-    // ---- Mock toggle ----
-    var mockToggle = document.getElementById("mockToggle");
-    mockToggle.addEventListener("change", function() {
-      if (mockToggle.checked) {
-        selectedStrategyIds.clear();
-        selectedStrategyIds.add("mock");
-        announce("Simulation mode enabled — mock strategy selected");
-      } else {
-        selectedStrategyIds.delete("mock");
-        announce("Simulation mode disabled");
-      }
-      updateStrategyCards();
-      updateSelectedCount();
-    });
-
     // ---- Load strategies from API ----
     async function loadStrategies() {
       try {
@@ -1492,10 +1492,6 @@
         strategies = data.strategies || [];
         setConnection(true);
         renderStrategyCards();
-        // Default: select mock
-        selectedStrategyIds.add("mock");
-        mockToggle.checked = true;
-        updateStrategyCards();
         updateSelectedCount();
       } catch (e) {
         console.error("Failed to load strategies:", e);
@@ -1622,7 +1618,6 @@
           } else {
             selectedStrategyIds.add(s.id);
           }
-          mockToggle.checked = selectedStrategyIds.has("mock") && selectedStrategyIds.size === 1;
           updateStrategyCards();
           updateSelectedCount();
         }
@@ -1702,7 +1697,21 @@
     // ---- Evaluate ----
     evalBtn.addEventListener("click", async function() {
       var task = taskInput.value.trim();
-      if (!task || !selectedFile || isRunning || selectedStrategyIds.size === 0) return;
+      if (isRunning) return;
+
+      // Prompt user to select a strategy if none selected
+      if (selectedStrategyIds.size === 0) {
+        configContent.style.display = "";
+        configChevron.style.transform = "";
+        configToggle.setAttribute("aria-expanded", "true");
+        announce("Please select at least one strategy before evaluating");
+        // Flash the strategy grid briefly
+        strategyGrid.style.outline = "2px solid #7c3aed";
+        setTimeout(function() { strategyGrid.style.outline = ""; }, 1500);
+        return;
+      }
+
+      if (!task || !selectedFile) return;
 
       setRunning(true);
 
@@ -1751,6 +1760,12 @@
       activeTabId = null;
       summaryResults = {};
       summaryEl = null;
+
+      // Assign distinct colors to each strategy
+      strategyColorMap = {};
+      strategyIds.forEach(function(sid, i) {
+        strategyColorMap[sid] = STRATEGY_COLORS[i % STRATEGY_COLORS.length];
+      });
 
       // Initialize summary results for each strategy
       strategyIds.forEach(function(sid) {
@@ -1814,22 +1829,31 @@
 
       // Strategy tabs
       strategyIds.forEach(function(sid) {
+        var color = strategyColorMap[sid] || "#7c3aed";
         var tab = document.createElement("button");
-        tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap";
+        tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap flex items-center";
         tab.setAttribute("data-tab-id", sid);
         tab.setAttribute("role", "tab");
         tab.setAttribute("aria-selected", "false");
         tab.setAttribute("aria-controls", "tab-content-" + sid);
+        tab.style.setProperty("--tab-color", color);
 
         var strat = strategies.find(function(s) { return s.id === sid; });
         var displayName = strat ? strat.display_name : sid;
+
+        var colorDot = document.createElement("span");
+        colorDot.className = "tab-color-dot";
+        colorDot.style.background = color;
+        tab.appendChild(colorDot);
 
         var nameSpan = document.createElement("span");
         nameSpan.textContent = displayName;
         tab.appendChild(nameSpan);
 
         var statusBadge = document.createElement("span");
-        statusBadge.className = "ml-2 text-[10px] bg-f-purple/20 text-purple-300 px-1.5 py-0.5 rounded";
+        statusBadge.className = "ml-2 text-[10px] px-1.5 py-0.5 rounded";
+        statusBadge.style.background = color + "20";
+        statusBadge.style.color = color;
         statusBadge.textContent = "running";
         statusBadge.id = "tab-status-" + sid;
         tab.appendChild(statusBadge);
@@ -1859,6 +1883,11 @@
       div.id = "tab-content-" + sid;
       div.setAttribute("role", "tabpanel");
       div.setAttribute("tabindex", "0");
+      var color = strategyColorMap[sid];
+      if (color) {
+        div.style.borderTop = "2px solid " + color;
+        div.style.paddingTop = "12px";
+      }
       return div;
     }
 
@@ -1942,13 +1971,21 @@
         var displayName = strat ? strat.display_name : sid;
 
         var row = document.createElement("div");
+        var rowColor = strategyColorMap[sid] || "#7c3aed";
         row.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
+        row.style.borderLeft = "3px solid " + rowColor;
         row.addEventListener("click", function() { switchTab(sid); });
 
-        // Strategy name
-        var nameCell = document.createElement("span");
-        nameCell.className = "text-xs text-gray-200 font-medium truncate";
-        nameCell.textContent = displayName;
+        // Strategy name with color dot
+        var nameCell = document.createElement("div");
+        nameCell.className = "flex items-center gap-2 min-w-0";
+        var nameDot = document.createElement("span");
+        nameDot.style.cssText = "width:8px;height:8px;border-radius:50%;flex-shrink:0;background:" + rowColor;
+        nameCell.appendChild(nameDot);
+        var nameText = document.createElement("span");
+        nameText.className = "text-xs text-gray-200 font-medium truncate";
+        nameText.textContent = displayName;
+        nameCell.appendChild(nameText);
         row.appendChild(nameCell);
 
         // Status with colored dot
