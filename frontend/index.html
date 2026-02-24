@@ -239,6 +239,17 @@
 
     /* Strategy popover: keyboard accessible via focus-within */
     .strategy-chip:focus-within .chip-popover { display: block; }
+
+    /* Image hover zoom */
+    .img-zoom {
+      transition: transform 0.2s ease;
+      cursor: zoom-in;
+    }
+    .img-zoom:hover {
+      transform: scale(3);
+      z-index: 50;
+      position: relative;
+    }
   </style>
   <script>
     tailwind.config = {
@@ -462,7 +473,7 @@
         <!-- Image preview -->
         <div id="imagePreview" class="hidden mb-3">
           <div class="relative inline-block">
-            <img id="previewImg" class="h-20 rounded-lg border border-f-border object-cover" />
+            <img id="previewImg" class="h-20 rounded-lg border border-f-border object-cover img-zoom origin-bottom-left" />
             <button id="removeImage" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs hover:bg-red-400 transition-colors" title="Remove image" aria-label="Remove uploaded image">&times;</button>
           </div>
         </div>
@@ -2174,7 +2185,7 @@
       var img = document.createElement("img");
       img.src = imgSrc;
       img.alt = "Uploaded workspace image";
-      img.className = "w-full max-h-56 object-contain w-auto mx-auto rounded-lg";
+      img.className = "w-full max-h-56 object-contain w-auto mx-auto rounded-lg img-zoom origin-top-left";
       card.appendChild(img);
 
       var taskP = document.createElement("p");
