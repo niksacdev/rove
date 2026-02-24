@@ -147,7 +147,14 @@ class PipelineContext(BaseModel):
                 include={"strategy", "target_object", "steps", "confidence"}
             )
         if self.action:
-            d["action"] = self.action.model_dump(include={"action_type", "num_steps", "confidence"})
+            action_d = self.action.model_dump(
+                include={"action_type", "num_steps", "confidence", "actions"}
+            )
+            # Cap trajectory to first 10 steps to keep prompt compact
+            if action_d.get("actions") and len(action_d["actions"]) > 10:
+                action_d["actions"] = action_d["actions"][:10]
+                action_d["actions_truncated"] = True
+            d["action"] = action_d
         if self.proprioception:
             d["proprioception"] = self.proprioception
         if self.after_image_base64:

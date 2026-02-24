@@ -2635,44 +2635,94 @@
       }
 
       var actions = o.actions || o.action_steps;
-      if (o.action_type !== "tool_calls" && actions && Array.isArray(actions)) {
+      if (o.action_type !== "tool_calls" && actions && Array.isArray(actions) && actions.length > 0) {
         rendered = true;
         var heading2 = document.createElement("p");
         heading2.className = "text-[11px] text-gray-500 font-medium";
-        heading2.textContent = "Action sequence";
+        heading2.textContent = "Trajectory (" + actions.length + " step" + (actions.length > 1 ? "s" : "") + ")";
         container.appendChild(heading2);
 
+        // DOF labels for 6/7-DOF end-effector deltas
+        var dofLabels = ["dx", "dy", "dz", "rx", "ry", "rz", "grip"];
+
+        var table = document.createElement("div");
+        table.className = "mt-1 font-mono text-[10px] leading-relaxed overflow-x-auto";
+
+        // Header row
+        if (Array.isArray(actions[0])) {
+          var hdr = document.createElement("div");
+          hdr.className = "flex gap-1 text-gray-600 mb-0.5";
+          var stepHdr = document.createElement("span");
+          stepHdr.className = "w-6 text-right shrink-0";
+          stepHdr.textContent = "#";
+          hdr.appendChild(stepHdr);
+          var numDof = actions[0].length;
+          for (var d = 0; d < numDof; d++) {
+            var lbl = document.createElement("span");
+            lbl.className = "w-16 text-right shrink-0";
+            lbl.textContent = d < dofLabels.length ? dofLabels[d] : "d" + d;
+            hdr.appendChild(lbl);
+          }
+          table.appendChild(hdr);
+        }
+
         actions.forEach(function(a, i) {
-          var text = typeof a === "string" ? a : (a.description || JSON.stringify(a));
-          var p = document.createElement("p");
-          p.className = "text-xs text-gray-300 ml-2";
-          p.textContent = (i + 1) + ". " + text;
-          container.appendChild(p);
+          var row = document.createElement("div");
+          row.className = "flex gap-1 text-gray-300";
+          var stepNum = document.createElement("span");
+          stepNum.className = "w-6 text-right text-gray-600 shrink-0";
+          stepNum.textContent = String(i + 1);
+          row.appendChild(stepNum);
+
+          if (Array.isArray(a)) {
+            a.forEach(function(v) {
+              var cell = document.createElement("span");
+              cell.className = "w-16 text-right shrink-0" + (v < 0 ? " text-red-400" : "");
+              cell.textContent = typeof v === "number" ? v.toFixed(4) : String(v);
+              row.appendChild(cell);
+            });
+          } else {
+            var text = document.createElement("span");
+            text.className = "text-gray-400";
+            text.textContent = typeof a === "string" ? a : JSON.stringify(a);
+            row.appendChild(text);
+          }
+          table.appendChild(row);
         });
+        container.appendChild(table);
       }
 
-      if (o.actions_executed != null) {
+      // Sim status badges
+      if (o.sim_done != null || o.sim_success != null) {
+        rendered = true;
+        var simRow = document.createElement("div");
+        simRow.className = "mt-2 flex items-center gap-2";
+        if (o.sim_success != null) {
+          var successBadge = document.createElement("span");
+          successBadge.className = "text-[10px] px-2 py-0.5 rounded " +
+            (o.sim_success ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300");
+          successBadge.textContent = o.sim_success ? "Sim: success" : "Sim: not achieved";
+          simRow.appendChild(successBadge);
+        }
+        if (o.sim_done) {
+          var doneBadge = document.createElement("span");
+          doneBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
+          doneBadge.textContent = "Episode done";
+          simRow.appendChild(doneBadge);
+        }
+        if (o.actions_executed != null) {
+          var countBadge = document.createElement("span");
+          countBadge.className = "text-[10px] text-gray-500";
+          countBadge.textContent = o.actions_executed + " step" + (o.actions_executed !== 1 ? "s" : "") + " executed";
+          simRow.appendChild(countBadge);
+        }
+        container.appendChild(simRow);
+      } else if (o.actions_executed != null) {
         rendered = true;
         var traj = document.createElement("p");
         traj.className = "text-xs text-gray-500 mt-1";
-        traj.textContent = "Actions executed: " + o.actions_executed + " steps";
+        traj.textContent = o.actions_executed + " step" + (o.actions_executed !== 1 ? "s" : "") + " executed";
         container.appendChild(traj);
-      }
-
-      var res = o.sim_result || o.result;
-      if (res) {
-        rendered = true;
-        var resRow = document.createElement("div");
-        resRow.className = "mt-2 flex items-center gap-2";
-        var resLabel = document.createElement("span");
-        resLabel.className = "text-[11px] text-gray-500";
-        resLabel.textContent = "Sim result:";
-        resRow.appendChild(resLabel);
-        var resVal = document.createElement("span");
-        resVal.className = "text-xs text-gray-200";
-        resVal.textContent = typeof res === "string" ? res : JSON.stringify(res);
-        resRow.appendChild(resVal);
-        container.appendChild(resRow);
       }
 
       if (!rendered) {

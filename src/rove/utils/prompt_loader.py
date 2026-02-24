@@ -103,9 +103,37 @@ class PromptManager:
             stage_lines.append(f"Action type: {action.get('action_type', 'N/A')}")
             stage_lines.append(f"Num steps: {action.get('num_steps', 'N/A')}")
             stage_lines.append(f"Confidence: {action.get('confidence', 'N/A')}")
-            stage_lines.append(
-                "Assess: Were the predicted actions reasonable for executing the plan?"
-            )
+
+            # Include trajectory vectors for plausibility analysis
+            actions = action.get("actions", [])
+            if actions and isinstance(actions[0], list):
+                dof_labels = ["dx", "dy", "dz", "rx", "ry", "rz", "grip"]
+                num_dof = len(actions[0])
+                header = ", ".join(
+                    dof_labels[i] if i < len(dof_labels) else f"d{i}" for i in range(num_dof)
+                )
+                stage_lines.append(f"Trajectory ({num_dof}-DOF: {header}):")
+                for i, step in enumerate(actions):
+                    vals = ", ".join(f"{v:+.4f}" for v in step)
+                    stage_lines.append(f"  step {i + 1}: [{vals}]")
+                if action.get("actions_truncated"):
+                    stage_lines.append(f"  ... (truncated, {action['num_steps']} total)")
+
+                stage_lines.append("")
+                stage_lines.append(
+                    "Assess the trajectory plausibility:\n"
+                    "- Are magnitudes physically reasonable for end-effector deltas"
+                    " (typically ±0.05m per step)?\n"
+                    "- Is the trajectory direction consistent with the plan"
+                    " (e.g., 'move left' → negative dx)?\n"
+                    "- Does the gripper open/close at appropriate steps"
+                    " (grip ≈ 1.0 = open, ≈ 0.0 = closed)?\n"
+                    "- Is the number of steps reasonable for the task complexity?"
+                )
+            else:
+                stage_lines.append(
+                    "Assess: Were the predicted actions reasonable for executing the plan?"
+                )
             stage_lines.append("")
 
         if not completed_stages:

@@ -245,17 +245,11 @@ class EvaluationPipeline:
 
                 latency = (time.monotonic() - t0) * 1000
 
-                act_output: dict[str, Any] = {
-                    "action_type": action_pred.action_type,
-                    "num_steps": action_pred.num_steps,
-                    "confidence": action_pred.confidence,
-                    "sim_done": last_obs.done if last_obs else False,
-                    "sim_success": last_obs.success if last_obs else False,
-                }
+                act_output: dict[str, Any] = action_pred.model_dump()
+                act_output["sim_done"] = last_obs.done if last_obs else False
+                act_output["sim_success"] = last_obs.success if last_obs else False
                 if action_pred.action_type == "trajectory":
                     act_output["actions_executed"] = len(action_pred.actions)
-                elif action_pred.action_type == "tool_calls":
-                    act_output["tool_calls"] = action_pred.tool_calls
 
                 yield PipelineStageResult(
                     stage="act",
