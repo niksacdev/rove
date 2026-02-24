@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
-from rove.models import PipelineStage, StageStatus
+from rove.models import ExampleData, PipelineStage, StageStatus
 from rove.models.config import get_strategies, load_config
 from rove.orchestrator.pipeline import EvaluationPipeline
 from rove.orchestrator.run_manager import RunManager
@@ -40,8 +40,8 @@ _eval_queues: dict[str, asyncio.Queue] = {}
 _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
 
 
-def _load_ground_truth(example_filename: str) -> dict | None:
-    """Load ground truth eval_qa from manifest.json for a given example filename."""
+def _load_example_data(example_filename: str) -> ExampleData | None:
+    """Load example data from manifest.json into an ExampleData container."""
     manifest_path = _data_dir / "manifest.json"
     if not manifest_path.exists() or not example_filename:
         return None
@@ -49,9 +49,23 @@ def _load_ground_truth(example_filename: str) -> dict | None:
         manifest = json.loads(manifest_path.read_text())
         for entry in manifest:
             if entry.get("filename") == example_filename:
-                return entry.get("eval_qa")
+                # Ground truth goes in the dedicated field; everything else in extras
+                extras = {}
+                for k in (
+                    "proprioception",
+                    "ground_truth_action",
+                    "robot",
+                    "action_dim",
+                    "state_dim",
+                ):
+                    if k in entry:
+                        extras[k] = entry[k]
+                return ExampleData(
+                    ground_truth=entry.get("eval_qa"),
+                    extras=extras,
+                )
     except Exception:
-        logger.warning(f"Failed to load ground truth for {example_filename}")
+        logger.warning(f"Failed to load example data for {example_filename}")
     return None
 
 
@@ -60,7 +74,7 @@ async def _run_multi_strategy(
     task: str,
     image_base64: str,
     strategy_ids: list[str],
-    ground_truth: dict | None = None,
+    example: ExampleData | None = None,
 ):
     """Background task that runs multiple strategies concurrently via RunManager."""
     queue = _eval_queues[eval_id]
@@ -81,7 +95,11 @@ async def _run_multi_strategy(
             await queue.put({"event": event_type, "data": data})
 
         results = await run_manager.run_strategies(
-            strategies, task, image_base64, on_event, ground_truth=ground_truth
+            strategies,
+            task,
+            image_base64,
+            on_event,
+            example=example,
         )
 
         complete_data = {
@@ -111,7 +129,7 @@ async def _run_evaluation(
     act_model_id: str,
     verify_model_id: str,
     sim_id: str,
-    ground_truth: dict | None = None,
+    example: ExampleData | None = None,
 ):
     """Background task that runs a single pipeline and pushes events to the SSE queue."""
     queue = _eval_queues[eval_id]
@@ -132,7 +150,10 @@ async def _run_evaluation(
         stages: list[dict] = []
 
         async for stage_result in pipeline.run_trial(
-            task, image_base64, eval_id, ground_truth=ground_truth
+            task,
+            image_base64,
+            eval_id,
+            example=example,
         ):
             stage_dict = stage_result.model_dump()
             if stage_result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
@@ -197,8 +218,8 @@ async def create_evaluation(
     image_bytes = await image.read()
     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Load ground truth from manifest if example_filename provided
-    ground_truth = _load_ground_truth(example_filename) if example_filename else None
+    # Load example data (ground truth, proprioception, etc.) from manifest
+    example = _load_example_data(example_filename) if example_filename else None
 
     _eval_queues[eval_id] = asyncio.Queue()
     _evaluations[eval_id] = {"eval_id": eval_id, "status": "running"}
@@ -207,7 +228,7 @@ async def create_evaluation(
     if strategy_ids:
         ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
         bg = asyncio.create_task(
-            _run_multi_strategy(eval_id, task, image_base64, ids, ground_truth=ground_truth)
+            _run_multi_strategy(eval_id, task, image_base64, ids, example=example)
         )
         _background_tasks.add(bg)
         bg.add_done_callback(_background_tasks.discard)
@@ -224,7 +245,7 @@ async def create_evaluation(
             act_model_id,
             verify_model_id,
             sim_id,
-            ground_truth=ground_truth,
+            example=example,
         )
     )
     _background_tasks.add(bg)

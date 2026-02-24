@@ -119,6 +119,26 @@ endpoints:
       Flow matching with SmolVLM backbone. Ideal for edge deployment.
       Requires proprioception (current joint state) as input.
 
+  pi05-libero:
+    type: vla
+    adapter: local_lerobot
+    display_name: "pi0.5 (LIBERO)"
+    deployment_type: local
+    config:
+      model_id: "lerobot/pi05_libero_finetuned"
+      device: mps
+      action_space: ee_delta
+      chunk_size: 50
+      requires_proprio: true
+    cost: { type: fixed, per_call: 0.00 }
+    max_concurrent: 1
+    availability:
+      huggingface: "lerobot/pi05_libero_finetuned"
+      lerobot: true
+    notes: >
+      Physical Intelligence pi0.5 fine-tuned on LIBERO. 97.5% avg success.
+      3B PaliGemma backbone, flow matching, 7-DOF output (includes gripper).
+
   # --- Mock VLA (Phase 1 testing) ---
   mock-vla:
     type: vla
@@ -259,24 +279,24 @@ strategies:
 
   # --- Scene + Action (perceive → act → verify) ---
   scene_action:
-    display_name: "Scene + Action"
-    description: "Qwen3-VL 8B perceives, SmolVLA executes, Qwen verifies — no planning"
+    display_name: "Scene + Action (pi0.5)"
+    description: "Qwen3-VL 8B perceives, pi0.5 executes 7-DOF trajectory, Qwen verifies"
     perceive: qwen3-vl-8b
-    act: smolvla-450m
+    act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
-    tags: [scene, vla, local, lerobot]
+    tags: [scene, vla, local, lerobot, pi05]
 
   # --- Scene + Plan + Action (perceive → plan → act → verify) ---
   scene_plan_action:
-    display_name: "Scene + Plan + Action"
-    description: "Qwen3-VL 8B perceives and plans, SmolVLA executes, Qwen verifies"
+    display_name: "Scene + Plan + Action (pi0.5)"
+    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    act: smolvla-450m
+    act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
-    tags: [full, local, vla, lerobot]
+    tags: [full, local, vla, lerobot, pi05]
 
   # --- Full Pipeline (perceive → plan → act → verify) ---
   full_local:

@@ -7,7 +7,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from rove.adapters.registry import AdapterRegistry
-from rove.models import StageStatus, Strategy
+from rove.models import ExampleData, StageStatus, Strategy
 from rove.orchestrator.pipeline import EvaluationPipeline
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class RunManager:
         task: str,
         image_base64: str,
         on_event: Callable[[str, str, dict], Awaitable[None]],
-        ground_truth: dict | None = None,
+        example: ExampleData | None = None,
     ) -> list[dict]:
         """Run all strategies concurrently. on_event(strategy_id, event_type, data)."""
         results: list[dict] = []
@@ -34,9 +34,7 @@ class RunManager:
         async with asyncio.TaskGroup() as tg:
             for strategy in strategies:
                 tg.create_task(
-                    self._run_strategy(
-                        strategy, task, image_base64, results, on_event, ground_truth
-                    )
+                    self._run_strategy(strategy, task, image_base64, results, on_event, example)
                 )
 
         return results
@@ -48,7 +46,7 @@ class RunManager:
         image_base64: str,
         results: list[dict],
         on_event: Callable[[str, str, dict], Awaitable[None]],
-        ground_truth: dict | None = None,
+        example: ExampleData | None = None,
     ) -> None:
         await on_event(
             strategy.id,
@@ -72,7 +70,9 @@ class RunManager:
                 stages: list[dict] = []
 
                 async for stage_result in pipeline.run_trial(
-                    task, image_base64, ground_truth=ground_truth
+                    task,
+                    image_base64,
+                    example=example,
                 ):
                     stage_dict = stage_result.model_dump()
                     stage_dict["strategy_id"] = strategy.id

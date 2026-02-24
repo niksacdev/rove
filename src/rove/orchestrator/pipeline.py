@@ -17,6 +17,7 @@ from rove.adapters.protocols import (
 from rove.adapters.registry import AdapterRegistry
 from rove.models import (
     ActionPrediction,
+    ExampleData,
     PipelineContext,
     PipelineStageResult,
     SceneAnalysis,
@@ -128,14 +129,19 @@ class EvaluationPipeline:
         task: str,
         image_base64: str,
         eval_id: str | None = None,
-        ground_truth: dict | None = None,
+        example: ExampleData | None = None,
     ) -> AsyncGenerator[PipelineStageResult, None]:
         """Run a trial, yielding stage results as they complete.
 
         Stages with None adapters are skipped. verify is always required.
         """
         eval_id = eval_id or str(uuid.uuid4())
+        ground_truth = example.ground_truth if example else None
         ctx = PipelineContext(task=task, image_base64=image_base64, ground_truth=ground_truth)
+
+        # Seed proprioception from example data (dataset mode, no sim)
+        if example and example.extras.get("proprioception"):
+            ctx.proprioception = example.extras["proprioception"]
         scene = None
         plan = None
         reset_obs = None

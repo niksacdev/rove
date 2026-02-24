@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __all__ = [
     "ActionPrediction",
+    "ExampleData",
     "GraspPlan",
     "GroundTruthCheck",
     "PipelineContext",
@@ -60,6 +61,17 @@ class TaskPlan(BaseModel):
 
 
 GraspPlan = TaskPlan  # backward compat alias
+
+
+class ExampleData(BaseModel):
+    """Stable container for all data provided by a dataset example.
+
+    Carries ground truth QA, sensor data, and any future example-level
+    metadata through the pipeline without polluting function signatures.
+    """
+
+    ground_truth: dict | None = None  # eval_qa from manifest
+    extras: dict = Field(default_factory=dict)  # proprioception, robot, etc.
 
 
 class ActionPrediction(BaseModel):
@@ -150,10 +162,18 @@ class PipelineContext(BaseModel):
             action_d = self.action.model_dump(
                 include={"action_type", "num_steps", "confidence", "actions"}
             )
-            # Cap trajectory to first 10 steps to keep prompt compact
-            if action_d.get("actions") and len(action_d["actions"]) > 10:
-                action_d["actions"] = action_d["actions"][:10]
+            actions = action_d.get("actions", [])
+            if actions and len(actions[0]) >= 7:
+                # Summarize gripper events for the verifier
+                action_d["gripper_events"] = _extract_gripper_events(actions)
+            # Cap trajectory to first/last steps to keep prompt compact
+            if actions and len(actions) > 10:
+                action_d["actions"] = actions[:5] + actions[-5:]
                 action_d["actions_truncated"] = True
+                action_d["actions_note"] = (
+                    f"Showing steps 1-5 and {len(actions) - 4}-{len(actions)} "
+                    f"of {len(actions)} total. See gripper_events for full summary."
+                )
             d["action"] = action_d
         if self.proprioception:
             d["proprioception"] = self.proprioception
@@ -164,6 +184,29 @@ class PipelineContext(BaseModel):
         if self.ground_truth:
             d["ground_truth"] = self.ground_truth
         return d
+
+
+def _extract_gripper_events(actions: list[list[float]]) -> list[dict]:
+    """Extract gripper open/close transitions from a trajectory.
+
+    Scans the last DOF (grip) for transitions between open (>0.5) and
+    closed (<0.5) states, returning a compact event list for the verifier.
+    """
+    events: list[dict] = []
+    prev_open = True  # assume starts open
+    for i, a in enumerate(actions):
+        grip = a[-1]  # last DOF = gripper
+        is_open = grip > 0.0
+        if is_open != prev_open:
+            events.append(
+                {
+                    "step": i + 1,
+                    "action": "open" if is_open else "close",
+                    "grip_value": round(grip, 3),
+                }
+            )
+            prev_open = is_open
+    return events
 
 
 class Strategy(BaseModel):
