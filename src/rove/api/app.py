@@ -40,11 +40,27 @@ _eval_queues: dict[str, asyncio.Queue] = {}
 _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
 
 
+def _load_ground_truth(example_filename: str) -> dict | None:
+    """Load ground truth eval_qa from manifest.json for a given example filename."""
+    manifest_path = _data_dir / "manifest.json"
+    if not manifest_path.exists() or not example_filename:
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text())
+        for entry in manifest:
+            if entry.get("filename") == example_filename:
+                return entry.get("eval_qa")
+    except Exception:
+        logger.warning(f"Failed to load ground truth for {example_filename}")
+    return None
+
+
 async def _run_multi_strategy(
     eval_id: str,
     task: str,
     image_base64: str,
     strategy_ids: list[str],
+    ground_truth: dict | None = None,
 ):
     """Background task that runs multiple strategies concurrently via RunManager."""
     queue = _eval_queues[eval_id]
@@ -64,7 +80,9 @@ async def _run_multi_strategy(
         async def on_event(strategy_id: str, event_type: str, data: dict) -> None:
             await queue.put({"event": event_type, "data": data})
 
-        results = await run_manager.run_strategies(strategies, task, image_base64, on_event)
+        results = await run_manager.run_strategies(
+            strategies, task, image_base64, on_event, ground_truth=ground_truth
+        )
 
         complete_data = {
             "eval_id": eval_id,
@@ -93,6 +111,7 @@ async def _run_evaluation(
     act_model_id: str,
     verify_model_id: str,
     sim_id: str,
+    ground_truth: dict | None = None,
 ):
     """Background task that runs a single pipeline and pushes events to the SSE queue."""
     queue = _eval_queues[eval_id]
@@ -112,7 +131,9 @@ async def _run_evaluation(
         )
         stages: list[dict] = []
 
-        async for stage_result in pipeline.run_trial(task, image_base64, eval_id):
+        async for stage_result in pipeline.run_trial(
+            task, image_base64, eval_id, ground_truth=ground_truth
+        ):
             stage_dict = stage_result.model_dump()
             if stage_result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
                 stages.append(stage_dict)
@@ -170,10 +191,14 @@ async def create_evaluation(
     act_model_id: str = Form(default="mock-vla"),
     verify_model_id: str = Form(default="mock-vlm"),
     sim_id: str = Form(default="mock-sim"),
+    example_filename: str = Form(default=""),
 ):
     eval_id = str(uuid.uuid4())
     image_bytes = await image.read()
     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    # Load ground truth from manifest if example_filename provided
+    ground_truth = _load_ground_truth(example_filename) if example_filename else None
 
     _eval_queues[eval_id] = asyncio.Queue()
     _evaluations[eval_id] = {"eval_id": eval_id, "status": "running"}
@@ -181,7 +206,9 @@ async def create_evaluation(
     # If strategy_ids provided, use multi-strategy RunManager path
     if strategy_ids:
         ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
-        bg = asyncio.create_task(_run_multi_strategy(eval_id, task, image_base64, ids))
+        bg = asyncio.create_task(
+            _run_multi_strategy(eval_id, task, image_base64, ids, ground_truth=ground_truth)
+        )
         _background_tasks.add(bg)
         bg.add_done_callback(_background_tasks.discard)
         return {"eval_id": eval_id, "status": "running", "strategies": ids}
@@ -197,6 +224,7 @@ async def create_evaluation(
             act_model_id,
             verify_model_id,
             sim_id,
+            ground_truth=ground_truth,
         )
     )
     _background_tasks.add(bg)

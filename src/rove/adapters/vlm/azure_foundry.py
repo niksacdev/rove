@@ -8,6 +8,7 @@ import os
 import re
 import time
 
+from rove.adapters.vlm.verify_prompts import build_verify_prompt, build_verify_system_message
 from rove.models import SceneAnalysis, TaskPlan, VerificationResult
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,8 @@ class AzureFoundryVLMAdapter:
 
         self._endpoint = os.environ.get(endpoint_env, "")
         self._api_key = os.environ.get(key_env, "")
+        self._max_tokens = cfg.get("max_tokens", 1024)
+        self._temperature = cfg.get("temperature", 0.1)
         self._total_tokens = 0
         self._client = None
 
@@ -140,8 +143,8 @@ class AzureFoundryVLMAdapter:
                     ]
                 ),
             ],
-            max_tokens=1024,
-            temperature=0.1,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
         )
         latency = (time.monotonic() - t0) * 1000
         raw = response.choices[0].message.content
@@ -193,8 +196,8 @@ class AzureFoundryVLMAdapter:
                     ]
                 ),
             ],
-            max_tokens=512,
-            temperature=0.1,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
         )
         raw = response.choices[0].message.content
         if response.usage:
@@ -213,39 +216,13 @@ class AzureFoundryVLMAdapter:
     ) -> VerificationResult:
         from azure.ai.inference.models import SystemMessage, UserMessage
 
-        # Build context-aware prompt
-        context_info = ""
-        if context:
-            plan = context.get("plan", {})
-            if plan:
-                target = plan.get("target_object", "")
-                strategy = plan.get("strategy", "")
-                if target:
-                    context_info += f"Target object: {target}\n"
-                if strategy:
-                    context_info += f"Planned strategy: {strategy}\n"
-
-        prompt = (
-            "You are the VERIFY stage of a robotics evaluation pipeline. "
-            "Your job is to compare before/after images to determine if the task succeeded.\n\n"
-            f"Task: {task}\n"
-            f"{context_info}\n"
-            "You are given two images: BEFORE (first) and AFTER (second) executing the task.\n"
-            "Determine if the task was completed successfully.\n\n"
-            "Return a JSON object with:\n"
-            '- "success": boolean\n'
-            '- "confidence": float 0-1\n'
-            '- "reasoning": string explaining your assessment\n\n'
-            "Return ONLY valid JSON, no markdown."
-        )
+        prompt = build_verify_prompt(task, context or {})
 
         client = self._get_client()
         response = client.complete(
             model=self._model_name or None,
             messages=[
-                SystemMessage(
-                    content="You are a precise robotics verification system. Always respond with valid JSON only."
-                ),
+                SystemMessage(content=build_verify_system_message()),
                 UserMessage(
                     content=[
                         {"type": "text", "text": prompt},
@@ -256,8 +233,8 @@ class AzureFoundryVLMAdapter:
                     ]
                 ),
             ],
-            max_tokens=512,
-            temperature=0.1,
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
         )
         raw = response.choices[0].message.content
         if response.usage:

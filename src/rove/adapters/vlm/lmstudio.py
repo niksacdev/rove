@@ -9,6 +9,7 @@ import re
 
 import httpx
 
+from rove.adapters.vlm.verify_prompts import build_verify_prompt
 from rove.models import SceneAnalysis, TaskPlan, VerificationResult
 
 logger = logging.getLogger(__name__)
@@ -192,38 +193,11 @@ class LMStudioVLMAdapter:
         task: str,
         context: dict | None = None,
     ) -> VerificationResult:
-        context_info = ""
-        if context:
-            plan = context.get("plan", {})
-            if plan:
-                target = plan.get("target_object", "")
-                strategy = plan.get("strategy", "")
-                if target:
-                    context_info += f"Target object: {target}\n"
-                if strategy:
-                    context_info += f"Planned strategy: {strategy}\n"
-
-        prompt = (
-            "You are the VERIFY stage of a robotics evaluation pipeline. "
-            "Your job is to compare before/after images to determine if the task succeeded.\n\n"
-            f"Task: {task}\n"
-            f"{context_info}\n"
-            "You are given two images: BEFORE (first) and AFTER (second) executing the task.\n"
-            "Determine if the task was completed successfully.\n\n"
-            "Return a JSON object with:\n"
-            '- "success": boolean\n'
-            '- "confidence": float 0-1\n'
-            '- "reasoning": string explaining your assessment\n\n'
-            "Return ONLY valid JSON, no markdown."
-        )
+        prompt = build_verify_prompt(task, context or {})
         raw = await self._chat(prompt, [before_image_base64, after_image_base64])
         data = _extract_json(raw)
-        return VerificationResult(
-            success=data.get("success", False),
-            confidence=float(data.get("confidence", 0.5)),
-            reasoning=data.get("reasoning", ""),
-            raw_response=raw,
-        )
+        data["raw_response"] = raw
+        return VerificationResult.model_validate(data)
 
     async def health_check(self) -> bool:
         """Check if LM Studio is reachable."""

@@ -90,6 +90,84 @@ class TestPipelineDataFlow:
             assert stage_events[1].status == StageStatus.COMPLETED
 
 
+class TestCompletedStagesAndGroundTruth:
+    @pytest.mark.asyncio
+    async def test_completed_stages_tracked(self):
+        """Verify that completed_stages accumulates correctly through the pipeline."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+        )
+        verify_output = None
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status == StageStatus.COMPLETED and result.stage == "verify":
+                verify_output = result.output
+
+        assert verify_output is not None
+        assert verify_output["completed_stages"] == ["perceive", "plan", "act"]
+        assert len(verify_output["stage_checks"]) == 3
+        for check in verify_output["stage_checks"]:
+            assert check["stage"] in ["perceive", "plan", "act"]
+
+    @pytest.mark.asyncio
+    async def test_perceive_only_tracks_single_stage(self):
+        """With only perceive, completed_stages should be ['perceive']."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+        )
+        verify_output = None
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status == StageStatus.COMPLETED and result.stage == "verify":
+                verify_output = result.output
+
+        assert verify_output is not None
+        assert verify_output["completed_stages"] == ["perceive"]
+        assert len(verify_output["stage_checks"]) == 1
+        assert verify_output["stage_checks"][0]["stage"] == "perceive"
+
+    @pytest.mark.asyncio
+    async def test_ground_truth_passed_to_verify(self):
+        """Ground truth data flows through to verify output."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+        )
+        gt = {
+            "question": "Is the bottle reachable?",
+            "choices": ["Yes", "No"],
+            "correct_answer_index": 0,
+            "correct_answer_text": "Yes",
+        }
+        verify_output = None
+        async for result in pipeline.run_trial("pick bottle", "fake_img", ground_truth=gt):
+            if result.status == StageStatus.COMPLETED and result.stage == "verify":
+                verify_output = result.output
+
+        assert verify_output is not None
+        assert verify_output["ground_truth"] is not None
+        assert verify_output["ground_truth"]["question"] == "Is the bottle reachable?"
+        assert verify_output["ground_truth"]["correct_answer"] == "Yes"
+
+    @pytest.mark.asyncio
+    async def test_no_ground_truth_when_not_provided(self):
+        """Without ground truth, verify output has no ground_truth field."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+        )
+        verify_output = None
+        async for result in pipeline.run_trial("pick bottle", "fake_img"):
+            if result.status == StageStatus.COMPLETED and result.stage == "verify":
+                verify_output = result.output
+
+        assert verify_output is not None
+        assert verify_output["ground_truth"] is None
+
+
 class TestPartialPipeline:
     """Test optional pipeline stages — skipping perceive, plan, or act."""
 
