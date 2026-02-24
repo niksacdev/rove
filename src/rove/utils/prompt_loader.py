@@ -103,13 +103,84 @@ class PromptManager:
             stage_lines.append(f"Action type: {action.get('action_type', 'N/A')}")
             stage_lines.append(f"Num steps: {action.get('num_steps', 'N/A')}")
             stage_lines.append(f"Confidence: {action.get('confidence', 'N/A')}")
-            stage_lines.append(
-                "Assess: Were the predicted actions reasonable for executing the plan?"
-            )
+
+            # Include trajectory summary for plausibility analysis
+            actions = action.get("actions", [])
+            if actions and isinstance(actions[0], list):
+                dof_labels = ["dx", "dy", "dz", "rx", "ry", "rz", "grip"]
+                num_dof = len(actions[0])
+                header = ", ".join(
+                    dof_labels[i] if i < len(dof_labels) else f"d{i}" for i in range(num_dof)
+                )
+                total_steps = action.get("num_steps", len(actions))
+
+                # Gripper events are the primary evidence for manipulation tasks
+                gripper_events = action.get("gripper_events", [])
+                if gripper_events:
+                    stage_lines.append(f"Trajectory: {total_steps} steps, {num_dof}-DOF ({header})")
+                    stage_lines.append("")
+                    stage_lines.append("Gripper events in trajectory:")
+                    for evt in gripper_events:
+                        stage_lines.append(
+                            f"  Step {evt['step']}/{total_steps}: gripper {evt['action']}"
+                            f" (value={evt['grip_value']:.3f})"
+                        )
+                    n_close = sum(1 for e in gripper_events if e["action"] == "close")
+                    n_open = sum(1 for e in gripper_events if e["action"] == "open")
+                    stage_lines.append(f"  Summary: {n_close} grasp(es), {n_open} release(s)")
+                else:
+                    stage_lines.append(
+                        f"Trajectory: {total_steps} steps, {num_dof}-DOF"
+                        f" ({header}). No gripper events detected."
+                    )
+
+                # Show sample steps for reference
+                stage_lines.append("")
+                stage_lines.append("Sample trajectory steps:")
+                for i, step in enumerate(actions):
+                    if action.get("actions_truncated") and i >= 5:
+                        step_num = total_steps - (len(actions) - 1 - i)
+                    else:
+                        step_num = i + 1
+                    vals = ", ".join(f"{v:+.4f}" for v in step)
+                    stage_lines.append(f"  step {step_num}: [{vals}]")
+                if action.get("actions_truncated"):
+                    stage_lines.append(f"  (first 5 + last 5 of {total_steps})")
+
+                stage_lines.append("")
+                stage_lines.append(
+                    "IMPORTANT: Without before/after images from a simulator,"
+                    " you CANNOT determine whether the trajectory reached the"
+                    " correct object or destination. Evaluate what IS observable:\n"
+                    "- Does the gripper open/close pattern match the task"
+                    " (e.g., pick-and-place needs close→open)?\n"
+                    "- Is the number of steps reasonable?\n"
+                    "- Are the delta magnitudes physically plausible?\n"
+                    "- Does the trajectory show distinct phases (approach,"
+                    " grasp, transport, place)?\n"
+                    "Do NOT fail the act stage solely because you cannot verify"
+                    " the exact target position from delta values alone."
+                )
+            else:
+                stage_lines.append(
+                    "Assess: Were the predicted actions reasonable for executing the plan?"
+                )
             stage_lines.append("")
 
         if not completed_stages:
             stage_lines.append("No pipeline stages completed before verification.")
+            stage_lines.append("")
+
+        # Scope instruction: tell verifier what stages were/weren't in the pipeline
+        if completed_stages and "act" not in completed_stages:
+            stage_lines.append("--- EVALUATION SCOPE ---")
+            stage_lines.append(
+                "This pipeline did NOT include an act (execution) stage."
+                " The robot was not expected to physically perform the task."
+                " Evaluate ONLY the stages listed above (perceive and/or plan)."
+                " Do NOT penalize the pipeline for missing execution — that was"
+                " not part of this evaluation configuration."
+            )
             stage_lines.append("")
 
         # Ground truth QA section

@@ -7,7 +7,7 @@ import pytest
 from rove.adapters.mock_sim import MockSimAdapter
 from rove.adapters.mock_vla import MockVLAAdapter
 from rove.adapters.mock_vlm import MockVLMAdapter
-from rove.models import StageStatus
+from rove.models import ExampleData, StageStatus
 from rove.orchestrator.pipeline import EvaluationPipeline
 
 
@@ -143,7 +143,11 @@ class TestCompletedStagesAndGroundTruth:
             "correct_answer_text": "Yes",
         }
         verify_output = None
-        async for result in pipeline.run_trial("pick bottle", "fake_img", ground_truth=gt):
+        async for result in pipeline.run_trial(
+            "pick bottle",
+            "fake_img",
+            example=ExampleData(ground_truth=gt),
+        ):
             if result.status == StageStatus.COMPLETED and result.stage == "verify":
                 verify_output = result.output
 

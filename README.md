@@ -81,20 +81,33 @@ results = await rove.evaluate(
 ```yaml
 # Endpoints — one model per entry
 endpoints:
+  # Cloud VLMs
+  gpt-4o:
+    type: vlm
+    adapter: azure_openai
+    config: { deployment_name: gpt-4o, api_version: "2025-04-01-preview" }
+
+  # Local VLMs (via LM Studio, Ollama, etc.)
   qwen3-vl-8b:
     type: vlm
-    adapter: lmstudio
-    config:
-      endpoint: "http://127.0.0.1:1234"
-      model_id: "qwen3-vl-8b"
+    provider: lmstudio
+    config: { model_id: "qwen/qwen3-vl-8b", endpoint: "http://127.0.0.1:1234" }
 
+  # Local VLAs (via LeRobot)
+  pi05-libero:
+    type: vla
+    adapter: local_lerobot
+    config: { model_id: "lerobot/pi05_libero_finetuned", device: mps }
+
+  smolvla-450m:
+    type: vla
+    adapter: local_lerobot
+    config: { model_id: "lerobot/smolvla_base", device: mps }
+
+  # Mock adapters for testing
   mock-vlm:
     type: vlm
     adapter: mock_vlm
-
-  mock-vla:
-    type: vla
-    adapter: mock_vla
 
 # Strategies — named pipeline configurations
 strategies:
@@ -113,26 +126,26 @@ strategies:
     verify: qwen3-vl-8b
     sim: mock-sim
 
-  full_local:
-    display_name: "Full Pipeline (Local)"
+  scene_plan_action:
+    display_name: "Scene + Plan + Action (pi0.5)"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    act: mock-vla
+    act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
 ```
 
-Adding a new model = implement one Protocol + add a YAML entry. No changes to orchestrator, API, or dashboard.
+Adding a new endpoint = implement one Protocol + add a YAML entry. No changes to orchestrator, API, or dashboard.
 
 ---
 
-## Adding a New Model
+## Adding a New Endpoint
 
 **1. Implement the Protocol:**
 
 ```python
-# src/rove/adapters/vlm/my_model.py
-class MyModelAdapter:
+# src/rove/adapters/my_adapter.py
+class MyVLMAdapter:
     async def analyze_scene(self, image_base64, task, **kwargs): ...
     async def plan_task(self, image_base64, task, scene_analysis, **kwargs): ...
     async def verify_success(self, initial_image, final_image, task, **kwargs): ...
@@ -145,8 +158,9 @@ class MyModelAdapter:
 endpoints:
   my-model-7b:
     type: vlm
-    adapter: my_model
+    adapter: my_adapter
     config:
+      model_id: "org/my-model-7b"
       endpoint: http://localhost:8080
 ```
 

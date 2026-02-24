@@ -28,6 +28,7 @@ _VLM_ADAPTERS = {
 
 _VLA_ADAPTERS = {
     "mock_vla": "rove.adapters.mock_vla:MockVLAAdapter",
+    "local_lerobot": "rove.adapters.local_lerobot:LeRobotVLAAdapter",
 }
 
 _AGENT_ADAPTERS = {

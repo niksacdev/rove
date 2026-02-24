@@ -53,6 +53,40 @@ class TestRenderVerify:
         assert "top-down approach" in prompt
         assert "trajectory" in prompt
 
+    def test_act_trajectory_in_prompt(self):
+        pm = get_prompt_manager()
+        ctx = {
+            "task": "pick bolt",
+            "completed_stages": ["perceive", "plan", "act"],
+            "scene": {
+                "objects": [{"name": "bolt"}],
+                "spatial_relations": [],
+                "task_relevant": ["bolt"],
+            },
+            "plan": {
+                "strategy": "top-down approach",
+                "target_object": "bolt",
+                "steps": ["locate", "grasp", "lift"],
+                "confidence": 0.9,
+            },
+            "action": {
+                "action_type": "trajectory",
+                "num_steps": 2,
+                "confidence": 0.85,
+                "actions": [
+                    [0.01, -0.02, -0.03, 0.0, 0.0, 0.0, 1.0],
+                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                ],
+            },
+        }
+        prompt = pm.render_verify("pick bolt", ctx)
+        assert "7-DOF" in prompt
+        assert "dx, dy, dz, rx, ry, rz, grip" in prompt
+        assert "step 1:" in prompt
+        assert "step 2:" in prompt
+        assert "+0.0100" in prompt
+        assert "gripper open/close" in prompt
+
     def test_ground_truth_in_prompt(self):
         pm = get_prompt_manager()
         ctx = {

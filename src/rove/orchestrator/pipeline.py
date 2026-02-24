@@ -17,6 +17,7 @@ from rove.adapters.protocols import (
 from rove.adapters.registry import AdapterRegistry
 from rove.models import (
     ActionPrediction,
+    ExampleData,
     PipelineContext,
     PipelineStageResult,
     SceneAnalysis,
@@ -128,14 +129,19 @@ class EvaluationPipeline:
         task: str,
         image_base64: str,
         eval_id: str | None = None,
-        ground_truth: dict | None = None,
+        example: ExampleData | None = None,
     ) -> AsyncGenerator[PipelineStageResult, None]:
         """Run a trial, yielding stage results as they complete.
 
         Stages with None adapters are skipped. verify is always required.
         """
         eval_id = eval_id or str(uuid.uuid4())
+        ground_truth = example.ground_truth if example else None
         ctx = PipelineContext(task=task, image_base64=image_base64, ground_truth=ground_truth)
+
+        # Seed proprioception from example data (dataset mode, no sim)
+        if example and example.extras.get("proprioception"):
+            ctx.proprioception = example.extras["proprioception"]
         scene = None
         plan = None
         reset_obs = None
@@ -245,17 +251,11 @@ class EvaluationPipeline:
 
                 latency = (time.monotonic() - t0) * 1000
 
-                act_output: dict[str, Any] = {
-                    "action_type": action_pred.action_type,
-                    "num_steps": action_pred.num_steps,
-                    "confidence": action_pred.confidence,
-                    "sim_done": last_obs.done if last_obs else False,
-                    "sim_success": last_obs.success if last_obs else False,
-                }
+                act_output: dict[str, Any] = action_pred.model_dump()
+                act_output["sim_done"] = last_obs.done if last_obs else False
+                act_output["sim_success"] = last_obs.success if last_obs else False
                 if action_pred.action_type == "trajectory":
                     act_output["actions_executed"] = len(action_pred.actions)
-                elif action_pred.action_type == "tool_calls":
-                    act_output["tool_calls"] = action_pred.tool_calls
 
                 yield PipelineStageResult(
                     stage="act",
