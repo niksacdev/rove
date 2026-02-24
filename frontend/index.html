@@ -633,7 +633,7 @@
             switchView("home");
           } else if (text === "strategies") {
             switchView("strategies");
-          } else if (text === "models") {
+          } else if (text === "endpoints") {
             switchView("models");
           }
           updateTopNav(text);
@@ -682,7 +682,7 @@
       });
 
       // Update top nav active state
-      var navMap = { home: "evaluate", strategies: "strategies", models: "models", examples: "evaluate", settings: "evaluate" };
+      var navMap = { home: "evaluate", strategies: "strategies", models: "endpoints", examples: "evaluate", settings: "evaluate" };
       updateTopNav(navMap[view] || "evaluate");
 
       // Update history active state
