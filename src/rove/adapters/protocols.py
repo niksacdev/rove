@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["AgentAdapter", "PolicyAdapter", "SimAdapter", "StageAdapter", "VLMAdapter"]
+__all__ = ["AgentAdapter", "SimAdapter", "StageAdapter", "VLAAdapter", "VLMAdapter"]
 
 from typing import Protocol, runtime_checkable
 
@@ -46,8 +46,8 @@ class VLMAdapter(Protocol):
 
 
 @runtime_checkable
-class PolicyAdapter(Protocol):
-    """Protocol for robot policy (VLA) adapters."""
+class VLAAdapter(Protocol):
+    """Protocol for Vision-Language-Action (VLA) model adapters."""
 
     model_id: str
     display_name: str
@@ -105,4 +105,4 @@ class SimAdapter(Protocol):
         ...
 
 
-StageAdapter = VLMAdapter | PolicyAdapter | AgentAdapter
+StageAdapter = VLMAdapter | VLAAdapter | AgentAdapter

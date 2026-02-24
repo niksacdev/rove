@@ -1,10 +1,10 @@
-"""Tests for rove.config — Pydantic-validated YAML loading and strategy resolution."""
+"""Tests for rove.models.config — Pydantic-validated YAML loading and strategy resolution."""
 
 from __future__ import annotations
 
 import pytest
 
-from rove.config import (
+from rove.models.config import (
     EndpointConfig,
     RoveConfig,
     find_model_config,

@@ -16,8 +16,8 @@ from fastapi.responses import FileResponse, HTMLResponse
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
-from rove.config import get_strategies, load_config
 from rove.models import PipelineStage, StageStatus
+from rove.models.config import get_strategies, load_config
 from rove.orchestrator.pipeline import EvaluationPipeline
 from rove.orchestrator.run_manager import RunManager
 

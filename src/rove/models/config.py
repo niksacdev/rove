@@ -26,7 +26,7 @@ import yaml
 from pydantic import BaseModel, model_validator
 
 if TYPE_CHECKING:
-    from rove.models import Strategy
+    from rove.models.core import Strategy
 
 
 # =============================================================================
@@ -43,7 +43,8 @@ class CostConfig(BaseModel):
 
 class EndpointConfig(BaseModel):
     type: str  # "vlm" | "vla" | "llm" | "grounding" | "agent" | "sim"
-    adapter: str
+    adapter: str | None = None
+    provider: str | None = None
     display_name: str = ""
     deployment_type: str = "local"
     endpoint: str | None = None
@@ -53,6 +54,12 @@ class EndpointConfig(BaseModel):
     max_concurrent: int | None = None
     availability: dict[str, Any] = {}
     notes: str = ""
+
+    @model_validator(mode="after")
+    def _require_adapter_or_provider(self) -> EndpointConfig:
+        if not self.adapter and not self.provider:
+            raise ValueError("EndpointConfig must have at least one of 'adapter' or 'provider'")
+        return self
 
 
 class StrategyConfig(BaseModel):
@@ -112,7 +119,7 @@ def _find_config_path() -> Path:
     search_paths = [
         Path.cwd() / "rove.yaml",
         Path.cwd() / "config" / "rove.yaml",
-        Path(__file__).parent.parent.parent / "rove.yaml",
+        Path(__file__).parent.parent.parent.parent / "rove.yaml",
     ]
     for p in search_paths:
         if p.exists():
@@ -201,7 +208,7 @@ def find_model_config(model_id: str) -> tuple[str, dict[str, Any]]:
 
 def get_strategies() -> dict[str, Strategy]:
     """Load all strategies from rove.yaml."""
-    from rove.models import Strategy
+    from rove.models.core import Strategy
 
     config = load_config()
     strategies: dict[str, Strategy] = {}

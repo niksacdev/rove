@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from rove.adapters.policy.mock import MockPolicyAdapter
-from rove.adapters.sim.mock import MockSimAdapter
-from rove.adapters.vlm.mock import MockVLMAdapter
+from rove.adapters.mock_sim import MockSimAdapter
+from rove.adapters.mock_vla import MockVLAAdapter
+from rove.adapters.mock_vlm import MockVLMAdapter
 from rove.models import StageStatus
 from rove.orchestrator.pipeline import EvaluationPipeline
 
@@ -16,7 +16,7 @@ def pipeline():
     return EvaluationPipeline(
         perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
         plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
-        act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
+        act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
         verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
         sim=MockSimAdapter(),
     )
@@ -74,7 +74,7 @@ class TestPipelineDataFlow:
         pipeline = EvaluationPipeline(
             perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
             plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
-            act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
             verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
             sim=MockSimAdapter(),
         )
@@ -97,7 +97,7 @@ class TestCompletedStagesAndGroundTruth:
         pipeline = EvaluationPipeline(
             perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
             plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
-            act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
             verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
             sim=MockSimAdapter(),
         )
@@ -193,7 +193,7 @@ class TestPartialPipeline:
         pipeline = EvaluationPipeline(
             perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
             plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
-            act_adapter=MockPolicyAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
             verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
             sim=MockSimAdapter(),
         )

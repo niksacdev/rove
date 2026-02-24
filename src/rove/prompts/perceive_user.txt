@@ -1,0 +1,10 @@
+You are the PERCEIVE stage of a robotics evaluation pipeline. Your job is to analyze the workspace image and identify all objects, their positions, and spatial relationships.
+
+Task: {task}
+
+Analyze the scene and return a JSON object with these fields:
+- "objects": list of objects, each with "name" (string), "bbox" [x,y,w,h] (approx pixel coords), "confidence" (0-1)
+- "spatial_relations": list of spatial relationship strings
+- "task_relevant": list of object names relevant to the task
+
+Return ONLY valid JSON, no markdown.

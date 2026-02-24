@@ -10,9 +10,9 @@ from typing import Any
 
 from rove.adapters.protocols import (
     AgentAdapter,
-    PolicyAdapter,
     SimAdapter,
     StageAdapter,
+    VLAAdapter,
 )
 from rove.adapters.registry import AdapterRegistry
 from rove.models import (
@@ -40,14 +40,14 @@ class EvaluationPipeline:
     """Runs the 4-stage pipeline: perceive → plan → act → verify.
 
     Each stage has its own adapter — they can be the same model or different models.
-    Supports VLM, VLA (Policy), and Agent adapters.
+    Supports VLM, VLA, and Agent adapters.
     """
 
     def __init__(
         self,
         perceive_adapter: StageAdapter | None = None,
         plan_adapter: StageAdapter | None = None,
-        act_adapter: PolicyAdapter | AgentAdapter | None = None,
+        act_adapter: VLAAdapter | AgentAdapter | None = None,
         verify_adapter: StageAdapter | None = None,
         sim: SimAdapter | None = None,
         registry: AdapterRegistry | None = None,
@@ -96,7 +96,7 @@ class EvaluationPipeline:
                 raise ValueError(f"Unknown stage: {stage}")
             return model_cls.model_validate(raw)
 
-        # Type-specific calls for VLM/Policy adapters
+        # Type-specific calls for VLM/VLA adapters
         if stage == "perceive":
             return await adapter.analyze_scene(image_base64, task)
         elif stage == "plan":

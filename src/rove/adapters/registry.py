@@ -11,34 +11,32 @@ __all__ = ["CAPABILITY_TO_STAGES", "STAGE_TO_CAPABILITY", "AdapterRegistry"]
 
 from rove.adapters.protocols import (
     AgentAdapter,
-    PolicyAdapter,
     SimAdapter,
     StageAdapter,
+    VLAAdapter,
     VLMAdapter,
 )
-from rove.config import get_all_models, get_endpoint_config
 from rove.models import PipelineStage
+from rove.models.config import get_all_models, get_endpoint_config
 
 logger = logging.getLogger(__name__)
 
 # Adapter class mappings — "adapter_name" → "module.path:ClassName"
 _VLM_ADAPTERS = {
-    "mock_vlm": "rove.adapters.vlm.mock:MockVLMAdapter",
-    "azure_foundry": "rove.adapters.vlm.azure_foundry:AzureFoundryVLMAdapter",
-    "lmstudio": "rove.adapters.vlm.lmstudio:LMStudioVLMAdapter",
+    "mock_vlm": "rove.adapters.mock_vlm:MockVLMAdapter",
 }
 
-_POLICY_ADAPTERS = {
-    "mock_vla": "rove.adapters.policy.mock:MockPolicyAdapter",
+_VLA_ADAPTERS = {
+    "mock_vla": "rove.adapters.mock_vla:MockVLAAdapter",
 }
 
 _AGENT_ADAPTERS = {
-    "mock_agent": "rove.adapters.agent.mock:MockAgentAdapter",
-    "azure_foundry_agent": "rove.adapters.agent.azure_foundry:AzureFoundryAgentAdapter",
+    "mock_agent": "rove.adapters.mock_agent:MockAgentAdapter",
+    "azure_foundry_agent": "rove.adapters.azure_foundry_agent:AzureFoundryAgentAdapter",
 }
 
 _SIM_ADAPTERS = {
-    "mock_sim": "rove.adapters.sim.mock:MockSimAdapter",
+    "mock_sim": "rove.adapters.mock_sim:MockSimAdapter",
 }
 
 # Capability → which pipeline stages a model can serve
@@ -95,12 +93,40 @@ def _build_adapter(
     return instance
 
 
+def _build_vlm_provider_adapter(model_id: str, cache: dict[str, Any]) -> Any:
+    """Build a GenericVLMAdapter backed by a provider (Azure Foundry, LM Studio, etc.)."""
+    if model_id in cache:
+        return cache[model_id]
+
+    from rove.adapters.generic_vlm import GenericVLMAdapter
+    from rove.providers import create_provider
+    from rove.utils.prompt_loader import get_prompt_manager
+
+    ep = get_endpoint_config(model_id)
+    config = dict(ep.config)
+    if ep.endpoint:
+        config["endpoint"] = ep.endpoint
+
+    provider = create_provider(ep.provider, config)
+    prompt_manager = get_prompt_manager()
+    display_name = ep.display_name or model_id
+
+    instance = GenericVLMAdapter(
+        model_id=model_id,
+        display_name=display_name,
+        provider=provider,
+        prompt_manager=prompt_manager,
+    )
+    cache[model_id] = instance
+    return instance
+
+
 class AdapterRegistry:
     """Resolves model IDs to adapter instances, with caching."""
 
     def __init__(self):
         self._vlm_cache: dict[str, VLMAdapter] = {}
-        self._policy_cache: dict[str, PolicyAdapter] = {}
+        self._vla_cache: dict[str, VLAAdapter] = {}
         self._agent_cache: dict[str, AgentAdapter] = {}
         self._sim_cache: dict[str, SimAdapter] = {}
         self._semaphores: dict[str, asyncio.Semaphore] = {}
@@ -120,10 +146,13 @@ class AdapterRegistry:
         return None
 
     def get_vlm(self, model_id: str) -> VLMAdapter:
+        ep = get_endpoint_config(model_id)
+        if ep.provider:
+            return _build_vlm_provider_adapter(model_id, self._vlm_cache)
         return _build_adapter(model_id, _VLM_ADAPTERS, self._vlm_cache)
 
-    def get_policy(self, model_id: str) -> PolicyAdapter:
-        return _build_adapter(model_id, _POLICY_ADAPTERS, self._policy_cache)
+    def get_vla(self, model_id: str) -> VLAAdapter:
+        return _build_adapter(model_id, _VLA_ADAPTERS, self._vla_cache)
 
     def get_agent(self, model_id: str) -> AgentAdapter:
         return _build_adapter(model_id, _AGENT_ADAPTERS, self._agent_cache)
@@ -166,7 +195,7 @@ class AdapterRegistry:
                     f"Model '{model_id}' (type={ep.type}) cannot serve 'act'. "
                     f"Only VLA or agent models can serve the act stage."
                 )
-            return self.get_policy(model_id)
+            return self.get_vla(model_id)
 
         # VLM or LLM type — perceive, plan, verify
         if ep.type not in ("vlm", "llm"):
@@ -198,8 +227,9 @@ class AdapterRegistry:
 
         # VLMs — check capabilities to determine eligible stages
         for model_id, model_cfg in all_models.get("vlm", {}).items():
-            adapter_name = model_cfg.get("adapter", "")
-            has_impl = adapter_name in _VLM_ADAPTERS
+            adapter_name = model_cfg.get("adapter") or ""
+            provider_name = model_cfg.get("provider") or ""
+            has_impl = adapter_name in _VLM_ADAPTERS or bool(provider_name)
             capabilities = model_cfg.get("capabilities", [])
 
             entry = {
@@ -223,7 +253,7 @@ class AdapterRegistry:
         # VLAs — always eligible for act
         for model_id, model_cfg in all_models.get("vla", {}).items():
             adapter_name = model_cfg.get("adapter", "")
-            has_impl = adapter_name in _POLICY_ADAPTERS
+            has_impl = adapter_name in _VLA_ADAPTERS
             stages["act"].append(
                 {
                     "id": model_id,

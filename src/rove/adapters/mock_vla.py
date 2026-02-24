@@ -1,4 +1,4 @@
-"""Mock policy adapter for testing without real VLA models."""
+"""Mock VLA adapter for testing without real VLA models."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import random
 from rove.models import ActionPrediction, TaskPlan
 
 
-class MockPolicyAdapter:
+class MockVLAAdapter:
     def __init__(self, model_id: str = "mock-vla", config: dict | None = None):
         self.model_id = model_id
         self.display_name = "Mock VLA"
