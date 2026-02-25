@@ -36,7 +36,8 @@ app.add_middleware(
 
 # Global state (no database for demo)
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"
-_history_path = _data_dir / "history.jsonl"
+_output_dir = _data_dir / "output"
+_history_path = _output_dir / "history.jsonl"
 registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
@@ -46,7 +47,7 @@ _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
 def _persist_evaluation(eval_data: dict[str, Any]) -> None:
     """Append a completed evaluation record to history.jsonl."""
     try:
-        _data_dir.mkdir(parents=True, exist_ok=True)
+        _output_dir.mkdir(parents=True, exist_ok=True)
         record = {
             "eval_id": eval_data.get("eval_id"),
             "task": eval_data.get("task", ""),

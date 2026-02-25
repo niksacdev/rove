@@ -38,5 +38,8 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
+# Evaluation output (runtime-generated)
+data/output/
+
 # uv
 .python-version
