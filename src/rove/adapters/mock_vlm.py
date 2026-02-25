@@ -164,19 +164,50 @@ class MockVLMAdapter:
 
         # Generate action plausibility if act stage was completed
         plausibility = None
+        fk_data = context.get("fk_analysis") if context else None
         if "act" in completed_stages:
-            plausibility = ActionPlausibility(
-                bounds_check=random.random() < self._quality,
-                smoothness=random.random() < self._quality,
-                gripper_consistency=random.random() < self._quality,
-                plan_alignment=round(random.uniform(0.5, 0.95), 2),
-                reasoning=(
-                    "Action deltas are within expected ranges. "
-                    "Gripper pattern is consistent with pick-and-place. "
-                    "Note: true success cannot be assessed without a simulator "
-                    "or post-execution image."
-                ),
-            )
+            if fk_data:
+                # Derive scores from FK analysis instead of random
+                fk_bounds = fk_data.get("joint_limits_ok", True) and not fk_data.get(
+                    "self_collision", False
+                )
+                fk_disp = fk_data.get("total_displacement_m", 0.0)
+                fk_smooth = fk_data.get("smoothness_score", 1.0)
+                fk_smoothness = fk_disp < 2.0 and fk_smooth > 0.1
+                fk_plan_align = round(min(fk_smooth, 0.3 if not fk_bounds else 1.0), 2)
+
+                reasons = []
+                if not fk_bounds:
+                    reasons.append("FK: joint limits exceeded or self-collision detected")
+                    all_passed = False
+                if not fk_smoothness:
+                    reasons.append(
+                        f"FK: displacement {fk_disp:.1f}m or smoothness {fk_smooth:.2f} out of range"
+                    )
+                    all_passed = False
+                if not reasons:
+                    reasons.append("FK: all checks passed, trajectory is physically plausible")
+
+                plausibility = ActionPlausibility(
+                    bounds_check=fk_bounds,
+                    smoothness=fk_smoothness,
+                    gripper_consistency=random.random() < self._quality,
+                    plan_alignment=fk_plan_align,
+                    reasoning=" ".join(reasons),
+                )
+            else:
+                plausibility = ActionPlausibility(
+                    bounds_check=random.random() < self._quality,
+                    smoothness=random.random() < self._quality,
+                    gripper_consistency=random.random() < self._quality,
+                    plan_alignment=round(random.uniform(0.5, 0.95), 2),
+                    reasoning=(
+                        "Action deltas are within expected ranges. "
+                        "Gripper pattern is consistent with pick-and-place. "
+                        "Note: true success cannot be assessed without a simulator "
+                        "or post-execution image."
+                    ),
+                )
 
         success = all_passed if (stage_checks or gt_check) else random.random() < self._quality
 
