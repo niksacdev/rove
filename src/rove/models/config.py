@@ -72,6 +72,7 @@ class StrategyConfig(BaseModel):
     sim: str
     forward_kinematics: bool = False
     tags: list[str] = []
+    latency_budget: dict[str, int] = {}  # per-stage overrides (ms), empty = use defaults
 
 
 class DefaultsConfig(BaseModel):
@@ -82,6 +83,13 @@ class DefaultsConfig(BaseModel):
     max_concurrent_combinations: int = 9
     timeout_per_step_ms: int = 30000
     max_retries_per_step: int = 2
+    latency_budget_ms: int = 10000  # 10s total pipeline latency target
+    latency_budget: dict[str, int] = {
+        "perceive": 3000,
+        "plan": 3000,
+        "act": 3000,
+        "verify": 1000,
+    }
 
 
 class RoveConfig(BaseModel):

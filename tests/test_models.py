@@ -11,6 +11,7 @@ from rove.models import (
     TaskPlan,
     VerificationResult,
 )
+from rove.models.config import DefaultsConfig, StrategyConfig
 
 
 class TestPipelineContext:
@@ -109,6 +110,47 @@ class TestStrategy:
             tags=["fast", "cloud"],
         )
         assert s.tags == ["fast", "cloud"]
+
+
+class TestDefaultsConfig:
+    def test_latency_budget_default(self):
+        d = DefaultsConfig()
+        assert d.latency_budget_ms == 10000
+
+    def test_latency_budget_custom(self):
+        d = DefaultsConfig(latency_budget_ms=5000)
+        assert d.latency_budget_ms == 5000
+
+    def test_latency_budget_per_stage_defaults(self):
+        d = DefaultsConfig()
+        assert d.latency_budget == {
+            "perceive": 3000,
+            "plan": 3000,
+            "act": 3000,
+            "verify": 1000,
+        }
+
+    def test_latency_budget_per_stage_custom(self):
+        d = DefaultsConfig(
+            latency_budget={"perceive": 1000, "plan": 1000, "act": 5000, "verify": 500}
+        )
+        assert d.latency_budget["act"] == 5000
+
+
+class TestStrategyConfig:
+    def test_latency_budget_override_empty_by_default(self):
+        s = StrategyConfig(verify="mock-vlm", sim="mock-sim", perceive="mock-vlm")
+        assert s.latency_budget == {}
+
+    def test_latency_budget_partial_override(self):
+        s = StrategyConfig(
+            verify="mock-vlm",
+            sim="mock-sim",
+            perceive="mock-vlm",
+            latency_budget={"act": 8000},
+        )
+        assert s.latency_budget == {"act": 8000}
+        assert "perceive" not in s.latency_budget
 
 
 class TestActionPlausibility:
