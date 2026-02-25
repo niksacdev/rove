@@ -11,6 +11,7 @@ let activeTabId = null;
 let tabData = {};
 let summaryResults = {}; // { [sid]: { status, success, latency_ms, currentStage, stageStatuses: {perceive,plan,act,verify} } }
 let summaryEl = null; // DOM element for summary tab content
+let compareEl = null; // DOM element for comparison tab content
 let currentView = "home"; // "home" | "strategies" | "models" | "settings" | "evaluation"
 let runHistory = []; // per-eval data entries
 let activeHistoryIndex = -1;
@@ -1113,6 +1114,7 @@ function showHistoryEntry(idx) {
 
   // Clear existing tab content
   chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
+  compareEl = null;
 
   var ids = entry.strategyIds;
 
@@ -1635,6 +1637,7 @@ function setupTabs(strategyIds) {
   activeTabId = null;
   summaryResults = {};
   summaryEl = null;
+  compareEl = null;
 
   // Assign distinct colors to each strategy
   strategyColorMap = {};
@@ -1785,6 +1788,8 @@ function switchTab(sid) {
 
   if (sid === "__summary__" && summaryEl) {
     chatArea.appendChild(summaryEl);
+  } else if (sid === "__compare__" && compareEl) {
+    chatArea.appendChild(compareEl);
   } else if (tabData[sid]) {
     chatArea.appendChild(tabData[sid].el);
   }
@@ -1932,7 +1937,662 @@ function updateSummaryTable(strategyIds) {
 
     tableWrap.appendChild(row);
   });
+
+  // Compare button — only when 2+ strategies completed
+  var completedIds = ids.filter(function(sid) {
+    return summaryResults[sid] && summaryResults[sid].status === "completed";
+  });
+  if (completedIds.length >= 2) {
+    var compareWrap = summaryEl.querySelector(".compare-wrap");
+    if (!compareWrap) {
+      compareWrap = document.createElement("div");
+      compareWrap.className = "compare-wrap mt-3";
+      summaryEl.appendChild(compareWrap);
+    }
+    compareWrap.textContent = "";
+    var compareBtn = document.createElement("button");
+    compareBtn.className = "flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-f-purple hover:bg-f-purple-hover rounded-lg transition-colors shadow-sm";
+    var cIcon = document.createElement("i");
+    cIcon.setAttribute("data-lucide", "columns-2");
+    cIcon.className = "w-4 h-4";
+    compareBtn.appendChild(cIcon);
+    compareBtn.appendChild(document.createTextNode(" Compare strategies"));
+    compareBtn.addEventListener("click", function() {
+      enterCompareSelectionMode(completedIds, compareWrap);
+    });
+    compareWrap.appendChild(compareBtn);
+    lucide.createIcons({ nodes: [compareWrap] });
+  }
 }
+
+function enterCompareSelectionMode(completedIds, container) {
+  var selected = new Set();
+  container.textContent = "";
+
+  var instruction = document.createElement("p");
+  instruction.className = "text-xs text-gray-400 mb-2";
+  instruction.textContent = "Select 2 completed strategies to compare";
+  container.appendChild(instruction);
+
+  var chipWrap = document.createElement("div");
+  chipWrap.className = "flex flex-wrap gap-2 mb-3";
+  container.appendChild(chipWrap);
+
+  completedIds.forEach(function(sid) {
+    var strat = strategies.find(function(s) { return s.id === sid; });
+    var displayName = strat ? strat.display_name : sid;
+    var color = strategyColorMap[sid] || "#7c3aed";
+
+    var chip = document.createElement("button");
+    chip.className = "compare-chip flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-f-border rounded-lg transition-all cursor-pointer";
+    chip.style.borderLeftWidth = "3px";
+    chip.style.borderLeftColor = color;
+    var chipLabel = document.createElement("span");
+    chipLabel.className = "text-gray-300";
+    chipLabel.textContent = displayName;
+    chip.appendChild(chipLabel);
+    chip.addEventListener("click", function() {
+      if (selected.has(sid)) {
+        selected.delete(sid);
+        chip.classList.remove("selected");
+      } else if (selected.size < 2) {
+        selected.add(sid);
+        chip.classList.add("selected");
+      }
+      openBtn.disabled = selected.size !== 2;
+      openBtn.classList.toggle("opacity-50", selected.size !== 2);
+    });
+    chipWrap.appendChild(chip);
+  });
+
+  var btnWrap = document.createElement("div");
+  btnWrap.className = "flex items-center gap-2";
+  container.appendChild(btnWrap);
+
+  var openBtn = document.createElement("button");
+  openBtn.className = "px-4 py-1.5 text-xs font-medium text-white bg-f-purple rounded-lg opacity-50 transition-opacity";
+  openBtn.textContent = "Open comparison";
+  openBtn.disabled = true;
+  openBtn.addEventListener("click", function() {
+    var ids = Array.from(selected);
+    openCompareTab(ids[0], ids[1]);
+  });
+  btnWrap.appendChild(openBtn);
+
+  var cancelBtn = document.createElement("button");
+  cancelBtn.className = "px-4 py-1.5 text-xs font-medium text-gray-400 border border-f-border rounded-lg hover:text-white transition-colors";
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", function() {
+    container.textContent = "";
+    updateSummaryTable();
+  });
+  btnWrap.appendChild(cancelBtn);
+}
+
+// ---- Compare tab ----
+
+function openCompareTab(sidA, sidB) {
+  // Get strategy results from current history entry or live run
+  var entry = activeHistoryIndex >= 0 ? runHistory[activeHistoryIndex] : null;
+  var resultsA = entry && entry.results ? entry.results[sidA] : null;
+  var resultsB = entry && entry.results ? entry.results[sidB] : null;
+  if (!resultsA && !resultsB) return;
+
+  // Remove existing compare tab button if present
+  var oldTab = tabBar.querySelector("[data-tab-id='__compare__']");
+  if (oldTab) oldTab.remove();
+
+  // Create compare tab button
+  var cmpTab = document.createElement("button");
+  cmpTab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap flex items-center";
+  cmpTab.setAttribute("data-tab-id", "__compare__");
+  cmpTab.setAttribute("role", "tab");
+  cmpTab.setAttribute("aria-selected", "false");
+  cmpTab.setAttribute("aria-controls", "tab-content-__compare__");
+  cmpTab.style.setProperty("--tab-color", "#f59e0b");
+  var cmpIcon = document.createElement("i");
+  cmpIcon.setAttribute("data-lucide", "columns-2");
+  cmpIcon.className = "w-3.5 h-3.5 inline-block mr-1.5 align-middle";
+  cmpTab.appendChild(cmpIcon);
+  var cmpLabel = document.createElement("span");
+  cmpLabel.textContent = "Comparison";
+  cmpTab.appendChild(cmpLabel);
+  cmpTab.addEventListener("click", function() { switchTab("__compare__"); });
+  tabBar.appendChild(cmpTab);
+  lucide.createIcons({ nodes: [cmpTab] });
+
+  // Build compare content
+  compareEl = document.createElement("div");
+  compareEl.className = "space-y-4";
+  compareEl.id = "tab-content-__compare__";
+  compareEl.setAttribute("role", "tabpanel");
+  compareEl.setAttribute("tabindex", "0");
+
+  buildCompareContent(compareEl, sidA, sidB, resultsA, resultsB);
+
+  // Switch to compare tab
+  switchTab("__compare__");
+}
+
+function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
+  var stratA = strategies.find(function(s) { return s.id === sidA; });
+  var stratB = strategies.find(function(s) { return s.id === sidB; });
+  var nameA = stratA ? stratA.display_name : sidA;
+  var nameB = stratB ? stratB.display_name : sidB;
+  var colorA = strategyColorMap[sidA] || "#7c3aed";
+  var colorB = strategyColorMap[sidB] || "#3b82f6";
+
+  // Summary badges
+  var summaryRow = document.createElement("div");
+  summaryRow.className = "grid grid-cols-2 gap-4";
+  [{sid: sidA, r: resultsA, name: nameA, color: colorA}, {sid: sidB, r: resultsB, name: nameB, color: colorB}].forEach(function(item) {
+    var card = document.createElement("div");
+    card.className = "bg-f-surface border border-f-border rounded-xl p-4 flex items-center gap-3";
+    card.style.borderLeftWidth = "3px";
+    card.style.borderLeftColor = item.color;
+    var nm = document.createElement("span");
+    nm.className = "text-sm font-semibold text-gray-200 truncate";
+    nm.textContent = item.name;
+    card.appendChild(nm);
+    if (item.r) {
+      var badge = document.createElement("span");
+      badge.className = "text-[11px] font-semibold px-2 py-0.5 rounded ml-auto ";
+      if (item.r.success === true) {
+        badge.className += "bg-green-500/15 text-green-400";
+        badge.textContent = "Pass";
+      } else if (item.r.success === false) {
+        badge.className += "bg-red-500/15 text-red-400";
+        badge.textContent = "Fail";
+      } else {
+        badge.className += "bg-gray-500/15 text-gray-400";
+        badge.textContent = "\u2014";
+      }
+      card.appendChild(badge);
+      var lat = item.r.totalLatencyMs;
+      if (lat != null) {
+        var latEl = document.createElement("span");
+        latEl.className = "text-[11px] font-mono text-gray-400";
+        latEl.textContent = Math.round(lat) + "ms";
+        card.appendChild(latEl);
+      }
+    }
+    summaryRow.appendChild(card);
+  });
+
+  // Latency delta
+  if (resultsA && resultsB && resultsA.totalLatencyMs != null && resultsB.totalLatencyMs != null) {
+    var delta = resultsA.totalLatencyMs - resultsB.totalLatencyMs;
+    var deltaEl = document.createElement("div");
+    deltaEl.className = "col-span-2 text-center text-[11px] font-mono " + (delta < 0 ? "text-green-400" : delta > 0 ? "text-red-400" : "text-gray-500");
+    var fasterLabel = delta < 0 ? nameA + " faster" : delta > 0 ? nameB + " faster" : "equal";
+    deltaEl.textContent = "Latency delta: " + (delta > 0 ? "+" : "") + Math.round(delta) + "ms (" + fasterLabel + ")";
+    summaryRow.appendChild(deltaEl);
+  }
+  el.appendChild(summaryRow);
+
+  // Per-stage comparison cards
+  var STAGE_NAMES = ["perceive", "plan", "act", "verify"];
+  var STAGE_ICONS = { perceive: "eye", plan: "brain", act: "bot", verify: "check-circle" };
+  var STAGE_LABELS = { perceive: "Scene Analysis", plan: "Task Planning", act: "Action Execution", verify: "Verification" };
+
+  STAGE_NAMES.forEach(function(stageName) {
+    var stageA = findStageInResults(resultsA, stageName);
+    var stageB = findStageInResults(resultsB, stageName);
+    if (!stageA && !stageB) return;
+
+    var card = document.createElement("div");
+    card.className = "bg-f-surface border border-f-border rounded-xl overflow-hidden";
+
+    // Stage header
+    var hdr = document.createElement("div");
+    hdr.className = "flex items-center gap-2 px-4 py-3 border-b border-f-border bg-f-elevated/50";
+    var icon = document.createElement("i");
+    icon.setAttribute("data-lucide", STAGE_ICONS[stageName]);
+    icon.className = "w-4 h-4 text-purple-400";
+    hdr.appendChild(icon);
+    var hdrText = document.createElement("span");
+    hdrText.className = "text-sm font-semibold text-gray-200";
+    hdrText.textContent = STAGE_LABELS[stageName];
+    hdr.appendChild(hdrText);
+
+    // Latency in header
+    var latA = stageA ? (stageA.latencyMs || stageA.latency_ms) : null;
+    var latB = stageB ? (stageB.latencyMs || stageB.latency_ms) : null;
+    if (latA != null && latB != null) {
+      var latComp = document.createElement("span");
+      latComp.className = "text-[10px] font-mono text-gray-500 ml-auto";
+      latComp.textContent = Math.round(latA) + "ms vs " + Math.round(latB) + "ms";
+      hdr.appendChild(latComp);
+    }
+    card.appendChild(hdr);
+
+    // Column labels
+    var labelRow = document.createElement("div");
+    labelRow.className = "grid grid-cols-2 divide-x divide-f-border border-b border-f-border/50";
+    [{ name: nameA, color: colorA }, { name: nameB, color: colorB }].forEach(function(item) {
+      var lbl = document.createElement("div");
+      lbl.className = "px-4 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 font-semibold flex items-center gap-1.5";
+      var dot = document.createElement("span");
+      dot.style.cssText = "width:6px;height:6px;border-radius:50%;background:" + item.color;
+      lbl.appendChild(dot);
+      lbl.appendChild(document.createTextNode(item.name));
+      labelRow.appendChild(lbl);
+    });
+    card.appendChild(labelRow);
+
+    // Side-by-side content
+    var content = document.createElement("div");
+    content.className = "grid grid-cols-2 divide-x divide-f-border";
+    var colA = document.createElement("div");
+    colA.className = "p-4 min-w-0";
+    var colB = document.createElement("div");
+    colB.className = "p-4 min-w-0";
+
+    var outputA = stageA ? (stageA.output || {}) : null;
+    var outputB = stageB ? (stageB.output || {}) : null;
+
+    var renderer = COMPARE_RENDERERS[stageName];
+    renderStageColumn(colA, stageA, outputA, outputB, renderer);
+    renderStageColumn(colB, stageB, outputB, outputA, renderer);
+
+    content.appendChild(colA);
+    content.appendChild(colB);
+
+    // Model IDs footer
+    var modelA = stageA ? (stageA.modelId || stageA.model_id) : null;
+    var modelB = stageB ? (stageB.modelId || stageB.model_id) : null;
+    if (modelA || modelB) {
+      var modelRow = document.createElement("div");
+      modelRow.className = "grid grid-cols-2 divide-x divide-f-border border-t border-f-border/50";
+      [modelA, modelB].forEach(function(mid) {
+        var cell = document.createElement("div");
+        cell.className = "px-4 py-1.5 text-[10px] font-mono text-gray-500";
+        cell.textContent = mid || "\u2014";
+        if (modelA && modelB && modelA !== modelB) cell.classList.add("diff-changed");
+        modelRow.appendChild(cell);
+      });
+      content.appendChild(modelRow);
+    }
+
+    card.appendChild(content);
+    el.appendChild(card);
+  });
+
+  lucide.createIcons({ nodes: [el] });
+}
+
+function findStageInResults(resultObj, stageName) {
+  if (!resultObj || !resultObj.stages) return null;
+  for (var i = 0; i < resultObj.stages.length; i++) {
+    if (resultObj.stages[i].stage === stageName) return resultObj.stages[i];
+  }
+  return null;
+}
+
+function renderStageColumn(col, stageData, output, otherOutput, renderer) {
+  if (!stageData) {
+    var skip = document.createElement("div");
+    skip.className = "text-xs text-gray-600 italic";
+    skip.textContent = "Stage skipped";
+    col.appendChild(skip);
+  } else if (stageData.status === "error") {
+    var errEl = document.createElement("div");
+    errEl.className = "text-xs text-red-400";
+    errEl.textContent = stageData.error || "Error";
+    col.appendChild(errEl);
+  } else if (renderer) {
+    renderer(col, output || {}, otherOutput || {});
+  }
+}
+
+// ---- Compare diff helpers ----
+
+function cmpLabel(parent, text) {
+  var lbl = document.createElement("div");
+  lbl.className = "text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1";
+  lbl.textContent = text;
+  parent.appendChild(lbl);
+}
+
+function cmpStringDiff(parent, label, val, otherVal) {
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  if (val !== otherVal && val && otherVal) wrap.classList.add("diff-changed");
+  cmpLabel(wrap, label);
+  var v = document.createElement("div");
+  v.className = "text-sm text-gray-200";
+  v.textContent = val || "\u2014";
+  wrap.appendChild(v);
+  parent.appendChild(wrap);
+}
+
+function cmpNumberDiff(parent, label, val, otherVal, fmt) {
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  cmpLabel(wrap, label);
+  var row = document.createElement("div");
+  row.className = "flex items-center gap-2";
+  var v = document.createElement("span");
+  v.className = "text-sm font-mono text-gray-200";
+  v.textContent = val != null ? (fmt ? fmt(val) : String(val)) : "\u2014";
+  row.appendChild(v);
+  if (val != null && otherVal != null && val !== otherVal) {
+    var delta = val - otherVal;
+    var deltaEl = document.createElement("span");
+    deltaEl.className = "text-[11px] font-mono " + (delta > 0 ? "text-green-400" : "text-red-400");
+    deltaEl.textContent = (delta > 0 ? "+" : "") + (fmt ? fmt(delta) : String(delta));
+    row.appendChild(deltaEl);
+    wrap.classList.add("diff-changed");
+  }
+  wrap.appendChild(row);
+  parent.appendChild(wrap);
+}
+
+function cmpBoolDiff(parent, label, val, otherVal) {
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  cmpLabel(wrap, label);
+  var badge = document.createElement("span");
+  badge.className = "text-xs font-semibold px-2 py-0.5 rounded ";
+  if (val === true) {
+    badge.className += "bg-green-500/15 text-green-400";
+    badge.textContent = "Pass";
+  } else if (val === false) {
+    badge.className += "bg-red-500/15 text-red-400";
+    badge.textContent = "Fail";
+  } else {
+    badge.className += "bg-gray-500/15 text-gray-400";
+    badge.textContent = "\u2014";
+  }
+  wrap.appendChild(badge);
+  if (val !== otherVal) {
+    var marker = document.createElement("span");
+    marker.className = "text-[10px] text-amber-400 ml-2";
+    marker.textContent = "(differs)";
+    wrap.appendChild(marker);
+    wrap.classList.add("diff-changed");
+  }
+  parent.appendChild(wrap);
+}
+
+function cmpStringListDiff(parent, label, myList, otherList) {
+  if (!myList && !otherList) return;
+  var mine = myList || [];
+  var other = new Set(otherList || []);
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  cmpLabel(wrap, label);
+  var tagWrap = document.createElement("div");
+  tagWrap.className = "flex flex-wrap gap-1";
+  mine.forEach(function(item) {
+    var tag = document.createElement("span");
+    tag.className = "text-[11px] px-2 py-0.5 rounded ";
+    if (other.has(item)) {
+      tag.className += "bg-purple-500/15 text-purple-300";
+    } else {
+      tag.className += "bg-emerald-500/15 text-emerald-300";
+      wrap.classList.add("diff-unique");
+    }
+    tag.textContent = item;
+    tagWrap.appendChild(tag);
+  });
+  if (mine.length === 0) {
+    var empty = document.createElement("span");
+    empty.className = "text-xs text-gray-600";
+    empty.textContent = "None";
+    tagWrap.appendChild(empty);
+  }
+  wrap.appendChild(tagWrap);
+  parent.appendChild(wrap);
+}
+
+function cmpOrderedListDiff(parent, label, myList, otherList) {
+  if (!myList && !otherList) return;
+  var mine = myList || [];
+  var other = otherList || [];
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  cmpLabel(wrap, label);
+  var ol = document.createElement("ol");
+  ol.className = "list-decimal list-inside space-y-1 text-sm text-gray-200";
+  mine.forEach(function(item, i) {
+    var li = document.createElement("li");
+    var text = typeof item === "string" ? item : (item.description || item.action || JSON.stringify(item));
+    li.textContent = text;
+    if (i >= other.length) {
+      li.className = "bg-emerald-500/5 border-l-2 border-emerald-500 pl-2";
+    } else {
+      var otherText = typeof other[i] === "string" ? other[i] : (other[i].description || other[i].action || JSON.stringify(other[i]));
+      if (text !== otherText) {
+        li.className = "bg-amber-500/5 border-l-2 border-amber-500 pl-2";
+      }
+    }
+    ol.appendChild(li);
+  });
+  wrap.appendChild(ol);
+  parent.appendChild(wrap);
+}
+
+function cmpConfidenceBar(parent, label, val, otherVal) {
+  var wrap = document.createElement("div");
+  wrap.className = "mb-3";
+  if (val !== otherVal) wrap.classList.add("diff-changed");
+  cmpLabel(wrap, label);
+  var barBg = document.createElement("div");
+  barBg.className = "w-full h-2 rounded-full bg-gray-700 mt-1";
+  var barFill = document.createElement("div");
+  var pct = (val != null ? val : 0) * 100;
+  barFill.className = "h-full rounded-full transition-all";
+  barFill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  barFill.style.background = pct >= 70 ? "#22c55e" : pct >= 40 ? "#f59e0b" : "#ef4444";
+  barBg.appendChild(barFill);
+  wrap.appendChild(barBg);
+  var valRow = document.createElement("div");
+  valRow.className = "flex items-center gap-2 mt-1";
+  var num = document.createElement("span");
+  num.className = "text-xs font-mono text-gray-300";
+  num.textContent = val != null ? (val * 100).toFixed(1) + "%" : "\u2014";
+  valRow.appendChild(num);
+  if (val != null && otherVal != null && val !== otherVal) {
+    var d = (val - otherVal) * 100;
+    var deltaEl = document.createElement("span");
+    deltaEl.className = "text-[11px] font-mono " + (d > 0 ? "text-green-400" : "text-red-400");
+    deltaEl.textContent = (d > 0 ? "+" : "") + d.toFixed(1) + "%";
+    valRow.appendChild(deltaEl);
+  }
+  wrap.appendChild(valRow);
+  parent.appendChild(wrap);
+}
+
+// ---- Per-stage compare renderers ----
+
+function cmpRenderPerceive(col, output, otherOutput) {
+  var o = output || {};
+  var oo = otherOutput || {};
+  cmpStringDiff(col, "Environment", o.environment_distribution, oo.environment_distribution);
+
+  var myObjs = o.objects || [];
+  var otherObjs = oo.objects || [];
+  var otherNames = {};
+  otherObjs.forEach(function(ob) { otherNames[ob.name || ob.label || ""] = ob; });
+
+  if (myObjs.length > 0 || otherObjs.length > 0) {
+    var wrap = document.createElement("div");
+    wrap.className = "mb-3";
+    cmpLabel(wrap, "Detected Objects");
+    myObjs.forEach(function(obj) {
+      var name = obj.name || obj.label || "unknown";
+      var conf = obj.confidence;
+      var matched = otherNames[name];
+      var row = document.createElement("div");
+      row.className = "flex items-center gap-2 text-sm py-0.5";
+      var tag = document.createElement("span");
+      tag.className = "text-[11px] px-2 py-0.5 rounded ";
+      tag.className += matched ? "bg-purple-500/15 text-purple-300" : "bg-emerald-500/15 text-emerald-300";
+      tag.textContent = name;
+      row.appendChild(tag);
+      if (conf != null) {
+        var confEl = document.createElement("span");
+        confEl.className = "text-[10px] font-mono text-gray-500";
+        confEl.textContent = (conf * 100).toFixed(0) + "%";
+        row.appendChild(confEl);
+        if (matched && matched.confidence != null && matched.confidence !== conf) {
+          var d = (conf - matched.confidence) * 100;
+          var delta = document.createElement("span");
+          delta.className = "text-[10px] font-mono " + (d > 0 ? "text-green-400" : "text-red-400");
+          delta.textContent = (d > 0 ? "+" : "") + d.toFixed(0) + "%";
+          row.appendChild(delta);
+        }
+      }
+      wrap.appendChild(row);
+    });
+    col.appendChild(wrap);
+  }
+
+  cmpStringListDiff(col, "Spatial Relations", o.spatial_relations, oo.spatial_relations);
+}
+
+function cmpRenderPlan(col, output, otherOutput) {
+  var o = output || {};
+  var oo = otherOutput || {};
+  cmpStringDiff(col, "Strategy", o.strategy, oo.strategy);
+  cmpStringDiff(col, "Target Object", o.target_object, oo.target_object);
+  cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
+  cmpOrderedListDiff(col, "Steps", o.steps, oo.steps);
+  cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
+  cmpStringListDiff(col, "Task Repertoire", o.task_repertoire, oo.task_repertoire);
+  cmpStringListDiff(col, "Artifacts", o.artifacts, oo.artifacts);
+  cmpStringListDiff(col, "Degradation Profile", o.degradation_profile, oo.degradation_profile);
+}
+
+function cmpRenderAct(col, output, otherOutput) {
+  var o = output || {};
+  var oo = otherOutput || {};
+  cmpStringDiff(col, "Action Type", o.action_type, oo.action_type);
+  cmpNumberDiff(col, "Steps", o.num_steps, oo.num_steps);
+  cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
+
+  if (o.action_type === "tool_calls" && o.tool_calls) {
+    cmpOrderedListDiff(col, "Tool Calls", o.tool_calls, oo.tool_calls);
+  }
+
+  var actions = o.actions || o.trajectory;
+  if (Array.isArray(actions) && actions.length > 0) {
+    var wrap = document.createElement("div");
+    wrap.className = "mb-3";
+    cmpLabel(wrap, "Trajectory (" + actions.length + " steps)");
+    var preview = document.createElement("div");
+    preview.className = "text-[11px] font-mono text-gray-400 space-y-0.5";
+    var show = actions.slice(0, 3);
+    show.forEach(function(a, i) {
+      var line = document.createElement("div");
+      line.textContent = "[" + i + "] " + JSON.stringify(a).substring(0, 80);
+      preview.appendChild(line);
+    });
+    if (actions.length > 6) {
+      var ellipsis = document.createElement("div");
+      ellipsis.className = "text-gray-600";
+      ellipsis.textContent = "... " + (actions.length - 6) + " more steps ...";
+      preview.appendChild(ellipsis);
+    }
+    if (actions.length > 3) {
+      actions.slice(-3).forEach(function(a, i) {
+        var line = document.createElement("div");
+        line.textContent = "[" + (actions.length - 3 + i) + "] " + JSON.stringify(a).substring(0, 80);
+        preview.appendChild(line);
+      });
+    }
+    wrap.appendChild(preview);
+    col.appendChild(wrap);
+  }
+}
+
+function cmpRenderVerify(col, output, otherOutput) {
+  var o = output || {};
+  var oo = otherOutput || {};
+  cmpBoolDiff(col, "Success", o.success, oo.success);
+  cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
+  cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
+
+  // Stage checks
+  var myChecks = o.stage_checks || [];
+  var otherChecks = oo.stage_checks || [];
+  if (myChecks.length > 0 || otherChecks.length > 0) {
+    var otherMap = {};
+    otherChecks.forEach(function(c) { otherMap[c.stage || c.name || ""] = c; });
+    var wrap = document.createElement("div");
+    wrap.className = "mb-3";
+    cmpLabel(wrap, "Stage Checks");
+    myChecks.forEach(function(check) {
+      var name = check.stage || check.name || "unknown";
+      var matched = otherMap[name];
+      var row = document.createElement("div");
+      row.className = "flex items-center gap-2 py-1 text-sm";
+      if (matched && (matched.passed !== check.passed || matched.reasoning !== check.reasoning)) {
+        row.classList.add("diff-changed");
+      }
+      var badge = document.createElement("span");
+      badge.className = "text-[10px] font-semibold px-1.5 py-0.5 rounded ";
+      badge.className += check.passed ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400";
+      badge.textContent = check.passed ? "PASS" : "FAIL";
+      row.appendChild(badge);
+      var nameEl = document.createElement("span");
+      nameEl.className = "text-xs text-gray-300 font-medium";
+      nameEl.textContent = name;
+      row.appendChild(nameEl);
+      if (check.reasoning) {
+        var reason = document.createElement("span");
+        reason.className = "text-[11px] text-gray-500 ml-1";
+        reason.textContent = "\u2014 " + check.reasoning;
+        row.appendChild(reason);
+      }
+      wrap.appendChild(row);
+    });
+    col.appendChild(wrap);
+  }
+
+  // Ground truth
+  var gt = o.ground_truth;
+  var ogt = oo.ground_truth;
+  if (gt || ogt) {
+    var wrap = document.createElement("div");
+    wrap.className = "mb-3";
+    if (JSON.stringify(gt) !== JSON.stringify(ogt)) wrap.classList.add("diff-changed");
+    cmpLabel(wrap, "Ground Truth");
+    if (gt) {
+      var badge = document.createElement("span");
+      badge.className = "text-xs font-semibold px-2 py-0.5 rounded ";
+      badge.className += gt.correct ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400";
+      badge.textContent = gt.correct ? "Correct" : "Incorrect";
+      wrap.appendChild(badge);
+      if (gt.expected) {
+        var exp = document.createElement("div");
+        exp.className = "text-[11px] text-gray-500 mt-1";
+        exp.textContent = "Expected: " + gt.expected;
+        wrap.appendChild(exp);
+      }
+      if (gt.actual) {
+        var act = document.createElement("div");
+        act.className = "text-[11px] text-gray-500";
+        act.textContent = "Actual: " + gt.actual;
+        wrap.appendChild(act);
+      }
+    } else {
+      var none = document.createElement("span");
+      none.className = "text-xs text-gray-600";
+      none.textContent = "\u2014";
+      wrap.appendChild(none);
+    }
+    col.appendChild(wrap);
+  }
+}
+
+var COMPARE_RENDERERS = {
+  perceive: cmpRenderPerceive,
+  plan: cmpRenderPlan,
+  act: cmpRenderAct,
+  verify: cmpRenderVerify,
+};
 
 // ---- SSE connection ----
 function connectSSE(evalId) {
