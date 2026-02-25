@@ -26,6 +26,7 @@ azure = [
     "tenacity>=8.0",
 ]
 smolvla = ["lerobot", "transformers", "num2words"]
+kinematics = ["mujoco>=3.0"]
 dev = ["pytest", "pytest-asyncio", "httpx", "pre-commit", "bandit[toml]"]
 data = ["datasets>=3.0", "huggingface-hub>=0.25", "Pillow>=10.0"]
 

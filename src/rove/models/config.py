@@ -70,6 +70,7 @@ class StrategyConfig(BaseModel):
     act: str | None = None
     verify: str
     sim: str
+    forward_kinematics: bool = False
     tags: list[str] = []
 
 
@@ -222,6 +223,7 @@ def get_strategies() -> dict[str, Strategy]:
             act=entry.act,
             verify=entry.verify,
             sim=entry.sim,
+            forward_kinematics=entry.forward_kinematics,
             tags=list(entry.tags),
         )
     return strategies

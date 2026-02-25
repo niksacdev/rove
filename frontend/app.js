@@ -3,6 +3,7 @@ const API_BASE = window.location.origin;
 
 // ---- State ----
 let selectedFile = null;
+let selectedUrdfFile = null;
 let isRunning = false;
 let currentEventSource = null;
 let strategies = [];
@@ -50,13 +51,19 @@ const strategiesView = document.getElementById("strategiesView");
 const modelsView    = document.getElementById("modelsView");
 const examplesView  = document.getElementById("examplesView");
 const settingsView  = document.getElementById("settingsView");
+const plusBtn       = document.getElementById("plusBtn");
+const plusPopover   = document.getElementById("plusPopover");
+const urdfInput     = document.getElementById("urdfInput");
+const urdfPreview   = document.getElementById("urdfPreview");
+const urdfName      = document.getElementById("urdfName");
+const removeUrdfBtn = document.getElementById("removeUrdf");
 
 // ---- Stage metadata ----
 const STAGES = {
   perceive: { label: "Scene Analysis",     icon: "eye"          },
   plan:     { label: "Task Planning",       icon: "brain"        },
   act:      { label: "Action Execution",    icon: "bot"          },
-  verify:   { label: "Verification",        icon: "check-circle" },
+  verify:   { label: "Action Plausibility",  icon: "shield-check" },
 };
 
 const STAGE_COLORS = {
@@ -137,17 +144,66 @@ function initTopNav() {
     link.addEventListener("click", function(e) {
       e.preventDefault();
       var text = link.textContent.trim().toLowerCase();
-      activeHistoryIndex = -1;
       if (text === "evaluate") {
-        switchView("home");
+        // If a run is active, restore the evaluation view instead of going home
+        if (isRunning || Object.keys(tabData).length > 0) {
+          restoreEvaluation();
+        } else {
+          activeHistoryIndex = -1;
+          switchView("home");
+        }
       } else if (text === "strategies") {
+        activeHistoryIndex = -1;
         switchView("strategies");
       } else if (text === "endpoints") {
+        activeHistoryIndex = -1;
         switchView("models");
       }
       updateTopNav(text);
     });
   });
+}
+
+function restoreEvaluation() {
+  currentView = "evaluation";
+
+  // Hide all non-eval views
+  welcomeMsg.classList.add("hidden");
+  strategiesView.classList.add("hidden");
+  modelsView.classList.add("hidden");
+  examplesView.classList.add("hidden");
+  settingsView.classList.add("hidden");
+
+  // Unhide evaluation elements
+  chatArea.querySelectorAll(".eval-content").forEach(function(el) { el.classList.remove("hidden"); });
+
+  // Show tabBar if multi-strategy
+  if (Object.keys(tabData).length > 1 || summaryEl) {
+    tabBar.classList.remove("hidden");
+  }
+
+  // Show the active tab content
+  chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.classList.add("hidden"); });
+  var targetEl = null;
+  if (activeTabId === "__summary__" && summaryEl) {
+    targetEl = summaryEl;
+  } else if (activeTabId === "__compare__" && compareEl) {
+    targetEl = compareEl;
+  } else if (tabData[activeTabId]) {
+    targetEl = tabData[activeTabId].el;
+  }
+  if (targetEl) {
+    if (!targetEl.parentNode) {
+      chatArea.appendChild(targetEl);
+    }
+    targetEl.classList.remove("hidden");
+  }
+
+  // Update sidebar/topnav state
+  document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
+  updateTopNav("evaluate");
+
+  scrollToBottom();
 }
 
 function updateTopNav(activeText) {
@@ -173,13 +229,11 @@ function switchView(view) {
   modelsView.classList.add("hidden");
   examplesView.classList.add("hidden");
   settingsView.classList.add("hidden");
-  tabBar.classList.add("hidden");
 
-  // Clear non-persistent content (eval-content AND tab-content elements)
-  var dynamicEls = chatArea.querySelectorAll(".eval-content");
-  dynamicEls.forEach(function(el) { el.remove(); });
-  var tabEls = chatArea.querySelectorAll("[id^='tab-content-']");
-  tabEls.forEach(function(el) { el.remove(); });
+  // Hide (not destroy) evaluation elements so SSE can keep writing to them
+  chatArea.querySelectorAll(".eval-content").forEach(function(el) { el.classList.add("hidden"); });
+  chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.classList.add("hidden"); });
+  tabBar.classList.add("hidden");
 
   // Update sidebar nav active state
   document.querySelectorAll(".sidebar-nav-link").forEach(function(link) {
@@ -220,7 +274,7 @@ function switchView(view) {
       settingsView.classList.remove("hidden");
       break;
     case "evaluation":
-      // Handled by showHistoryEntry
+      // Handled by showHistoryEntry or restoreEvaluation
       break;
   }
 }
@@ -1098,6 +1152,13 @@ function showHistoryEntry(idx) {
   var entry = runHistory[idx];
   if (!entry) return;
 
+  // If this is the currently running/active evaluation, just restore the view
+  if (entry.status === "running" && Object.keys(tabData).length > 0) {
+    restoreEvaluation();
+    renderHistoryItems();
+    return;
+  }
+
   // Clear sidebar nav active state
   document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
 
@@ -1550,6 +1611,37 @@ removeImageBtn.addEventListener("click", function() {
   imagePreview.classList.add("hidden");
 });
 
+// ---- Plus button popover ----
+plusBtn.addEventListener("click", function(e) {
+  e.stopPropagation();
+  plusPopover.classList.toggle("hidden");
+});
+
+document.addEventListener("click", function(e) {
+  if (!plusPopover.contains(e.target) && e.target !== plusBtn) {
+    plusPopover.classList.add("hidden");
+  }
+});
+
+// Hide popover when a file is selected
+imageInput.addEventListener("click", function() { plusPopover.classList.add("hidden"); });
+
+// ---- URDF handling ----
+urdfInput.addEventListener("change", function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  selectedUrdfFile = file;
+  urdfName.textContent = file.name;
+  urdfPreview.classList.remove("hidden");
+  plusPopover.classList.add("hidden");
+});
+
+removeUrdfBtn.addEventListener("click", function() {
+  selectedUrdfFile = null;
+  urdfInput.value = "";
+  urdfPreview.classList.add("hidden");
+});
+
 // ---- Auto-resize textarea + keyboard shortcuts ----
 function autoResizeTextarea() {
   taskInput.addEventListener("input", function() {
@@ -1613,6 +1705,9 @@ evalBtn.addEventListener("click", async function() {
   form.append("image", selectedFile);
   form.append("task", task);
   form.append("strategy_ids", ids.join(","));
+  if (selectedUrdfFile) {
+    form.append("urdf", selectedUrdfFile);
+  }
 
   try {
     var res = await fetch(API_BASE + "/api/evaluate", { method: "POST", body: form });
@@ -1783,15 +1878,24 @@ function switchTab(sid) {
     }
   });
 
-  // Remove old tab content but keep persistent views
-  chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.remove(); });
+  // Hide all tab content panels
+  chatArea.querySelectorAll("[id^='tab-content-']").forEach(function(el) { el.classList.add("hidden"); });
 
+  // Show the target panel (append if not yet in DOM, unhide if already there)
+  var targetEl = null;
   if (sid === "__summary__" && summaryEl) {
-    chatArea.appendChild(summaryEl);
+    targetEl = summaryEl;
   } else if (sid === "__compare__" && compareEl) {
-    chatArea.appendChild(compareEl);
+    targetEl = compareEl;
   } else if (tabData[sid]) {
-    chatArea.appendChild(tabData[sid].el);
+    targetEl = tabData[sid].el;
+  }
+
+  if (targetEl) {
+    if (!targetEl.parentNode) {
+      chatArea.appendChild(targetEl);
+    }
+    targetEl.classList.remove("hidden");
   }
   activeTabId = sid;
 
@@ -2132,8 +2236,8 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
 
   // Per-stage comparison cards
   var STAGE_NAMES = ["perceive", "plan", "act", "verify"];
-  var STAGE_ICONS = { perceive: "eye", plan: "brain", act: "bot", verify: "check-circle" };
-  var STAGE_LABELS = { perceive: "Scene Analysis", plan: "Task Planning", act: "Action Execution", verify: "Verification" };
+  var STAGE_ICONS = { perceive: "eye", plan: "brain", act: "bot", verify: "shield-check" };
+  var STAGE_LABELS = { perceive: "Scene Analysis", plan: "Task Planning", act: "Action Execution", verify: "Action Plausibility" };
 
   STAGE_NAMES.forEach(function(stageName) {
     var stageA = findStageInResults(resultsA, stageName);
@@ -2584,6 +2688,30 @@ function cmpRenderVerify(col, output, otherOutput) {
       wrap.appendChild(none);
     }
     col.appendChild(wrap);
+  }
+
+  // Action plausibility
+  var ap = o.action_plausibility;
+  var oap = oo.action_plausibility;
+  if (ap || oap) {
+    var apWrap = document.createElement("div");
+    apWrap.className = "mb-3";
+    cmpLabel(apWrap, "Action Plausibility");
+    if (ap) {
+      cmpBoolDiff(apWrap, "Bounds Check", ap.bounds_check, oap ? oap.bounds_check : undefined);
+      cmpBoolDiff(apWrap, "Smoothness", ap.smoothness, oap ? oap.smoothness : undefined);
+      cmpBoolDiff(apWrap, "Gripper Consistency", ap.gripper_consistency, oap ? oap.gripper_consistency : undefined);
+      cmpConfidenceBar(apWrap, "Plan Alignment", ap.plan_alignment, oap ? oap.plan_alignment : undefined);
+      if (ap.reasoning) {
+        cmpStringDiff(apWrap, "Plausibility Reasoning", ap.reasoning, oap ? oap.reasoning : undefined);
+      }
+    } else {
+      var none = document.createElement("span");
+      none.className = "text-xs text-gray-600";
+      none.textContent = "\u2014";
+      apWrap.appendChild(none);
+    }
+    col.appendChild(apWrap);
   }
 }
 
@@ -3347,6 +3475,79 @@ function renderAct(container, o) {
     container.appendChild(traj);
   }
 
+  // FK analysis card
+  if (o.fk_analysis) {
+    rendered = true;
+    var fk = o.fk_analysis;
+    var fkCard = document.createElement("div");
+    fkCard.className = "mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2";
+
+    var fkTitle = document.createElement("div");
+    fkTitle.className = "flex items-center gap-2 mb-2";
+    var fkBadge = document.createElement("span");
+    fkBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
+    fkBadge.textContent = "FK Analysis";
+    fkTitle.appendChild(fkBadge);
+    var fkSubtitle = document.createElement("span");
+    fkSubtitle.className = "text-[10px] text-gray-500";
+    fkSubtitle.textContent = "MuJoCo Forward Kinematics";
+    fkTitle.appendChild(fkSubtitle);
+    fkCard.appendChild(fkTitle);
+
+    var fkGrid = document.createElement("div");
+    fkGrid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
+
+    var ep = fk.final_endpoint || [0, 0, 0];
+    var fkItems = [
+      ["Endpoint", "[" + ep.map(function(v) { return v.toFixed(3); }).join(", ") + "]m"],
+      ["Displacement", (fk.total_displacement_m || 0).toFixed(3) + "m"],
+      ["Joint limits", fk.joint_limits_ok ? "within bounds" : "EXCEEDED"],
+      ["Self-collision", fk.self_collision ? "DETECTED" : "none"],
+      ["Smoothness", (fk.smoothness_score || 0).toFixed(2)],
+      ["Max velocity", (fk.max_velocity_rad_s || 0).toFixed(2) + " rad/s"],
+    ];
+    fkItems.forEach(function(item) {
+      var label = document.createElement("span");
+      label.className = "text-gray-500";
+      label.textContent = item[0];
+      fkGrid.appendChild(label);
+      var value = document.createElement("span");
+      var isWarning = (item[0] === "Joint limits" && !fk.joint_limits_ok) ||
+                      (item[0] === "Self-collision" && fk.self_collision);
+      value.className = isWarning ? "text-red-400 font-medium" : "text-gray-300";
+      value.textContent = item[1];
+      fkGrid.appendChild(value);
+    });
+    fkCard.appendChild(fkGrid);
+
+    // Trajectory sample
+    var fkTraj = fk.endpoint_trajectory || [];
+    if (fkTraj.length > 0) {
+      var trajDiv = document.createElement("div");
+      trajDiv.className = "mt-2 font-mono text-[10px] text-gray-400";
+      var trajTitle2 = document.createElement("p");
+      trajTitle2.className = "text-gray-500 mb-0.5";
+      trajTitle2.textContent = "End-effector trajectory (" + fkTraj.length + " points):";
+      trajDiv.appendChild(trajTitle2);
+      var showCount = Math.min(fkTraj.length, 5);
+      for (var ti = 0; ti < showCount; ti++) {
+        var pt = fkTraj[ti];
+        var ptEl = document.createElement("p");
+        ptEl.textContent = "  " + (ti + 1) + ": [" + pt.map(function(v) { return v.toFixed(3); }).join(", ") + "]m";
+        trajDiv.appendChild(ptEl);
+      }
+      if (fkTraj.length > 5) {
+        var more = document.createElement("p");
+        more.className = "text-gray-600";
+        more.textContent = "  ... (" + fkTraj.length + " total)";
+        trajDiv.appendChild(more);
+      }
+      fkCard.appendChild(trajDiv);
+    }
+
+    container.appendChild(fkCard);
+  }
+
   if (!rendered) {
     var fallback = document.createElement("pre");
     fallback.className = "text-xs text-gray-400";
@@ -3480,6 +3681,109 @@ function renderVerify(container, o) {
 
     gtSection.appendChild(gtCard);
     container.appendChild(gtSection);
+  }
+
+  if (o.action_plausibility) {
+    rendered = true;
+    var ap = o.action_plausibility;
+    var apSection = document.createElement("div");
+    apSection.className = "mt-3 space-y-2";
+    var apHeading = document.createElement("div");
+    apHeading.className = "flex items-center gap-1.5";
+    var apTitle = document.createElement("p");
+    apTitle.className = "text-[11px] text-gray-500 font-medium";
+    apTitle.textContent = "Action Plausibility";
+    apHeading.appendChild(apTitle);
+    var apInfo = document.createElement("span");
+    apInfo.className = "text-[10px] text-gray-600";
+    apInfo.title = "Structured plausibility checks derived from VLA output without simulation";
+    apInfo.textContent = "\u24d8";
+    apHeading.appendChild(apInfo);
+    apSection.appendChild(apHeading);
+
+    var apCard = document.createElement("div");
+    apCard.className = "bg-black/20 rounded-md px-3 py-2 space-y-2";
+
+    // Boolean sub-checks
+    var boolChecks = [
+      { key: "bounds_check", label: "Bounds Check", desc: "Action deltas within plausible ranges" },
+      { key: "smoothness", label: "Smoothness", desc: "No sudden jumps between steps" },
+      { key: "gripper_consistency", label: "Gripper Consistency", desc: "Open/close pattern matches task" },
+    ];
+    boolChecks.forEach(function(bc) {
+      var row = document.createElement("div");
+      row.className = "flex items-center gap-2";
+      var badge = document.createElement("span");
+      badge.className = ap[bc.key]
+        ? "text-[10px] bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded"
+        : "text-[10px] bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded";
+      badge.textContent = ap[bc.key] ? "PASS" : "FAIL";
+      row.appendChild(badge);
+      var lbl = document.createElement("span");
+      lbl.className = "text-xs text-gray-200 font-medium";
+      lbl.textContent = bc.label;
+      row.appendChild(lbl);
+      var desc = document.createElement("span");
+      desc.className = "text-[10px] text-gray-600 ml-auto";
+      desc.textContent = bc.desc;
+      row.appendChild(desc);
+      apCard.appendChild(row);
+    });
+
+    // Plan alignment bar
+    if (ap.plan_alignment != null) {
+      var paRow = document.createElement("div");
+      paRow.className = "mt-1";
+      var paLabel = document.createElement("div");
+      paLabel.className = "flex items-center gap-2 mb-1";
+      var paLbl = document.createElement("span");
+      paLbl.className = "text-[11px] text-gray-500";
+      paLbl.textContent = "Plan Alignment";
+      paLabel.appendChild(paLbl);
+      var paDesc = document.createElement("span");
+      paDesc.className = "text-[10px] text-gray-600";
+      paDesc.textContent = "how rigorously the VLA follows the plan";
+      paLabel.appendChild(paDesc);
+      paRow.appendChild(paLabel);
+      var paPct = (ap.plan_alignment * 100).toFixed(1);
+      var paColor = ap.plan_alignment >= 0.7 ? "green" : (ap.plan_alignment >= 0.4 ? "yellow" : "red");
+      var paBarRow = document.createElement("div");
+      paBarRow.className = "flex items-center gap-3";
+      var paOuter = document.createElement("div");
+      paOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[200px]";
+      var paInner = document.createElement("div");
+      paInner.className = "h-full bg-" + paColor + "-500 rounded-full transition-all duration-500";
+      paInner.style.width = paPct + "%";
+      paOuter.appendChild(paInner);
+      paBarRow.appendChild(paOuter);
+      var paPctSpan = document.createElement("span");
+      paPctSpan.className = "text-xs font-mono text-" + paColor + "-400";
+      paPctSpan.textContent = paPct + "%";
+      paBarRow.appendChild(paPctSpan);
+      paRow.appendChild(paBarRow);
+      apCard.appendChild(paRow);
+    }
+
+    // Plausibility reasoning
+    if (ap.reasoning) {
+      var apReason = document.createElement("p");
+      apReason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-1";
+      apReason.textContent = ap.reasoning;
+      apCard.appendChild(apReason);
+    }
+
+    apSection.appendChild(apCard);
+
+    // Disclaimer banner
+    var disclaimer = document.createElement("div");
+    disclaimer.className = "mt-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-md";
+    var disclaimerText = document.createElement("p");
+    disclaimerText.className = "text-[11px] text-amber-400/80";
+    disclaimerText.textContent = "\u26A0 Action plausibility only \u2014 true success assessment requires a simulator or post-execution observation.";
+    disclaimer.appendChild(disclaimerText);
+    apSection.appendChild(disclaimer);
+
+    container.appendChild(apSection);
   }
 
   if (!rendered) {

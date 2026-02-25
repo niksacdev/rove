@@ -256,6 +256,7 @@ strategies:
     act: mock-vla
     verify: mock-vlm
     sim: mock-sim
+    forward_kinematics: true
     tags: [test, mock]
 
   # --- Scene Detection (perceive → verify only) ---
@@ -285,6 +286,7 @@ strategies:
     act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
+    forward_kinematics: true
     tags: [scene, vla, local, lerobot, pi05]
 
   # --- Scene + Plan + Action (perceive → plan → act → verify) ---
@@ -296,6 +298,19 @@ strategies:
     act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
+    forward_kinematics: true
+    tags: [full, local, vla, lerobot, pi05]
+
+  # --- Scene + Plan + Action without FK (perceive → plan → act → verify) ---
+  scene_plan_action_no_fk:
+    display_name: "Scene + Plan + Action (pi0.5) - No FK"
+    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies — no FK"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: pi05-libero
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    forward_kinematics: false
     tags: [full, local, vla, lerobot, pi05]
 
   # --- Hybrid: Edge VLM + Foundry Agent + VLA ---
@@ -307,6 +322,7 @@ strategies:
     act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
+    forward_kinematics: true
     tags: [hybrid, foundry, agent, pi05]
 
   # --- Full Pipeline (perceive → plan → act → verify) ---
@@ -318,6 +334,7 @@ strategies:
     act: mock-vla
     verify: qwen3-vl-8b
     sim: mock-sim
+    forward_kinematics: true
     tags: [full, local, vla]
 
 # =============================================================================

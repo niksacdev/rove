@@ -16,9 +16,15 @@ logger = logging.getLogger(__name__)
 class RunManager:
     """Execute multiple strategies concurrently with bounded parallelism."""
 
-    def __init__(self, registry: AdapterRegistry, max_concurrent: int = 5):
+    def __init__(
+        self,
+        registry: AdapterRegistry,
+        max_concurrent: int = 5,
+        urdf_path: str | None = None,
+    ):
         self.registry = registry
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._urdf_path = urdf_path
 
     async def run_strategies(
         self,
@@ -150,4 +156,6 @@ class RunManager:
             verify_adapter=verify,
             sim=sim,
             registry=self.registry,
+            forward_kinematics=strategy.forward_kinematics,
+            urdf_path=self._urdf_path,
         )

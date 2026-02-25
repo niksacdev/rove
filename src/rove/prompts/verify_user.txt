@@ -1,5 +1,5 @@
 You are the VERIFY stage of a robotics evaluation pipeline.
-Evaluate the quality of each completed pipeline stage's outputs.
+Evaluate the quality of each completed pipeline stage's outputs and assess action plausibility.
 
 Task: {task}
 Completed stages: {completed_stages}
@@ -9,7 +9,7 @@ Completed stages: {completed_stages}
 {ground_truth_section}
 
 Return a JSON object with:
-- "success": boolean (overall pipeline success)
+- "success": boolean (overall pipeline plausibility — are all outputs reasonable?)
 - "confidence": float 0-1
 - "reasoning": string explaining your overall assessment
 - "stage_checks": list of objects, one per completed stage, each with:
@@ -18,6 +18,14 @@ Return a JSON object with:
     - "confidence": float 0-1
     - "reasoning": string
 - "completed_stages": list of stage name strings that were evaluated
+- "action_plausibility": object (only if act stage completed), with:
+    - "bounds_check": boolean (are action deltas within physically plausible ranges, e.g. <0.1m per step?)
+    - "smoothness": boolean (no sudden large jumps between consecutive steps?)
+    - "gripper_consistency": boolean (does gripper open/close pattern match the task, e.g. close-then-open for pick-and-place?)
+    - "plan_alignment": float 0-1 (how rigorously does the VLA trajectory follow the planned steps? Cross-reference the plan's steps/strategy with the trajectory phases — approach, grasp, transport, place — and score alignment)
+    - "reasoning": string explaining the plausibility assessment, including which plan steps the trajectory appears to follow and where it diverges
 {ground_truth_output_spec}
+
+IMPORTANT: You cannot determine whether the robot successfully completed the task without a simulator or post-execution image. Assess action PLAUSIBILITY, not action SUCCESS. Specifically evaluate how faithfully the VLA output follows the plan. State the sim/after-image limitation in your reasoning.
 
 Return ONLY valid JSON, no markdown.
