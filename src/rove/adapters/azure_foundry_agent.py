@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 _STAGE_PROMPTS: dict[str, str] = {
     "perceive": (
         "You are a robotics perception agent. Analyze the scene and return JSON with:\n"
-        '{"objects": [{"name": str, "bbox": [x,y,w,h], "confidence": float}], '
+        '{"objects": [{"name": str, "bbox": [x,y,w,h], "position": [x,y,z] (meters, optional), "confidence": float}], '
         '"spatial_relations": [str], "task_relevant": [str], '
         '"environment_distribution": str (describe environment type, lighting, surfaces, clutter), '
         '"raw_response": str}\n'
@@ -44,11 +44,16 @@ _STAGE_PROMPTS: dict[str, str] = {
         "Return ONLY valid JSON, no markdown fences."
     ),
     "verify": (
-        "You are a robotics verification agent. Assess whether the task was completed "
-        "successfully. Check whether the pipeline included environment_distribution, "
+        "You are a robotics action plausibility assessor. Evaluate whether pipeline stage "
+        "outputs are reasonable and whether predicted actions are physically plausible. "
+        "You CANNOT determine task success without a simulator or post-execution observation — "
+        "assess plausibility only. Check whether the pipeline included environment_distribution, "
         "task_repertoire, artifacts, and degradation_profile — note as a weakness if missing. "
         "Return JSON with:\n"
-        '{"success": bool, "confidence": float, "reasoning": str, "raw_response": str}\n'
+        '{"success": bool, "confidence": float, "reasoning": str, '
+        '"action_plausibility": {"bounds_check": bool, "smoothness": bool, '
+        '"gripper_consistency": bool, "plan_alignment": float, "reasoning": str}, '
+        '"raw_response": str}\n'
         "Return ONLY valid JSON, no markdown fences."
     ),
 }

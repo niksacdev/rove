@@ -5,7 +5,14 @@ from __future__ import annotations
 import asyncio
 import random
 
-from rove.models import GroundTruthCheck, SceneAnalysis, StageCheck, TaskPlan, VerificationResult
+from rove.models import (
+    ActionPlausibility,
+    GroundTruthCheck,
+    SceneAnalysis,
+    StageCheck,
+    TaskPlan,
+    VerificationResult,
+)
 
 
 class MockVLMAdapter:
@@ -24,10 +31,30 @@ class MockVLMAdapter:
         await self._simulate_latency()
         return SceneAnalysis(
             objects=[
-                {"name": "red bracket", "bbox": [120, 80, 60, 40], "confidence": 0.94},
-                {"name": "blue bolt", "bbox": [250, 150, 30, 25], "confidence": 0.88},
-                {"name": "bin A", "bbox": [400, 200, 100, 80], "confidence": 0.96},
-                {"name": "gripper", "bbox": [300, 50, 50, 60], "confidence": 0.91},
+                {
+                    "name": "red bracket",
+                    "bbox": [120, 80, 60, 40],
+                    "position": [0.25, -0.10, 0.32],
+                    "confidence": 0.94,
+                },
+                {
+                    "name": "blue bolt",
+                    "bbox": [250, 150, 30, 25],
+                    "position": [0.35, 0.05, 0.31],
+                    "confidence": 0.88,
+                },
+                {
+                    "name": "bin A",
+                    "bbox": [400, 200, 100, 80],
+                    "position": [0.50, 0.15, 0.30],
+                    "confidence": 0.96,
+                },
+                {
+                    "name": "gripper",
+                    "bbox": [300, 50, 50, 60],
+                    "position": [0.30, 0.00, 0.45],
+                    "confidence": 0.91,
+                },
             ],
             spatial_relations=[
                 "red bracket is to the left of bin A",
@@ -135,6 +162,22 @@ class MockVLMAdapter:
                 confidence=random.uniform(0.7, 0.95) if is_correct else random.uniform(0.3, 0.6),
             )
 
+        # Generate action plausibility if act stage was completed
+        plausibility = None
+        if "act" in completed_stages:
+            plausibility = ActionPlausibility(
+                bounds_check=random.random() < self._quality,
+                smoothness=random.random() < self._quality,
+                gripper_consistency=random.random() < self._quality,
+                plan_alignment=round(random.uniform(0.5, 0.95), 2),
+                reasoning=(
+                    "Action deltas are within expected ranges. "
+                    "Gripper pattern is consistent with pick-and-place. "
+                    "Note: true success cannot be assessed without a simulator "
+                    "or post-execution image."
+                ),
+            )
+
         success = all_passed if (stage_checks or gt_check) else random.random() < self._quality
 
         if success:
@@ -158,6 +201,7 @@ class MockVLMAdapter:
             completed_stages=completed_stages,
             stage_checks=stage_checks,
             ground_truth=gt_check,
+            action_plausibility=plausibility,
         )
 
     async def health_check(self) -> bool:

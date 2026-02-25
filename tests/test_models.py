@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from rove.models import (
+    ActionPlausibility,
     ActionPrediction,
     PipelineContext,
     SceneAnalysis,
     Strategy,
     TaskPlan,
+    VerificationResult,
 )
 
 
@@ -29,6 +31,25 @@ class TestPipelineContext:
         d = ctx.to_dict()
         assert d["scene"]["task_relevant"] == ["bolt"]
         assert d["scene"]["objects"] == [{"name": "bolt"}]
+
+    def test_with_scene_position(self):
+        ctx = PipelineContext(task="test")
+        ctx.scene = SceneAnalysis(
+            objects=[
+                {
+                    "name": "bolt",
+                    "bbox": [10, 20, 30, 40],
+                    "position": [0.25, -0.10, 0.32],
+                    "confidence": 0.9,
+                }
+            ],
+            spatial_relations=["bolt is on table"],
+            task_relevant=["bolt"],
+        )
+        d = ctx.to_dict()
+        obj = d["scene"]["objects"][0]
+        assert obj["position"] == [0.25, -0.10, 0.32]
+        assert obj["name"] == "bolt"
 
     def test_with_plan(self):
         ctx = PipelineContext(task="test")
@@ -88,3 +109,40 @@ class TestStrategy:
             tags=["fast", "cloud"],
         )
         assert s.tags == ["fast", "cloud"]
+
+
+class TestActionPlausibility:
+    def test_defaults(self):
+        ap = ActionPlausibility()
+        assert ap.bounds_check is True
+        assert ap.smoothness is True
+        assert ap.gripper_consistency is True
+        assert ap.plan_alignment == 0.0
+        assert ap.reasoning == ""
+
+    def test_custom_values(self):
+        ap = ActionPlausibility(
+            bounds_check=False,
+            smoothness=True,
+            gripper_consistency=False,
+            plan_alignment=0.75,
+            reasoning="Bounds exceeded at step 3",
+        )
+        assert ap.bounds_check is False
+        assert ap.plan_alignment == 0.75
+        assert "step 3" in ap.reasoning
+
+    def test_verification_result_with_plausibility(self):
+        ap = ActionPlausibility(plan_alignment=0.8, reasoning="Good alignment")
+        vr = VerificationResult(
+            success=True,
+            confidence=0.9,
+            reasoning="Plausible",
+            action_plausibility=ap,
+        )
+        assert vr.action_plausibility is not None
+        assert vr.action_plausibility.plan_alignment == 0.8
+
+    def test_verification_result_without_plausibility(self):
+        vr = VerificationResult(success=True, confidence=0.9, reasoning="OK")
+        assert vr.action_plausibility is None

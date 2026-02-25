@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "ActionPlausibility",
     "ActionPrediction",
     "ExampleData",
     "GraspPlan",
@@ -43,7 +44,7 @@ class StageStatus(StrEnum):
 class SceneAnalysis(BaseModel):
     objects: list[dict] = Field(
         default_factory=list
-    )  # [{"name": "red bracket", "bbox": [x,y,w,h], "confidence": 0.9}]
+    )  # [{"name": str, "bbox": [x,y,w,h], "position": [x,y,z] (meters, optional), "confidence": float}]
     spatial_relations: list[str] = Field(
         default_factory=list
     )  # ["red bracket is to the left of bin A"]
@@ -112,6 +113,16 @@ class GroundTruthCheck(BaseModel):
     confidence: float
 
 
+class ActionPlausibility(BaseModel):
+    """Structured plausibility checks derivable from VLA output without simulation."""
+
+    bounds_check: bool = True  # action deltas within physically plausible ranges
+    smoothness: bool = True  # no sudden jumps between consecutive steps
+    gripper_consistency: bool = True  # gripper open/close pattern matches task type
+    plan_alignment: float = 0.0  # 0-1, how rigorously the VLA trajectory follows the plan steps
+    reasoning: str = ""  # explanation of plausibility assessment
+
+
 class VerificationResult(BaseModel):
     success: bool
     confidence: float  # 0.0 - 1.0
@@ -120,6 +131,7 @@ class VerificationResult(BaseModel):
     completed_stages: list[str] = Field(default_factory=list)
     stage_checks: list[StageCheck] = Field(default_factory=list)
     ground_truth: GroundTruthCheck | None = None
+    action_plausibility: ActionPlausibility | None = None
 
 
 class PipelineStageResult(BaseModel):
