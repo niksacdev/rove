@@ -40,8 +40,18 @@ class MockAgentAdapter:
     def _mock_perceive(self, task: str, context: dict | None) -> dict:
         return {
             "objects": [
-                {"name": "target object", "bbox": [120, 80, 60, 40], "confidence": 0.92},
-                {"name": "destination", "bbox": [400, 200, 100, 80], "confidence": 0.95},
+                {
+                    "name": "target object",
+                    "bbox": [120, 80, 60, 40],
+                    "position": [0.25, -0.10, 0.32],
+                    "confidence": 0.92,
+                },
+                {
+                    "name": "destination",
+                    "bbox": [400, 200, 100, 80],
+                    "position": [0.50, 0.15, 0.30],
+                    "confidence": 0.95,
+                },
             ],
             "spatial_relations": ["target object is to the left of destination"],
             "task_relevant": ["target object", "destination"],

@@ -50,6 +50,15 @@ class TestMockSimAdapter:
 
 class TestMockVLMAdapter:
     @pytest.mark.asyncio
+    async def test_analyze_scene_has_positions(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2]})
+        scene = await vlm.analyze_scene("img", "pick red bracket")
+        for obj in scene.objects:
+            assert "position" in obj, f"Missing position for {obj['name']}"
+            assert isinstance(obj["position"], list)
+            assert len(obj["position"]) == 3
+
+    @pytest.mark.asyncio
     async def test_plan_uses_scene_target(self):
         vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2]})
         scene = SceneAnalysis(
@@ -118,6 +127,31 @@ class TestMockVLMVerifyStageAware:
         result = await vlm.verify_success("before", "after", "test", context=ctx)
         assert result.ground_truth is None
 
+    @pytest.mark.asyncio
+    async def test_verify_plausibility_with_act(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0})
+        ctx = {
+            "completed_stages": ["perceive", "plan", "act"],
+            "plan": {"target_object": "bolt", "strategy": "top-down"},
+        }
+        result = await vlm.verify_success("before", "after", "test", context=ctx)
+        assert result.action_plausibility is not None
+        assert isinstance(result.action_plausibility.bounds_check, bool)
+        assert isinstance(result.action_plausibility.smoothness, bool)
+        assert isinstance(result.action_plausibility.gripper_consistency, bool)
+        assert 0.0 <= result.action_plausibility.plan_alignment <= 1.0
+        assert result.action_plausibility.reasoning != ""
+
+    @pytest.mark.asyncio
+    async def test_verify_plausibility_without_act(self):
+        vlm = MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0})
+        ctx = {
+            "completed_stages": ["perceive", "plan"],
+            "plan": {"target_object": "bolt"},
+        }
+        result = await vlm.verify_success("before", "after", "test", context=ctx)
+        assert result.action_plausibility is None
+
 
 class TestMockVLAAdapter:
     @pytest.mark.asyncio
@@ -140,6 +174,15 @@ class TestMockVLAAdapter:
 
 
 class TestMockAgentAdapter:
+    @pytest.mark.asyncio
+    async def test_perceive_has_positions(self):
+        agent = MockAgentAdapter(config={"mock_latency_ms": [1, 2]})
+        result = await agent.run_stage("perceive", "img", "pick object")
+        for obj in result["objects"]:
+            assert "position" in obj, f"Missing position for {obj['name']}"
+            assert isinstance(obj["position"], list)
+            assert len(obj["position"]) == 3
+
     @pytest.mark.asyncio
     async def test_plan_uses_scene_context(self):
         agent = MockAgentAdapter(config={"mock_latency_ms": [1, 2]})

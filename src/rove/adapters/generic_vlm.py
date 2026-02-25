@@ -9,8 +9,16 @@ from rove.utils.prompt_loader import PromptManager
 
 def _format_scene(scene: SceneAnalysis) -> str:
     """Format a SceneAnalysis into a text summary for the plan prompt."""
+    parts = []
+    for o in scene.objects:
+        name = o.get("name", "?")
+        pos = o.get("position")
+        if pos:
+            parts.append(f"{name} at [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]m")
+        else:
+            parts.append(name)
     return (
-        f"Detected objects: {', '.join(o.get('name', '?') for o in scene.objects)}. "
+        f"Detected objects: {', '.join(parts)}. "
         f"Spatial relations: {'; '.join(scene.spatial_relations)}. "
         f"Task-relevant: {', '.join(scene.task_relevant)}."
     )

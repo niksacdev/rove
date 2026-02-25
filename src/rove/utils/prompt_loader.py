@@ -71,11 +71,18 @@ class PromptManager:
         if "perceive" in completed_stages:
             scene = context.get("scene", {})
             objects = scene.get("objects", [])
-            obj_names = [o.get("name", "?") for o in objects]
+            obj_summaries = []
+            for o in objects:
+                name = o.get("name", "?")
+                pos = o.get("position")
+                if pos:
+                    obj_summaries.append(f"{name} at [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]m")
+                else:
+                    obj_summaries.append(name)
             relations = scene.get("spatial_relations", [])
             relevant = scene.get("task_relevant", [])
             stage_lines.append("--- PERCEIVE stage output ---")
-            stage_lines.append(f"Detected objects: {', '.join(obj_names)}")
+            stage_lines.append(f"Detected objects: {', '.join(obj_summaries)}")
             stage_lines.append(f"Spatial relations: {'; '.join(relations)}")
             stage_lines.append(f"Task-relevant objects: {', '.join(relevant)}")
             env_dist = scene.get("environment_distribution", "")
@@ -168,13 +175,18 @@ class PromptManager:
                 stage_lines.append(
                     "IMPORTANT: Without before/after images from a simulator,"
                     " you CANNOT determine whether the trajectory reached the"
-                    " correct object or destination. Evaluate what IS observable:\n"
+                    " correct object or destination. Assess action PLAUSIBILITY,"
+                    " not action SUCCESS. Evaluate what IS observable:\n"
                     "- Does the gripper open/close pattern match the task"
                     " (e.g., pick-and-place needs close→open)?\n"
                     "- Is the number of steps reasonable?\n"
                     "- Are the delta magnitudes physically plausible?\n"
                     "- Does the trajectory show distinct phases (approach,"
                     " grasp, transport, place)?\n"
+                    "- How faithfully does the VLA trajectory follow the planned steps?\n"
+                    "Return an 'action_plausibility' object with: bounds_check (bool),"
+                    " smoothness (bool), gripper_consistency (bool),"
+                    " plan_alignment (float 0-1), reasoning (string).\n"
                     "Do NOT fail the act stage solely because you cannot verify"
                     " the exact target position from delta values alone."
                 )
