@@ -26,7 +26,7 @@ let stageBudgets = {}; // per-stage budgets { perceive: 3000, plan: 3000, act: 3
 
 function formatLatency(ms) {
   if (ms == null) return "\u2014";
-  return (ms / 1000).toFixed(1) + "s";
+  return Math.round(ms) + "ms";
 }
 
 function latencyColorClass(ms, budgetMs) {
@@ -2264,7 +2264,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
     var deltaEl = document.createElement("div");
     deltaEl.className = "col-span-2 text-center text-[11px] font-mono " + (delta < 0 ? "text-green-400" : delta > 0 ? "text-red-400" : "text-gray-500");
     var fasterLabel = delta < 0 ? nameA + " faster" : delta > 0 ? nameB + " faster" : "equal";
-    deltaEl.textContent = "Latency delta: " + (delta > 0 ? "+" : "") + (delta / 1000).toFixed(1) + "s (" + fasterLabel + ")";
+    deltaEl.textContent = "Latency delta: " + (delta > 0 ? "+" : "") + Math.round(delta) + "ms (" + fasterLabel + ")";
     summaryRow.appendChild(deltaEl);
   }
   el.appendChild(summaryRow);
@@ -3497,14 +3497,21 @@ function renderAct(container, o) {
     rendered = true;
     var simRow = document.createElement("div");
     simRow.className = "mt-2 flex items-center gap-2";
-    if (o.sim_success != null) {
+    var isMock = o.sim_is_mock === true;
+    if (o.sim_success != null && !isMock) {
       var successBadge = document.createElement("span");
       successBadge.className = "text-[10px] px-2 py-0.5 rounded " +
         (o.sim_success ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300");
       successBadge.textContent = o.sim_success ? "Sim: success" : "Sim: not achieved";
       simRow.appendChild(successBadge);
     }
-    if (o.sim_done) {
+    if (isMock) {
+      var mockBadge = document.createElement("span");
+      mockBadge.className = "text-[10px] bg-gray-500/15 text-gray-400 px-2 py-0.5 rounded";
+      mockBadge.textContent = "Sim: mock (no real physics)";
+      simRow.appendChild(mockBadge);
+    }
+    if (o.sim_done && !isMock) {
       var doneBadge = document.createElement("span");
       doneBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
       doneBadge.textContent = "Episode done";
@@ -3596,6 +3603,21 @@ function renderAct(container, o) {
     }
 
     container.appendChild(fkCard);
+  }
+
+  // FK skipped warning
+  if (o.fk_skipped) {
+    rendered = true;
+    var fkWarn = document.createElement("div");
+    fkWarn.className = "mt-2 flex items-center gap-2 text-[10px] text-yellow-400/80";
+    var warnIcon = document.createElement("i");
+    warnIcon.setAttribute("data-lucide", "alert-triangle");
+    warnIcon.className = "w-3 h-3";
+    fkWarn.appendChild(warnIcon);
+    var warnText = document.createElement("span");
+    warnText.textContent = "FK skipped: " + o.fk_skipped;
+    fkWarn.appendChild(warnText);
+    container.appendChild(fkWarn);
   }
 
   if (!rendered) {

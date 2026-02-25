@@ -267,31 +267,48 @@ class EvaluationPipeline:
                     last_obs = await self.sim.get_observation()
 
                 # Compute FK before yielding act result so it's included in output
-                if self._forward_kinematics and self._urdf_path and action_pred.actions:
-                    try:
-                        from rove.adapters.fk_mujoco import compute_fk
-
-                        fk = compute_fk(
-                            self._urdf_path,
-                            action_pred.actions,
-                            initial_qpos=ctx.proprioception or None,
+                fk_skipped_reason: str | None = None
+                if self._forward_kinematics:
+                    if not self._urdf_path:
+                        fk_skipped_reason = (
+                            "No URDF provided — upload a URDF or use a dataset with robot metadata"
                         )
-                        ctx.fk_analysis = fk
-                        logger.info("FK analysis: %d steps", fk.get("steps_analyzed", 0))
-                    except ImportError:
-                        logger.warning("MuJoCo not installed — skipping FK")
-                    except Exception as fk_err:
-                        logger.warning("FK computation failed: %s", fk_err)
+                        logger.warning("FK enabled but no URDF path — skipping FK")
+                    elif not action_pred.actions:
+                        fk_skipped_reason = "No trajectory actions to analyze"
+                        logger.warning("FK enabled but no actions — skipping FK")
+                    else:
+                        try:
+                            from rove.adapters.fk_mujoco import compute_fk
+
+                            fk = compute_fk(
+                                self._urdf_path,
+                                action_pred.actions,
+                                initial_qpos=ctx.proprioception or None,
+                            )
+                            ctx.fk_analysis = fk
+                            logger.info("FK analysis: %d steps", fk.get("steps_analyzed", 0))
+                        except ImportError:
+                            fk_skipped_reason = "MuJoCo not installed"
+                            logger.warning("MuJoCo not installed — skipping FK")
+                        except Exception as fk_err:
+                            fk_skipped_reason = f"FK computation failed: {fk_err}"
+                            logger.warning("FK computation failed: %s", fk_err)
 
                 latency = (time.monotonic() - t0) * 1000
 
                 act_output: dict[str, Any] = action_pred.model_dump()
                 act_output["sim_done"] = last_obs.done if last_obs else False
                 act_output["sim_success"] = last_obs.success if last_obs else False
+                act_output["sim_is_mock"] = self.sim is not None and getattr(
+                    self.sim, "model_id", ""
+                ).startswith("mock")
                 if action_pred.action_type == "trajectory":
                     act_output["actions_executed"] = len(action_pred.actions)
                 if ctx.fk_analysis:
                     act_output["fk_analysis"] = ctx.fk_analysis
+                if fk_skipped_reason:
+                    act_output["fk_skipped"] = fk_skipped_reason
 
                 yield PipelineStageResult(
                     stage="act",
