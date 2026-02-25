@@ -21,6 +21,33 @@ let configData = null; // full rove.yaml as JSON
 let sampleIndex = 0;
 let historyFilterText = "";
 let historyFilterStrategy = "";
+let latencyBudgetMs = null; // loaded from /api/config
+let stageBudgets = {}; // per-stage budgets { perceive: 3000, plan: 3000, act: 3000, verify: 1000 }
+
+function formatLatency(ms) {
+  if (ms == null) return "\u2014";
+  return (ms / 1000).toFixed(1) + "s";
+}
+
+function latencyColorClass(ms, budgetMs) {
+  if (budgetMs === undefined) budgetMs = latencyBudgetMs;
+  if (ms == null || budgetMs == null) return "text-gray-300";
+  var ratio = ms / budgetMs;
+  if (ratio <= 0.8) return "text-green-400";
+  if (ratio <= 1.0) return "text-yellow-400";
+  return "text-red-400";
+}
+
+function getStageBudget(stage, strategyId) {
+  // Strategy-level override
+  if (strategyId && configData && configData.strategies && configData.strategies[strategyId]) {
+    var sb = configData.strategies[strategyId].latency_budget;
+    if (sb && sb[stage] != null) return sb[stage];
+  }
+  // Default fallback
+  if (stageBudgets[stage] != null) return stageBudgets[stage];
+  return null;
+}
 
 const SAMPLE_QUESTIONS = [
   "Pick up the red bracket from the table and place it in bin A",
@@ -133,6 +160,12 @@ async function loadConfig() {
     var res = await fetch(API_BASE + "/api/config");
     if (!res.ok) throw new Error("HTTP " + res.status);
     configData = await res.json();
+    if (configData && configData.defaults && configData.defaults.latency_budget_ms) {
+      latencyBudgetMs = configData.defaults.latency_budget_ms;
+    }
+    if (configData && configData.defaults && configData.defaults.latency_budget) {
+      stageBudgets = configData.defaults.latency_budget;
+    }
   } catch (e) {
     console.error("Failed to load config:", e);
   }
@@ -1270,7 +1303,7 @@ function showHistoryEntry(idx) {
       var stratResults = entry.results && entry.results[sid];
       if (stratResults && stratResults.stages) {
         stratResults.stages.forEach(function(stg, stageIndex) {
-          addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex);
+          addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex, sid);
         });
       }
     });
@@ -1290,7 +1323,7 @@ function showHistoryEntry(idx) {
     var stratResults = entry.results && entry.results[showSid];
     if (stratResults && stratResults.stages) {
       stratResults.stages.forEach(function(stg, stageIndex) {
-        addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex);
+        addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex, showSid);
       });
     }
 
@@ -1915,7 +1948,8 @@ function updateTabStatus(sid, status, latencyMs) {
   if (latencyMs != null) {
     var lat = document.getElementById("tab-latency-" + sid);
     if (lat) {
-      lat.textContent = Math.round(latencyMs) + "ms";
+      lat.textContent = formatLatency(latencyMs);
+      lat.className = "ml-1 text-[10px] font-mono hidden " + latencyColorClass(latencyMs);
       lat.classList.remove("hidden");
     }
   }
@@ -1940,7 +1974,8 @@ function updateSummaryTable(strategyIds) {
   // Table header
   var headerRow = document.createElement("div");
   headerRow.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
-  ["Strategy", "Status", "Result", "Latency", "Stages"].forEach(function(h) {
+  var latencyHeader = "Latency" + (latencyBudgetMs ? " (/" + formatLatency(latencyBudgetMs) + ")" : "");
+  ["Strategy", "Status", "Result", latencyHeader, "Stages"].forEach(function(h) {
     var cell = document.createElement("span");
     cell.textContent = h;
     headerRow.appendChild(cell);
@@ -2011,8 +2046,8 @@ function updateSummaryTable(strategyIds) {
 
     // Latency
     var latCell = document.createElement("span");
-    latCell.className = "text-[11px] font-mono " + (sr.latency_ms != null ? "text-gray-300" : "text-gray-600");
-    latCell.textContent = sr.latency_ms != null ? Math.round(sr.latency_ms) + "ms" : "\u2014";
+    latCell.className = "text-[11px] font-mono " + (sr.latency_ms != null ? latencyColorClass(sr.latency_ms) : "text-gray-600");
+    latCell.textContent = formatLatency(sr.latency_ms);
     row.appendChild(latCell);
 
     // Stage progress dots
@@ -2215,8 +2250,8 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
       var lat = item.r.totalLatencyMs;
       if (lat != null) {
         var latEl = document.createElement("span");
-        latEl.className = "text-[11px] font-mono text-gray-400";
-        latEl.textContent = Math.round(lat) + "ms";
+        latEl.className = "text-[11px] font-mono " + latencyColorClass(lat);
+        latEl.textContent = formatLatency(lat);
         card.appendChild(latEl);
       }
     }
@@ -2229,7 +2264,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
     var deltaEl = document.createElement("div");
     deltaEl.className = "col-span-2 text-center text-[11px] font-mono " + (delta < 0 ? "text-green-400" : delta > 0 ? "text-red-400" : "text-gray-500");
     var fasterLabel = delta < 0 ? nameA + " faster" : delta > 0 ? nameB + " faster" : "equal";
-    deltaEl.textContent = "Latency delta: " + (delta > 0 ? "+" : "") + Math.round(delta) + "ms (" + fasterLabel + ")";
+    deltaEl.textContent = "Latency delta: " + (delta > 0 ? "+" : "") + (delta / 1000).toFixed(1) + "s (" + fasterLabel + ")";
     summaryRow.appendChild(deltaEl);
   }
   el.appendChild(summaryRow);
@@ -2259,13 +2294,26 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
     hdrText.textContent = STAGE_LABELS[stageName];
     hdr.appendChild(hdrText);
 
-    // Latency in header
+    // Latency in header — color-coded per stage budget
     var latA = stageA ? (stageA.latencyMs || stageA.latency_ms) : null;
     var latB = stageB ? (stageB.latencyMs || stageB.latency_ms) : null;
-    if (latA != null && latB != null) {
+    if (latA != null || latB != null) {
       var latComp = document.createElement("span");
-      latComp.className = "text-[10px] font-mono text-gray-500 ml-auto";
-      latComp.textContent = Math.round(latA) + "ms vs " + Math.round(latB) + "ms";
+      latComp.className = "text-[10px] font-mono ml-auto";
+      var budgetA = getStageBudget(stageName, sidA);
+      var budgetB = getStageBudget(stageName, sidB);
+      var spanA = document.createElement("span");
+      spanA.className = latA != null ? latencyColorClass(latA, budgetA) : "text-gray-500";
+      spanA.textContent = formatLatency(latA);
+      var spanVs = document.createElement("span");
+      spanVs.className = "text-gray-500";
+      spanVs.textContent = " vs ";
+      var spanB = document.createElement("span");
+      spanB.className = latB != null ? latencyColorClass(latB, budgetB) : "text-gray-500";
+      spanB.textContent = formatLatency(latB);
+      latComp.appendChild(spanA);
+      latComp.appendChild(spanVs);
+      latComp.appendChild(spanB);
       hdr.appendChild(latComp);
     }
     card.appendChild(hdr);
@@ -2768,7 +2816,7 @@ function connectSSE(evalId) {
         tabData[sid].typingEl = null;
       }
       var stageIndex = ["perceive", "plan", "act", "verify"].indexOf(stage);
-      addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el, stageIndex);
+      addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el, stageIndex, sid);
       var stageLabel = STAGES[stage] ? STAGES[stage].label : stage;
       announce(stageLabel + " " + status);
 
@@ -2975,7 +3023,7 @@ function addTypingIndicator(stage, container, sid) {
   return card;
 }
 
-function addStageCard(stage, status, latencyMs, output, error, modelId, container, stageIndex) {
+function addStageCard(stage, status, latencyMs, output, error, modelId, container, stageIndex, strategyId) {
   var meta = STAGES[stage];
   var isOk = status === "completed";
   var accentColor = isOk ? "green" : "red";
@@ -3032,8 +3080,10 @@ function addStageCard(stage, status, latencyMs, output, error, modelId, containe
   headerRight.className = "flex items-center gap-1.5";
   if (latencyMs != null) {
     var latBadge = document.createElement("span");
-    latBadge.className = "text-[10px] bg-f-elevated text-gray-300 px-2 py-0.5 rounded";
-    latBadge.textContent = latencyMs + "ms";
+    var stageBudget = getStageBudget(stage, strategyId);
+    var latColor = latencyColorClass(latencyMs, stageBudget);
+    latBadge.className = "text-[10px] bg-f-elevated px-2 py-0.5 rounded " + latColor;
+    latBadge.textContent = formatLatency(latencyMs);
     headerRight.appendChild(latBadge);
   }
   if (modelId) {

@@ -267,6 +267,9 @@ strategies:
     verify: qwen3-vl-8b
     sim: mock-sim
     tags: [scene, vlm, local]
+    latency_budget:
+      perceive: 2000
+      verify: 1000
 
   # --- Scene + Plan (perceive → plan → verify) ---
   scene_plan:
@@ -300,6 +303,8 @@ strategies:
     sim: mock-sim
     forward_kinematics: true
     tags: [full, local, vla, lerobot, pi05]
+    latency_budget:
+      act: 5000
 
   # --- Scene + Plan + Action without FK (perceive → plan → act → verify) ---
   scene_plan_action_no_fk:
@@ -348,3 +353,9 @@ defaults:
   max_concurrent_combinations: 9
   timeout_per_step_ms: 30000
   max_retries_per_step: 2
+  latency_budget_ms: 10000              # 10s pipeline latency target
+  latency_budget:
+    perceive: 3000
+    plan: 3000
+    act: 3000
+    verify: 1000
