@@ -36,6 +36,39 @@ Strategies run concurrently, streaming progress via SSE in real time.
 
 ---
 
+## Forward Kinematics Verification
+
+When a strategy includes VLA action execution, ROVE can optionally compute
+forward kinematics on the predicted trajectory using MuJoCo. Upload your
+robot's URDF alongside the scene image, and ROVE converts raw action arrays
+into spatial analysis the verifier can reason about.
+
+```
+ act stage output              FK analysis (MuJoCo)
+ ─────────────────             ────────────────────
+ [[0.02, -0.01, ...], ...]  →  Endpoint: [0.34, 0.21, 0.46]
+                                Joint limits: within bounds
+                                Self-collision: none detected
+                                Smoothness: 0.95
+```
+
+Enable per strategy in `rove.yaml`:
+
+```yaml
+strategies:
+  scene_plan_action:
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    act: pi05-libero
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    forward_kinematics: true   # enable FK verification
+```
+
+Requires: `pip install rove-eval[kinematics]` (adds MuJoCo ~5MB)
+
+---
+
 ## Quick Start
 
 ```bash

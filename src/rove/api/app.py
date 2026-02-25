@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import logging
+import tempfile
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -114,6 +115,7 @@ async def _run_multi_strategy(
     image_base64: str,
     strategy_ids: list[str],
     example: ExampleData | None = None,
+    urdf_path: str | None = None,
 ):
     """Background task that runs multiple strategies concurrently via RunManager."""
     queue = _eval_queues[eval_id]
@@ -127,7 +129,9 @@ async def _run_multi_strategy(
 
         config = load_config()
         run_manager = RunManager(
-            registry, max_concurrent=config.defaults.max_concurrent_combinations
+            registry,
+            max_concurrent=config.defaults.max_concurrent_combinations,
+            urdf_path=urdf_path,
         )
 
         async def on_event(strategy_id: str, event_type: str, data: dict) -> None:
@@ -255,10 +259,23 @@ async def create_evaluation(
     verify_model_id: str = Form(default="mock-vlm"),
     sim_id: str = Form(default="mock-sim"),
     example_filename: str = Form(default=""),
+    urdf: UploadFile | None = File(default=None),
 ):
     eval_id = str(uuid.uuid4())
     image_bytes = await image.read()
     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    # Save URDF to temp file if provided
+    urdf_path: str | None = None
+    if urdf is not None:
+        urdf_bytes = await urdf.read()
+        if urdf_bytes:
+            suffix = Path(urdf.filename or "robot.urdf").suffix or ".urdf"
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=suffix, prefix="rove_urdf_"
+            ) as tmp:
+                tmp.write(urdf_bytes)
+            urdf_path = tmp.name
 
     # Load example data (ground truth, proprioception, etc.) from manifest
     example = _load_example_data(example_filename) if example_filename else None
@@ -270,7 +287,9 @@ async def create_evaluation(
     if strategy_ids:
         ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
         bg = asyncio.create_task(
-            _run_multi_strategy(eval_id, task, image_base64, ids, example=example)
+            _run_multi_strategy(
+                eval_id, task, image_base64, ids, example=example, urdf_path=urdf_path
+            )
         )
         _background_tasks.add(bg)
         bg.add_done_callback(_background_tasks.discard)

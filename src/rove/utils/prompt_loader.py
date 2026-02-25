@@ -171,24 +171,77 @@ class PromptManager:
                 if action.get("actions_truncated"):
                     stage_lines.append(f"  (first 5 + last 5 of {total_steps})")
 
+                # FK analysis provides spatial context when available
+                fk = context.get("fk_analysis")
+                if fk:
+                    stage_lines.append("")
+                    stage_lines.append("--- FORWARD KINEMATICS ANALYSIS (MuJoCo) ---")
+                    ep = fk.get("final_endpoint", [0, 0, 0])
+                    stage_lines.append(
+                        f"Final end-effector position: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] meters"
+                    )
+                    stage_lines.append(
+                        f"Total displacement: {fk.get('total_displacement_m', 0):.3f}m"
+                    )
+                    stage_lines.append(
+                        "Joint limits: "
+                        + ("all within bounds" if fk.get("joint_limits_ok") else "EXCEEDED")
+                    )
+                    stage_lines.append(
+                        "Self-collision: "
+                        + ("DETECTED" if fk.get("self_collision") else "none detected")
+                    )
+                    stage_lines.append(f"Smoothness score: {fk.get('smoothness_score', 0):.2f}")
+                    stage_lines.append(
+                        f"Max angular velocity: {fk.get('max_velocity_rad_s', 0):.2f} rad/s"
+                    )
+                    stage_lines.append(f"Steps analyzed: {fk.get('steps_analyzed', 0)}")
+
+                    traj = fk.get("endpoint_trajectory", [])
+                    if traj:
+                        stage_lines.append("")
+                        stage_lines.append("End-effector trajectory (sample):")
+                        for i, pt in enumerate(traj[:5]):
+                            stage_lines.append(
+                                f"  step {i + 1}: [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}]m"
+                            )
+                        if len(traj) > 5:
+                            stage_lines.append(f"  ... ({len(traj)} total steps)")
+
+                    stage_lines.append("")
+                    stage_lines.append(
+                        "IMPORTANT: FK analysis provides SPATIAL CONTEXT for the VLA trajectory."
+                        " You can now reason about WHERE the robot arm moves, not just the raw deltas."
+                        " Use the end-effector positions to assess:\n"
+                        "- Does the trajectory reach the target object's perceived position?\n"
+                        "- Does the lift height clear obstacles?\n"
+                        "- Is the placement position near the goal?\n"
+                        "- Do joint limit violations or self-collisions indicate an unsafe plan?\n"
+                        "Cross-reference FK positions with the PERCEIVE stage's object positions."
+                    )
+                else:
+                    stage_lines.append("")
+                    stage_lines.append(
+                        "IMPORTANT: Without before/after images from a simulator,"
+                        " you CANNOT determine whether the trajectory reached the"
+                        " correct object or destination. Assess action PLAUSIBILITY,"
+                        " not action SUCCESS. Evaluate what IS observable:\n"
+                        "- Does the gripper open/close pattern match the task"
+                        " (e.g., pick-and-place needs close->open)?\n"
+                        "- Is the number of steps reasonable?\n"
+                        "- Are the delta magnitudes physically plausible?\n"
+                        "- Does the trajectory show distinct phases (approach,"
+                        " grasp, transport, place)?\n"
+                        "- How faithfully does the VLA trajectory follow the planned steps?\n"
+                        "Do NOT fail the act stage solely because you cannot verify"
+                        " the exact target position from delta values alone."
+                    )
+
                 stage_lines.append("")
                 stage_lines.append(
-                    "IMPORTANT: Without before/after images from a simulator,"
-                    " you CANNOT determine whether the trajectory reached the"
-                    " correct object or destination. Assess action PLAUSIBILITY,"
-                    " not action SUCCESS. Evaluate what IS observable:\n"
-                    "- Does the gripper open/close pattern match the task"
-                    " (e.g., pick-and-place needs close→open)?\n"
-                    "- Is the number of steps reasonable?\n"
-                    "- Are the delta magnitudes physically plausible?\n"
-                    "- Does the trajectory show distinct phases (approach,"
-                    " grasp, transport, place)?\n"
-                    "- How faithfully does the VLA trajectory follow the planned steps?\n"
                     "Return an 'action_plausibility' object with: bounds_check (bool),"
                     " smoothness (bool), gripper_consistency (bool),"
-                    " plan_alignment (float 0-1), reasoning (string).\n"
-                    "Do NOT fail the act stage solely because you cannot verify"
-                    " the exact target position from delta values alone."
+                    " plan_alignment (float 0-1), reasoning (string)."
                 )
             else:
                 stage_lines.append(

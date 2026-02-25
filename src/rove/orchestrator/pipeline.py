@@ -52,6 +52,8 @@ class EvaluationPipeline:
         verify_adapter: StageAdapter | None = None,
         sim: SimAdapter | None = None,
         registry: AdapterRegistry | None = None,
+        forward_kinematics: bool = False,
+        urdf_path: str | None = None,
     ):
         self.perceive_adapter = perceive_adapter
         self.plan_adapter = plan_adapter
@@ -59,6 +61,8 @@ class EvaluationPipeline:
         self.verify_adapter = verify_adapter
         self.sim = sim
         self._registry = registry
+        self._forward_kinematics = forward_kinematics
+        self._urdf_path = urdf_path
 
     async def _call_adapter(
         self,
@@ -142,6 +146,19 @@ class EvaluationPipeline:
         # Seed proprioception from example data (dataset mode, no sim)
         if example and example.extras.get("proprioception"):
             ctx.proprioception = example.extras["proprioception"]
+
+        # Auto-detect URDF from example robot type if FK enabled but no URDF provided
+        if self._forward_kinematics and not self._urdf_path and example:
+            robot = example.extras.get("robot")
+            if robot:
+                from pathlib import Path
+
+                data_dir = Path(__file__).parent.parent.parent.parent / "data"
+                candidate = data_dir / "urdf" / robot / f"{robot}.urdf"
+                if candidate.exists():
+                    self._urdf_path = str(candidate)
+                    logger.info("Auto-detected URDF for robot '%s': %s", robot, candidate)
+
         scene = None
         plan = None
         reset_obs = None
@@ -249,6 +266,23 @@ class EvaluationPipeline:
                 elif action_pred.action_type == "tool_calls":
                     last_obs = await self.sim.get_observation()
 
+                # Compute FK before yielding act result so it's included in output
+                if self._forward_kinematics and self._urdf_path and action_pred.actions:
+                    try:
+                        from rove.adapters.fk_mujoco import compute_fk
+
+                        fk = compute_fk(
+                            self._urdf_path,
+                            action_pred.actions,
+                            initial_qpos=ctx.proprioception or None,
+                        )
+                        ctx.fk_analysis = fk
+                        logger.info("FK analysis: %d steps", fk.get("steps_analyzed", 0))
+                    except ImportError:
+                        logger.warning("MuJoCo not installed — skipping FK")
+                    except Exception as fk_err:
+                        logger.warning("FK computation failed: %s", fk_err)
+
                 latency = (time.monotonic() - t0) * 1000
 
                 act_output: dict[str, Any] = action_pred.model_dump()
@@ -256,6 +290,8 @@ class EvaluationPipeline:
                 act_output["sim_success"] = last_obs.success if last_obs else False
                 if action_pred.action_type == "trajectory":
                     act_output["actions_executed"] = len(action_pred.actions)
+                if ctx.fk_analysis:
+                    act_output["fk_analysis"] = ctx.fk_analysis
 
                 yield PipelineStageResult(
                     stage="act",

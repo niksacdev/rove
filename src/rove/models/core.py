@@ -132,6 +132,7 @@ class VerificationResult(BaseModel):
     stage_checks: list[StageCheck] = Field(default_factory=list)
     ground_truth: GroundTruthCheck | None = None
     action_plausibility: ActionPlausibility | None = None
+    fk_analysis: dict | None = None
 
 
 class PipelineStageResult(BaseModel):
@@ -163,6 +164,7 @@ class PipelineContext(BaseModel):
     after_image_base64: str = ""
     completed_stages: list[str] = Field(default_factory=list)
     ground_truth: dict | None = None
+    fk_analysis: dict | None = None
 
     def to_dict(self) -> dict:
         """Serialize non-empty fields for adapter context bags.
@@ -209,6 +211,8 @@ class PipelineContext(BaseModel):
             d["completed_stages"] = self.completed_stages
         if self.ground_truth:
             d["ground_truth"] = self.ground_truth
+        if self.fk_analysis:
+            d["fk_analysis"] = self.fk_analysis
         return d
 
 
@@ -246,6 +250,7 @@ class Strategy(BaseModel):
     act: str | None = None  # model_id (None to skip stage)
     verify: str = ""  # model_id (required)
     sim: str = ""  # sim_id (required)
+    forward_kinematics: bool = False
     tags: list[str] = Field(default_factory=list)
 
 

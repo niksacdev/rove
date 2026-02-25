@@ -126,5 +126,5 @@ class TestRenderVerify:
     def test_system_message(self):
         pm = get_prompt_manager()
         msg = pm.render_verify_system()
-        assert "LLM judge" in msg
+        assert "plausibility" in msg
         assert "JSON" in msg
