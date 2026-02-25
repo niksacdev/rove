@@ -2733,6 +2733,95 @@ function renderVerify(container, o) {
     container.appendChild(reason);
   }
 
+  if (o.stage_checks && Array.isArray(o.stage_checks) && o.stage_checks.length > 0) {
+    rendered = true;
+    var checksSection = document.createElement("div");
+    checksSection.className = "mt-3 space-y-2";
+    var checksHeading = document.createElement("p");
+    checksHeading.className = "text-[11px] text-gray-500 font-medium";
+    checksHeading.textContent = "Stage checks";
+    checksSection.appendChild(checksHeading);
+
+    o.stage_checks.forEach(function(sc) {
+      var card = document.createElement("div");
+      card.className = "bg-black/20 rounded-md px-3 py-2 space-y-1";
+
+      var header = document.createElement("div");
+      header.className = "flex items-center gap-2";
+      var badge = document.createElement("span");
+      badge.className = sc.passed
+        ? "text-[10px] bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded"
+        : "text-[10px] bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded";
+      badge.textContent = sc.passed ? "PASS" : "FAIL";
+      header.appendChild(badge);
+      var stageName = document.createElement("span");
+      stageName.className = "text-xs text-gray-200 font-medium";
+      stageName.textContent = sc.stage;
+      header.appendChild(stageName);
+      if (sc.confidence != null) {
+        var confSpan = document.createElement("span");
+        confSpan.className = "text-[10px] text-gray-500 ml-auto";
+        confSpan.textContent = (sc.confidence * 100).toFixed(0) + "% confidence";
+        header.appendChild(confSpan);
+      }
+      card.appendChild(header);
+
+      if (sc.reasoning) {
+        var scReason = document.createElement("p");
+        scReason.className = "text-xs text-gray-400 ml-1";
+        scReason.textContent = sc.reasoning;
+        card.appendChild(scReason);
+      }
+      checksSection.appendChild(card);
+    });
+    container.appendChild(checksSection);
+  }
+
+  if (o.ground_truth) {
+    rendered = true;
+    var gt = o.ground_truth;
+    var gtSection = document.createElement("div");
+    gtSection.className = "mt-3 space-y-1";
+    var gtHeading = document.createElement("p");
+    gtHeading.className = "text-[11px] text-gray-500 font-medium";
+    gtHeading.textContent = "Ground truth QA";
+    gtSection.appendChild(gtHeading);
+
+    var gtCard = document.createElement("div");
+    gtCard.className = "bg-black/20 rounded-md px-3 py-2 space-y-1";
+
+    if (gt.question) {
+      var q = document.createElement("p");
+      q.className = "text-xs text-gray-200";
+      q.textContent = gt.question;
+      gtCard.appendChild(q);
+    }
+
+    var answerRow = document.createElement("div");
+    answerRow.className = "flex items-center gap-2 mt-1";
+    var correctBadge = document.createElement("span");
+    correctBadge.className = gt.correct
+      ? "text-[10px] bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded"
+      : "text-[10px] bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded";
+    correctBadge.textContent = gt.correct ? "CORRECT" : "INCORRECT";
+    answerRow.appendChild(correctBadge);
+    var ansText = document.createElement("span");
+    ansText.className = "text-xs text-gray-300";
+    ansText.textContent = "Pipeline: " + (gt.pipeline_answer || "N/A");
+    answerRow.appendChild(ansText);
+    gtCard.appendChild(answerRow);
+
+    if (gt.correct_answer && !gt.correct) {
+      var expected = document.createElement("p");
+      expected.className = "text-[10px] text-gray-500 ml-1";
+      expected.textContent = "Expected: " + gt.correct_answer;
+      gtCard.appendChild(expected);
+    }
+
+    gtSection.appendChild(gtCard);
+    container.appendChild(gtSection);
+  }
+
   if (!rendered) {
     var fallback = document.createElement("pre");
     fallback.className = "text-xs text-gray-400";
