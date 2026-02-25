@@ -13,6 +13,20 @@ Upload a scene image, describe a manipulation task, select strategies, and ROVE 
 
 ---
 
+## Capabilities
+
+- **Multi-strategy parallel evaluation** — run multiple agent pipeline configs concurrently, stream results via SSE
+- **4-stage deterministic pipeline** — perceive → plan → act → verify, each stage independently configurable
+- **Forward kinematics verification** — MuJoCo-based joint limit, collision, displacement, and smoothness checks on VLA trajectories
+- **FK sanity checks** — objective FK measurements override VLM plausibility scores when physics contradicts the judge
+- **URDF support** — upload or auto-detect from dataset robot metadata
+- **Per-stage latency budgets** — set time limits per stage with strategy-level overrides
+- **Side-by-side strategy comparison** — diff highlighting across pipeline configurations
+- **Dataset browser** — robo2VLM and LIBERO examples with ground truth QA
+- **Extensible adapter pattern** — add any model by implementing one Protocol + one YAML entry
+
+---
+
 ## How It Works
 
 Every evaluation runs a fixed four-stage pipeline. Stages are optional — a strategy defines which stages to run and which model handles each.
@@ -29,8 +43,8 @@ Every evaluation runs a fixed four-stage pipeline. Stages are optional — a str
 |-------|-------|--------|
 | **perceive** | Scene image + task | Objects, spatial relationships |
 | **plan** | Scene analysis + task | Strategy, steps, confidence |
-| **act** | Sim observation + task | Action chunk executed in simulator |
-| **verify** | Before/after images | Success/fail + confidence |
+| **act** | Sim observation + task | Action chunk executed in simulator; FK analysis when enabled |
+| **verify** | Before/after images | Success/fail + confidence; FK sanity checks override scores |
 
 Strategies run concurrently, streaming progress via SSE in real time.
 
@@ -66,6 +80,24 @@ strategies:
 ```
 
 Requires: `pip install rove-eval[kinematics]` (adds MuJoCo ~5MB)
+
+### FK Sanity Checks
+
+After the verify stage, ROVE compares FK measurements against the VLM judge's
+plausibility scores. When physics contradicts the judge, FK data wins:
+
+| FK Check | Condition | Override |
+|----------|-----------|----------|
+| Joint limits | Any joint outside bounds | `plan_alignment` capped at 0.3, `confidence` capped at 0.4 |
+| Self-collision | Collision detected | `plan_alignment` capped at 0.3, `confidence` capped at 0.4 |
+| Displacement | Net displacement < 2cm | `plan_alignment` capped at 0.5, `confidence` capped at 0.5 |
+| Smoothness | Smoothness score < 0.3 | `plan_alignment` capped at 0.6, `confidence` capped at 0.6 |
+
+Overridden scores include `[FK override: ...]` tags in the reasoning field so
+you can see exactly what triggered the correction.
+
+URDF can be uploaded manually or auto-detected from dataset robot metadata
+(e.g., LIBERO datasets include Panda robot type).
 
 ---
 
@@ -172,7 +204,30 @@ Adding a new endpoint = implement one Protocol + add a YAML entry. No changes to
 
 ---
 
-## Adding a New Endpoint
+## Extensibility
+
+ROVE uses a Protocol-based adapter pattern with provider-level flexibility.
+Adapters connect to **providers** — inference backends that can host any
+compatible model. Point ROVE at a provider, swap the `model_id`, and evaluate
+a different model with zero code changes.
+
+- **LM Studio** — any vision-language model with an OpenAI-compatible API
+  becomes a VLM adapter. Switch from Qwen3-VL to Phi-4 by changing one YAML
+  field.
+- **Azure AI Foundry** — agents built in Foundry can serve any pipeline stage.
+  ROVE calls them through the Foundry SDK, so any agent you deploy there is
+  immediately evaluable.
+- **LeRobot** — any VLA checkpoint hosted on HuggingFace and loadable by
+  LeRobot (pi0, SmolVLA, OpenVLA) works as an act-stage adapter.
+
+Four Protocol types cover the pipeline:
+
+| Protocol | Role | Providers |
+|----------|------|-----------|
+| `VLMAdapter` | perceive, plan, verify | LM Studio, Azure OpenAI |
+| `VLAAdapter` | act (VLA) | LeRobot (pi0, SmolVLA, OpenVLA) |
+| `AgentAdapter` | any stage via LLM agent | Azure AI Foundry |
+| `SimAdapter` *(future)* | simulation environment | MuJoCo / LIBERO (planned) |
 
 **1. Implement the Protocol:**
 
@@ -197,14 +252,24 @@ endpoints:
       endpoint: http://localhost:8080
 ```
 
+The same pattern applies to VLA, agent, and sim adapters. Once registered in
+`rove.yaml`, new models are immediately available in any strategy — just
+reference them by ID.
+
 ---
 
-## What ROVE Does Not Do
+## Design Philosophy
 
-- **No model training** — inference-only
-- **No real robot control** — simulation only
-- **No model serving** — calls models, does not host them
-- **No general LLM evaluation** — robotics agent pipelines only
+ROVE is **inference-only by design**. It calls models through their standard APIs
+and measures what comes back — it never trains, fine-tunes, or modifies weights. This means:
+
+- **Reproducible** — same inputs produce same outputs; no training state to drift
+- **Safe for production endpoints** — read-only access to your deployed models
+- **Hardware-agnostic measurement** — ROVE measures inference latency, not deployment
+  overhead (sensor readout, network hops, controller processing). You set a latency
+  budget; ROVE tells you which pipelines fit it
+- **Robotics-specific** — evaluates complete agent pipelines (perceive → plan → act
+  → verify), not isolated model capabilities
 
 ---
 
