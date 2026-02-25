@@ -7,7 +7,7 @@ import pytest
 from rove.adapters.mock_sim import MockSimAdapter
 from rove.adapters.mock_vla import MockVLAAdapter
 from rove.adapters.mock_vlm import MockVLMAdapter
-from rove.models import ExampleData, StageStatus
+from rove.models import ActionPlausibility, ExampleData, StageStatus, VerificationResult
 from rove.orchestrator.pipeline import EvaluationPipeline
 
 
@@ -227,3 +227,77 @@ class TestPartialPipeline:
         # No plan or act stages should be present
         assert "plan" not in stages
         assert "act" not in stages
+
+
+class TestFKSanityChecks:
+    """Test _apply_fk_sanity_checks static method."""
+
+    @staticmethod
+    def _make_verification(**overrides) -> VerificationResult:
+        defaults = {
+            "success": True,
+            "confidence": 0.85,
+            "reasoning": "Looks good",
+            "action_plausibility": ActionPlausibility(
+                bounds_check=True,
+                smoothness=True,
+                gripper_consistency=True,
+                plan_alignment=0.8,
+                reasoning="VLM says plausible",
+            ),
+        }
+        defaults.update(overrides)
+        return VerificationResult(**defaults)
+
+    def test_joint_limits_override_bounds_check(self):
+        v = self._make_verification()
+        fk = {"joint_limits_ok": False, "self_collision": False}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.action_plausibility.bounds_check is False
+        assert result.action_plausibility.plan_alignment <= 0.3
+
+    def test_self_collision_overrides_bounds_check(self):
+        v = self._make_verification()
+        fk = {"joint_limits_ok": True, "self_collision": True}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.action_plausibility.bounds_check is False
+
+    def test_high_displacement_overrides_smoothness(self):
+        v = self._make_verification()
+        fk = {"joint_limits_ok": True, "total_displacement_m": 28.0}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.action_plausibility.smoothness is False
+        assert result.action_plausibility.plan_alignment <= 0.3
+
+    def test_multiple_failures_cap_confidence(self):
+        v = self._make_verification(confidence=0.85)
+        fk = {"joint_limits_ok": False, "total_displacement_m": 28.0}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.confidence <= 0.4
+        assert result.action_plausibility.plan_alignment <= 0.3
+
+    def test_no_fk_leaves_verification_unchanged(self):
+        """When no FK analysis, the method should not be called — but if it is
+        with empty data, nothing should change."""
+        v = self._make_verification()
+        fk = {"joint_limits_ok": True, "self_collision": False, "total_displacement_m": 0.1}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.action_plausibility.bounds_check is True
+        assert result.action_plausibility.smoothness is True
+        assert result.action_plausibility.plan_alignment == 0.8
+        assert result.confidence == 0.85
+
+    def test_fk_override_appends_reasoning(self):
+        v = self._make_verification()
+        fk = {"joint_limits_ok": False}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert "[FK override:" in result.action_plausibility.reasoning
+        assert "VLM says plausible" in result.action_plausibility.reasoning
+
+    def test_no_plausibility_returns_unchanged(self):
+        """If there's no action_plausibility, verification passes through."""
+        v = self._make_verification(action_plausibility=None)
+        fk = {"joint_limits_ok": False}
+        result = EvaluationPipeline._apply_fk_sanity_checks(v, fk)
+        assert result.action_plausibility is None
+        assert result.confidence == 0.85

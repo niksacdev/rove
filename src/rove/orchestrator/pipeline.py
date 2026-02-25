@@ -128,6 +128,75 @@ class EvaluationPipeline:
     def _get_model_id(self, adapter: StageAdapter) -> str:
         return adapter.model_id
 
+    @staticmethod
+    def _apply_fk_sanity_checks(
+        verification: VerificationResult, fk_analysis: dict
+    ) -> VerificationResult:
+        """Override VLM plausibility scores when FK data objectively contradicts them.
+
+        FK provides ground-truth physics checks (joint limits, collisions,
+        displacement) that should override subjective VLM scores.
+        """
+        if not verification.action_plausibility:
+            return verification
+
+        plaus = verification.action_plausibility.model_copy()
+        overrides: list[str] = []
+        fk_failures = 0
+
+        # Joint limits violation
+        if not fk_analysis.get("joint_limits_ok", True):
+            if plaus.bounds_check:
+                plaus.bounds_check = False
+                overrides.append("bounds_check=False: joint limits exceeded")
+            fk_failures += 1
+
+        # Self-collision
+        if fk_analysis.get("self_collision", False):
+            if plaus.bounds_check:
+                plaus.bounds_check = False
+                overrides.append("bounds_check=False: self-collision detected")
+            fk_failures += 1
+
+        # Excessive displacement
+        total_disp = fk_analysis.get("total_displacement_m", 0.0)
+        if total_disp > 2.0:
+            if plaus.smoothness:
+                plaus.smoothness = False
+                overrides.append(
+                    f"smoothness=False: displacement {total_disp:.1f}m exceeds 2.0m limit"
+                )
+            fk_failures += 1
+
+        # Very low smoothness score
+        smoothness_score = fk_analysis.get("smoothness_score", 1.0)
+        if smoothness_score < 0.1:
+            fk_failures += 1
+
+        # Cap plan_alignment if any FK failure
+        if fk_failures >= 1 and plaus.plan_alignment > 0.3:
+            overrides.append(f"plan_alignment capped 0.3: {fk_failures} FK failure(s)")
+            plaus.plan_alignment = 0.3
+
+        # Cap overall confidence if 2+ FK failures
+        new_confidence = verification.confidence
+        if fk_failures >= 2 and verification.confidence > 0.4:
+            overrides.append(f"confidence capped 0.4: {fk_failures} FK failures")
+            new_confidence = 0.4
+
+        if overrides:
+            override_text = " | ".join(f"[FK override: {o}]" for o in overrides)
+            plaus.reasoning = (
+                f"{plaus.reasoning} {override_text}" if plaus.reasoning else override_text
+            )
+
+        return verification.model_copy(
+            update={
+                "action_plausibility": plaus,
+                "confidence": new_confidence,
+            }
+        )
+
     async def run_trial(
         self,
         task: str,
@@ -350,6 +419,8 @@ class EvaluationPipeline:
                 after_image=after_image,
                 pipeline_context=ctx.to_dict(),
             )
+            if ctx.fk_analysis:
+                verification = self._apply_fk_sanity_checks(verification, ctx.fk_analysis)
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="verify",
