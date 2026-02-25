@@ -7,12 +7,14 @@ import base64
 import json
 import logging
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
@@ -34,10 +36,47 @@ app.add_middleware(
 
 # Global state (no database for demo)
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"
+_output_dir = _data_dir / "output"
+_history_path = _output_dir / "history.jsonl"
 registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
 _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
+
+
+def _persist_evaluation(eval_data: dict[str, Any]) -> None:
+    """Append a completed evaluation record to history.jsonl."""
+    try:
+        _output_dir.mkdir(parents=True, exist_ok=True)
+        record = {
+            "eval_id": eval_data.get("eval_id"),
+            "task": eval_data.get("task", ""),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": eval_data.get("status", "completed"),
+            "strategy_ids": eval_data.get("strategy_ids", []),
+            "results": eval_data.get("results", {}),
+        }
+        with open(_history_path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception:
+        logger.warning("Failed to persist evaluation to history.jsonl", exc_info=True)
+
+
+def _read_history() -> list[dict[str, Any]]:
+    """Read all history records from JSONL, most recent first."""
+    if not _history_path.exists():
+        return []
+    records = []
+    for line in _history_path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    records.reverse()
+    return records
 
 
 def _load_example_data(example_filename: str) -> ExampleData | None:
@@ -107,8 +146,10 @@ async def _run_multi_strategy(
             "status": "completed",
             "task": task,
             "results": results,
+            "strategy_ids": strategy_ids,
         }
         _evaluations[eval_id] = complete_data
+        _persist_evaluation(complete_data)
         await queue.put({"event": "complete", "data": complete_data})
 
     except Exception as e:
@@ -184,6 +225,7 @@ async def _run_evaluation(
             "total_latency_ms": round(total_latency, 1),
         }
         _evaluations[eval_id] = result
+        _persist_evaluation(result)
         await queue.put({"event": "complete", "data": result})
 
     except Exception as e:
@@ -319,14 +361,58 @@ async def get_mock_models():
     return mock_ids
 
 
+@app.get("/api/history")
+async def list_history():
+    """Return all evaluation history (most recent first)."""
+    return _read_history()
+
+
+@app.get("/api/history/{eval_id}")
+async def get_history_entry(eval_id: str):
+    """Return a single history entry by eval_id. In-memory first, JSONL fallback."""
+    if eval_id in _evaluations:
+        return _evaluations[eval_id]
+    for record in _read_history():
+        if record.get("eval_id") == eval_id:
+            return record
+    raise HTTPException(status_code=404, detail="History entry not found")
+
+
+@app.delete("/api/history/{eval_id}")
+async def delete_history_entry(eval_id: str):
+    """Remove a history entry from the JSONL file."""
+    if not _history_path.exists():
+        raise HTTPException(status_code=404, detail="No history file")
+    lines = _history_path.read_text().splitlines()
+    kept = []
+    found = False
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+            if record.get("eval_id") == eval_id:
+                found = True
+                continue
+            kept.append(line)
+        except json.JSONDecodeError:
+            kept.append(line)
+    if not found:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    _history_path.write_text("\n".join(kept) + ("\n" if kept else ""))
+    return {"deleted": eval_id}
+
+
 # Serve example data
 if _data_dir.is_dir():
-    from fastapi.staticfiles import StaticFiles
-
     app.mount("/data", StaticFiles(directory=str(_data_dir)), name="data")
 
-# Serve frontend
+# Serve frontend (mount entire directory so CSS/JS are served alongside HTML)
 _frontend_dir = Path(__file__).parent.parent.parent.parent / "frontend"
+
+if _frontend_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_frontend_dir)), name="frontend-static")
 
 
 @app.get("/", response_class=HTMLResponse)

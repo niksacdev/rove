@@ -5,11 +5,22 @@ Scene analysis: {scene_summary}
 
 Plan a strategy to accomplish the task. Each step must be a single, atomic robot action (e.g. "move gripper 10cm above bolt", "close gripper", "lift 15cm"). Do NOT use loops, conditionals, or references to other steps (e.g. never write "repeat steps 2-4"). Fully expand any repeated actions into individual steps.
 
+Infer the following from the scene analysis context and the task:
+- What domain-specific capabilities (task repertoire) the robot must demonstrate
+- What measurable success markers (artifacts) indicate the task is done
+- What environmental challenges (degradation profile) make this task hard
+
 Return a JSON object with:
 - "strategy": string (high-level approach description)
 - "reasoning": string (explain your thinking)
 - "steps": list of strings (ordered atomic sub-steps; each step = one robot motion or gripper action)
 - "target_object": string (primary object to manipulate, if any)
 - "confidence": float 0-1
+- "task_repertoire": list of strings — domain-specific capabilities the robot MUST demonstrate
+  (e.g., ["precision grasping of small parts", "force-controlled insertion", "obstacle avoidance"])
+- "artifacts": list of strings — measurable, localizable success markers
+  (e.g., ["bracket seated in slot at bin A", "bolt torqued to position", "package at delivery coordinates (3.2, 1.1)"])
+- "degradation_profile": list of strings — what makes this domain/task hard
+  (e.g., ["reflective metallic surfaces reduce depth accuracy", "narrow clearance requires sub-mm precision", "no GPS for localization"])
 
 Return ONLY valid JSON, no markdown.

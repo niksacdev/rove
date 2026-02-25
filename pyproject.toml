@@ -22,6 +22,8 @@ azure = [
     "azure-ai-projects>=2.0.0b3",
     "azure-identity>=1.19.0",
     "openai>=1.0.0",
+    "aiohttp>=3.9.0",
+    "tenacity>=8.0",
 ]
 smolvla = ["lerobot", "transformers", "num2words"]
 dev = ["pytest", "pytest-asyncio", "httpx", "pre-commit", "bandit[toml]"]

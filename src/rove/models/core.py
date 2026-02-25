@@ -48,6 +48,7 @@ class SceneAnalysis(BaseModel):
         default_factory=list
     )  # ["red bracket is to the left of bin A"]
     task_relevant: list[str] = Field(default_factory=list)  # ["red bracket", "bin A"]
+    environment_distribution: str = ""  # description of the environment/domain
     raw_response: str = ""
 
 
@@ -57,6 +58,11 @@ class TaskPlan(BaseModel):
     steps: list[str] = Field(default_factory=list)  # ordered sub-steps
     target_object: str = ""  # optional, for manipulation tasks
     confidence: float = 0.0
+    task_repertoire: list[str] = Field(
+        default_factory=list
+    )  # domain-specific capabilities required
+    artifacts: list[str] = Field(default_factory=list)  # measurable success markers
+    degradation_profile: list[str] = Field(default_factory=list)  # domain-specific challenges
     raw_response: str = ""
 
 
@@ -156,7 +162,15 @@ class PipelineContext(BaseModel):
             d["scene"] = self.scene.model_dump(exclude={"raw_response"})
         if self.plan:
             d["plan"] = self.plan.model_dump(
-                include={"strategy", "target_object", "steps", "confidence"}
+                include={
+                    "strategy",
+                    "target_object",
+                    "steps",
+                    "confidence",
+                    "task_repertoire",
+                    "artifacts",
+                    "degradation_profile",
+                }
             )
         if self.action:
             action_d = self.action.model_dump(

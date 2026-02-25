@@ -215,16 +215,16 @@ endpoints:
     capabilities: [scene_analysis, task_planning, verification, action_execution]
     config:
       mock_latency_ms: [300, 800]
-    # Uncomment when Foundry agent is configured:
-    # foundry-task-agent:
-    #   type: agent
-    #   adapter: azure_foundry_agent
-    #   display_name: "Foundry Task Agent"
-    #   deployment_type: azure_managed
-    #   endpoint: "https://your-foundry-agent-endpoint.azure.com/"
-    #   capabilities: [task_planning, action_execution]
-    #   config:
-    #     agent_id: "my-robotics-agent"
+
+  bing-grounding-agent:
+    type: agent
+    adapter: azure_foundry_agent
+    display_name: "Bing Grounding Agent"
+    deployment_type: azure_managed
+    capabilities: [task_planning]
+    config:
+      project_endpoint: "https://niksac-agent-resource.services.ai.azure.com/api/projects/niksac-agent"
+      agent_name: "binggroundingagent"
 
   # --- Simulation environments ---
   mujoco-libero:
@@ -297,6 +297,17 @@ strategies:
     verify: qwen3-vl-8b
     sim: mock-sim
     tags: [full, local, vla, lerobot, pi05]
+
+  # --- Hybrid: Edge VLM + Foundry Agent + VLA ---
+  hybrid_foundry:
+    display_name: "Hybrid (Edge VLM + Foundry Agent + pi0.5)"
+    description: "Qwen3-VL perceives locally, Foundry agent plans via Bing grounding, pi0.5 executes, Qwen verifies"
+    perceive: qwen3-vl-8b
+    plan: bing-grounding-agent
+    act: pi05-libero
+    verify: qwen3-vl-8b
+    sim: mock-sim
+    tags: [hybrid, foundry, agent, pi05]
 
   # --- Full Pipeline (perceive → plan → act → verify) ---
   full_local:

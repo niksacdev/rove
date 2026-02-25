@@ -6,5 +6,9 @@ Analyze the scene and return a JSON object with these fields:
 - "objects": list of objects, each with "name" (string), "bbox" [x,y,w,h] (approx pixel coords), "confidence" (0-1)
 - "spatial_relations": list of spatial relationship strings
 - "task_relevant": list of object names relevant to the task
+- "environment_distribution": string describing the environment type and characteristics
+  (e.g., "industrial warehouse with metal shelving", "clinical lab with sterile surfaces",
+  "tabletop workspace with scattered parts"). Include lighting, surface types, clutter level,
+  and any constraints visible in the scene.
 
 Return ONLY valid JSON, no markdown.
