@@ -78,6 +78,9 @@ class PromptManager:
             stage_lines.append(f"Detected objects: {', '.join(obj_names)}")
             stage_lines.append(f"Spatial relations: {'; '.join(relations)}")
             stage_lines.append(f"Task-relevant objects: {', '.join(relevant)}")
+            env_dist = scene.get("environment_distribution", "")
+            if env_dist:
+                stage_lines.append(f"Environment: {env_dist}")
             stage_lines.append(
                 "Assess: Did the perceive stage correctly identify the relevant objects"
                 " and spatial relationships for this task?"
@@ -92,8 +95,22 @@ class PromptManager:
             steps = plan.get("steps", [])
             stage_lines.append(f"Steps: {'; '.join(steps) if steps else 'N/A'}")
             stage_lines.append(f"Confidence: {plan.get('confidence', 'N/A')}")
+            repertoire = plan.get("task_repertoire", [])
+            if repertoire:
+                stage_lines.append(f"Task repertoire: {'; '.join(repertoire)}")
+            artifacts = plan.get("artifacts", [])
+            if artifacts:
+                stage_lines.append(f"Success artifacts: {'; '.join(artifacts)}")
+            degradation = plan.get("degradation_profile", [])
+            if degradation:
+                stage_lines.append(f"Degradation profile: {'; '.join(degradation)}")
             stage_lines.append(
                 "Assess: Is the plan feasible and appropriate for the task given the scene?"
+            )
+            stage_lines.append(
+                "If environment_distribution, task_repertoire, artifacts, or degradation_profile "
+                "are missing or shallow, note this as a weakness — these fields help the robot "
+                "anticipate domain-specific challenges and define concrete success criteria."
             )
             stage_lines.append("")
 

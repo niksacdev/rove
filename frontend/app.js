@@ -999,12 +999,16 @@ function renderHistoryItems() {
   filtered.slice().reverse().forEach(function(entry) {
     var idx = runHistory.indexOf(entry);
     var item = document.createElement("div");
-    item.className = "history-item sidebar-item flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer text-[12px]";
+    item.className = "history-item sidebar-item flex flex-col gap-1 px-3 py-2 rounded-md cursor-pointer text-[12px]";
     item.setAttribute("role", "button");
     item.setAttribute("tabindex", "0");
     if (idx === activeHistoryIndex) {
       item.classList.add("active", "bg-f-surface");
     }
+
+    // Top row: dot + task + time + delete
+    var topRow = document.createElement("div");
+    topRow.className = "flex items-center gap-2";
 
     // Status dot
     var dot = document.createElement("span");
@@ -1012,13 +1016,14 @@ function renderHistoryItems() {
                    entry.status === "completed" ? "bg-green-500" : "bg-red-500";
     dot.className = "w-2 h-2 rounded-full shrink-0 " + dotColor;
     dot.setAttribute("aria-hidden", "true");
-    item.appendChild(dot);
+    topRow.appendChild(dot);
 
     // Task text (truncated)
     var textSpan = document.createElement("span");
     textSpan.className = "text-gray-300 truncate flex-1";
     textSpan.textContent = entry.task.length > 25 ? entry.task.substring(0, 25) + "..." : entry.task;
-    item.appendChild(textSpan);
+    textSpan.title = entry.task;
+    topRow.appendChild(textSpan);
 
     // Time
     var timeSpan = document.createElement("span");
@@ -1027,7 +1032,7 @@ function renderHistoryItems() {
     var h = ts.getHours().toString().padStart(2, "0");
     var m = ts.getMinutes().toString().padStart(2, "0");
     timeSpan.textContent = h + ":" + m;
-    item.appendChild(timeSpan);
+    topRow.appendChild(timeSpan);
 
     // Delete button (visible on hover)
     var delBtn = document.createElement("button");
@@ -1038,16 +1043,23 @@ function renderHistoryItems() {
       e.stopPropagation();
       deleteHistoryEntry(idx);
     });
-    item.appendChild(delBtn);
+    topRow.appendChild(delBtn);
 
-    // Hover tooltip
-    item.addEventListener("mouseenter", function(e) {
-      showHistoryTooltip(item, entry);
+    item.appendChild(topRow);
+
+    // Strategy tags row
+    var tagsRow = document.createElement("div");
+    tagsRow.className = "flex flex-wrap gap-1 ml-4";
+    entry.strategyIds.forEach(function(sid) {
+      var strat = strategies.find(function(s) { return s.id === sid; });
+      var displayName = strat ? strat.display_name : sid;
+      var tag = document.createElement("span");
+      tag.className = "text-[9px] px-1.5 py-0.5 rounded bg-f-elevated text-gray-500 truncate max-w-[80px]";
+      tag.textContent = displayName;
+      tag.title = displayName;
+      tagsRow.appendChild(tag);
     });
-    item.addEventListener("mouseleave", function() {
-      var tip = item.querySelector(".history-tooltip");
-      if (tip) tip.remove();
-    });
+    item.appendChild(tagsRow);
 
     item.addEventListener("click", function() {
       showHistoryEntry(idx);
@@ -1058,65 +1070,6 @@ function renderHistoryItems() {
 
     container.appendChild(item);
   });
-}
-
-function showHistoryTooltip(itemEl, entry) {
-  // Remove any existing tooltip
-  var existing = itemEl.querySelector(".history-tooltip");
-  if (existing) existing.remove();
-
-  var tip = document.createElement("div");
-  tip.className = "history-tooltip";
-
-  // Full task text
-  var taskP = document.createElement("p");
-  taskP.className = "text-[11px] text-gray-200 mb-2";
-  taskP.textContent = entry.task;
-  tip.appendChild(taskP);
-
-  // Strategy names + status
-  entry.strategyIds.forEach(function(sid) {
-    var strat = strategies.find(function(s) { return s.id === sid; });
-    var displayName = strat ? strat.display_name : sid;
-    var sr = entry.summaryResults && entry.summaryResults[sid];
-
-    var row = document.createElement("div");
-    row.className = "flex items-center gap-2 mb-1";
-
-    var dot = document.createElement("span");
-    dot.className = "w-1.5 h-1.5 rounded-full shrink-0";
-    if (sr && sr.status === "completed") {
-      dot.style.background = sr.success ? "#22c55e" : "#ef4444";
-    } else if (sr && sr.status === "error") {
-      dot.style.background = "#ef4444";
-    } else {
-      dot.style.background = "#7c3aed";
-    }
-    row.appendChild(dot);
-
-    var nameSpan = document.createElement("span");
-    nameSpan.className = "text-[10px] text-gray-300 flex-1 truncate";
-    nameSpan.textContent = displayName;
-    row.appendChild(nameSpan);
-
-    if (sr && sr.latency_ms != null) {
-      var latSpan = document.createElement("span");
-      latSpan.className = "text-[10px] text-gray-500 font-mono";
-      latSpan.textContent = Math.round(sr.latency_ms) + "ms";
-      row.appendChild(latSpan);
-    }
-
-    tip.appendChild(row);
-  });
-
-  // Timestamp
-  var ts = typeof entry.timestamp === "string" ? new Date(entry.timestamp) : entry.timestamp;
-  var timeP = document.createElement("p");
-  timeP.className = "text-[10px] text-gray-600 mt-2";
-  timeP.textContent = ts.toLocaleString();
-  tip.appendChild(timeP);
-
-  itemEl.appendChild(tip);
 }
 
 function deleteHistoryEntry(idx) {
@@ -2444,6 +2397,21 @@ function renderPerceive(container, o) {
     container.appendChild(relSection);
   }
 
+  if (o.environment_distribution) {
+    rendered = true;
+    var envSection = document.createElement("div");
+    envSection.className = "mt-2 space-y-1";
+    var envHeading = document.createElement("p");
+    envHeading.className = "text-[11px] text-gray-500 font-medium";
+    envHeading.textContent = "Environment";
+    envSection.appendChild(envHeading);
+    var envText = document.createElement("p");
+    envText.className = "text-xs text-gray-400 ml-2";
+    envText.textContent = o.environment_distribution;
+    envSection.appendChild(envText);
+    container.appendChild(envSection);
+  }
+
   if (o.scene_description || o.description) {
     rendered = true;
     var desc = document.createElement("p");
@@ -2525,6 +2493,60 @@ function renderPlan(container, o) {
       stepsSection.appendChild(stepRow);
     });
     container.appendChild(stepsSection);
+  }
+
+  if (o.task_repertoire && Array.isArray(o.task_repertoire) && o.task_repertoire.length > 0) {
+    rendered = true;
+    var repSection = document.createElement("div");
+    repSection.className = "mt-2 space-y-1";
+    var repHeading = document.createElement("p");
+    repHeading.className = "text-[11px] text-gray-500 font-medium";
+    repHeading.textContent = "Task Repertoire";
+    repSection.appendChild(repHeading);
+    var repWrap = document.createElement("div");
+    repWrap.className = "flex flex-wrap gap-1.5";
+    o.task_repertoire.forEach(function(cap) {
+      var tag = document.createElement("span");
+      tag.className = "text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded";
+      tag.textContent = cap;
+      repWrap.appendChild(tag);
+    });
+    repSection.appendChild(repWrap);
+    container.appendChild(repSection);
+  }
+
+  if (o.artifacts && Array.isArray(o.artifacts) && o.artifacts.length > 0) {
+    rendered = true;
+    var artSection = document.createElement("div");
+    artSection.className = "mt-2 space-y-1";
+    var artHeading = document.createElement("p");
+    artHeading.className = "text-[11px] text-gray-500 font-medium";
+    artHeading.textContent = "Artifacts";
+    artSection.appendChild(artHeading);
+    o.artifacts.forEach(function(a) {
+      var p = document.createElement("p");
+      p.className = "text-xs text-emerald-300 ml-2";
+      p.textContent = "\u2713 " + a;
+      artSection.appendChild(p);
+    });
+    container.appendChild(artSection);
+  }
+
+  if (o.degradation_profile && Array.isArray(o.degradation_profile) && o.degradation_profile.length > 0) {
+    rendered = true;
+    var degSection = document.createElement("div");
+    degSection.className = "mt-2 space-y-1";
+    var degHeading = document.createElement("p");
+    degHeading.className = "text-[11px] text-gray-500 font-medium";
+    degHeading.textContent = "Degradation Profile";
+    degSection.appendChild(degHeading);
+    o.degradation_profile.forEach(function(d) {
+      var p = document.createElement("p");
+      p.className = "text-xs text-amber-400 ml-2";
+      p.textContent = "\u26A0 " + d;
+      degSection.appendChild(p);
+    });
+    container.appendChild(degSection);
   }
 
   if (!rendered) {

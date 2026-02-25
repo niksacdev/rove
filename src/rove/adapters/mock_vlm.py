@@ -35,6 +35,7 @@ class MockVLMAdapter:
                 "gripper is above the workspace",
             ],
             task_relevant=["red bracket", "bin A"],
+            environment_distribution="Indoor tabletop workspace with scattered industrial parts, overhead lighting, light clutter",
             raw_response='{"mock": true, "quality": ' + str(self._quality) + "}",
         )
 
@@ -57,6 +58,15 @@ class MockVLMAdapter:
             ],
             target_object=target,
             confidence=0.88,
+            task_repertoire=["top-down grasping", "precise placement", "obstacle-aware transport"],
+            artifacts=[
+                f"{target} placed in destination bin",
+                f"{target} no longer at original position",
+            ],
+            degradation_profile=[
+                "small part size requires precise gripper alignment",
+                "nearby objects risk collision during transport",
+            ],
             raw_response='{"mock": true}',
         )
 

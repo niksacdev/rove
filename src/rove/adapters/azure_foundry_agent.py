@@ -20,14 +20,20 @@ _STAGE_PROMPTS: dict[str, str] = {
     "perceive": (
         "You are a robotics perception agent. Analyze the scene and return JSON with:\n"
         '{"objects": [{"name": str, "bbox": [x,y,w,h], "confidence": float}], '
-        '"spatial_relations": [str], "task_relevant": [str], "raw_response": str}\n'
+        '"spatial_relations": [str], "task_relevant": [str], '
+        '"environment_distribution": str (describe environment type, lighting, surfaces, clutter), '
+        '"raw_response": str}\n'
         "Return ONLY valid JSON, no markdown fences."
     ),
     "plan": (
         "You are a robotics task planning agent. Given a scene analysis and task, "
         "create an execution plan. Return JSON with:\n"
         '{"strategy": str, "reasoning": str, "steps": [str], '
-        '"target_object": str, "confidence": float, "raw_response": str}\n'
+        '"target_object": str, "confidence": float, '
+        '"task_repertoire": [str] (domain-specific capabilities required), '
+        '"artifacts": [str] (measurable success markers), '
+        '"degradation_profile": [str] (what makes this domain/task hard), '
+        '"raw_response": str}\n'
         "Return ONLY valid JSON, no markdown fences."
     ),
     "act": (
@@ -39,7 +45,9 @@ _STAGE_PROMPTS: dict[str, str] = {
     ),
     "verify": (
         "You are a robotics verification agent. Assess whether the task was completed "
-        "successfully. Return JSON with:\n"
+        "successfully. Check whether the pipeline included environment_distribution, "
+        "task_repertoire, artifacts, and degradation_profile — note as a weakness if missing. "
+        "Return JSON with:\n"
         '{"success": bool, "confidence": float, "reasoning": str, "raw_response": str}\n'
         "Return ONLY valid JSON, no markdown fences."
     ),
@@ -47,13 +55,21 @@ _STAGE_PROMPTS: dict[str, str] = {
 
 # Fallback defaults when JSON parsing fails
 _STAGE_FALLBACKS: dict[str, dict] = {
-    "perceive": {"objects": [], "spatial_relations": [], "task_relevant": []},
+    "perceive": {
+        "objects": [],
+        "spatial_relations": [],
+        "task_relevant": [],
+        "environment_distribution": "",
+    },
     "plan": {
         "strategy": "unknown",
         "reasoning": "",
         "steps": [],
         "target_object": "",
         "confidence": 0.0,
+        "task_repertoire": [],
+        "artifacts": [],
+        "degradation_profile": [],
     },
     "act": {"action_type": "tool_calls", "tool_calls": [], "num_steps": 0, "confidence": 0.0},
     "verify": {"success": False, "confidence": 0.0, "reasoning": "Could not parse agent response"},
