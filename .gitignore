@@ -41,5 +41,9 @@ htmlcov/
 # Evaluation output (runtime-generated)
 data/output/
 
+# URDF visual meshes (not needed for FK — collision meshes suffice)
+data/urdf/*/meshes/visual/
+data/urdf/*/urdf/
+
 # uv
 .python-version
