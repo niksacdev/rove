@@ -26,8 +26,14 @@ class VLMAdapter(Protocol):
         """Perceive step: analyze workspace image and identify objects."""
         ...
 
-    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
-        """Plan step: generate a task strategy given scene analysis."""
+    async def plan_task(
+        self, image_base64: str, task: str, scene: SceneAnalysis, **kwargs
+    ) -> TaskPlan:
+        """Plan step: generate a task strategy given scene analysis.
+
+        Optional kwargs:
+            task_metadata: dict with eval_category, constraints, correction, expected_subtasks
+        """
         ...
 
     async def verify_success(

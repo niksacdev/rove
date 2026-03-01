@@ -52,7 +52,7 @@ class EvaluationPipeline:
         verify_adapter: StageAdapter | None = None,
         sim: SimAdapter | None = None,
         registry: AdapterRegistry | None = None,
-        forward_kinematics: bool = False,
+        compute_dynamics: bool = False,
         urdf_path: str | None = None,
     ):
         self.perceive_adapter = perceive_adapter
@@ -61,7 +61,7 @@ class EvaluationPipeline:
         self.verify_adapter = verify_adapter
         self.sim = sim
         self._registry = registry
-        self._forward_kinematics = forward_kinematics
+        self._compute_dynamics = compute_dynamics
         self._urdf_path = urdf_path
 
     async def _call_adapter(
@@ -106,7 +106,8 @@ class EvaluationPipeline:
             return await adapter.analyze_scene(image_base64, task)
         elif stage == "plan":
             scene = context.get("scene")
-            return await adapter.plan_task(image_base64, task, scene)
+            task_metadata = context.get("task_metadata")
+            return await adapter.plan_task(image_base64, task, scene, task_metadata=task_metadata)
         elif stage == "act":
             return await adapter.predict_action(
                 image_base64,
@@ -129,63 +130,85 @@ class EvaluationPipeline:
         return adapter.model_id
 
     @staticmethod
-    def _apply_fk_sanity_checks(
-        verification: VerificationResult, fk_analysis: dict
+    def _apply_dynamics_sanity_checks(
+        verification: VerificationResult, dynamics_analysis: dict
     ) -> VerificationResult:
-        """Override VLM plausibility scores when FK data objectively contradicts them.
+        """Override VLM plausibility scores when dynamics data objectively contradicts them.
 
-        FK provides ground-truth physics checks (joint limits, collisions,
-        displacement) that should override subjective VLM scores.
+        MuJoCo dynamics provides ground-truth physics checks (joint limits,
+        collisions, displacement, torques, singularity) that should override
+        subjective VLM scores.
         """
         if not verification.action_plausibility:
             return verification
 
         plaus = verification.action_plausibility.model_copy()
         overrides: list[str] = []
-        fk_failures = 0
+        dyn_failures = 0
 
         # Joint limits violation
-        if not fk_analysis.get("joint_limits_ok", True):
+        if not dynamics_analysis.get("joint_limits_ok", True):
             if plaus.bounds_check:
                 plaus.bounds_check = False
                 overrides.append("bounds_check=False: joint limits exceeded")
-            fk_failures += 1
+            dyn_failures += 1
 
         # Self-collision
-        if fk_analysis.get("self_collision", False):
+        if dynamics_analysis.get("self_collision", False):
             if plaus.bounds_check:
                 plaus.bounds_check = False
                 overrides.append("bounds_check=False: self-collision detected")
-            fk_failures += 1
+            dyn_failures += 1
 
         # Excessive displacement
-        total_disp = fk_analysis.get("total_displacement_m", 0.0)
+        total_disp = dynamics_analysis.get("total_displacement_m", 0.0)
         if total_disp > 2.0:
             if plaus.smoothness:
                 plaus.smoothness = False
                 overrides.append(
                     f"smoothness=False: displacement {total_disp:.1f}m exceeds 2.0m limit"
                 )
-            fk_failures += 1
+            dyn_failures += 1
 
         # Very low smoothness score
-        smoothness_score = fk_analysis.get("smoothness_score", 1.0)
+        smoothness_score = dynamics_analysis.get("smoothness_score", 1.0)
         if smoothness_score < 0.1:
-            fk_failures += 1
+            dyn_failures += 1
 
-        # Cap plan_alignment if any FK failure
-        if fk_failures >= 1 and plaus.plan_alignment > 0.3:
-            overrides.append(f"plan_alignment capped 0.3: {fk_failures} FK failure(s)")
+        # Torque feasibility violation
+        if not dynamics_analysis.get("torque_feasible", True):
+            if plaus.bounds_check:
+                plaus.bounds_check = False
+                overrides.append("bounds_check=False: torque limits exceeded")
+            dyn_failures += 1
+
+        # Near singularity — cap plan_alignment
+        if dynamics_analysis.get("near_singularity", False):
+            if plaus.plan_alignment > 0.3:
+                overrides.append("plan_alignment capped 0.3: near singularity at grasp config")
+                plaus.plan_alignment = 0.3
+            dyn_failures += 1
+
+        # Gravity compensation infeasible
+        if not dynamics_analysis.get("gravity_feasible", True):
+            if plaus.bounds_check:
+                plaus.bounds_check = False
+                overrides.append("bounds_check=False: gravity compensation infeasible")
+            dyn_failures += 1
+
+        # Cap plan_alignment if any dynamics failure
+        if dyn_failures >= 1 and plaus.plan_alignment > 0.3:
+            overrides.append(f"plan_alignment capped 0.3: {dyn_failures} dynamics failure(s)")
             plaus.plan_alignment = 0.3
 
-        # Cap overall confidence if 2+ FK failures
+        # Cap overall confidence if 2+ dynamics failures
         new_confidence = verification.confidence
-        if fk_failures >= 2 and verification.confidence > 0.4:
-            overrides.append(f"confidence capped 0.4: {fk_failures} FK failures")
+        if dyn_failures >= 2 and verification.confidence > 0.4:
+            overrides.append(f"confidence capped 0.4: {dyn_failures} dynamics failures")
             new_confidence = 0.4
 
         if overrides:
-            override_text = " | ".join(f"[FK override: {o}]" for o in overrides)
+            override_text = " | ".join(f"[Dynamics override: {o}]" for o in overrides)
             plaus.reasoning = (
                 f"{plaus.reasoning} {override_text}" if plaus.reasoning else override_text
             )
@@ -216,8 +239,27 @@ class EvaluationPipeline:
         if example and example.extras.get("proprioception"):
             ctx.proprioception = example.extras["proprioception"]
 
-        # Auto-detect URDF from example robot type if FK enabled but no URDF provided
-        if self._forward_kinematics and not self._urdf_path and example:
+        # Carry task metadata (constraints, eval_category, correction, etc.)
+        # so prompt templates can reference them for real adapters
+        if example:
+            meta: dict = {}
+            for key in (
+                "eval_category",
+                "constraints",
+                "correction",
+                "turns",
+                "expected_subtasks",
+                "acceptable_interpretations",
+                "difficulty",
+            ):
+                val = example.extras.get(key)
+                if val is not None:
+                    meta[key] = val
+            if meta:
+                ctx.task_metadata = meta
+
+        # Auto-detect URDF from example robot type if dynamics enabled but no URDF provided
+        if self._compute_dynamics and not self._urdf_path and example:
             robot = example.extras.get("robot")
             if robot:
                 from pathlib import Path
@@ -285,6 +327,7 @@ class EvaluationPipeline:
                     image_base64,
                     task,
                     scene=scene,
+                    task_metadata=ctx.task_metadata,
                 )
                 ctx.plan = plan
                 ctx.completed_stages.append("plan")
@@ -327,42 +370,43 @@ class EvaluationPipeline:
                 ctx.completed_stages.append("act")
 
                 last_obs = reset_obs
-                if action_pred.action_type == "trajectory" and action_pred.actions:
-                    for action in action_pred.actions:
-                        last_obs = await self.sim.step(action)
-                        if last_obs.done:
-                            break
-                elif action_pred.action_type == "tool_calls":
-                    last_obs = await self.sim.get_observation()
+                if self.sim is not None:
+                    if action_pred.action_type == "trajectory" and action_pred.actions:
+                        for action in action_pred.actions:
+                            last_obs = await self.sim.step(action)
+                            if last_obs.done:
+                                break
+                    elif action_pred.action_type == "tool_calls":
+                        last_obs = await self.sim.get_observation()
 
-                # Compute FK before yielding act result so it's included in output
-                fk_skipped_reason: str | None = None
-                if self._forward_kinematics:
+                # Compute dynamics before yielding act result so it's included in output
+                dynamics_skipped_reason: str | None = None
+                if self._compute_dynamics:
                     if not self._urdf_path:
-                        fk_skipped_reason = (
+                        dynamics_skipped_reason = (
                             "No URDF provided — upload a URDF or use a dataset with robot metadata"
                         )
-                        logger.warning("FK enabled but no URDF path — skipping FK")
+                        logger.warning("Dynamics enabled but no URDF path — skipping")
                     elif not action_pred.actions:
-                        fk_skipped_reason = "No trajectory actions to analyze"
-                        logger.warning("FK enabled but no actions — skipping FK")
+                        dynamics_skipped_reason = "No trajectory actions to analyze"
+                        logger.warning("Dynamics enabled but no actions — skipping")
                     else:
                         try:
-                            from rove.adapters.fk_mujoco import compute_fk
+                            from rove.adapters.dynamics_mujoco import compute_dynamics
 
-                            fk = compute_fk(
+                            dyn = compute_dynamics(
                                 self._urdf_path,
                                 action_pred.actions,
                                 initial_qpos=ctx.proprioception or None,
                             )
-                            ctx.fk_analysis = fk
-                            logger.info("FK analysis: %d steps", fk.get("steps_analyzed", 0))
+                            ctx.dynamics_analysis = dyn
+                            logger.info("Dynamics analysis: %d steps", dyn.get("steps_analyzed", 0))
                         except ImportError:
-                            fk_skipped_reason = "MuJoCo not installed"
-                            logger.warning("MuJoCo not installed — skipping FK")
-                        except Exception as fk_err:
-                            fk_skipped_reason = f"FK computation failed: {fk_err}"
-                            logger.warning("FK computation failed: %s", fk_err)
+                            dynamics_skipped_reason = "MuJoCo not installed"
+                            logger.warning("MuJoCo not installed — skipping dynamics")
+                        except Exception as dyn_err:
+                            dynamics_skipped_reason = f"Dynamics computation failed: {dyn_err}"
+                            logger.warning("Dynamics computation failed: %s", dyn_err)
 
                 latency = (time.monotonic() - t0) * 1000
 
@@ -374,10 +418,10 @@ class EvaluationPipeline:
                 ).startswith("mock")
                 if action_pred.action_type == "trajectory":
                     act_output["actions_executed"] = len(action_pred.actions)
-                if ctx.fk_analysis:
-                    act_output["fk_analysis"] = ctx.fk_analysis
-                if fk_skipped_reason:
-                    act_output["fk_skipped"] = fk_skipped_reason
+                if ctx.dynamics_analysis:
+                    act_output["dynamics_analysis"] = ctx.dynamics_analysis
+                if dynamics_skipped_reason:
+                    act_output["dynamics_skipped"] = dynamics_skipped_reason
 
                 yield PipelineStageResult(
                     stage="act",
@@ -419,8 +463,10 @@ class EvaluationPipeline:
                 after_image=after_image,
                 pipeline_context=ctx.to_dict(),
             )
-            if ctx.fk_analysis:
-                verification = self._apply_fk_sanity_checks(verification, ctx.fk_analysis)
+            if ctx.dynamics_analysis:
+                verification = self._apply_dynamics_sanity_checks(
+                    verification, ctx.dynamics_analysis
+                )
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="verify",

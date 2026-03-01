@@ -124,4 +124,4 @@ class TestFoundryAgentYAMLConfig:
         assert s.plan == "bing-grounding-agent"
         assert s.perceive == "qwen3-vl-8b"
         assert s.act == "pi05-libero"
-        assert s.verify == "qwen3-vl-8b"
+        assert s.verify == "bing-grounding-agent"

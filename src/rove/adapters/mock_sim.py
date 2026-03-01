@@ -20,6 +20,8 @@ class MockSimAdapter:
         self.display_name = "Mock Sim"
         cfg = config or {}
         self._success_rate = cfg.get("mock_success_rate", 0.80)
+        seed = cfg.get("seed")
+        self._rng = random.Random(seed) if seed is not None else random.Random()
         self._step_count = 0
         self._last_success = False
         self._last_proprioception: list[float] = [0.0] * 7
@@ -40,11 +42,11 @@ class MockSimAdapter:
         )
 
     async def step(self, action: list[float]) -> SimObservation:
-        await asyncio.sleep(random.uniform(0.01, 0.03))
+        await asyncio.sleep(self._rng.uniform(0.01, 0.03))
         self._step_count += 1
         self._done = self._step_count >= 5
-        self._last_success = self._done and random.random() < self._success_rate
-        self._last_proprioception = [round(random.uniform(-0.5, 0.5), 3) for _ in range(7)]
+        self._last_success = self._done and self._rng.random() < self._success_rate
+        self._last_proprioception = [round(self._rng.uniform(-0.5, 0.5), 3) for _ in range(7)]
         self._last_image_base64 = _MOCK_IMAGE_B64
         return SimObservation(
             image_base64=self._last_image_base64,

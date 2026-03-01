@@ -113,6 +113,423 @@ const STRATEGY_COLORS = [
 ];
 var strategyColorMap = {}; // strategy_id → color hex
 
+// Failure category labels and colors
+var FAILURE_LABELS = {
+  "perceive_error": "Perception Error",
+  "perceive_miss": "Perception Miss",
+  "plan_error": "Planning Error",
+  "plan_low_confidence": "Low Confidence",
+  "act_error": "Action Error",
+  "action_dynamics_violation": "Dynamics Violation",
+  "action_torque_violation": "Torque Violation",
+  "action_singularity": "Near Singularity",
+  "action_infeasible": "Infeasible Action",
+  "verify_error": "Verify Error",
+  "verification_mismatch": "Verify Mismatch",
+};
+
+function getFailureLabel(cat) {
+  return FAILURE_LABELS[cat] || cat;
+}
+
+function getFailureBadgeClass(cat) {
+  if (cat && cat.indexOf("error") !== -1) return "bg-red-500/15 text-red-400";
+  if (cat === "perceive_miss" || cat === "plan_low_confidence") return "bg-amber-500/15 text-amber-400";
+  if (cat && cat.indexOf("action") !== -1) return "bg-orange-500/15 text-orange-400";
+  if (cat && cat.indexOf("verification") !== -1) return "bg-yellow-500/15 text-yellow-400";
+  return "bg-gray-500/15 text-gray-400";
+}
+
+// ---- Provenance Card ----
+function renderProvenanceCard(prov, parentEl) {
+  var wrap = document.createElement("div");
+  wrap.className = "bg-f-surface border border-f-border rounded-xl overflow-hidden mt-3";
+
+  var header = document.createElement("button");
+  header.className = "w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer";
+  var headerLabel = document.createElement("span");
+  headerLabel.className = "font-semibold uppercase tracking-wider text-[10px]";
+  headerLabel.textContent = "Run Info";
+  var headerToggle = document.createElement("span");
+  headerToggle.className = "text-[10px]";
+  headerToggle.textContent = "click to expand";
+  header.appendChild(headerLabel);
+  header.appendChild(headerToggle);
+
+  var body = document.createElement("div");
+  body.className = "px-4 pb-3 border-t border-f-border/50";
+  body.style.display = "none";
+
+  header.addEventListener("click", function() {
+    var shown = body.style.display !== "none";
+    body.style.display = shown ? "none" : "";
+    headerToggle.textContent = shown ? "click to expand" : "click to collapse";
+  });
+
+  var grid = document.createElement("div");
+  grid.className = "grid grid-cols-2 gap-x-6 gap-y-1.5 pt-2.5 text-[11px]";
+
+  var fields = [
+    ["Timestamp", prov.timestamp ? new Date(prov.timestamp).toLocaleString() : "\u2014"],
+    ["Hostname", prov.hostname || "\u2014"],
+    ["ROVE Version", prov.rove_version || "\u2014"],
+    ["Python", prov.python_version || "\u2014"],
+    ["Image Hash", prov.image_sha256 ? prov.image_sha256.substring(0, 12) + "\u2026" : "\u2014"],
+    ["Config Hash", prov.config_hash ? prov.config_hash.substring(0, 12) + "\u2026" : "\u2014"],
+    ["Seed", prov.seed != null ? String(prov.seed) : "none"],
+    ["Strategies", (prov.strategy_ids || []).join(", ") || "\u2014"],
+  ];
+
+  fields.forEach(function(pair) {
+    var label = document.createElement("span");
+    label.className = "text-gray-500";
+    label.textContent = pair[0];
+    var value = document.createElement("span");
+    value.className = "text-gray-300 font-mono truncate";
+    value.textContent = pair[1];
+    grid.appendChild(label);
+    grid.appendChild(value);
+  });
+
+  body.appendChild(grid);
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+  parentEl.appendChild(wrap);
+}
+
+// ---- Insights Card ----
+function renderInsightsCard(insights, parentEl) {
+  if (!insights) return;
+
+  var card = document.createElement("div");
+  card.className = "bg-f-surface border border-f-border rounded-xl p-4 mt-3 space-y-4";
+
+  // Section header
+  var headerSpan = document.createElement("span");
+  headerSpan.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+  headerSpan.textContent = "Run Insights";
+  card.appendChild(headerSpan);
+
+  // Top Finding banner
+  if (insights.top_finding) {
+    var banner = document.createElement("div");
+    banner.className = "px-3 py-2 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20";
+    banner.textContent = insights.top_finding;
+    card.appendChild(banner);
+  }
+
+  // Failure Breakdown — horizontal bar chart
+  if (insights.failure_breakdown && Object.keys(insights.failure_breakdown).length > 0) {
+    var fbSection = document.createElement("div");
+    fbSection.className = "space-y-1.5";
+    var fbTitle = document.createElement("span");
+    fbTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    fbTitle.textContent = "Failure Breakdown";
+    fbSection.appendChild(fbTitle);
+
+    var maxCount = Math.max.apply(null, Object.values(insights.failure_breakdown));
+    Object.keys(insights.failure_breakdown).forEach(function(cat) {
+      var count = insights.failure_breakdown[cat];
+      var barWrap = document.createElement("div");
+      barWrap.className = "flex items-center gap-2";
+
+      var label = document.createElement("span");
+      label.className = "text-[11px] text-gray-400 w-32 shrink-0 truncate";
+      label.textContent = getFailureLabel(cat);
+
+      var barBg = document.createElement("div");
+      barBg.className = "flex-1 h-4 bg-f-elevated rounded overflow-hidden";
+      var bar = document.createElement("div");
+      var pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
+      bar.className = "h-full rounded " + (cat.indexOf("error") !== -1 ? "bg-red-500/60" : "bg-amber-500/60");
+      bar.style.width = pct + "%";
+      bar.style.minWidth = "20px";
+      barBg.appendChild(bar);
+
+      var countSpan = document.createElement("span");
+      countSpan.className = "text-[11px] text-gray-400 font-mono w-6 text-right";
+      countSpan.textContent = String(count);
+
+      barWrap.appendChild(label);
+      barWrap.appendChild(barBg);
+      barWrap.appendChild(countSpan);
+      fbSection.appendChild(barWrap);
+    });
+    card.appendChild(fbSection);
+  }
+
+  // Stage Health — 4 colored progress bars
+  if (insights.stage_health && Object.keys(insights.stage_health).length > 0) {
+    var shSection = document.createElement("div");
+    shSection.className = "space-y-1.5";
+    var shTitle = document.createElement("span");
+    shTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    shTitle.textContent = "Stage Health";
+    shSection.appendChild(shTitle);
+
+    ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+      var score = insights.stage_health[stage];
+      if (score == null) return;
+      var barWrap = document.createElement("div");
+      barWrap.className = "flex items-center gap-2";
+
+      var label = document.createElement("span");
+      label.className = "text-[11px] text-gray-400 w-20 shrink-0 capitalize";
+      label.textContent = stage;
+
+      var barBg = document.createElement("div");
+      barBg.className = "flex-1 h-3 bg-f-elevated rounded-full overflow-hidden";
+      var bar = document.createElement("div");
+      var barColor = score > 0.7 ? "bg-green-500" : score > 0.4 ? "bg-amber-500" : "bg-red-500";
+      bar.className = "h-full rounded-full transition-all " + barColor;
+      bar.style.width = Math.max(score * 100, 2) + "%";
+      barBg.appendChild(bar);
+
+      var pctLabel = document.createElement("span");
+      pctLabel.className = "text-[11px] font-mono w-10 text-right " + (score > 0.7 ? "text-green-400" : score > 0.4 ? "text-amber-400" : "text-red-400");
+      pctLabel.textContent = Math.round(score * 100) + "%";
+
+      barWrap.appendChild(label);
+      barWrap.appendChild(barBg);
+      barWrap.appendChild(pctLabel);
+      shSection.appendChild(barWrap);
+    });
+    card.appendChild(shSection);
+  }
+
+  // Degradation Signals
+  if (insights.degradation_signals && insights.degradation_signals.length > 0) {
+    var dsSection = document.createElement("div");
+    dsSection.className = "space-y-1";
+    var dsTitle = document.createElement("span");
+    dsTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    dsTitle.textContent = "Degradation Signals";
+    dsSection.appendChild(dsTitle);
+
+    insights.degradation_signals.forEach(function(signal) {
+      var item = document.createElement("div");
+      item.className = "flex items-start gap-2 text-[11px] text-amber-400";
+      var warnIcon = document.createElement("span");
+      warnIcon.className = "shrink-0 mt-px";
+      warnIcon.textContent = "\u26A0";
+      var signalText = document.createElement("span");
+      signalText.textContent = signal;
+      item.appendChild(warnIcon);
+      item.appendChild(signalText);
+      dsSection.appendChild(item);
+    });
+    card.appendChild(dsSection);
+  }
+
+  // Model Comparison mini table
+  if (insights.model_comparison && insights.model_comparison.length > 0) {
+    var mcSection = document.createElement("div");
+    mcSection.className = "space-y-1.5";
+    var mcTitle = document.createElement("span");
+    mcTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    mcTitle.textContent = "Model Comparison";
+    mcSection.appendChild(mcTitle);
+
+    var table = document.createElement("div");
+    table.className = "border border-f-border rounded-lg overflow-hidden";
+
+    // Table header
+    var tHeader = document.createElement("div");
+    tHeader.className = "grid grid-cols-[1fr_90px_90px_50px] gap-2 px-3 py-1.5 bg-f-elevated text-[10px] text-gray-500 font-semibold uppercase";
+    ["Model", "Success", "Avg Latency", "N"].forEach(function(h) {
+      var c = document.createElement("span");
+      c.textContent = h;
+      tHeader.appendChild(c);
+    });
+    table.appendChild(tHeader);
+
+    insights.model_comparison.forEach(function(mc) {
+      var row = document.createElement("div");
+      row.className = "grid grid-cols-[1fr_90px_90px_50px] gap-2 px-3 py-1.5 border-t border-f-border/50 text-[11px]";
+
+      var nameC = document.createElement("span");
+      nameC.className = "text-gray-300 font-mono truncate";
+      nameC.textContent = mc.model_id;
+      row.appendChild(nameC);
+
+      var srC = document.createElement("span");
+      var srPct = Math.round(mc.success_rate * 100);
+      srC.className = "font-mono " + (srPct >= 70 ? "text-green-400" : srPct >= 40 ? "text-amber-400" : "text-red-400");
+      srC.textContent = srPct + "%";
+      row.appendChild(srC);
+
+      var latC = document.createElement("span");
+      latC.className = "text-gray-400 font-mono";
+      latC.textContent = Math.round(mc.avg_latency_ms) + "ms";
+      row.appendChild(latC);
+
+      var nC = document.createElement("span");
+      nC.className = "text-gray-500 font-mono";
+      nC.textContent = String(mc.n);
+      row.appendChild(nC);
+
+      table.appendChild(row);
+    });
+    mcSection.appendChild(table);
+    card.appendChild(mcSection);
+  }
+
+  // Reasoning Trail — collapsible per-strategy
+  if (insights.reasoning_trail && Object.keys(insights.reasoning_trail).length > 0) {
+    var rtSection = document.createElement("div");
+    rtSection.className = "space-y-1.5";
+    var rtTitle = document.createElement("span");
+    rtTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    rtTitle.textContent = "Reasoning Trail";
+    rtSection.appendChild(rtTitle);
+
+    Object.keys(insights.reasoning_trail).forEach(function(sid) {
+      var trail = insights.reasoning_trail[sid];
+      var strat = strategies.find(function(s) { return s.id === sid; });
+      var displayName = strat ? strat.display_name : sid;
+
+      var details = document.createElement("details");
+      details.className = "border border-f-border/50 rounded-lg overflow-hidden";
+      var summary = document.createElement("summary");
+      summary.className = "px-3 py-2 text-[11px] text-gray-400 cursor-pointer hover:text-gray-300 transition-colors";
+      summary.textContent = displayName;
+      details.appendChild(summary);
+
+      var body = document.createElement("div");
+      body.className = "px-3 pb-3 space-y-2";
+
+      // Plan reasoning
+      if (trail.plan_reasoning) {
+        var planBlock = document.createElement("div");
+        planBlock.className = "space-y-0.5";
+        var planLabel = document.createElement("span");
+        planLabel.className = "text-[10px] font-semibold text-purple-400 uppercase";
+        planLabel.textContent = "Plan Reasoning";
+        planBlock.appendChild(planLabel);
+        var planText = document.createElement("p");
+        planText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
+        planText.textContent = trail.plan_reasoning;
+        planBlock.appendChild(planText);
+        body.appendChild(planBlock);
+      }
+
+      // Structured Reasoning: Subtask Reasoning
+      if (trail.subtask_reasoning) {
+        var srBlock = document.createElement("div");
+        srBlock.className = "space-y-0.5";
+        var srLabel = document.createElement("span");
+        srLabel.className = "text-[10px] font-semibold text-cyan-400 uppercase";
+        srLabel.textContent = "Subtask Reasoning";
+        srBlock.appendChild(srLabel);
+        var srText = document.createElement("p");
+        srText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
+        srText.textContent = trail.subtask_reasoning;
+        srBlock.appendChild(srText);
+        body.appendChild(srBlock);
+      }
+
+      // Structured Reasoning: Action Reasoning
+      if (trail.action_reasoning) {
+        var arBlock = document.createElement("div");
+        arBlock.className = "space-y-0.5";
+        var arLabel = document.createElement("span");
+        arLabel.className = "text-[10px] font-semibold text-violet-400 uppercase";
+        arLabel.textContent = "Action Reasoning";
+        arBlock.appendChild(arLabel);
+        var arText = document.createElement("p");
+        arText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
+        arText.textContent = trail.action_reasoning;
+        arBlock.appendChild(arText);
+        body.appendChild(arBlock);
+      }
+
+      // Constraints Acknowledged
+      if (trail.constraints_acknowledged && trail.constraints_acknowledged.length > 0) {
+        var caBlock = document.createElement("div");
+        caBlock.className = "space-y-0.5";
+        var caLabel = document.createElement("span");
+        caLabel.className = "text-[10px] font-semibold text-red-400 uppercase";
+        caLabel.textContent = "Constraints Acknowledged";
+        caBlock.appendChild(caLabel);
+        var caWrap = document.createElement("div");
+        caWrap.className = "flex flex-wrap gap-1.5 mt-1";
+        trail.constraints_acknowledged.forEach(function(c) {
+          var tag = document.createElement("span");
+          tag.className = "text-[10px] bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-0.5 rounded";
+          tag.textContent = c;
+          caWrap.appendChild(tag);
+        });
+        caBlock.appendChild(caWrap);
+        body.appendChild(caBlock);
+      }
+
+      // Verify reasoning
+      if (trail.verify_reasoning) {
+        var verifyBlock = document.createElement("div");
+        verifyBlock.className = "space-y-0.5";
+        var verifyLabel = document.createElement("span");
+        verifyLabel.className = "text-[10px] font-semibold text-amber-400 uppercase";
+        verifyLabel.textContent = "Verify Reasoning";
+        verifyBlock.appendChild(verifyLabel);
+        var verifyText = document.createElement("p");
+        verifyText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
+        verifyText.textContent = trail.verify_reasoning;
+        verifyBlock.appendChild(verifyText);
+        body.appendChild(verifyBlock);
+      }
+
+      // Stage checks
+      if (trail.stage_checks && trail.stage_checks.length > 0) {
+        var checksBlock = document.createElement("div");
+        checksBlock.className = "space-y-1";
+        var checksLabel = document.createElement("span");
+        checksLabel.className = "text-[10px] font-semibold text-gray-500 uppercase";
+        checksLabel.textContent = "Stage Checks";
+        checksBlock.appendChild(checksLabel);
+        trail.stage_checks.forEach(function(check) {
+          var checkItem = document.createElement("div");
+          checkItem.className = "flex items-start gap-2 text-[11px]";
+          var icon = document.createElement("span");
+          icon.className = "shrink-0";
+          icon.textContent = check.passed ? "\u2705" : "\u274C";
+          var stageSpan = document.createElement("span");
+          stageSpan.className = "text-gray-500";
+          stageSpan.textContent = (check.stage ? check.stage.charAt(0).toUpperCase() + check.stage.slice(1) : "") + ":";
+          var reasonSpan = document.createElement("span");
+          reasonSpan.className = "text-gray-400";
+          reasonSpan.textContent = check.reasoning || "";
+          checkItem.appendChild(icon);
+          checkItem.appendChild(stageSpan);
+          checkItem.appendChild(reasonSpan);
+          checksBlock.appendChild(checkItem);
+        });
+        body.appendChild(checksBlock);
+      }
+
+      // Perceive raw_response
+      if (trail.perceive_reasoning) {
+        var percBlock = document.createElement("div");
+        percBlock.className = "space-y-0.5";
+        var percLabel = document.createElement("span");
+        percLabel.className = "text-[10px] font-semibold text-blue-400 uppercase";
+        percLabel.textContent = "Perceive Output";
+        percBlock.appendChild(percLabel);
+        var percText = document.createElement("p");
+        percText.className = "text-[11px] text-gray-400 whitespace-pre-wrap max-h-32 overflow-y-auto";
+        percText.textContent = trail.perceive_reasoning.length > 500 ? trail.perceive_reasoning.substring(0, 500) + "..." : trail.perceive_reasoning;
+        percBlock.appendChild(percText);
+        body.appendChild(percBlock);
+      }
+
+      details.appendChild(body);
+      rtSection.appendChild(details);
+    });
+    card.appendChild(rtSection);
+  }
+
+  parentEl.appendChild(card);
+}
+
 // ---- Theme ----
 function initTheme() {
   var saved = localStorage.getItem("rove-theme");
@@ -570,21 +987,26 @@ async function renderExamplesView() {
     return;
   }
 
-  // Group by category, then by scene_type
-  var categories = {};
-  examples.forEach(function(ex) {
-    var cat = ex.category || "perceive-plan";
-    if (!categories[cat]) categories[cat] = {};
-    var key = ex.scene_type || "other";
-    if (!categories[cat][key]) categories[cat][key] = [];
-    categories[cat][key].push(ex);
-  });
-
-  var catMeta = {
-    "perceive-plan": { label: "Perceive & Plan", desc: "Robo2VLM-1 \u2014 scene understanding and planning tasks (no VLA)", icon: "eye" },
-    "action": { label: "Action (VLA)", desc: "LIBERO-10 \u2014 manipulation tasks with proprioception and ground truth actions", icon: "move-3d" }
+  // Eval category metadata — primary grouping
+  var evalCatMeta = {
+    "atomic":               { label: "Atomic",      icon: "target",      color: "text-green-400",  badgeCls: "bg-green-500/10 text-green-300 border-green-500/20",  desc: "Single-step manipulation tasks. Tests baseline perception and planning on straightforward pick-and-place instructions." },
+    "multi_stage":          { label: "Multi-Stage",  icon: "layers",      color: "text-blue-400",   badgeCls: "bg-blue-500/10 text-blue-300 border-blue-500/20",    desc: "Sequential tasks requiring ordered subtask decomposition. Tests whether the pipeline breaks complex instructions into correctly ordered steps." },
+    "situated_correction":  { label: "Correction",   icon: "message-circle", color: "text-amber-400", badgeCls: "bg-amber-500/10 text-amber-300 border-amber-500/20", desc: "Mid-task human feedback that changes the plan. Tests whether the pipeline adapts to corrections like \"not that one\" or \"use the other hand.\"" },
+    "constrained":          { label: "Constrained",  icon: "shield-alert", color: "text-red-400",    badgeCls: "bg-red-500/10 text-red-300 border-red-500/20",      desc: "Tasks with safety or preference constraints. Tests whether the pipeline acknowledges and respects rules like \"don't go near the baby\" or \"keep it upright.\"" },
+    "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"make this tidier\" or \"get drinks ready.\"" },
+    "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" }
   };
-  var catKeys = ["perceive-plan", "action"];
+  var evalCatOrder = ["atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative"];
+
+  // Group examples by eval_category, then by scene_type
+  var catGroups = {};
+  examples.forEach(function(ex) {
+    var ec = ex.eval_category || "atomic";
+    if (!catGroups[ec]) catGroups[ec] = {};
+    var scene = ex.scene_type || "other";
+    if (!catGroups[ec][scene]) catGroups[ec][scene] = [];
+    catGroups[ec][scene].push(ex);
+  });
 
   // Layout: left menu + right content
   var layout = document.createElement("div");
@@ -592,7 +1014,7 @@ async function renderExamplesView() {
 
   // Left menu
   var menu = document.createElement("nav");
-  menu.className = "shrink-0 w-48 pt-1";
+  menu.className = "shrink-0 w-52 pt-1";
 
   var menuTitle = document.createElement("h2");
   menuTitle.className = "text-lg font-semibold text-gray-100 mb-1";
@@ -601,7 +1023,7 @@ async function renderExamplesView() {
 
   var menuSubtitle = document.createElement("p");
   menuSubtitle.className = "text-[10px] text-gray-500 mb-4";
-  menuSubtitle.textContent = "Click to auto-fill evaluation";
+  menuSubtitle.textContent = "Select a category, then click an example to auto-fill evaluation";
   menu.appendChild(menuSubtitle);
 
   // Right content area
@@ -610,48 +1032,62 @@ async function renderExamplesView() {
 
   var panels = {};
   var menuButtons = {};
+  var activeCatKeys = [];
 
-  catKeys.forEach(function(cat) {
-    var groups = categories[cat];
+  evalCatOrder.forEach(function(ec) {
+    var groups = catGroups[ec];
     if (!groups) return;
-    var cm = catMeta[cat] || { label: cat, desc: "", icon: "box" };
+    activeCatKeys.push(ec);
+    var meta = evalCatMeta[ec];
     var totalCount = Object.values(groups).reduce(function(s, arr) { return s + arr.length; }, 0);
 
-    // Menu button (safe DOM construction)
+    // Menu button
     var btn = document.createElement("button");
-    btn.className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1";
+    btn.className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 text-gray-400 hover:text-gray-200 hover:bg-f-surface/50";
     var btnIcon = document.createElement("i");
-    btnIcon.setAttribute("data-lucide", cm.icon);
-    btnIcon.className = "w-4 h-4 shrink-0";
+    btnIcon.setAttribute("data-lucide", meta.icon);
+    btnIcon.className = "w-4 h-4 shrink-0 " + meta.color;
     btn.appendChild(btnIcon);
     var btnLabel = document.createElement("span");
     btnLabel.className = "flex-1 truncate";
-    btnLabel.textContent = cm.label;
+    btnLabel.textContent = meta.label;
     btn.appendChild(btnLabel);
     var btnCount = document.createElement("span");
     btnCount.className = "text-[10px] text-gray-500";
     btnCount.textContent = String(totalCount);
     btn.appendChild(btnCount);
-    menuButtons[cat] = btn;
+    menuButtons[ec] = btn;
     menu.appendChild(btn);
 
     // Content panel (hidden by default)
     var panel = document.createElement("div");
     panel.style.display = "none";
 
+    // Panel header with description
     var panelHeader = document.createElement("div");
-    panelHeader.className = "mb-4";
+    panelHeader.className = "mb-5";
+    var panelTitleRow = document.createElement("div");
+    panelTitleRow.className = "flex items-center gap-2 mb-1.5";
+    var panelIcon = document.createElement("i");
+    panelIcon.setAttribute("data-lucide", meta.icon);
+    panelIcon.className = "w-5 h-5 " + meta.color;
+    panelTitleRow.appendChild(panelIcon);
     var panelTitle = document.createElement("h3");
     panelTitle.className = "text-sm font-semibold text-gray-200";
-    panelTitle.textContent = cm.label;
+    panelTitle.textContent = meta.label;
+    panelTitleRow.appendChild(panelTitle);
+    var panelCount = document.createElement("span");
+    panelCount.className = "text-[10px] text-gray-500 ml-auto";
+    panelCount.textContent = totalCount + " example" + (totalCount !== 1 ? "s" : "");
+    panelTitleRow.appendChild(panelCount);
+    panelHeader.appendChild(panelTitleRow);
     var panelDesc = document.createElement("p");
-    panelDesc.className = "text-[10px] text-gray-500 mt-0.5";
-    panelDesc.textContent = cm.desc;
-    panelHeader.appendChild(panelTitle);
+    panelDesc.className = "text-xs text-gray-400 leading-relaxed";
+    panelDesc.textContent = meta.desc;
     panelHeader.appendChild(panelDesc);
     panel.appendChild(panelHeader);
 
-    // Scene type groups
+    // Scene type groups within this eval category
     Object.keys(groups).sort().forEach(function(sceneType) {
       var section = document.createElement("div");
       section.className = "mb-4";
@@ -699,15 +1135,29 @@ async function renderExamplesView() {
         taskText.className = "text-xs text-gray-200 group-hover:text-white line-clamp-2";
         taskText.textContent = ex.task;
 
+        // Meta row: source + pipeline scope badge
+        var metaRow = document.createElement("div");
+        metaRow.className = "flex items-center gap-1.5 mt-0.5";
+
+        // Pipeline scope badge (VLA vs perceive-plan)
+        if (ex.category === "action") {
+          var vlaBadge = document.createElement("span");
+          vlaBadge.className = "text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-300 border-indigo-500/20";
+          vlaBadge.textContent = "VLA";
+          metaRow.appendChild(vlaBadge);
+        }
+
         var metaParts = [ex.source ? ex.source.dataset : ""];
         if (ex.robot) metaParts.push(ex.robot.toUpperCase());
         if (ex.proprioception) metaParts.push(ex.state_dim + "-DOF state");
-        var meta = document.createElement("p");
-        meta.className = "text-[10px] text-gray-500 mt-0.5";
-        meta.textContent = metaParts.filter(Boolean).join(" \u00b7 ");
+        if (ex.difficulty) metaParts.push(ex.difficulty);
+        var metaSpan = document.createElement("span");
+        metaSpan.className = "text-[10px] text-gray-500";
+        metaSpan.textContent = metaParts.filter(Boolean).join(" \u00b7 ");
+        metaRow.appendChild(metaSpan);
 
         info.appendChild(taskText);
-        info.appendChild(meta);
+        info.appendChild(metaRow);
         card.appendChild(thumb);
         card.appendChild(info);
 
@@ -723,13 +1173,13 @@ async function renderExamplesView() {
       panel.appendChild(section);
     });
 
-    panels[cat] = panel;
+    panels[ec] = panel;
     content.appendChild(panel);
   });
 
   // Activate a category — show its panel, highlight its menu button
   function activateCategory(cat) {
-    catKeys.forEach(function(k) {
+    activeCatKeys.forEach(function(k) {
       if (panels[k]) panels[k].style.display = k === cat ? "" : "none";
       if (menuButtons[k]) {
         menuButtons[k].className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 "
@@ -740,7 +1190,7 @@ async function renderExamplesView() {
     });
   }
 
-  catKeys.forEach(function(cat) {
+  activeCatKeys.forEach(function(cat) {
     if (menuButtons[cat]) {
       menuButtons[cat].addEventListener("click", function() {
         activateCategory(cat);
@@ -748,7 +1198,8 @@ async function renderExamplesView() {
     }
   });
 
-  activateCategory("perceive-plan");
+  // Default to first available category
+  if (activeCatKeys.length > 0) activateCategory(activeCatKeys[0]);
 
   layout.appendChild(menu);
   layout.appendChild(content);
@@ -774,6 +1225,10 @@ async function loadExample(ex) {
     window._selectedProprioception = ex.proprioception || null;
     window._selectedGroundTruth = ex.ground_truth_action || null;
     window._selectedCategory = ex.category || "perceive-plan";
+    window._selectedEvalCategory = ex.eval_category || null;
+    window._selectedExpectedSubtasks = ex.expected_subtasks || null;
+    window._selectedCorrection = ex.correction || null;
+    window._selectedConstraints = ex.constraints || null;
 
     switchView("home");
   } catch (e) {
@@ -1294,6 +1749,16 @@ function showHistoryEntry(idx) {
     summaryEl.setAttribute("tabindex", "0");
     updateSummaryTable(ids);
 
+    // Provenance card (collapsible)
+    if (entry.provenance) {
+      renderProvenanceCard(entry.provenance, summaryEl);
+    }
+
+    // Insights card
+    if (entry.insights) {
+      renderInsightsCard(entry.insights, summaryEl);
+    }
+
     // Build per-strategy tab content from stored results
     tabData = {};
     ids.forEach(function(sid) {
@@ -1397,8 +1862,12 @@ function restoreHistory() {
           };
           // Convert server results to client format
           if (se.results) {
-            Object.keys(se.results).forEach(function(sid) {
-              var sr = se.results[sid];
+            // Handle both list and dict formats
+            var resultItems = Array.isArray(se.results)
+              ? se.results
+              : Object.values(se.results);
+            resultItems.forEach(function(sr) {
+              var sid = sr.strategy_id || sr.display_name || "default";
               entry.results[sid] = {
                 stages: (sr.stages || []).map(function(stg) {
                   return {
@@ -1412,6 +1881,8 @@ function restoreHistory() {
                 }),
                 success: sr.success,
                 totalLatencyMs: sr.total_latency_ms,
+                failureStage: sr.failure_stage || null,
+                failureCategory: sr.failure_category || null,
               };
               entry.summaryResults[sid] = {
                 status: sr.success != null ? "completed" : "error",
@@ -1419,9 +1890,17 @@ function restoreHistory() {
                 latency_ms: sr.total_latency_ms,
                 currentStage: null,
                 stageStatuses: {},
+                failureCategory: sr.failure_category || null,
               };
+              // Ensure strategy_ids includes this sid
+              if (entry.strategyIds.indexOf(sid) === -1) {
+                entry.strategyIds.push(sid);
+              }
             });
           }
+          // Pass through provenance and insights
+          if (se.provenance) entry.provenance = se.provenance;
+          if (se.insights) entry.insights = se.insights;
           runHistory.push(entry);
           added = true;
         }
@@ -1973,9 +2452,9 @@ function updateSummaryTable(strategyIds) {
 
   // Table header
   var headerRow = document.createElement("div");
-  headerRow.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
+  headerRow.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
   var latencyHeader = "Latency" + (latencyBudgetMs ? " (/" + formatLatency(latencyBudgetMs) + ")" : "");
-  ["Strategy", "Status", "Result", latencyHeader, "Stages"].forEach(function(h) {
+  ["Strategy", "Status", "Result", "Failure", latencyHeader, "Stages"].forEach(function(h) {
     var cell = document.createElement("span");
     cell.textContent = h;
     headerRow.appendChild(cell);
@@ -1991,7 +2470,7 @@ function updateSummaryTable(strategyIds) {
 
     var row = document.createElement("div");
     var rowColor = strategyColorMap[sid] || "#7c3aed";
-    row.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
+    row.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
     row.style.borderLeft = "3px solid " + rowColor;
     row.addEventListener("click", function() { switchTab(sid); });
 
@@ -2043,6 +2522,18 @@ function updateSummaryTable(strategyIds) {
       resultCell.textContent = "\u2014";
     }
     row.appendChild(resultCell);
+
+    // Failure category badge
+    var failCell = document.createElement("span");
+    var failCat = sr.failureCategory || null;
+    if (failCat) {
+      failCell.className = "text-[10px] px-1.5 py-0.5 rounded font-medium " + getFailureBadgeClass(failCat);
+      failCell.textContent = getFailureLabel(failCat);
+    } else {
+      failCell.className = "text-[10px] text-gray-600";
+      failCell.textContent = "\u2014";
+    }
+    row.appendChild(failCell);
 
     // Latency
     var latCell = document.createElement("span");
@@ -2610,6 +3101,9 @@ function cmpRenderPlan(col, output, otherOutput) {
   cmpStringDiff(col, "Strategy", o.strategy, oo.strategy);
   cmpStringDiff(col, "Target Object", o.target_object, oo.target_object);
   cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
+  cmpStringDiff(col, "Subtask Reasoning", o.subtask_reasoning, oo.subtask_reasoning);
+  cmpStringDiff(col, "Action Reasoning", o.action_reasoning, oo.action_reasoning);
+  cmpStringListDiff(col, "Constraints Acknowledged", o.constraints_acknowledged, oo.constraints_acknowledged);
   cmpOrderedListDiff(col, "Steps", o.steps, oo.steps);
   cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
   cmpStringListDiff(col, "Task Repertoire", o.task_repertoire, oo.task_repertoire);
@@ -2849,6 +3343,7 @@ function connectSSE(evalId) {
       summaryResults[sid].latency_ms = data.total_latency_ms;
       summaryResults[sid].success = data.success != null ? data.success : null;
       summaryResults[sid].currentStage = null;
+      summaryResults[sid].failureCategory = data.failure_category || null;
       updateSummaryTable();
     }
 
@@ -2856,6 +3351,8 @@ function connectSSE(evalId) {
     if (historyEntry && historyEntry.results[sid]) {
       historyEntry.results[sid].success = data.success;
       historyEntry.results[sid].totalLatencyMs = data.total_latency_ms;
+      historyEntry.results[sid].failureStage = data.failure_stage || null;
+      historyEntry.results[sid].failureCategory = data.failure_category || null;
     }
   });
 
@@ -2877,10 +3374,33 @@ function connectSSE(evalId) {
     }
   });
 
-  es.addEventListener("complete", function() {
+  es.addEventListener("complete", function(e) {
     es.close();
     currentEventSource = null;
     setRunning(false);
+    // Store provenance and insights from complete event, then render
+    if (e.data) {
+      try {
+        var completeData = JSON.parse(e.data);
+        if (historyEntry) {
+          if (completeData.provenance) historyEntry.provenance = completeData.provenance;
+          if (completeData.insights) historyEntry.insights = completeData.insights;
+        }
+        // Render provenance + insights into summary tab or active container
+        var insightsTarget = summaryEl;
+        if (!insightsTarget && activeTabId && tabData[activeTabId]) {
+          insightsTarget = tabData[activeTabId].el;
+        }
+        if (insightsTarget) {
+          if (completeData.provenance) {
+            renderProvenanceCard(completeData.provenance, insightsTarget);
+          }
+          if (completeData.insights) {
+            renderInsightsCard(completeData.insights, insightsTarget);
+          }
+        }
+      } catch (_) {}
+    }
     updateHistoryStatus(evalId, "completed");
   });
 
@@ -3307,6 +3827,59 @@ function renderPlan(container, o) {
     container.appendChild(reason);
   }
 
+  // Structured Reasoning: Subtask Reasoning
+  if (o.subtask_reasoning) {
+    rendered = true;
+    var srBlock = document.createElement("div");
+    srBlock.className = "mt-2 space-y-0.5";
+    var srLabel = document.createElement("p");
+    srLabel.className = "text-[11px] text-cyan-400 font-medium";
+    srLabel.textContent = "Subtask Reasoning";
+    srBlock.appendChild(srLabel);
+    var srText = document.createElement("p");
+    srText.className = "text-xs text-gray-400 italic border-l-2 border-cyan-500/30 pl-3";
+    srText.textContent = o.subtask_reasoning;
+    srBlock.appendChild(srText);
+    container.appendChild(srBlock);
+  }
+
+  // Structured Reasoning: Action Reasoning
+  if (o.action_reasoning) {
+    rendered = true;
+    var arBlock = document.createElement("div");
+    arBlock.className = "mt-2 space-y-0.5";
+    var arLabel = document.createElement("p");
+    arLabel.className = "text-[11px] text-violet-400 font-medium";
+    arLabel.textContent = "Action Reasoning";
+    arBlock.appendChild(arLabel);
+    var arText = document.createElement("p");
+    arText.className = "text-xs text-gray-400 italic border-l-2 border-violet-500/30 pl-3";
+    arText.textContent = o.action_reasoning;
+    arBlock.appendChild(arText);
+    container.appendChild(arBlock);
+  }
+
+  // Constraints Acknowledged
+  if (o.constraints_acknowledged && Array.isArray(o.constraints_acknowledged) && o.constraints_acknowledged.length > 0) {
+    rendered = true;
+    var caSection = document.createElement("div");
+    caSection.className = "mt-2 space-y-1";
+    var caHeading = document.createElement("p");
+    caHeading.className = "text-[11px] text-red-400 font-medium";
+    caHeading.textContent = "Constraints Acknowledged";
+    caSection.appendChild(caHeading);
+    var caWrap = document.createElement("div");
+    caWrap.className = "flex flex-wrap gap-1.5";
+    o.constraints_acknowledged.forEach(function(c) {
+      var tag = document.createElement("span");
+      tag.className = "text-xs bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-0.5 rounded";
+      tag.textContent = c;
+      caWrap.appendChild(tag);
+    });
+    caSection.appendChild(caWrap);
+    container.appendChild(caSection);
+  }
+
   if (o.steps && Array.isArray(o.steps) && o.steps.length > 0) {
     rendered = true;
     var stepsSection = document.createElement("div");
@@ -3331,6 +3904,83 @@ function renderPlan(container, o) {
       stepsSection.appendChild(stepRow);
     });
     container.appendChild(stepsSection);
+  }
+
+  // Expected subtasks checklist (multi_stage tasks)
+  if (window._selectedExpectedSubtasks && Array.isArray(window._selectedExpectedSubtasks) && window._selectedExpectedSubtasks.length > 0 && o.steps && o.steps.length > 0) {
+    rendered = true;
+    var esSection = document.createElement("div");
+    esSection.className = "mt-2 space-y-1";
+    var esHeading = document.createElement("p");
+    esHeading.className = "text-[11px] text-blue-400 font-medium";
+    esHeading.textContent = "Expected Subtasks";
+    esSection.appendChild(esHeading);
+    var stepsLower = o.steps.map(function(s) { return (typeof s === "string" ? s : JSON.stringify(s)).toLowerCase(); }).join(" ");
+    window._selectedExpectedSubtasks.forEach(function(expected) {
+      var found = stepsLower.indexOf(expected.toLowerCase()) >= 0;
+      var esRow = document.createElement("div");
+      esRow.className = "flex items-center gap-2 ml-1";
+      var esIcon = document.createElement("span");
+      esIcon.className = found ? "text-[11px] text-green-400" : "text-[11px] text-red-400";
+      esIcon.textContent = found ? "\u2713" : "\u2717";
+      esRow.appendChild(esIcon);
+      var esText = document.createElement("span");
+      esText.className = "text-xs " + (found ? "text-gray-300" : "text-gray-500 line-through");
+      esText.textContent = expected;
+      esRow.appendChild(esText);
+      esSection.appendChild(esRow);
+    });
+    container.appendChild(esSection);
+  }
+
+  // Correction indicator (situated_correction tasks)
+  if (window._selectedCorrection) {
+    rendered = true;
+    var corrSection = document.createElement("div");
+    corrSection.className = "mt-2 p-2 rounded border border-amber-500/20 bg-amber-500/5";
+    var corrHeading = document.createElement("p");
+    corrHeading.className = "text-[11px] text-amber-400 font-medium mb-1";
+    corrHeading.textContent = "Situated Correction";
+    corrSection.appendChild(corrHeading);
+    var corrFeedback = document.createElement("p");
+    corrFeedback.className = "text-xs text-amber-200 italic";
+    corrFeedback.textContent = "\u201c" + (window._selectedCorrection.feedback || "") + "\u201d";
+    corrSection.appendChild(corrFeedback);
+    if (window._selectedCorrection.timing) {
+      var corrTiming = document.createElement("p");
+      corrTiming.className = "text-[10px] text-gray-500 mt-0.5";
+      corrTiming.textContent = "Timing: " + window._selectedCorrection.timing;
+      corrSection.appendChild(corrTiming);
+    }
+    container.appendChild(corrSection);
+  }
+
+  // Active constraints (constrained tasks)
+  if (window._selectedConstraints && Array.isArray(window._selectedConstraints) && window._selectedConstraints.length > 0) {
+    // Check which constraints were acknowledged
+    var acked = (o.constraints_acknowledged || []).map(function(c) { return c.toLowerCase(); }).join(" ");
+    var csSection = document.createElement("div");
+    csSection.className = "mt-2 space-y-1";
+    var csHeading = document.createElement("p");
+    csHeading.className = "text-[11px] text-red-400 font-medium";
+    csHeading.textContent = "Task Constraints";
+    csSection.appendChild(csHeading);
+    window._selectedConstraints.forEach(function(constraint) {
+      var matched = acked.indexOf(constraint.toLowerCase().substring(0, 15)) >= 0;
+      var csRow = document.createElement("div");
+      csRow.className = "flex items-center gap-2 ml-1";
+      var csIcon = document.createElement("span");
+      csIcon.className = matched ? "text-[11px] text-green-400" : "text-[11px] text-yellow-400";
+      csIcon.textContent = matched ? "\u2713" : "\u26a0";
+      csRow.appendChild(csIcon);
+      var csText = document.createElement("span");
+      csText.className = "text-xs " + (matched ? "text-gray-300" : "text-yellow-300");
+      csText.textContent = constraint;
+      csRow.appendChild(csText);
+      csSection.appendChild(csRow);
+    });
+    container.appendChild(csSection);
+    rendered = true;
   }
 
   if (o.task_repertoire && Array.isArray(o.task_repertoire) && o.task_repertoire.length > 0) {
@@ -3532,92 +4182,98 @@ function renderAct(container, o) {
     container.appendChild(traj);
   }
 
-  // FK analysis card
-  if (o.fk_analysis) {
+  // Dynamics analysis card
+  if (o.dynamics_analysis) {
     rendered = true;
-    var fk = o.fk_analysis;
-    var fkCard = document.createElement("div");
-    fkCard.className = "mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2";
+    var dyn = o.dynamics_analysis;
+    var dynCard = document.createElement("div");
+    dynCard.className = "mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2";
 
-    var fkTitle = document.createElement("div");
-    fkTitle.className = "flex items-center gap-2 mb-2";
-    var fkBadge = document.createElement("span");
-    fkBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
-    fkBadge.textContent = "FK Analysis";
-    fkTitle.appendChild(fkBadge);
-    var fkSubtitle = document.createElement("span");
-    fkSubtitle.className = "text-[10px] text-gray-500";
-    fkSubtitle.textContent = "MuJoCo Forward Kinematics";
-    fkTitle.appendChild(fkSubtitle);
-    fkCard.appendChild(fkTitle);
+    var dynTitle = document.createElement("div");
+    dynTitle.className = "flex items-center gap-2 mb-2";
+    var dynBadge = document.createElement("span");
+    dynBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
+    dynBadge.textContent = "Dynamics";
+    dynTitle.appendChild(dynBadge);
+    var dynSubtitle = document.createElement("span");
+    dynSubtitle.className = "text-[10px] text-gray-500";
+    dynSubtitle.textContent = "Provider: MuJoCo";
+    dynTitle.appendChild(dynSubtitle);
+    dynCard.appendChild(dynTitle);
 
-    var fkGrid = document.createElement("div");
-    fkGrid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
+    var dynGrid = document.createElement("div");
+    dynGrid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
 
-    var ep = fk.final_endpoint || [0, 0, 0];
-    var fkItems = [
+    var ep = dyn.final_endpoint || [0, 0, 0];
+    var dynItems = [
       ["Endpoint", "[" + ep.map(function(v) { return v.toFixed(3); }).join(", ") + "]m"],
-      ["Displacement", (fk.total_displacement_m || 0).toFixed(3) + "m"],
-      ["Joint limits", fk.joint_limits_ok ? "within bounds" : "EXCEEDED"],
-      ["Self-collision", fk.self_collision ? "DETECTED" : "none"],
-      ["Smoothness", (fk.smoothness_score || 0).toFixed(2)],
-      ["Max velocity", (fk.max_velocity_rad_s || 0).toFixed(2) + " rad/s"],
+      ["Displacement", (dyn.total_displacement_m || 0).toFixed(3) + "m"],
+      ["Joint limits", dyn.joint_limits_ok ? "within bounds" : "EXCEEDED"],
+      ["Self-collision", dyn.self_collision ? "DETECTED" : "none"],
+      ["Smoothness", (dyn.smoothness_score || 0).toFixed(2)],
+      ["Max velocity", (dyn.max_velocity_rad_s || 0).toFixed(2) + " rad/s"],
+      ["Torque feasible", dyn.torque_feasible ? "yes" : "VIOLATED"],
+      ["Gravity hold", dyn.gravity_feasible ? "feasible" : "INFEASIBLE"],
+      ["Manipulability", (dyn.manipulability || 0).toFixed(4) + (dyn.near_singularity ? " (SINGULARITY)" : "")],
     ];
-    fkItems.forEach(function(item) {
+    dynItems.forEach(function(item) {
       var label = document.createElement("span");
       label.className = "text-gray-500";
       label.textContent = item[0];
-      fkGrid.appendChild(label);
+      dynGrid.appendChild(label);
       var value = document.createElement("span");
-      var isWarning = (item[0] === "Joint limits" && !fk.joint_limits_ok) ||
-                      (item[0] === "Self-collision" && fk.self_collision);
+      var isWarning = (item[0] === "Joint limits" && !dyn.joint_limits_ok) ||
+                      (item[0] === "Self-collision" && dyn.self_collision) ||
+                      (item[0] === "Torque feasible" && !dyn.torque_feasible) ||
+                      (item[0] === "Gravity hold" && !dyn.gravity_feasible) ||
+                      (item[0] === "Manipulability" && dyn.near_singularity);
       value.className = isWarning ? "text-red-400 font-medium" : "text-gray-300";
       value.textContent = item[1];
-      fkGrid.appendChild(value);
+      dynGrid.appendChild(value);
     });
-    fkCard.appendChild(fkGrid);
+    dynCard.appendChild(dynGrid);
 
     // Trajectory sample
-    var fkTraj = fk.endpoint_trajectory || [];
-    if (fkTraj.length > 0) {
+    var dynTraj = dyn.endpoint_trajectory || [];
+    if (dynTraj.length > 0) {
       var trajDiv = document.createElement("div");
       trajDiv.className = "mt-2 font-mono text-[10px] text-gray-400";
       var trajTitle2 = document.createElement("p");
       trajTitle2.className = "text-gray-500 mb-0.5";
-      trajTitle2.textContent = "End-effector trajectory (" + fkTraj.length + " points):";
+      trajTitle2.textContent = "End-effector trajectory (" + dynTraj.length + " points):";
       trajDiv.appendChild(trajTitle2);
-      var showCount = Math.min(fkTraj.length, 5);
+      var showCount = Math.min(dynTraj.length, 5);
       for (var ti = 0; ti < showCount; ti++) {
-        var pt = fkTraj[ti];
+        var pt = dynTraj[ti];
         var ptEl = document.createElement("p");
         ptEl.textContent = "  " + (ti + 1) + ": [" + pt.map(function(v) { return v.toFixed(3); }).join(", ") + "]m";
         trajDiv.appendChild(ptEl);
       }
-      if (fkTraj.length > 5) {
+      if (dynTraj.length > 5) {
         var more = document.createElement("p");
         more.className = "text-gray-600";
-        more.textContent = "  ... (" + fkTraj.length + " total)";
+        more.textContent = "  ... (" + dynTraj.length + " total)";
         trajDiv.appendChild(more);
       }
-      fkCard.appendChild(trajDiv);
+      dynCard.appendChild(trajDiv);
     }
 
-    container.appendChild(fkCard);
+    container.appendChild(dynCard);
   }
 
-  // FK skipped warning
-  if (o.fk_skipped) {
+  // Dynamics skipped warning
+  if (o.dynamics_skipped) {
     rendered = true;
-    var fkWarn = document.createElement("div");
-    fkWarn.className = "mt-2 flex items-center gap-2 text-[10px] text-yellow-400/80";
+    var dynWarn = document.createElement("div");
+    dynWarn.className = "mt-2 flex items-center gap-2 text-[10px] text-yellow-400/80";
     var warnIcon = document.createElement("i");
     warnIcon.setAttribute("data-lucide", "alert-triangle");
     warnIcon.className = "w-3 h-3";
-    fkWarn.appendChild(warnIcon);
+    dynWarn.appendChild(warnIcon);
     var warnText = document.createElement("span");
-    warnText.textContent = "FK skipped: " + o.fk_skipped;
-    fkWarn.appendChild(warnText);
-    container.appendChild(fkWarn);
+    warnText.textContent = "Dynamics skipped: " + o.dynamics_skipped;
+    dynWarn.appendChild(warnText);
+    container.appendChild(dynWarn);
   }
 
   if (!rendered) {

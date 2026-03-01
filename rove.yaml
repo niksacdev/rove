@@ -227,6 +227,12 @@ endpoints:
       agent_name: "binggroundingagent"
 
   # --- Simulation environments ---
+  mock-sim:
+    type: sim
+    adapter: mock_sim
+    display_name: "Mock Sim"
+    deployment_type: local
+
   mujoco-libero:
     type: sim
     adapter: local_mujoco
@@ -236,11 +242,6 @@ endpoints:
       task_suite: libero_spatial
       render_size: [640, 480]
 
-  mock-sim:
-    type: sim
-    adapter: mock_sim
-    display_name: "Mock Sim"
-    deployment_type: local
 
 # =============================================================================
 # Strategies — Named pipeline configurations (map endpoints to stages)
@@ -256,7 +257,7 @@ strategies:
     act: mock-vla
     verify: mock-vlm
     sim: mock-sim
-    forward_kinematics: true
+    compute_dynamics: true  # MuJoCo dynamics engine
     tags: [test, mock]
 
   # --- Scene Detection (perceive → verify only) ---
@@ -264,8 +265,7 @@ strategies:
     display_name: "Scene Detection"
     description: "Qwen3-VL 8B perceives the scene and verifies — no planning or action"
     perceive: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
+    verify: bing-grounding-agent
     tags: [scene, vlm, local]
     latency_budget:
       perceive: 2000
@@ -277,8 +277,7 @@ strategies:
     description: "Qwen3-VL 8B perceives the scene, plans a strategy, and verifies"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
+    verify: bing-grounding-agent
     tags: [scene, plan, vlm, local]
 
   # --- Scene + Action (perceive → act → verify) ---
@@ -287,9 +286,8 @@ strategies:
     description: "Qwen3-VL 8B perceives, pi0.5 executes 7-DOF trajectory, Qwen verifies"
     perceive: qwen3-vl-8b
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
+    verify: bing-grounding-agent
+    compute_dynamics: true  # MuJoCo dynamics engine
     tags: [scene, vla, local, lerobot, pi05]
 
   # --- Scene + Plan + Action (perceive → plan → act → verify) ---
@@ -299,23 +297,21 @@ strategies:
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
+    verify: bing-grounding-agent
+    compute_dynamics: true  # MuJoCo dynamics engine
     tags: [full, local, vla, lerobot, pi05]
     latency_budget:
       act: 5000
 
-  # --- Scene + Plan + Action without FK (perceive → plan → act → verify) ---
-  scene_plan_action_no_fk:
-    display_name: "Scene + Plan + Action (pi0.5) - No FK"
-    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies — no FK"
+  # --- Scene + Plan + Action without dynamics (perceive → plan → act → verify) ---
+  scene_plan_action_no_dynamics:
+    display_name: "Scene + Plan + Action (pi0.5) - No Dynamics"
+    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies — no dynamics"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: false
+    verify: bing-grounding-agent
+    compute_dynamics: false
     tags: [full, local, vla, lerobot, pi05]
 
   # --- Hybrid: Edge VLM + Foundry Agent + VLA ---
@@ -325,9 +321,8 @@ strategies:
     perceive: qwen3-vl-8b
     plan: bing-grounding-agent
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
+    verify: bing-grounding-agent
+    compute_dynamics: true  # MuJoCo dynamics engine
     tags: [hybrid, foundry, agent, pi05]
 
   # --- Full Pipeline (perceive → plan → act → verify) ---
@@ -337,9 +332,8 @@ strategies:
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
     act: mock-vla
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
+    verify: bing-grounding-agent
+    compute_dynamics: true  # MuJoCo dynamics engine
     tags: [full, local, vla]
 
 # =============================================================================
@@ -347,7 +341,6 @@ strategies:
 # =============================================================================
 defaults:
   grounding: mock-grounding
-  sim: mock-sim
   trials: 1
   mode: full                              # full | vlm_only
   max_concurrent_combinations: 9

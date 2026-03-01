@@ -171,33 +171,74 @@ class PromptManager:
                 if action.get("actions_truncated"):
                     stage_lines.append(f"  (first 5 + last 5 of {total_steps})")
 
-                # FK analysis provides spatial context when available
-                fk = context.get("fk_analysis")
-                if fk:
+                # Dynamics analysis provides spatial context when available
+                dyn = context.get("dynamics_analysis")
+                if dyn:
                     stage_lines.append("")
-                    stage_lines.append("--- FORWARD KINEMATICS ANALYSIS (MuJoCo) ---")
-                    ep = fk.get("final_endpoint", [0, 0, 0])
+                    stage_lines.append("--- MUJOCO DYNAMICS ANALYSIS ---")
+                    ep = dyn.get("final_endpoint", [0, 0, 0])
                     stage_lines.append(
                         f"Final end-effector position: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] meters"
                     )
                     stage_lines.append(
-                        f"Total displacement: {fk.get('total_displacement_m', 0):.3f}m"
+                        f"Total displacement: {dyn.get('total_displacement_m', 0):.3f}m"
                     )
                     stage_lines.append(
                         "Joint limits: "
-                        + ("all within bounds" if fk.get("joint_limits_ok") else "EXCEEDED")
+                        + ("all within bounds" if dyn.get("joint_limits_ok") else "EXCEEDED")
                     )
                     stage_lines.append(
                         "Self-collision: "
-                        + ("DETECTED" if fk.get("self_collision") else "none detected")
+                        + ("DETECTED" if dyn.get("self_collision") else "none detected")
                     )
-                    stage_lines.append(f"Smoothness score: {fk.get('smoothness_score', 0):.2f}")
+                    stage_lines.append(f"Smoothness score: {dyn.get('smoothness_score', 0):.2f}")
                     stage_lines.append(
-                        f"Max angular velocity: {fk.get('max_velocity_rad_s', 0):.2f} rad/s"
+                        f"Max angular velocity: {dyn.get('max_velocity_rad_s', 0):.2f} rad/s"
                     )
-                    stage_lines.append(f"Steps analyzed: {fk.get('steps_analyzed', 0)}")
+                    stage_lines.append(f"Steps analyzed: {dyn.get('steps_analyzed', 0)}")
 
-                    traj = fk.get("endpoint_trajectory", [])
+                    # Inverse dynamics
+                    stage_lines.append("")
+                    torque_ok = dyn.get("torque_feasible", True)
+                    stage_lines.append(
+                        "Torque feasibility: " + ("feasible" if torque_ok else "VIOLATED")
+                    )
+                    peak = dyn.get("peak_torques", [])
+                    if peak:
+                        stage_lines.append(
+                            f"  Peak torques: [{', '.join(f'{t:.2f}' for t in peak)}]"
+                        )
+                    violations = dyn.get("torque_violations", [])
+                    for v in violations[:5]:
+                        stage_lines.append(
+                            f"  Violation: step {v['step']} joint {v['joint']}"
+                            f" (torque {v['torque']:.2f} > limit {v['limit']:.2f})"
+                        )
+
+                    # Gravity compensation
+                    payload = dyn.get("payload_kg", 0.5)
+                    grav_ok = dyn.get("gravity_feasible", True)
+                    stage_lines.append(
+                        f"Gravity compensation at grasp ({payload}kg payload): "
+                        + ("feasible" if grav_ok else "INFEASIBLE")
+                    )
+                    grav_torques = dyn.get("gravity_torques", [])
+                    if grav_torques:
+                        stage_lines.append(
+                            f"  Holding torques: [{', '.join(f'{t:.2f}' for t in grav_torques)}]"
+                        )
+
+                    # Manipulability
+                    manip = dyn.get("manipulability", 0.0)
+                    min_sv = dyn.get("min_singular_value", 0.0)
+                    sing = dyn.get("near_singularity", False)
+                    stage_lines.append(f"Manipulability at grasp: {manip:.4f}")
+                    stage_lines.append(f"  Min singular value: {min_sv:.4f}")
+                    stage_lines.append(
+                        "  Near singularity: " + ("YES — reduced dexterity" if sing else "no")
+                    )
+
+                    traj = dyn.get("endpoint_trajectory", [])
                     if traj:
                         stage_lines.append("")
                         stage_lines.append("End-effector trajectory (sample):")
@@ -210,14 +251,16 @@ class PromptManager:
 
                     stage_lines.append("")
                     stage_lines.append(
-                        "IMPORTANT: FK analysis provides SPATIAL CONTEXT for the VLA trajectory."
+                        "IMPORTANT: Dynamics analysis provides SPATIAL CONTEXT for the VLA trajectory."
                         " You can now reason about WHERE the robot arm moves, not just the raw deltas."
                         " Use the end-effector positions to assess:\n"
                         "- Does the trajectory reach the target object's perceived position?\n"
                         "- Does the lift height clear obstacles?\n"
                         "- Is the placement position near the goal?\n"
-                        "- Do joint limit violations or self-collisions indicate an unsafe plan?\n"
-                        "Cross-reference FK positions with the PERCEIVE stage's object positions."
+                        "- Do joint limit violations, self-collisions, or torque violations"
+                        " indicate an unsafe plan?\n"
+                        "- Does near-singularity suggest the grasp pose is poorly configured?\n"
+                        "Cross-reference dynamics positions with the PERCEIVE stage's object positions."
                     )
                 else:
                     stage_lines.append("")

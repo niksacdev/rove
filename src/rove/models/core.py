@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = [
     "ActionPlausibility",
     "ActionPrediction",
+    "EvaluationProvenance",
     "ExampleData",
     "GraspPlan",
     "GroundTruthCheck",
@@ -22,9 +23,97 @@ __all__ = [
     "VerificationResult",
 ]
 
+import hashlib
+import platform
+import sys
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+
+
+class EvaluationProvenance(BaseModel):
+    """Mandatory metadata captured at evaluation start for reproducibility."""
+
+    timestamp: str = ""  # ISO 8601 UTC
+    hostname: str = ""
+    rove_version: str = ""
+    python_version: str = ""
+    config_hash: str = ""  # SHA256 of rove.yaml contents
+    seed: int | None = None
+    image_sha256: str = ""  # fingerprint of input image
+    strategy_ids: list[str] = Field(default_factory=list)
+    resolved_models: dict = Field(default_factory=dict)
+    package_versions: dict = Field(default_factory=dict)
+
+    @staticmethod
+    def compute_image_hash(image_base64: str) -> str:
+        """SHA256 of the raw base64 string (not decoded bytes)."""
+        return hashlib.sha256(image_base64.encode()).hexdigest()[:16]
+
+    @staticmethod
+    def compute_config_hash(config_path: str | None = None) -> str:
+        """SHA256 of rove.yaml contents."""
+        from pathlib import Path
+
+        if config_path is None:
+            candidates = [
+                Path("rove.yaml"),
+                Path(__file__).parent.parent.parent.parent / "rove.yaml",
+            ]
+            for c in candidates:
+                if c.exists():
+                    config_path = str(c)
+                    break
+        if config_path is None:
+            return ""
+        try:
+            content = Path(config_path).read_bytes()
+            return hashlib.sha256(content).hexdigest()[:16]
+        except Exception:
+            return ""
+
+    @staticmethod
+    def collect_package_versions() -> dict[str, str]:
+        """Collect versions of key dependencies."""
+        versions: dict[str, str] = {}
+        for pkg in ("fastapi", "pydantic", "torch", "transformers", "mujoco", "lerobot"):
+            try:
+                from importlib.metadata import version
+
+                versions[pkg] = version(pkg)
+            except Exception:  # nosec B110
+                pass
+        return versions
+
+    @classmethod
+    def build(
+        cls,
+        image_base64: str,
+        strategy_ids: list[str],
+        resolved_models: dict | None = None,
+        seed: int | None = None,
+    ) -> EvaluationProvenance:
+        """Build provenance snapshot for current environment."""
+        from datetime import UTC, datetime
+        from importlib.metadata import version
+
+        try:
+            rove_ver = version("rove-eval")
+        except Exception:
+            rove_ver = "dev"
+
+        return cls(
+            timestamp=datetime.now(UTC).isoformat(),
+            hostname=platform.node(),
+            rove_version=rove_ver,
+            python_version=sys.version.split()[0],
+            config_hash=cls.compute_config_hash(),
+            seed=seed,
+            image_sha256=cls.compute_image_hash(image_base64),
+            strategy_ids=strategy_ids,
+            resolved_models=resolved_models or {},
+            package_versions=cls.collect_package_versions(),
+        )
 
 
 class PipelineStage(StrEnum):
@@ -59,6 +148,12 @@ class TaskPlan(BaseModel):
     steps: list[str] = Field(default_factory=list)  # ordered sub-steps
     target_object: str = ""  # optional, for manipulation tasks
     confidence: float = 0.0
+    # Structured reasoning (Task → Subtask → Move → Action)
+    subtask_reasoning: str = ""  # WHY this subtask is next (subtask decomposition)
+    action_reasoning: str = ""  # spatial/motion reasoning ("object is behind robot, move backward")
+    constraints_acknowledged: list[str] = Field(
+        default_factory=list
+    )  # echoed user constraints ("don't go near human", "glass only on left")
     task_repertoire: list[str] = Field(
         default_factory=list
     )  # domain-specific capabilities required
@@ -132,7 +227,7 @@ class VerificationResult(BaseModel):
     stage_checks: list[StageCheck] = Field(default_factory=list)
     ground_truth: GroundTruthCheck | None = None
     action_plausibility: ActionPlausibility | None = None
-    fk_analysis: dict | None = None
+    dynamics_analysis: dict | None = None
 
 
 class PipelineStageResult(BaseModel):
@@ -164,7 +259,10 @@ class PipelineContext(BaseModel):
     after_image_base64: str = ""
     completed_stages: list[str] = Field(default_factory=list)
     ground_truth: dict | None = None
-    fk_analysis: dict | None = None
+    dynamics_analysis: dict | None = None
+    # Task metadata from manifest (constraints, category, correction, expected_subtasks)
+    # Flows from ExampleData.extras into prompts so real adapters can honor them
+    task_metadata: dict = Field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Serialize non-empty fields for adapter context bags.
@@ -172,6 +270,8 @@ class PipelineContext(BaseModel):
         Excludes image blobs and raw_response to keep context compact.
         """
         d: dict = {"task": self.task}
+        if self.task_metadata:
+            d["task_metadata"] = self.task_metadata
         if self.scene:
             d["scene"] = self.scene.model_dump(exclude={"raw_response"})
         if self.plan:
@@ -181,6 +281,9 @@ class PipelineContext(BaseModel):
                     "target_object",
                     "steps",
                     "confidence",
+                    "subtask_reasoning",
+                    "action_reasoning",
+                    "constraints_acknowledged",
                     "task_repertoire",
                     "artifacts",
                     "degradation_profile",
@@ -211,8 +314,8 @@ class PipelineContext(BaseModel):
             d["completed_stages"] = self.completed_stages
         if self.ground_truth:
             d["ground_truth"] = self.ground_truth
-        if self.fk_analysis:
-            d["fk_analysis"] = self.fk_analysis
+        if self.dynamics_analysis:
+            d["dynamics_analysis"] = self.dynamics_analysis
         return d
 
 
@@ -249,8 +352,8 @@ class Strategy(BaseModel):
     plan: str | None = None  # model_id (None to skip stage)
     act: str | None = None  # model_id (None to skip stage)
     verify: str = ""  # model_id (required)
-    sim: str = ""  # sim_id (required)
-    forward_kinematics: bool = False
+    sim: str | None = None  # sim_id (None when no sim available)
+    compute_dynamics: bool = False
     tags: list[str] = Field(default_factory=list)
 
 

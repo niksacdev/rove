@@ -17,8 +17,8 @@ Upload a scene image, describe a manipulation task, select strategies, and ROVE 
 
 - **Multi-strategy parallel evaluation** — run multiple agent pipeline configs concurrently, stream results via SSE
 - **4-stage deterministic pipeline** — perceive → plan → act → verify, each stage independently configurable
-- **Forward kinematics verification** — MuJoCo-based joint limit, collision, displacement, and smoothness checks on VLA trajectories
-- **FK sanity checks** — objective FK measurements override VLM plausibility scores when physics contradicts the judge
+- **MuJoCo dynamics verification** — joint limits, collision, torque feasibility, gravity compensation, and manipulability checks on VLA trajectories
+- **Dynamics sanity checks** — objective physics measurements override VLM plausibility scores when dynamics contradicts the judge
 - **URDF support** — upload or auto-detect from dataset robot metadata
 - **Per-stage latency budgets** — set time limits per stage with strategy-level overrides
 - **Side-by-side strategy comparison** — diff highlighting across pipeline configurations
@@ -43,27 +43,28 @@ Every evaluation runs a fixed four-stage pipeline. Stages are optional — a str
 |-------|-------|--------|
 | **perceive** | Scene image + task | Objects, spatial relationships |
 | **plan** | Scene analysis + task | Strategy, steps, confidence |
-| **act** | Sim observation + task | Action chunk executed in simulator; FK analysis when enabled |
-| **verify** | Before/after images | Success/fail + confidence; FK sanity checks override scores |
+| **act** | Sim observation + task | Action chunk executed in simulator; dynamics analysis when enabled |
+| **verify** | Before/after images | Success/fail + confidence; dynamics sanity checks override scores |
 
 Strategies run concurrently, streaming progress via SSE in real time.
 
 ---
 
-## Forward Kinematics Verification
+## MuJoCo Dynamics Verification
 
 When a strategy includes VLA action execution, ROVE can optionally compute
-forward kinematics on the predicted trajectory using MuJoCo. Upload your
+full dynamics analysis on the predicted trajectory using MuJoCo. Upload your
 robot's URDF alongside the scene image, and ROVE converts raw action arrays
-into spatial analysis the verifier can reason about.
+into spatial and physical analysis the verifier can reason about.
 
 ```
- act stage output              FK analysis (MuJoCo)
- ─────────────────             ────────────────────
+ act stage output              Dynamics analysis (MuJoCo)
+ ─────────────────             ──────────────────────────
  [[0.02, -0.01, ...], ...]  →  Endpoint: [0.34, 0.21, 0.46]
                                 Joint limits: within bounds
-                                Self-collision: none detected
-                                Smoothness: 0.95
+                                Torque feasible: yes
+                                Gravity hold: feasible (0.5kg)
+                                Manipulability: 0.0142
 ```
 
 Enable per strategy in `rove.yaml`:
@@ -76,24 +77,26 @@ strategies:
     act: pi05-libero
     verify: qwen3-vl-8b
     sim: mock-sim
-    forward_kinematics: true   # enable FK verification
+    compute_dynamics: true  # MuJoCo dynamics engine
 ```
 
 Requires: `pip install rove-eval[kinematics]` (adds MuJoCo ~5MB)
 
-### FK Sanity Checks
+### Dynamics Sanity Checks
 
-After the verify stage, ROVE compares FK measurements against the VLM judge's
-plausibility scores. When physics contradicts the judge, FK data wins:
+After the verify stage, ROVE compares dynamics measurements against the VLM judge's
+plausibility scores. When physics contradicts the judge, dynamics data wins:
 
-| FK Check | Condition | Override |
-|----------|-----------|----------|
-| Joint limits | Any joint outside bounds | `plan_alignment` capped at 0.3, `confidence` capped at 0.4 |
-| Self-collision | Collision detected | `plan_alignment` capped at 0.3, `confidence` capped at 0.4 |
-| Displacement | Net displacement < 2cm | `plan_alignment` capped at 0.5, `confidence` capped at 0.5 |
-| Smoothness | Smoothness score < 0.3 | `plan_alignment` capped at 0.6, `confidence` capped at 0.6 |
+| Check | Condition | Override |
+|-------|-----------|----------|
+| Joint limits | Any joint outside bounds | `bounds_check=False`, `plan_alignment` capped at 0.3 |
+| Self-collision | Collision detected | `bounds_check=False`, `plan_alignment` capped at 0.3 |
+| Torque limits | Required torque exceeds actuator limits | `bounds_check=False`, `plan_alignment` capped at 0.3 |
+| Gravity comp | Holding + trajectory torques exceed limits | `bounds_check=False`, `plan_alignment` capped at 0.3 |
+| Singularity | Min singular value < 0.01 at grasp | `plan_alignment` capped at 0.3 |
+| Displacement | Total path > 2.0m | `smoothness=False` |
 
-Overridden scores include `[FK override: ...]` tags in the reasoning field so
+Overridden scores include `[Dynamics override: ...]` tags in the reasoning field so
 you can see exactly what triggered the correction.
 
 URDF can be uploaded manually or auto-detected from dataset robot metadata

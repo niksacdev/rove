@@ -14,10 +14,12 @@ class MockAgentAdapter:
         cfg = config or {}
         self.display_name = cfg.get("display_name", "Mock Agent")
         self._latency_range = cfg.get("mock_latency_ms", [300, 800])
+        seed = cfg.get("seed")
+        self._rng = random.Random(seed) if seed is not None else random.Random()
 
     async def _simulate_latency(self) -> None:
         lo, hi = self._latency_range
-        await asyncio.sleep(random.uniform(lo, hi) / 1000.0)
+        await asyncio.sleep(self._rng.uniform(lo, hi) / 1000.0)
 
     async def run_stage(
         self,
@@ -82,6 +84,15 @@ class MockAgentAdapter:
             ],
             "target_object": target,
             "confidence": 0.85,
+            "subtask_reasoning": (
+                f"First subtask is to locate {target} because we need visual confirmation "
+                "before planning approach. Approach must precede manipulation."
+            ),
+            "action_reasoning": (
+                f"The {target} is on the workspace surface. Agent will use move_to tool "
+                "to position end-effector above the target before grasping."
+            ),
+            "constraints_acknowledged": [],
             "raw_response": '{"mock_agent": true}',
         }
 
@@ -122,14 +133,16 @@ class MockAgentAdapter:
         stage_checks: list[dict] = []
         all_passed = True
         for stage in completed_stages:
-            passed = random.random() < quality
+            passed = self._rng.random() < quality
             if not passed:
                 all_passed = False
             stage_checks.append(
                 {
                     "stage": stage,
                     "passed": passed,
-                    "confidence": random.uniform(0.7, 0.95) if passed else random.uniform(0.3, 0.6),
+                    "confidence": self._rng.uniform(0.7, 0.95)
+                    if passed
+                    else self._rng.uniform(0.3, 0.6),
                     "reasoning": f"{stage} stage output is {'consistent with' if passed else 'inconsistent with'} task requirements.",
                 }
             )
@@ -139,7 +152,7 @@ class MockAgentAdapter:
         if ground_truth_data:
             correct_answer = ground_truth_data.get("correct_answer_text", "")
             choices = ground_truth_data.get("choices", [])
-            is_correct = random.random() < quality
+            is_correct = self._rng.random() < quality
             pipeline_answer = (
                 correct_answer
                 if is_correct
@@ -159,14 +172,16 @@ class MockAgentAdapter:
                 "correct_answer": correct_answer,
                 "pipeline_answer": pipeline_answer,
                 "correct": is_correct,
-                "confidence": random.uniform(0.7, 0.95) if is_correct else random.uniform(0.3, 0.6),
+                "confidence": self._rng.uniform(0.7, 0.95)
+                if is_correct
+                else self._rng.uniform(0.3, 0.6),
             }
 
-        success = all_passed if (stage_checks or gt_check) else random.random() < quality
+        success = all_passed if (stage_checks or gt_check) else self._rng.random() < quality
 
         result: dict = {
             "success": success,
-            "confidence": random.uniform(0.7, 0.95) if success else random.uniform(0.3, 0.6),
+            "confidence": self._rng.uniform(0.7, 0.95) if success else self._rng.uniform(0.3, 0.6),
             "reasoning": (
                 f"Task completed successfully — {target} moved to destination."
                 if success

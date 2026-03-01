@@ -1,4 +1,4 @@
-"""Tests for forward kinematics computation and integration."""
+"""Tests for MuJoCo dynamics computation and integration."""
 
 from __future__ import annotations
 
@@ -9,27 +9,27 @@ from rove.models.core import PipelineContext, Strategy, VerificationResult
 from rove.utils.prompt_loader import get_prompt_manager
 
 
-class TestStrategyFKConfig:
-    """Test forward_kinematics field on strategy config."""
+class TestStrategyDynamicsConfig:
+    """Test compute_dynamics field on strategy config."""
 
     def test_strategy_config_default_false(self):
         sc = StrategyConfig(verify="mock-vlm", sim="mock-sim", perceive="mock-vlm")
-        assert sc.forward_kinematics is False
+        assert sc.compute_dynamics is False
 
     def test_strategy_config_explicit_true(self):
         sc = StrategyConfig(
-            verify="mock-vlm", sim="mock-sim", perceive="mock-vlm", forward_kinematics=True
+            verify="mock-vlm", sim="mock-sim", perceive="mock-vlm", compute_dynamics=True
         )
-        assert sc.forward_kinematics is True
+        assert sc.compute_dynamics is True
 
-    def test_strategies_from_yaml_have_fk(self):
+    def test_strategies_from_yaml_have_dynamics(self):
         strategies = get_strategies()
-        # mock strategy has forward_kinematics: true in rove.yaml
-        assert strategies["mock"].forward_kinematics is True
-        # scene_detect has no act stage and no FK field
-        assert strategies["scene_detect"].forward_kinematics is False
+        # mock strategy has compute_dynamics: true in rove.yaml
+        assert strategies["mock"].compute_dynamics is True
+        # scene_detect has no act stage and no dynamics field
+        assert strategies["scene_detect"].compute_dynamics is False
 
-    def test_strategy_model_has_fk_field(self):
+    def test_strategy_model_has_dynamics_field(self):
         s = Strategy(
             id="test",
             display_name="Test",
@@ -38,50 +38,50 @@ class TestStrategyFKConfig:
             act="mock-vla",
             verify="mock-vlm",
             sim="mock-sim",
-            forward_kinematics=True,
+            compute_dynamics=True,
         )
-        assert s.forward_kinematics is True
+        assert s.compute_dynamics is True
         d = s.model_dump()
-        assert d["forward_kinematics"] is True
+        assert d["compute_dynamics"] is True
 
 
-class TestPipelineContextFK:
-    """Test fk_analysis on PipelineContext."""
+class TestPipelineContextDynamics:
+    """Test dynamics_analysis on PipelineContext."""
 
-    def test_fk_analysis_default_none(self):
+    def test_dynamics_analysis_default_none(self):
         ctx = PipelineContext(task="test")
-        assert ctx.fk_analysis is None
+        assert ctx.dynamics_analysis is None
 
-    def test_fk_analysis_in_to_dict(self):
+    def test_dynamics_analysis_in_to_dict(self):
         ctx = PipelineContext(task="test")
-        ctx.fk_analysis = {"final_endpoint": [0.3, 0.2, 0.4], "steps_analyzed": 5}
+        ctx.dynamics_analysis = {"final_endpoint": [0.3, 0.2, 0.4], "steps_analyzed": 5}
         d = ctx.to_dict()
-        assert "fk_analysis" in d
-        assert d["fk_analysis"]["steps_analyzed"] == 5
+        assert "dynamics_analysis" in d
+        assert d["dynamics_analysis"]["steps_analyzed"] == 5
 
-    def test_fk_analysis_excluded_when_none(self):
+    def test_dynamics_analysis_excluded_when_none(self):
         ctx = PipelineContext(task="test")
         d = ctx.to_dict()
-        assert "fk_analysis" not in d
+        assert "dynamics_analysis" not in d
 
 
-class TestVerificationResultFK:
-    """Test fk_analysis on VerificationResult."""
+class TestVerificationResultDynamics:
+    """Test dynamics_analysis on VerificationResult."""
 
-    def test_fk_analysis_field(self):
+    def test_dynamics_analysis_field(self):
         vr = VerificationResult(
             success=True,
             confidence=0.9,
             reasoning="good",
-            fk_analysis={"joint_limits_ok": True},
+            dynamics_analysis={"joint_limits_ok": True},
         )
-        assert vr.fk_analysis["joint_limits_ok"] is True
+        assert vr.dynamics_analysis["joint_limits_ok"] is True
 
 
-class TestVerifyPromptFK:
-    """Test FK injection in verify prompts."""
+class TestVerifyPromptDynamics:
+    """Test dynamics injection in verify prompts."""
 
-    def test_fk_in_verify_prompt(self):
+    def test_dynamics_in_verify_prompt(self):
         pm = get_prompt_manager()
         ctx = {
             "task": "pick bolt",
@@ -101,7 +101,7 @@ class TestVerifyPromptFK:
                 ],
                 "gripper_events": [{"step": 5, "action": "close", "grip_value": 0.0}],
             },
-            "fk_analysis": {
+            "dynamics_analysis": {
                 "final_endpoint": [0.340, 0.210, 0.460],
                 "total_displacement_m": 0.34,
                 "joint_limits_ok": True,
@@ -114,17 +114,29 @@ class TestVerifyPromptFK:
                     [0.32, 0.21, 0.44],
                     [0.34, 0.21, 0.46],
                 ],
+                "torque_feasible": True,
+                "torque_violations": [],
+                "peak_torques": [1.2, 0.8, 0.5, 0.3, 0.2, 0.1, 0.05],
+                "gravity_torques": [0.5, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01],
+                "gravity_feasible": True,
+                "payload_kg": 0.5,
+                "manipulability": 0.0142,
+                "min_singular_value": 0.05,
+                "near_singularity": False,
             },
         }
         prompt = pm.render_verify("pick bolt", ctx)
-        assert "FORWARD KINEMATICS" in prompt
+        assert "MUJOCO DYNAMICS ANALYSIS" in prompt
         assert "0.340" in prompt
         assert "within bounds" in prompt
         assert "SPATIAL CONTEXT" in prompt
+        assert "Torque feasibility" in prompt
+        assert "Gravity compensation" in prompt
+        assert "Manipulability" in prompt
         # Should NOT contain the "CANNOT determine" disclaimer
         assert "CANNOT determine" not in prompt
 
-    def test_no_fk_shows_disclaimer(self):
+    def test_no_dynamics_shows_disclaimer(self):
         pm = get_prompt_manager()
         ctx = {
             "task": "pick bolt",
@@ -141,11 +153,11 @@ class TestVerifyPromptFK:
         }
         prompt = pm.render_verify("pick bolt", ctx)
         assert "CANNOT determine" in prompt
-        assert "FORWARD KINEMATICS" not in prompt
+        assert "MUJOCO DYNAMICS" not in prompt
 
 
-class TestComputeFK:
-    """Test the compute_fk function (requires mujoco)."""
+class TestComputeDynamics:
+    """Test the compute_dynamics function (requires mujoco)."""
 
     @pytest.fixture
     def panda_urdf(self):
@@ -156,17 +168,18 @@ class TestComputeFK:
             pytest.skip("Panda URDF not available at data/urdf/panda/panda.urdf")
         return str(urdf)
 
-    def test_compute_fk_basic(self, panda_urdf):
+    def test_compute_dynamics_basic(self, panda_urdf):
         mujoco = pytest.importorskip("mujoco")  # noqa: F841
-        from rove.adapters.fk_mujoco import compute_fk
+        from rove.adapters.dynamics_mujoco import compute_dynamics
 
         actions = [
             [0.01, -0.01, 0.02, 0.0, 0.01, -0.01, 0.0],
             [0.02, -0.02, 0.01, 0.0, 0.02, -0.02, 0.0],
             [0.01, 0.0, 0.01, 0.0, 0.01, 0.0, 0.0],
         ]
-        result = compute_fk(panda_urdf, actions)
+        result = compute_dynamics(panda_urdf, actions)
 
+        # Existing FK fields
         assert "endpoint_trajectory" in result
         assert "final_endpoint" in result
         assert "joint_limits_ok" in result
@@ -180,33 +193,54 @@ class TestComputeFK:
         assert isinstance(result["smoothness_score"], float)
         assert 0.0 <= result["smoothness_score"] <= 1.0
 
-    def test_compute_fk_empty_actions(self, panda_urdf):
-        mujoco = pytest.importorskip("mujoco")  # noqa: F841
-        from rove.adapters.fk_mujoco import compute_fk
+        # New dynamics fields
+        assert "torque_feasible" in result
+        assert isinstance(result["torque_feasible"], bool)
+        assert "torque_violations" in result
+        assert isinstance(result["torque_violations"], list)
+        assert "peak_torques" in result
+        assert isinstance(result["peak_torques"], list)
+        assert "gravity_torques" in result
+        assert "gravity_feasible" in result
+        assert isinstance(result["gravity_feasible"], bool)
+        assert "payload_kg" in result
+        assert result["payload_kg"] == 0.5
+        assert "manipulability" in result
+        assert isinstance(result["manipulability"], float)
+        assert "min_singular_value" in result
+        assert "near_singularity" in result
+        assert isinstance(result["near_singularity"], bool)
 
-        result = compute_fk(panda_urdf, [])
+    def test_compute_dynamics_empty_actions(self, panda_urdf):
+        mujoco = pytest.importorskip("mujoco")  # noqa: F841
+        from rove.adapters.dynamics_mujoco import compute_dynamics
+
+        result = compute_dynamics(panda_urdf, [])
         assert result["steps_analyzed"] == 0
         assert len(result["endpoint_trajectory"]) == 1  # just initial position
+        assert result["torque_feasible"] is True
+        assert result["gravity_feasible"] is True
+        assert result["near_singularity"] is False
 
-    def test_compute_fk_file_not_found(self):
+    def test_compute_dynamics_file_not_found(self):
         """Test graceful error for missing URDF file."""
         pytest.importorskip("mujoco")
-        from rove.adapters.fk_mujoco import compute_fk
+        from rove.adapters.dynamics_mujoco import compute_dynamics
 
         with pytest.raises(FileNotFoundError, match="not found"):
-            compute_fk("/nonexistent/path/robot.urdf", [[0.1] * 7])
+            compute_dynamics("/nonexistent/path/robot.urdf", [[0.1] * 7])
 
-    def test_compute_fk_invalid_file(self, tmp_path):
+    def test_compute_dynamics_invalid_file(self, tmp_path):
         """Test graceful error for invalid URDF content."""
         pytest.importorskip("mujoco")
-        from rove.adapters.fk_mujoco import compute_fk
+        from rove.adapters.dynamics_mujoco import compute_dynamics
 
         bad_urdf = tmp_path / "bad.urdf"
         bad_urdf.write_text("this is not valid urdf content")
         with pytest.raises(ValueError, match="Failed to load"):
-            compute_fk(str(bad_urdf), [[0.1] * 7])
+            compute_dynamics(str(bad_urdf), [[0.1] * 7])
 
-    def test_compute_fk_import_error(self):
+    def test_compute_dynamics_import_error(self):
         """Test that missing mujoco raises ImportError with helpful message."""
         import sys
 
@@ -214,8 +248,8 @@ class TestComputeFK:
         if "mujoco" in sys.modules:
             pytest.skip("mujoco is installed")
         try:
-            from rove.adapters.fk_mujoco import compute_fk
+            from rove.adapters.dynamics_mujoco import compute_dynamics
 
-            compute_fk("nonexistent.urdf", [[0.1] * 7])
+            compute_dynamics("nonexistent.urdf", [[0.1] * 7])
         except ImportError as e:
             assert "kinematics" in str(e)

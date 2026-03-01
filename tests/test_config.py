@@ -103,7 +103,7 @@ class TestGetStrategies:
         assert sd.perceive == "qwen3-vl-8b"
         assert sd.plan is None
         assert sd.act is None
-        assert sd.verify == "qwen3-vl-8b"
+        assert sd.verify == "bing-grounding-agent"
 
     def test_full_local_strategy(self):
         """full_local has all four stages."""
@@ -112,7 +112,7 @@ class TestGetStrategies:
         assert fl.perceive == "qwen3-vl-8b"
         assert fl.plan == "qwen3-vl-8b"
         assert fl.act == "mock-vla"
-        assert fl.verify == "qwen3-vl-8b"
+        assert fl.verify == "bing-grounding-agent"
 
 
 class TestOptionalStageValidation:
