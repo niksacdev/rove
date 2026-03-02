@@ -1220,5 +1220,107 @@
       "correct_answer_index": 0,
       "correct_answer_text": "Yes, bottom drawer skipped"
     }
+  },
+  {
+    "filename": "libero_goal/goal_bowl_on_plate.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Put the bowl on the plate",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_0"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["pick up the bowl", "place on the plate"]
+  },
+  {
+    "filename": "libero_goal/goal_wine_on_rack.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Put the wine bottle on the rack",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_1"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["pick up the wine bottle", "place on the rack"]
+  },
+  {
+    "filename": "libero_goal/goal_cream_cheese_in_bowl.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Put the cream cheese in the bowl",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_5"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["pick up the cream cheese", "place in the bowl"]
+  },
+  {
+    "filename": "libero_goal/goal_push_plate.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Push the plate to the front of the stove",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_7"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["push plate toward stove"]
+  },
+  {
+    "filename": "libero_goal/goal_turn_on_stove.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Turn on the stove",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_9"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["reach stove knob", "turn knob"]
+  },
+  {
+    "filename": "libero_goal/goal_open_drawer.jpg",
+    "scene_type": "libero",
+    "category": "action",
+    "task": "Open the middle drawer of the cabinet",
+    "source": {
+      "dataset": "LIBERO-Goal (LeRobot)",
+      "license": "MIT",
+      "id": "lerobot/libero_goal_image/episode_20"
+    },
+    "robot": "panda",
+    "action_dim": 7,
+    "state_dim": 8,
+    "eval_category": "atomic",
+    "difficulty": "easy",
+    "expected_subtasks": ["grasp drawer handle", "pull drawer open"]
   }
 ]

@@ -1076,13 +1076,14 @@ async function renderExamplesView() {
   // Eval category metadata — primary grouping
   var evalCatMeta = {
     "scene_analysis":       { label: "Scene Analysis", icon: "eye",         color: "text-cyan-400",   badgeCls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",    desc: "VLM-only evaluation — no robot or action execution required. Tests scene understanding, object detection, spatial reasoning, and plan quality using diverse real-world images from multiple robot platforms." },
+    "atomic":               { label: "Atomic",       icon: "target",      color: "text-emerald-400", badgeCls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20", desc: "Single-instruction tasks that a VLA should accomplish in one motion sequence. Simple pick-place, push, turn, or open actions on the Panda robot. Good baseline for VLA confidence calibration." },
     "multi_stage":          { label: "Multi-Stage",  icon: "layers",      color: "text-blue-400",   badgeCls: "bg-blue-500/10 text-blue-300 border-blue-500/20",    desc: "Sequential tasks requiring ordered subtask decomposition. Tests whether the pipeline breaks complex instructions into correctly ordered steps." },
     "situated_correction":  { label: "Correction",   icon: "message-circle", color: "text-amber-400", badgeCls: "bg-amber-500/10 text-amber-300 border-amber-500/20", desc: "Mid-task human feedback that changes the plan. Tests whether the pipeline adapts to corrections like \"not that one\" or \"use the other hand.\"" },
     "constrained":          { label: "Constrained",  icon: "shield-alert", color: "text-red-400",    badgeCls: "bg-red-500/10 text-red-300 border-red-500/20",      desc: "Tasks with safety or preference constraints. Tests whether the pipeline acknowledges and respects rules like \"keep it flat\" or \"don't close the door.\"" },
     "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
     "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" }
   };
-  var evalCatOrder = ["scene_analysis", "multi_stage", "situated_correction", "constrained", "open_ended", "negative"];
+  var evalCatOrder = ["scene_analysis", "atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative"];
 
   // Group examples by eval_category, then by scene_type
   var catGroups = {};
