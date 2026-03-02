@@ -20,7 +20,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "tabletop/robo2vlm_002.jpg",
@@ -43,7 +43,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "tabletop/robo2vlm_003.jpg",
@@ -66,7 +66,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "tabletop/robo2vlm_004.jpg",
@@ -89,7 +89,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "drawer-cabinet/robo2vlm_005.jpg",
@@ -113,7 +113,7 @@
       "correct_answer_text": "Moving away with open gripper after releasing the bottle"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "drawer-cabinet/robo2vlm_006.jpg",
@@ -137,7 +137,7 @@
       "correct_answer_text": "None of the above"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "drawer-cabinet/robo2vlm_007.jpg",
@@ -161,7 +161,7 @@
       "correct_answer_text": "Approaching the sponge with open gripper"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "drawer-cabinet/robo2vlm_008.jpg",
@@ -185,7 +185,7 @@
       "correct_answer_text": "Closing gripper to grasp the sponge"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "kitchen/robo2vlm_009.jpg",
@@ -208,7 +208,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "assembly/robo2vlm_010.jpg",
@@ -232,7 +232,7 @@
       "correct_answer_text": "None of the above"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "assembly/robo2vlm_011.jpg",
@@ -255,7 +255,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "assembly/robo2vlm_012.jpg",
@@ -278,7 +278,7 @@
       "correct_answer_text": "No"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "assembly/robo2vlm_013.jpg",
@@ -302,7 +302,7 @@
       "correct_answer_text": "Closing gripper to grasp the peg"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "kitchen/robo2vlm_014.jpg",
@@ -326,7 +326,7 @@
       "correct_answer_text": "Red"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "kitchen/robo2vlm_015.jpg",
@@ -350,7 +350,7 @@
       "correct_answer_text": "None of the above"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "kitchen/robo2vlm_016.jpg",
@@ -373,7 +373,7 @@
       "correct_answer_text": "Yes"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "bin-picking/robo2vlm_017.jpg",
@@ -397,7 +397,7 @@
       "correct_answer_text": "Configuration A"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "bin-picking/robo2vlm_018.jpg",
@@ -421,7 +421,7 @@
       "correct_answer_text": "Configuration A"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "bin-picking/robo2vlm_019.jpg",
@@ -445,7 +445,7 @@
       "correct_answer_text": "Red"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "bin-picking/robo2vlm_020.jpg",
@@ -469,7 +469,7 @@
       "correct_answer_text": "A"
     },
     "category": "perceive-plan",
-    "eval_category": "atomic"
+    "eval_category": "scene_analysis"
   },
   {
     "filename": "libero/libero_000.jpg",
@@ -664,21 +664,21 @@
     ]
   },
   {
-    "filename": "kitchen/robo2vlm_009.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_003_006.jpg",
+    "scene_type": "libero",
     "eval_category": "multi_stage",
-    "task": "Stack the blue blocks on the plate, then put the plate in the cabinet",
+    "category": "perceive-plan",
+    "task": "Pick up the ketchup, open the top drawer, place it inside, and close the drawer",
     "expected_subtasks": [
-      "identify blue blocks",
-      "stack blocks on plate",
-      "grasp plate with blocks",
-      "open cabinet",
-      "place plate in cabinet"
+      "grasp ketchup bottle",
+      "open top drawer of cabinet",
+      "place ketchup inside drawer",
+      "close drawer"
     ],
     "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
       "question": "Does the plan decompose into at least 3 sequential subtasks?",
@@ -689,27 +689,27 @@
       ],
       "correct_answer_index": 0,
       "correct_answer_text": "Yes, 3+ subtasks"
-    },
-    "category": "perceive-plan"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_016.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_005_008.jpg",
+    "scene_type": "libero",
     "eval_category": "multi_stage",
-    "task": "Turn on the stove and put the moka pot on it",
+    "category": "perceive-plan",
+    "task": "Put the white bowl on top of the cabinet, then place the chocolate pudding to its left",
     "expected_subtasks": [
-      "locate stove knob",
-      "turn on stove",
-      "grasp moka pot",
-      "place on active burner"
+      "grasp white bowl",
+      "place bowl on cabinet top",
+      "grasp chocolate pudding",
+      "place pudding to left of bowl"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan turn on the stove BEFORE placing the moka pot?",
+      "question": "Does the plan place the bowl BEFORE the pudding?",
       "choices": [
         "Yes, correct order",
         "No, reversed order",
@@ -717,515 +717,508 @@
       ],
       "correct_answer_index": 0,
       "correct_answer_text": "Yes, correct order"
-    },
-    "category": "perceive-plan"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_001.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_000_018.jpg",
+    "scene_type": "libero",
     "eval_category": "situated_correction",
-    "task": "Clean up the table",
+    "category": "perceive-plan",
+    "task": "Put the mugs on the plates",
     "turns": 2,
     "correction": {
       "trigger": "after_first_grasp",
-      "feedback": "Not that one, leave the mugs"
+      "feedback": "Not that mug \u2014 leave the yellow one, just move the white mug"
     },
     "expected_subtasks": [
-      "identify items to clean",
-      "re-plan excluding mugs",
-      "remove non-mug items"
+      "release yellow mug if grasped",
+      "grasp white mug only",
+      "place white mug on plate"
     ],
     "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "After correction, does the plan exclude mugs from cleanup targets?",
+      "question": "After correction, does the plan exclude the yellow mug?",
       "choices": [
-        "Yes, mugs excluded",
-        "No, mugs still targeted",
+        "Yes, yellow mug excluded",
+        "No, yellow mug still targeted",
         "Plan not updated"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, mugs excluded"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, yellow mug excluded"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_003.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_004_009.jpg",
+    "scene_type": "libero",
     "eval_category": "situated_correction",
-    "task": "Sort the items into the bins",
+    "category": "perceive-plan",
+    "task": "Put the items in the basket",
     "turns": 2,
     "correction": {
-      "trigger": "after_wrong_bin",
-      "feedback": "That's recyclable, put it in the green bin instead"
+      "trigger": "after_wrong_item",
+      "feedback": "Actually, only the soup goes in the basket \u2014 leave the cream cheese on the counter"
     },
     "expected_subtasks": [
-      "identify current item",
-      "re-classify as recyclable",
-      "redirect to green bin"
-    ],
-    "difficulty": "hard",
-    "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
-    },
-    "eval_qa": {
-      "question": "After correction, does the plan redirect the item to the green (recycling) bin?",
-      "choices": [
-        "Yes, redirected to green bin",
-        "No, original bin kept",
-        "Plan not updated"
-      ],
-      "correct_answer_index": 0,
-      "correct_answer_text": "Yes, redirected to green bin"
-    },
-    "category": "perceive-plan"
-  },
-  {
-    "filename": "kitchen/robo2vlm_015.jpg",
-    "scene_type": "kitchen",
-    "eval_category": "situated_correction",
-    "task": "Set the table for dinner",
-    "turns": 2,
-    "correction": {
-      "trigger": "mid_task",
-      "feedback": "Actually we need one more place setting, we have a guest coming"
-    },
-    "expected_subtasks": [
-      "re-count place settings",
-      "add one additional setting",
-      "arrange all settings"
+      "release cream cheese if grasped",
+      "grasp alphabet soup only",
+      "place soup in basket"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "After correction, does the plan add an additional place setting?",
+      "question": "After correction, does the plan target only the alphabet soup?",
       "choices": [
-        "Yes, extra setting added",
-        "No, original count kept",
+        "Yes, only soup targeted",
+        "No, cream cheese still included",
         "Plan not updated"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, extra setting added"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, only soup targeted"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_004.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_001_001.jpg",
+    "scene_type": "libero",
     "eval_category": "situated_correction",
-    "task": "Hand me the tool",
+    "category": "perceive-plan",
+    "task": "Hand me something from the counter",
     "turns": 2,
     "correction": {
       "trigger": "after_wrong_grasp",
-      "feedback": "No, the other one, the Phillips screwdriver"
+      "feedback": "No, I meant the soup can, not that"
     },
     "expected_subtasks": [
-      "release current tool",
-      "identify Phillips screwdriver",
-      "grasp correct tool",
+      "release current object",
+      "identify soup can",
+      "grasp soup can",
       "hand to user"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "After correction, does the plan target the Phillips screwdriver specifically?",
+      "question": "After correction, does the plan target the soup can specifically?",
       "choices": [
-        "Yes, Phillips screwdriver targeted",
-        "No, wrong tool still targeted",
+        "Yes, soup can targeted",
+        "No, wrong item still targeted",
         "Plan not updated"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, Phillips screwdriver targeted"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, soup can targeted"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_014.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_006_010.jpg",
+    "scene_type": "libero",
+    "eval_category": "situated_correction",
+    "category": "perceive-plan",
+    "task": "Set up for cooking \u2014 put the plate on the stove",
+    "turns": 2,
+    "correction": {
+      "trigger": "mid_task",
+      "feedback": "Wait, put the bowl on the left side of the stove first, then the plate in front"
+    },
+    "expected_subtasks": [
+      "place bowl on left side of stove",
+      "then place plate in front of stove"
+    ],
+    "difficulty": "medium",
+    "source": {
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
+    },
+    "eval_qa": {
+      "question": "After correction, does the plan reorder to place the bowl before the plate?",
+      "choices": [
+        "Yes, bowl first then plate",
+        "No, original order kept",
+        "Plan not updated"
+      ],
+      "correct_answer_index": 0,
+      "correct_answer_text": "Yes, bowl first then plate"
+    }
+  },
+  {
+    "filename": "libero/libero_007_012.jpg",
+    "scene_type": "libero",
     "eval_category": "constrained",
-    "task": "Bring me the knife, but don't reach over the baby",
+    "category": "perceive-plan",
+    "task": "Arrange the food items on the plate, but keep the cream cheese away from the pudding",
     "constraints": [
-      "avoid_zone:baby_area",
-      "safety:no_reach_over_human"
+      "separation:cream_cheese_from_pudding",
+      "placement:on_plate"
     ],
     "expected_subtasks": [
-      "locate knife",
-      "plan path avoiding baby area",
-      "grasp knife via safe route",
-      "deliver to user"
+      "place pudding on one side of plate",
+      "place cream cheese on opposite side",
+      "verify separation maintained"
     ],
     "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan acknowledge the safety constraint about the baby?",
+      "question": "Does the plan acknowledge the separation constraint between cream cheese and pudding?",
       "choices": [
-        "Yes, constraint acknowledged in plan",
+        "Yes, constraint acknowledged",
         "No, constraint ignored",
         "Partially acknowledged"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, constraint acknowledged in plan"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, constraint acknowledged"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_002.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_004_025.jpg",
+    "scene_type": "libero",
     "eval_category": "constrained",
-    "task": "Sort the recycling: glass goes left, plastic goes right",
+    "category": "perceive-plan",
+    "task": "Put the items in the basket one at a time \u2014 cream cheese box first, then the soup",
     "constraints": [
-      "material_sort:glass=left",
-      "material_sort:plastic=right"
+      "order:cream_cheese_first",
+      "method:one_at_a_time"
     ],
     "expected_subtasks": [
-      "identify glass items",
-      "place glass items in left bin",
-      "identify plastic items",
-      "place plastic items in right bin"
+      "grasp cream cheese box",
+      "place cream cheese in basket",
+      "grasp alphabet soup",
+      "place soup in basket"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan correctly assign glass to left and plastic to right?",
+      "question": "Does the plan place cream cheese before soup?",
       "choices": [
-        "Yes, correct sorting",
+        "Yes, correct order",
         "No, reversed",
-        "Sorting not specified"
+        "Order not specified"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, correct sorting"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, correct order"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_009.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_002_003.jpg",
+    "scene_type": "libero",
     "eval_category": "constrained",
-    "task": "Make me a sandwich, but I'm allergic to pickles",
+    "category": "perceive-plan",
+    "task": "Put the mug in the microwave, but don't close the door \u2014 I need to set the timer first",
     "constraints": [
-      "exclude_ingredient:pickles",
-      "dietary:allergy"
+      "microwave_door:leave_open",
+      "sequence:wait_for_user"
     ],
     "expected_subtasks": [
-      "identify sandwich ingredients",
-      "exclude pickles from selection",
-      "assemble sandwich without pickles"
+      "open microwave door if closed",
+      "grasp mug",
+      "place mug inside microwave",
+      "leave door open"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan explicitly exclude pickles from the sandwich ingredients?",
+      "question": "Does the plan explicitly leave the microwave door open?",
       "choices": [
-        "Yes, pickles excluded",
-        "No, pickles included",
-        "Ingredients not specified"
+        "Yes, door left open",
+        "No, door closed",
+        "Not addressed"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, pickles excluded"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, door left open"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_001.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_009_028.jpg",
+    "scene_type": "libero",
     "eval_category": "constrained",
-    "task": "Move the fragile vase to the shelf, keep it upright at all times",
+    "category": "perceive-plan",
+    "task": "Move the book to the caddy, but keep it flat \u2014 don't bend the cover",
     "constraints": [
-      "orientation:upright",
-      "handling:fragile"
+      "orientation:flat",
+      "handling:no_bending"
     ],
     "expected_subtasks": [
-      "grasp vase carefully maintaining upright orientation",
-      "transport to shelf slowly",
-      "place on shelf maintaining upright"
+      "grasp book maintaining flat orientation",
+      "transport to caddy without tilting",
+      "place flat in caddy compartment"
     ],
     "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan specify maintaining upright orientation throughout transport?",
+      "question": "Does the plan specify maintaining flat orientation during transport?",
       "choices": [
-        "Yes, upright constraint maintained",
+        "Yes, flat constraint maintained",
         "No, orientation not addressed",
         "Partially addressed"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, upright constraint maintained"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, flat constraint maintained"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_015.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_001_004.jpg",
+    "scene_type": "libero",
     "eval_category": "open_ended",
-    "task": "It's movie night, can we get some drinks ready?",
+    "category": "perceive-plan",
+    "task": "Can you help tidy up the counter?",
     "expected_subtasks": [
-      "identify drink items in scene",
-      "locate glasses or cups",
-      "arrange drinks for serving"
-    ],
-    "acceptable_interpretations": [
-      "get beverages from fridge",
-      "pour drinks into glasses",
-      "arrange snack drinks on tray"
-    ],
-    "difficulty": "hard",
-    "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
-    },
-    "eval_qa": {
-      "question": "Is the plan's interpretation of 'get drinks ready' reasonable for a movie night context?",
-      "choices": [
-        "Yes, reasonable interpretation",
-        "No, unreasonable interpretation",
-        "Too literal or too vague"
-      ],
-      "correct_answer_index": 0,
-      "correct_answer_text": "Yes, reasonable interpretation"
-    },
-    "category": "perceive-plan"
-  },
-  {
-    "filename": "tabletop/robo2vlm_003.jpg",
-    "scene_type": "tabletop",
-    "eval_category": "open_ended",
-    "task": "Make this workspace tidier",
-    "expected_subtasks": [
-      "identify clutter items",
+      "identify items on counter",
       "determine tidy arrangement",
       "move items to organized positions"
     ],
     "acceptable_interpretations": [
-      "stack papers",
-      "align tools",
-      "clear center area",
-      "group similar items"
+      "put soup in basket",
+      "group items together",
+      "clear counter space"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan produce a reasonable interpretation of 'tidier' for the visible workspace?",
+      "question": "Does the plan produce a reasonable interpretation of 'tidy up' for the visible scene?",
       "choices": [
-        "Yes, reasonable tidy plan",
-        "No, random rearrangement",
+        "Yes, reasonable plan",
+        "No, unreasonable interpretation",
         "No plan generated"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, reasonable tidy plan"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, reasonable plan"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_016.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_003_038.jpg",
+    "scene_type": "libero",
     "eval_category": "open_ended",
-    "task": "I'm hungry, what can you make with what's here?",
+    "category": "perceive-plan",
+    "task": "Put the groceries away",
     "expected_subtasks": [
-      "survey available ingredients",
-      "propose feasible meal",
-      "plan preparation steps"
+      "identify grocery items",
+      "determine storage location",
+      "place items in storage"
     ],
     "acceptable_interpretations": [
-      "make a sandwich",
-      "prepare a salad",
-      "heat up leftovers",
-      "assemble a snack plate"
+      "put ketchup in cabinet drawer",
+      "put ketchup on shelf",
+      "organize counter items into cabinet"
+    ],
+    "difficulty": "medium",
+    "source": {
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
+    },
+    "eval_qa": {
+      "question": "Does the plan use visible storage (cabinet/drawer) for the grocery items?",
+      "choices": [
+        "Yes, uses visible storage",
+        "No, references unseen storage",
+        "No storage plan"
+      ],
+      "correct_answer_index": 0,
+      "correct_answer_text": "Yes, uses visible storage"
+    }
+  },
+  {
+    "filename": "libero/libero_005_013.jpg",
+    "scene_type": "libero",
+    "eval_category": "open_ended",
+    "category": "perceive-plan",
+    "task": "I need to clear some counter space \u2014 can you help?",
+    "expected_subtasks": [
+      "identify movable items on counter",
+      "determine where to relocate them",
+      "move items off counter"
+    ],
+    "acceptable_interpretations": [
+      "put bowl on cabinet",
+      "move pudding to cabinet",
+      "stack items to save space"
     ],
     "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan use only items visible in the scene to propose a meal?",
+      "question": "Does the plan move items to visible alternative locations (cabinet, shelf)?",
       "choices": [
-        "Yes, uses visible items",
-        "No, references unseen items",
-        "No meal proposed"
+        "Yes, uses visible locations",
+        "No, references unseen areas",
+        "No relocation plan"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, uses visible items"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, uses visible locations"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_004.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_006_020.jpg",
+    "scene_type": "libero",
     "eval_category": "open_ended",
-    "task": "Get something sweet from the shelf",
+    "category": "perceive-plan",
+    "task": "Get ready for dinner",
     "expected_subtasks": [
-      "identify sweet items on shelf",
-      "select one sweet item",
-      "retrieve from shelf"
+      "identify dinner-related items",
+      "arrange items for serving",
+      "set up eating area"
     ],
     "acceptable_interpretations": [
-      "grab candy",
-      "grab chocolate",
-      "grab cookies",
-      "grab any sweet snack"
+      "move plate to front as place setting",
+      "put bowl next to plate",
+      "arrange items for a meal"
     ],
-    "difficulty": "medium",
+    "difficulty": "hard",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan select an item that is plausibly sweet?",
+      "question": "Is the plan's interpretation of 'get ready for dinner' reasonable for the visible scene?",
       "choices": [
-        "Yes, sweet item selected",
-        "No, non-sweet item selected",
-        "No item selected"
+        "Yes, reasonable interpretation",
+        "No, unreasonable",
+        "Too literal or too vague"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, sweet item selected"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, reasonable interpretation"
+    }
   },
   {
-    "filename": "tabletop/robo2vlm_002.jpg",
-    "scene_type": "tabletop",
+    "filename": "libero/libero_002_034.jpg",
+    "scene_type": "libero",
     "eval_category": "negative",
-    "task": "Put away everything except the cookbook",
+    "category": "perceive-plan",
+    "task": "Clear the counter, but don't put anything in the microwave",
     "constraints": [
-      "exclude_object:cookbook"
+      "exclude_location:microwave"
     ],
     "expected_subtasks": [
-      "identify all items",
-      "exclude cookbook from targets",
-      "put away remaining items"
+      "identify items on counter",
+      "find alternative storage (not microwave)",
+      "move items to non-microwave locations"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan correctly exclude the cookbook from the items to put away?",
+      "question": "Does the plan avoid using the microwave as storage?",
       "choices": [
-        "Yes, cookbook excluded",
-        "No, cookbook included",
+        "Yes, microwave excluded",
+        "No, microwave used",
+        "Not addressed"
+      ],
+      "correct_answer_index": 0,
+      "correct_answer_text": "Yes, microwave excluded"
+    }
+  },
+  {
+    "filename": "libero/libero_007_017.jpg",
+    "scene_type": "libero",
+    "eval_category": "negative",
+    "category": "perceive-plan",
+    "task": "Remove everything from the table except the plate",
+    "constraints": [
+      "exclude_object:plate"
+    ],
+    "expected_subtasks": [
+      "identify all items on table",
+      "exclude plate from targets",
+      "remove pudding and cream cheese"
+    ],
+    "difficulty": "medium",
+    "source": {
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
+    },
+    "eval_qa": {
+      "question": "Does the plan correctly exclude the plate from removal?",
+      "choices": [
+        "Yes, plate excluded",
+        "No, plate included",
         "Exclusion not addressed"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, cookbook excluded"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, plate excluded"
+    }
   },
   {
-    "filename": "kitchen/robo2vlm_014.jpg",
-    "scene_type": "kitchen",
+    "filename": "libero/libero_008_015.jpg",
+    "scene_type": "libero",
     "eval_category": "negative",
-    "task": "Clean up only the trash, not the dishes",
+    "category": "perceive-plan",
+    "task": "Put away the dishes, but not the black bowl \u2014 I still need it",
     "constraints": [
-      "include_only:trash",
-      "exclude_category:dishes"
+      "exclude_object:black_bowl"
     ],
     "expected_subtasks": [
-      "classify items as trash or dishes",
-      "remove only trash items",
-      "leave dishes in place"
+      "identify all dishes",
+      "exclude black bowl from targets",
+      "put away remaining dishes"
     ],
     "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan distinguish trash from dishes and only target trash?",
+      "question": "Does the plan correctly exclude the black bowl?",
       "choices": [
-        "Yes, only trash targeted",
-        "No, dishes also targeted",
-        "No classification made"
-      ],
-      "correct_answer_index": 0,
-      "correct_answer_text": "Yes, only trash targeted"
-    },
-    "category": "perceive-plan"
-  },
-  {
-    "filename": "tabletop/robo2vlm_001.jpg",
-    "scene_type": "tabletop",
-    "eval_category": "negative",
-    "task": "Move all the blocks to the bin, but don't touch the red ones",
-    "constraints": [
-      "exclude_object:red_blocks",
-      "include_only:non_red_blocks"
-    ],
-    "expected_subtasks": [
-      "identify all blocks",
-      "filter out red blocks",
-      "move non-red blocks to bin"
-    ],
-    "difficulty": "medium",
-    "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
-    },
-    "eval_qa": {
-      "question": "Does the plan explicitly exclude red blocks from the move targets?",
-      "choices": [
-        "Yes, red blocks excluded",
-        "No, red blocks included",
+        "Yes, black bowl excluded",
+        "No, black bowl included",
         "Color not considered"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, red blocks excluded"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, black bowl excluded"
+    }
   },
   {
-    "filename": "bin-picking/robo2vlm_019.jpg",
-    "scene_type": "bin-picking",
+    "filename": "libero/libero_008_016.jpg",
+    "scene_type": "libero",
     "eval_category": "negative",
-    "task": "Empty the basket but leave the heavy items",
+    "category": "perceive-plan",
+    "task": "Close all the cabinet drawers except the bottom one",
     "constraints": [
-      "exclude_property:heavy"
+      "exclude_target:bottom_drawer"
     ],
     "expected_subtasks": [
-      "assess item weights",
-      "identify heavy items to skip",
-      "remove only light items from basket"
+      "identify open drawers",
+      "close all drawers except bottom",
+      "verify bottom drawer still open"
     ],
-    "difficulty": "hard",
+    "difficulty": "medium",
     "source": {
-      "dataset": "rove-curated",
-      "license": "CC-BY-4.0"
+      "dataset": "LIBERO-10 (LeRobot) + rove-curated task",
+      "license": "MIT"
     },
     "eval_qa": {
-      "question": "Does the plan attempt to classify items by weight and skip heavy ones?",
+      "question": "Does the plan explicitly skip the bottom drawer?",
       "choices": [
-        "Yes, weight-based filtering",
-        "No, all items targeted",
-        "No classification attempted"
+        "Yes, bottom drawer skipped",
+        "No, all drawers closed",
+        "Not specified"
       ],
       "correct_answer_index": 0,
-      "correct_answer_text": "Yes, weight-based filtering"
-    },
-    "category": "perceive-plan"
+      "correct_answer_text": "Yes, bottom drawer skipped"
+    }
   }
 ]
