@@ -1083,7 +1083,7 @@ async function renderExamplesView() {
     "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
     "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" }
   };
-  var evalCatOrder = ["scene_analysis", "atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative"];
+  var evalCatOrder = ["atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative", "scene_analysis"];
 
   // Group examples by eval_category, then by scene_type
   var catGroups = {};
