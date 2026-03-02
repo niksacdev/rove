@@ -131,79 +131,91 @@
           <p class="text-[11px] text-gray-500 max-w-md mb-8">Inference-only by design — ROVE runs models, never modifies them. Every evaluation is reproducible and safe to run on production model endpoints.</p>
 
           <!-- How ROVE Evaluates -->
-          <p class="text-[11px] text-gray-400 font-semibold mb-4 uppercase tracking-wider">How ROVE Evaluates</p>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full mb-8">
-
-            <!-- Sequential Pipeline (VLM-only) -->
-            <div class="bg-f-surface border border-f-border rounded-xl p-4">
-              <div class="flex items-center gap-2 mb-3">
-                <i data-lucide="arrow-right" class="w-4 h-4 text-purple-400"></i>
-                <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">Sequential Pipeline</span>
-              </div>
-              <p class="text-[10px] text-gray-500 mb-3">VLM-only strategies. Each stage feeds the next.</p>
-              <div class="pipeline-flow flex items-center justify-center gap-0">
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-24 shrink-0">
-                  <i data-lucide="eye" class="w-4 h-4 text-purple-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">Perceive</span>
-                </div>
-                <div class="pipeline-arrow shrink-0 mx-0.5" aria-hidden="true"></div>
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-24 shrink-0">
-                  <i data-lucide="brain" class="w-4 h-4 text-purple-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">Plan</span>
-                </div>
-                <div class="pipeline-arrow shrink-0 mx-0.5" aria-hidden="true"></div>
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-24 shrink-0">
-                  <i data-lucide="shield-check" class="w-4 h-4 text-amber-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">Verify</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- VLA Evaluation (Agent Loop) -->
-            <div class="bg-f-surface border border-f-border rounded-xl p-4">
-              <div class="flex items-center gap-2 mb-3">
+          <p class="text-[11px] text-gray-400 font-semibold mb-4 uppercase tracking-wider">How ROVE Evaluates VLAs</p>
+          <div class="max-w-2xl w-full mb-8">
+            <div class="bg-f-surface border border-f-border rounded-xl p-5">
+              <div class="flex items-center gap-2 mb-2">
                 <i data-lucide="git-branch" class="w-4 h-4 text-sky-400"></i>
-                <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">VLA Evaluation</span>
+                <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Multi-VLA Comparison</span>
               </div>
-              <p class="text-[10px] text-gray-500 mb-3">VLA executes, then an agentic verifier evaluates using tools.</p>
-              <!-- Execution phase -->
+              <p class="text-[10px] text-gray-500 mb-4">Run multiple VLAs on the same image &amp; task, then evaluate each with an agentic verifier that calls tools to gather evidence.</p>
+
+              <!-- Execution phase: multiple VLAs in parallel -->
               <div class="flex items-center gap-2 mb-2">
                 <span class="text-[9px] font-bold text-sky-400 uppercase tracking-widest">Execution</span>
                 <div class="flex-1 border-t border-sky-500/30"></div>
               </div>
-              <div class="flex justify-center mb-3">
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-28">
+              <div class="flex justify-center gap-3 mb-4">
+                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
                   <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">VLA Act</span>
-                  <p class="text-[8px] text-gray-500">image + task &rarr; actions</p>
+                  <span class="text-[10px] font-semibold text-gray-200 block">VLA A</span>
+                  <p class="text-[8px] text-gray-500">e.g. pi0-FAST</p>
+                </div>
+                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
+                  <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
+                  <span class="text-[10px] font-semibold text-gray-200 block">VLA B</span>
+                  <p class="text-[8px] text-gray-500">e.g. SmolVLA</p>
+                </div>
+                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
+                  <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
+                  <span class="text-[10px] font-semibold text-gray-200 block">VLA C</span>
+                  <p class="text-[8px] text-gray-500">e.g. OpenVLA</p>
                 </div>
               </div>
-              <!-- Evaluation phase -->
+
+              <!-- Down arrow -->
+              <div class="flex justify-center mb-3">
+                <span class="text-gray-600 text-lg">&darr;</span>
+              </div>
+
+              <!-- Evaluation phase: agentic verifier with tool calls -->
               <div class="flex items-center gap-2 mb-2">
                 <span class="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Agentic Verify</span>
+                <span class="text-[8px] text-gray-600 ml-1">(per VLA)</span>
                 <div class="flex-1 border-t border-purple-500/30"></div>
               </div>
-              <div class="flex flex-col items-center gap-1.5">
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-36">
+              <div class="flex flex-col items-center gap-2">
+                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-40">
                   <i data-lucide="shield-check" class="w-4 h-4 text-amber-400 mx-auto mb-1"></i>
                   <span class="text-[10px] font-semibold text-gray-200 block">Verifier LLM</span>
                   <p class="text-[8px] text-gray-500">reasons &amp; calls tools</p>
                 </div>
-                <div class="flex items-center gap-3 mt-1">
+                <div class="flex items-center gap-4 mt-1">
                   <div class="flex flex-col items-center">
                     <span class="text-[8px] text-purple-400 mb-0.5">&darr; tool call</span>
-                    <div class="gradient-card border rounded-md px-2 py-1 text-center">
+                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
                       <i data-lucide="eye" class="w-3 h-3 text-purple-400 mx-auto mb-0.5"></i>
                       <span class="text-[8px] font-semibold text-gray-300 block">Perceive</span>
                     </div>
                   </div>
                   <div class="flex flex-col items-center">
                     <span class="text-[8px] text-blue-400 mb-0.5">&darr; tool call</span>
-                    <div class="gradient-card border rounded-md px-2 py-1 text-center">
+                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
                       <i data-lucide="activity" class="w-3 h-3 text-blue-400 mx-auto mb-0.5"></i>
                       <span class="text-[8px] font-semibold text-gray-300 block">Dynamics</span>
                     </div>
                   </div>
+                  <div class="flex flex-col items-center">
+                    <span class="text-[8px] text-emerald-400 mb-0.5">&darr; tool call</span>
+                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
+                      <i data-lucide="box" class="w-3 h-3 text-emerald-400 mx-auto mb-0.5"></i>
+                      <span class="text-[8px] font-semibold text-gray-300 block">Simulate</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Down arrow -->
+              <div class="flex justify-center mt-3 mb-2">
+                <span class="text-gray-600 text-lg">&darr;</span>
+              </div>
+
+              <!-- Ranked comparison output -->
+              <div class="flex justify-center">
+                <div class="gradient-card border border-purple-500/20 rounded-lg px-4 py-2 text-center">
+                  <i data-lucide="bar-chart-3" class="w-4 h-4 text-purple-400 mx-auto mb-1"></i>
+                  <span class="text-[10px] font-semibold text-gray-200 block">Ranked Comparison</span>
+                  <p class="text-[8px] text-gray-500">confidence &middot; plausibility &middot; latency</p>
                 </div>
               </div>
             </div>
