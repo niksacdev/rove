@@ -537,6 +537,40 @@ class TestDynamicsSanityChecks:
         assert result.action_plausibility.dynamics_consistency == 1.0
 
 
+class TestURDFRobotInfo:
+    """Test URDF parsing for robot embodiment info."""
+
+    def test_extract_urdf_robot_info_panda(self):
+        """Panda URDF should yield 8 independent DOF (7 arm + 1 gripper)."""
+        pipeline = EvaluationPipeline(
+            urdf_path="data/urdf/panda/panda.urdf",
+        )
+        info = pipeline._urdf_robot_info
+        assert info["robot_name"] == "panda"
+        assert info["dof"] == 8  # 7 revolute arm + 1 prismatic gripper finger
+        assert "panda_joint1" in info["joint_names"]
+        assert "panda_finger_joint1" in info["joint_names"]
+        # finger_joint2 is a mimic joint (mirrors finger_joint1)
+        assert "panda_finger_joint2" in info.get("mimic_joints", [])
+
+    def test_extract_urdf_robot_info_none(self):
+        """No URDF should yield empty dict."""
+        pipeline = EvaluationPipeline()
+        assert pipeline._urdf_robot_info == {}
+
+    def test_robot_spec_includes_dof(self):
+        """Robot spec string should include DOF from URDF."""
+        from rove.models import PipelineContext
+
+        pipeline = EvaluationPipeline(
+            urdf_path="data/urdf/panda/panda.urdf",
+        )
+        ctx = PipelineContext()
+        spec = pipeline._build_robot_spec(ctx)
+        assert "DOF (from URDF): 8" in spec
+        assert "panda" in spec.lower()
+
+
 class TestVerifyLoop:
     """Test agentic verify loop with mock adapters."""
 

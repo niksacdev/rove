@@ -77,6 +77,48 @@ class EvaluationPipeline:
         self._urdf_path = urdf_path
         self._pipeline_mode = pipeline_mode
         self._verify_mode = verify_mode
+        self._urdf_robot_info = self._extract_urdf_robot_info()
+
+    def _extract_urdf_robot_info(self) -> dict:
+        """Extract robot DOF and joint info from URDF at init time.
+
+        Parses the URDF XML to count movable joints (revolute, prismatic,
+        continuous) without requiring MuJoCo. Returns empty dict if no URDF.
+        """
+        if not self._urdf_path:
+            return {}
+        try:
+            import xml.etree.ElementTree as ET  # nosec B405
+            from pathlib import Path
+
+            tree = ET.parse(self._urdf_path)  # nosec B314
+            root = tree.getroot()
+
+            robot_name = root.get("name", Path(self._urdf_path).stem)
+            movable_types = {"revolute", "prismatic", "continuous"}
+            movable_joints = []
+            mimic_joints = []
+
+            for joint in root.iter("joint"):
+                jtype = joint.get("type", "fixed")
+                jname = joint.get("name", "")
+                if jtype in movable_types:
+                    if joint.find("mimic") is not None:
+                        mimic_joints.append(jname)
+                    else:
+                        movable_joints.append(jname)
+
+            info: dict = {
+                "robot_name": robot_name,
+                "dof": len(movable_joints),
+                "joint_names": movable_joints,
+            }
+            if mimic_joints:
+                info["mimic_joints"] = mimic_joints
+            return info
+        except Exception:
+            logger.warning("Failed to parse URDF for robot info", exc_info=True)
+            return {}
 
     async def _call_adapter(
         self,
@@ -393,22 +435,26 @@ class EvaluationPipeline:
         """
         lines: list[str] = []
         meta = ctx.task_metadata or {}
+        urdf_info = self._urdf_robot_info
 
-        robot_name = meta.get("robot", "")
+        robot_name = meta.get("robot", "") or urdf_info.get("robot_name", "")
         action_dim = meta.get("action_dim")
         state_dim = meta.get("state_dim")
+        dof = urdf_info.get("dof")
 
-        # Fallback: extract robot name from URDF path
-        if not robot_name and self._urdf_path:
-            from pathlib import Path
-
-            robot_name = Path(self._urdf_path).stem
-
-        if not robot_name and not action_dim:
+        if not robot_name and not action_dim and not dof:
             return ""
 
         if robot_name:
             lines.append(f"Robot: {robot_name}")
+        if dof is not None:
+            joint_names = urdf_info.get("joint_names", [])
+            mimic_joints = urdf_info.get("mimic_joints", [])
+            lines.append(f"DOF (from URDF): {dof} independent joints")
+            if joint_names:
+                lines.append(f"Joint names: {', '.join(joint_names)}")
+            if mimic_joints:
+                lines.append(f"Mimic joints (not independent): {', '.join(mimic_joints)}")
         if action_dim is not None:
             lines.append(f"Expected action dimensions: {action_dim}")
         if state_dim is not None:
