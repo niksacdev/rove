@@ -29,24 +29,48 @@ Upload a scene image, describe a manipulation task, select strategies, and ROVE 
 
 ## How It Works
 
-Every evaluation runs a fixed four-stage pipeline. Stages are optional — a strategy defines which stages to run and which model handles each.
+ROVE runs pipelines in two modes, automatically selected based on whether a VLA is assigned.
+
+### Sequential Pipeline (VLM-only)
+
+Each stage feeds the next in a linear chain. Used when no VLA is assigned to the act stage.
 
 ```
- ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
- │ perceive │───>│   plan   │───>│   act    │───>│  verify  │
- │   (VLM)  │    │  (VLM)   │    │  (VLA +  │    │  (VLM)   │
- │          │    │          │    │   Sim)   │    │          │
- └──────────┘    └──────────┘    └──────────┘    └──────────┘
+ ┌──────────┐    ┌──────────┐    ┌──────────┐
+ │ perceive │───>│   plan   │───>│  verify  │
+ │   (VLM)  │    │  (VLM)   │    │  (VLM)   │
+ └──────────┘    └──────────┘    └──────────┘
+```
+
+### VLA Evaluation (Parallel)
+
+VLAs (pi0.5, SmolVLA, etc.) take only `image + task + proprioception` — they never consume perceive/plan outputs (64-200 token context windows). ROVE reflects this honestly:
+
+1. **Execution phase**: VLA runs independently (image + task → actions)
+2. **Evaluation phase**: Perceive, plan, dynamics, and verify assess the VLA output
+
+```
+ EXECUTION                    EVALUATION
+ ┌──────────┐                ┌──────────┐    ┌──────────┐
+ │ VLA Act  │                │ perceive │───>│   plan   │
+ │ (image + │                └──────────┘    └────┬─────┘
+ │  task)   │   ┌──────────┐                     │
+ └────┬─────┘   │ dynamics │─────────────────────┤
+      └────────>│ (MuJoCo) │                     │
+                └──────────┘              ┌──────┴─────┐
+                                          │   verify   │
+                                          └────────────┘
 ```
 
 | Stage | Input | Output |
 |-------|-------|--------|
 | **perceive** | Scene image + task | Objects, spatial relationships |
 | **plan** | Scene analysis + task | Strategy, steps, confidence |
-| **act** | Sim observation + task | Action chunk executed in simulator; dynamics analysis when enabled |
-| **verify** | Before/after images | Success/fail + confidence; dynamics sanity checks override scores |
+| **act** | Image + task + proprioception | Action trajectory or tool calls |
+| **dynamics** | VLA trajectory + URDF | Joint limits, collisions, torques, manipulability |
+| **verify** | All evaluation context | Success/fail + confidence; dynamics sanity checks override scores |
 
-Strategies run concurrently, streaming progress via SSE in real time.
+Strategies run concurrently, streaming progress via SSE in real time. The dashboard shows "Execution" and "Evaluation" phase headers for VLA strategies.
 
 ---
 
