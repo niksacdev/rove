@@ -289,8 +289,10 @@ class MockAgentAdapter:
                     "Increase action chunk size for transport phase."
                 )
                 if has_dynamics
-                else "Enable MuJoCo dynamics for a reliable assessment. "
-                "Without physics data, this evaluation cannot verify trajectory feasibility."
+                else "Run simulation or enable MuJoCo dynamics and ensure the VLA produces "
+                "actions matching the target robot's full joint specification (including "
+                "gripper). Only with dynamics can physical plausibility and task "
+                "completion be reliably assessed."
             ),
             "completed_stages": ["perceive", "act"],
             "stage_checks": [

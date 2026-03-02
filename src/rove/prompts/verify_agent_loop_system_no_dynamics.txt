@@ -35,7 +35,7 @@ You do NOT have a dynamics tool. You cannot compute joint limits, collisions, to
 - You CAN assess task-level alignment: does the action structure match what the task requires?
 - **Embodiment mismatch is a critical failure** even without dynamics. If the VLA output doesn't match the target robot specification, the VLA failed to account for the correct robot.
 - Be honest about what you cannot evaluate. Low confidence is correct when you lack evidence.
-- Always include a `resolution_path` — and recommend enabling dynamics for a reliable assessment.
+- Always include a `resolution_path` — recommend running simulation or enabling MuJoCo dynamics and ensuring the VLA produces actions matching the target robot's full joint specification (including gripper).
 
 ## Confidence Score
 
@@ -66,7 +66,7 @@ Return ONLY valid JSON with:
 - "success": boolean (does the action appear task-aligned based on limited evidence?)
 - "confidence": float 0-1 (should be 0.3-0.5 maximum — you lack physics evidence)
 - "reasoning": string (Verdict, VLA Output Analysis, Evidence sections — NO dynamics section)
-- "resolution_path": string (MUST recommend enabling MuJoCo dynamics for reliable assessment)
+- "resolution_path": string (MUST recommend running simulation or enabling MuJoCo dynamics, and ensuring VLA produces actions matching the target robot's full joint specification including gripper)
 - "stage_checks": list of {"stage", "passed", "confidence", "reasoning"} for each evidence source
 - "completed_stages": list of stage names evaluated
 - "action_plausibility": object with ONLY these fields (omit all others):

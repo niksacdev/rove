@@ -356,21 +356,19 @@ class MockVLMAdapter:
                     safety_assessment=dyn_safety,
                 )
             else:
+                # No dynamics — only score fields that don't require physics data.
+                # Omit bounds_check, dynamics_consistency, workspace_reachability,
+                # safety_assessment as these need MuJoCo dynamics to be meaningful.
                 plausibility = ActionPlausibility(
-                    bounds_check=self._rng.random() < self._quality,
-                    smoothness=self._rng.random() < self._quality,
-                    gripper_consistency=self._rng.random() < self._quality,
-                    plan_alignment=round(self._rng.uniform(0.5, 0.95), 2),
+                    smoothness=round(self._rng.uniform(0.2, 0.4), 2),
+                    gripper_consistency=round(self._rng.uniform(0.25, 0.45), 2),
+                    plan_alignment=round(self._rng.uniform(0.3, 0.5), 2),
+                    task_completion_plausibility=round(self._rng.uniform(0.2, 0.4), 2),
                     reasoning=(
-                        "Action deltas are within expected ranges. "
-                        "Gripper pattern is consistent with pick-and-place. "
-                        "Note: true success cannot be assessed without a simulator "
-                        "or post-execution image."
+                        "Without dynamics data, plausibility scores reflect high "
+                        "uncertainty — these are VLM estimates, not physics-grounded "
+                        "measurements. Enable MuJoCo dynamics for reliable assessment."
                     ),
-                    workspace_reachability=round(self._rng.uniform(0.7, 1.0), 2),
-                    task_completion_plausibility=round(self._rng.uniform(0.3, 0.8), 2),
-                    dynamics_consistency=1.0,  # no dynamics data to disagree with
-                    safety_assessment=round(self._rng.uniform(0.7, 1.0), 2),
                 )
 
         success = all_passed if (stage_checks or gt_check) else self._rng.random() < self._quality
@@ -520,9 +518,10 @@ class MockVLMAdapter:
                 )
                 if has_dynamics
                 else (
-                    "Enable MuJoCo dynamics (compute_dynamics: true) for a reliable assessment. "
-                    "Without physics data, this evaluation cannot verify trajectory feasibility, "
-                    "joint limits, or endpoint accuracy."
+                    "Run simulation or enable MuJoCo dynamics and ensure the VLA produces "
+                    "actions matching the target robot's full joint specification (including "
+                    "gripper). Only with dynamics can physical plausibility and task "
+                    "completion be reliably assessed."
                 )
             ),
             "completed_stages": ["perceive", "act"],
