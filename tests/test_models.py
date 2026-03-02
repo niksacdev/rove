@@ -6,7 +6,10 @@ from rove.models import (
     ActionPlausibility,
     ActionPrediction,
     PipelineContext,
+    PipelineStage,
+    PipelineStageResult,
     SceneAnalysis,
+    StageStatus,
     Strategy,
     TaskPlan,
     VerificationResult,
@@ -96,6 +99,7 @@ class TestStrategy:
         )
         assert s.id == "test"
         assert s.tags == []
+        assert s.pipeline_mode == "sequential"
 
     def test_with_tags(self):
         s = Strategy(
@@ -110,6 +114,62 @@ class TestStrategy:
             tags=["fast", "cloud"],
         )
         assert s.tags == ["fast", "cloud"]
+
+    def test_pipeline_mode_parallel(self):
+        s = Strategy(
+            id="vla",
+            display_name="VLA",
+            description="",
+            act="vla-1",
+            verify="vlm-1",
+            pipeline_mode="parallel",
+        )
+        assert s.pipeline_mode == "parallel"
+
+    def test_verify_mode_default(self):
+        s = Strategy(id="x", display_name="X", description="", verify="vlm-1")
+        assert s.verify_mode == "auto"
+
+    def test_verify_mode_agent_loop(self):
+        s = Strategy(
+            id="x",
+            display_name="X",
+            description="",
+            act="vla-1",
+            verify="vlm-1",
+            pipeline_mode="parallel",
+            verify_mode="agent_loop",
+        )
+        assert s.verify_mode == "agent_loop"
+
+
+class TestPipelineStage:
+    def test_dynamics_enum(self):
+        assert PipelineStage.DYNAMICS == "dynamics"
+        assert "dynamics" in [s.value for s in PipelineStage]
+
+    def test_all_stages(self):
+        stages = [s.value for s in PipelineStage]
+        assert stages == ["perceive", "plan", "act", "dynamics", "verify"]
+
+
+class TestPipelineStageResult:
+    def test_phase_default_empty(self):
+        r = PipelineStageResult(stage="perceive", status=StageStatus.RUNNING)
+        assert r.phase == ""
+
+    def test_phase_execution(self):
+        r = PipelineStageResult(stage="act", status=StageStatus.RUNNING, phase="execution")
+        assert r.phase == "execution"
+
+    def test_phase_evaluation(self):
+        r = PipelineStageResult(stage="dynamics", status=StageStatus.COMPLETED, phase="evaluation")
+        assert r.phase == "evaluation"
+
+    def test_phase_in_model_dump(self):
+        r = PipelineStageResult(stage="act", status=StageStatus.COMPLETED, phase="execution")
+        d = r.model_dump()
+        assert d["phase"] == "execution"
 
 
 class TestDefaultsConfig:
@@ -156,23 +216,38 @@ class TestStrategyConfig:
 class TestActionPlausibility:
     def test_defaults(self):
         ap = ActionPlausibility()
-        assert ap.bounds_check is True
-        assert ap.smoothness is True
-        assert ap.gripper_consistency is True
+        assert ap.bounds_check == 1.0
+        assert ap.smoothness == 1.0
+        assert ap.gripper_consistency == 1.0
         assert ap.plan_alignment == 0.0
         assert ap.reasoning == ""
+        assert ap.workspace_reachability == 1.0
+        assert ap.task_completion_plausibility == 0.0
+        assert ap.dynamics_consistency == 1.0
+        assert ap.safety_assessment == 1.0
 
     def test_custom_values(self):
         ap = ActionPlausibility(
-            bounds_check=False,
-            smoothness=True,
-            gripper_consistency=False,
+            bounds_check=0.0,
+            smoothness=1.0,
+            gripper_consistency=0.0,
             plan_alignment=0.75,
             reasoning="Bounds exceeded at step 3",
         )
-        assert ap.bounds_check is False
+        assert ap.bounds_check == 0.0
         assert ap.plan_alignment == 0.75
         assert "step 3" in ap.reasoning
+
+    def test_accepts_float_scores(self):
+        """LLMs return float scores (0-1) instead of booleans."""
+        ap = ActionPlausibility(
+            bounds_check=0.5,
+            smoothness=0.2,
+            gripper_consistency=0.3,
+        )
+        assert ap.bounds_check == 0.5
+        assert ap.smoothness == 0.2
+        assert ap.gripper_consistency == 0.3
 
     def test_verification_result_with_plausibility(self):
         ap = ActionPlausibility(plan_alignment=0.8, reasoning="Good alignment")
@@ -188,3 +263,38 @@ class TestActionPlausibility:
     def test_verification_result_without_plausibility(self):
         vr = VerificationResult(success=True, confidence=0.9, reasoning="OK")
         assert vr.action_plausibility is None
+
+    def test_verification_result_resolution_path(self):
+        vr = VerificationResult(
+            success=False,
+            confidence=0.4,
+            reasoning="Issues found",
+            resolution_path="Retrain VLA with tighter joint limits",
+        )
+        assert vr.resolution_path == "Retrain VLA with tighter joint limits"
+
+    def test_verification_result_verify_turns(self):
+        vr = VerificationResult(
+            success=True,
+            confidence=0.9,
+            reasoning="OK",
+            verify_turns=2,
+        )
+        assert vr.verify_turns == 2
+
+    def test_verification_result_defaults(self):
+        vr = VerificationResult(success=True, confidence=0.9, reasoning="OK")
+        assert vr.resolution_path == ""
+        assert vr.verify_turns == 1
+
+    def test_extended_fields(self):
+        ap = ActionPlausibility(
+            workspace_reachability=0.75,
+            task_completion_plausibility=0.6,
+            dynamics_consistency=0.5,
+            safety_assessment=0.4,
+        )
+        assert ap.workspace_reachability == 0.75
+        assert ap.task_completion_plausibility == 0.6
+        assert ap.dynamics_consistency == 0.5
+        assert ap.safety_assessment == 0.4

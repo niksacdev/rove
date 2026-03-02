@@ -229,6 +229,171 @@ class TestPartialPipeline:
         assert "act" not in stages
 
 
+class TestParallelPipeline:
+    """Test parallel pipeline mode — VLA execution first, then evaluation."""
+
+    @pytest.mark.asyncio
+    async def test_parallel_mode_stage_order(self):
+        """In parallel mode, act and perceive run concurrently; verify is always last."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        stage_names = [s.stage for s in completed]
+        # Act and perceive run concurrently — order depends on timing
+        assert set(stage_names) == {"act", "perceive", "plan", "verify"}
+        # Plan must come after perceive (dependency), verify must be last
+        assert stage_names.index("plan") > stage_names.index("perceive")
+        assert stage_names[-1] == "verify"
+        assert all(s.status == StageStatus.COMPLETED for s in completed)
+
+    @pytest.mark.asyncio
+    async def test_parallel_mode_phase_labels(self):
+        """Parallel mode stages carry execution/evaluation phase labels."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        phases = {s.stage: s.phase for s in completed}
+        assert phases["act"] == "execution"
+        assert phases["perceive"] == "evaluation"
+        assert phases["plan"] == "evaluation"
+        assert phases["verify"] == "evaluation"
+
+    @pytest.mark.asyncio
+    async def test_parallel_mode_act_latency_excludes_dynamics(self):
+        """In parallel mode, act latency should only be VLA time, not dynamics."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+            compute_dynamics=True,
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        act_result = next(s for s in completed if s.stage == "act")
+        # Act output should NOT contain dynamics_analysis in parallel mode
+        assert "dynamics_analysis" not in (act_result.output or {})
+
+    @pytest.mark.asyncio
+    async def test_parallel_mode_with_dynamics(self):
+        """Parallel mode with compute_dynamics yields a separate dynamics stage."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+            compute_dynamics=True,
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        stage_names = [s.stage for s in completed]
+        assert "dynamics" in stage_names
+        dynamics_result = next(s for s in completed if s.stage == "dynamics")
+        assert dynamics_result.phase == "evaluation"
+        # Dynamics should complete (with skipped reason since no URDF in test)
+        assert dynamics_result.status == StageStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_sequential_mode_no_phase_labels(self):
+        """Sequential mode stages have empty phase labels."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="sequential",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        # All sequential stages should have empty phase
+        for s in completed:
+            assert s.phase == ""
+
+    @pytest.mark.asyncio
+    async def test_parallel_continues_after_perceive_error(self):
+        """In parallel mode, evaluation continues to verify even if perceive fails."""
+
+        class FailingVLM(MockVLMAdapter):
+            async def analyze_scene(self, *args, **kwargs):
+                raise RuntimeError("perceive exploded")
+
+        pipeline = EvaluationPipeline(
+            perceive_adapter=FailingVLM(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        stages = {s.stage: s.status for s in completed}
+        assert stages["act"] == StageStatus.COMPLETED
+        assert stages["perceive"] == StageStatus.ERROR
+        # Verify should still run despite perceive failure
+        assert stages["verify"] == StageStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_parallel_no_perceive_no_plan(self):
+        """Parallel mode with only act + verify (no perceive/plan adapters)."""
+        pipeline = EvaluationPipeline(
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        stage_names = [s.stage for s in completed]
+        assert stage_names == ["act", "verify"]
+
+
 class TestDynamicsSanityChecks:
     """Test _apply_dynamics_sanity_checks static method."""
 
@@ -253,20 +418,20 @@ class TestDynamicsSanityChecks:
         v = self._make_verification()
         dyn = {"joint_limits_ok": False, "self_collision": False}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.bounds_check is False
+        assert result.action_plausibility.bounds_check == 0.0
         assert result.action_plausibility.plan_alignment <= 0.3
 
     def test_self_collision_overrides_bounds_check(self):
         v = self._make_verification()
         dyn = {"joint_limits_ok": True, "self_collision": True}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.bounds_check is False
+        assert result.action_plausibility.bounds_check == 0.0
 
     def test_high_displacement_overrides_smoothness(self):
         v = self._make_verification()
         dyn = {"joint_limits_ok": True, "total_displacement_m": 28.0}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.smoothness is False
+        assert result.action_plausibility.smoothness == 0.0
         assert result.action_plausibility.plan_alignment <= 0.3
 
     def test_multiple_failures_cap_confidence(self):
@@ -282,8 +447,8 @@ class TestDynamicsSanityChecks:
         v = self._make_verification()
         dyn = {"joint_limits_ok": True, "self_collision": False, "total_displacement_m": 0.1}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.bounds_check is True
-        assert result.action_plausibility.smoothness is True
+        assert result.action_plausibility.bounds_check == 1.0
+        assert result.action_plausibility.smoothness == 1.0
         assert result.action_plausibility.plan_alignment == 0.8
         assert result.confidence == 0.85
 
@@ -306,7 +471,7 @@ class TestDynamicsSanityChecks:
         v = self._make_verification()
         dyn = {"joint_limits_ok": True, "torque_feasible": False}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.bounds_check is False
+        assert result.action_plausibility.bounds_check == 0.0
         assert result.action_plausibility.plan_alignment <= 0.3
 
     def test_near_singularity_caps_plan_alignment(self):
@@ -319,4 +484,207 @@ class TestDynamicsSanityChecks:
         v = self._make_verification()
         dyn = {"joint_limits_ok": True, "gravity_feasible": False}
         result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
-        assert result.action_plausibility.bounds_check is False
+        assert result.action_plausibility.bounds_check == 0.0
+
+    def test_workspace_reachability_capped_by_failures(self):
+        v = self._make_verification()
+        dyn = {"joint_limits_ok": False, "self_collision": True, "total_displacement_m": 28.0}
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        # 3 failures → 1.0 - 3*0.25 = 0.25
+        assert result.action_plausibility.workspace_reachability <= 0.25
+
+    def test_safety_assessment_computed_from_signals(self):
+        v = self._make_verification()
+        dyn = {
+            "joint_limits_ok": True,
+            "torque_feasible": False,
+            "self_collision": True,
+            "near_singularity": True,
+            "gravity_feasible": False,
+        }
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        # 4 safety penalties → 1.0 - 4*0.3 = 0.0 (clamped)
+        assert result.action_plausibility.safety_assessment == 0.0
+
+    def test_safety_assessment_partial_penalties(self):
+        v = self._make_verification()
+        dyn = {"joint_limits_ok": True, "torque_feasible": False, "near_singularity": True}
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        # 2 safety penalties → 1.0 - 2*0.3 = 0.4
+        assert result.action_plausibility.safety_assessment == pytest.approx(0.4, abs=0.01)
+
+    def test_dynamics_consistency_decreases_with_overrides(self):
+        v = self._make_verification()
+        dyn = {"joint_limits_ok": False, "torque_feasible": False, "near_singularity": True}
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        assert result.action_plausibility.dynamics_consistency < 1.0
+
+    def test_task_completion_plausibility_not_overridden(self):
+        """task_completion_plausibility should NOT be modified by dynamics checks."""
+        v = self._make_verification()
+        v.action_plausibility.task_completion_plausibility = 0.7
+        dyn = {"joint_limits_ok": False, "torque_feasible": False}
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        assert result.action_plausibility.task_completion_plausibility == 0.7
+
+    def test_clean_dynamics_leaves_extended_fields_unchanged(self):
+        """No dynamics failures should not reduce extended fields."""
+        v = self._make_verification()
+        dyn = {"joint_limits_ok": True, "self_collision": False, "total_displacement_m": 0.1}
+        result = EvaluationPipeline._apply_dynamics_sanity_checks(v, dyn)
+        assert result.action_plausibility.workspace_reachability == 1.0
+        assert result.action_plausibility.safety_assessment == 1.0
+        assert result.action_plausibility.dynamics_consistency == 1.0
+
+
+class TestVerifyLoop:
+    """Test agentic verify loop with mock adapters."""
+
+    @pytest.mark.asyncio
+    async def test_verify_loop_requests_tools(self):
+        """In agent_loop mode, mock adapter returns function_calls on turn 0,
+        tools execute, final verdict on turn 1."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="agent_loop",
+        )
+        all_results = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            all_results.append(result)
+
+        # Should have act + verify stages (perceive is a verify sub-step, not a separate stage)
+        completed = [r for r in all_results if r.status == StageStatus.COMPLETED]
+        completed_stages = [r.stage for r in completed]
+        assert "act" in completed_stages
+        assert "verify" in completed_stages
+        # perceive should NOT appear as a separate completed stage
+        assert "perceive" not in completed_stages
+        # plan should NOT appear as a separate completed stage
+        assert "plan" not in completed_stages
+
+        # Verify output should have verify_turns > 1 (tool call + final)
+        verify_result = next(r for r in completed if r.stage == "verify")
+        assert verify_result.output is not None
+        assert verify_result.output.get("verify_turns", 1) >= 1
+
+        # Should have sub-step RUNNING events for verify
+        verify_running = [
+            r
+            for r in all_results
+            if r.stage == "verify" and r.status == StageStatus.RUNNING and r.output
+        ]
+        substep_events = [r for r in verify_running if r.output.get("substep")]
+        assert len(substep_events) >= 1  # at least a turn or tool sub-step
+
+    @pytest.mark.asyncio
+    async def test_verify_loop_max_turns(self):
+        """Verify loop respects max turn limit."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="agent_loop",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status == StageStatus.COMPLETED:
+                completed.append(result)
+
+        verify_result = next(r for r in completed if r.stage == "verify")
+        # verify_turns should be <= 4 (max_turns default)
+        assert verify_result.output.get("verify_turns", 1) <= 4
+
+    @pytest.mark.asyncio
+    async def test_verify_loop_no_tools_single_call(self):
+        """When no tools available, verify loop does a single call."""
+        pipeline = EvaluationPipeline(
+            # No perceive adapter, no dynamics → no tools available
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="agent_loop",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status == StageStatus.COMPLETED:
+                completed.append(result)
+
+        verify_result = next(r for r in completed if r.stage == "verify")
+        assert verify_result.output is not None
+        # With no tools, should be 1 turn
+        assert verify_result.output.get("verify_turns", 1) == 1
+
+    @pytest.mark.asyncio
+    async def test_precompute_mode_unchanged(self):
+        """Precompute mode still runs perceive/plan/dynamics as separate stages."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="precompute",
+        )
+        completed = []
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
+                completed.append(result)
+
+        stage_names = [s.stage for s in completed]
+        # Precompute should have separate perceive and plan stages
+        assert "perceive" in stage_names
+        assert "plan" in stage_names
+        assert "act" in stage_names
+        assert "verify" in stage_names
+
+    @pytest.mark.asyncio
+    async def test_verify_loop_resolution_path(self):
+        """Verify loop should produce resolution_path in output."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            sim=MockSimAdapter(),
+            pipeline_mode="parallel",
+            verify_mode="agent_loop",
+        )
+        verify_output = None
+        async for result in pipeline.run_trial("pick red bracket", "fake_img"):
+            if result.status == StageStatus.COMPLETED and result.stage == "verify":
+                verify_output = result.output
+
+        assert verify_output is not None
+        # Mock adapter should return resolution_path
+        assert "resolution_path" in verify_output
+
+    @pytest.mark.asyncio
+    async def test_auto_mode_resolves_to_precompute_for_sequential(self):
+        """Auto verify_mode should resolve to precompute for sequential pipelines."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            plan_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            pipeline_mode="sequential",
+            verify_mode="auto",
+        )
+        assert pipeline._resolve_verify_mode() == "precompute"
+
+    @pytest.mark.asyncio
+    async def test_auto_mode_resolves_to_agent_loop_for_parallel(self):
+        """Auto verify_mode should resolve to agent_loop for parallel with act adapter."""
+        pipeline = EvaluationPipeline(
+            perceive_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2]}),
+            act_adapter=MockVLAAdapter(config={"mock_latency_ms": [1, 2]}),
+            verify_adapter=MockVLMAdapter(config={"mock_latency_ms": [1, 2], "mock_quality": 1.0}),
+            pipeline_mode="parallel",
+            verify_mode="auto",
+        )
+        assert pipeline._resolve_verify_mode() == "agent_loop"

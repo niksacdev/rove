@@ -227,6 +227,7 @@ def _make_result(
     plan_reasoning="",
     verify_reasoning="",
     models=None,
+    confidence=0.8,
 ):
     """Helper to build a strategy result dict for testing."""
     stages = [
@@ -271,6 +272,7 @@ def _make_result(
         "strategy_id": sid,
         "display_name": sid,
         "success": success,
+        "confidence": confidence,
         "total_latency_ms": latency,
         "failure_stage": failure_stage,
         "failure_category": failure_category,
@@ -332,20 +334,25 @@ class TestRunInsights:
     def test_model_comparison(self):
         results = [
             _make_result(
-                "s1", success=True, latency=100, models={"perceive": "gpt4o", "verify": "gpt4o"}
+                "s1",
+                success=True,
+                latency=100,
+                confidence=0.85,
+                models={"perceive": "gpt4o", "verify": "gpt4o"},
             ),
             _make_result(
                 "s2",
                 success=False,
                 latency=200,
+                confidence=0.3,
                 models={"perceive": "qwen", "verify": "qwen"},
                 verify_success=False,
             ),
         ]
         insights = compute_run_insights(results)
         mc = {m["model_id"]: m for m in insights["model_comparison"]}
-        assert mc["gpt4o"]["success_rate"] == 1.0
-        assert mc["qwen"]["success_rate"] == 0.0
+        assert mc["gpt4o"]["avg_confidence"] == 0.85
+        assert mc["qwen"]["avg_confidence"] == 0.3
 
     def test_degradation_signals(self):
         results = [

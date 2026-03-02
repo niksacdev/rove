@@ -136,11 +136,16 @@ class TestMockVLMVerifyStageAware:
         }
         result = await vlm.verify_success("before", "after", "test", context=ctx)
         assert result.action_plausibility is not None
-        assert isinstance(result.action_plausibility.bounds_check, bool)
-        assert isinstance(result.action_plausibility.smoothness, bool)
-        assert isinstance(result.action_plausibility.gripper_consistency, bool)
+        assert isinstance(result.action_plausibility.bounds_check, float)
+        assert isinstance(result.action_plausibility.smoothness, float)
+        assert isinstance(result.action_plausibility.gripper_consistency, float)
         assert 0.0 <= result.action_plausibility.plan_alignment <= 1.0
         assert result.action_plausibility.reasoning != ""
+        # Extended fields
+        assert 0.0 <= result.action_plausibility.workspace_reachability <= 1.0
+        assert 0.0 <= result.action_plausibility.task_completion_plausibility <= 1.0
+        assert 0.0 <= result.action_plausibility.dynamics_consistency <= 1.0
+        assert 0.0 <= result.action_plausibility.safety_assessment <= 1.0
 
     @pytest.mark.asyncio
     async def test_verify_plausibility_without_act(self):
