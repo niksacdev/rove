@@ -525,6 +525,32 @@ class EvaluationPipeline:
         # Fallback: single-call verify (no tool support)
         raise NotImplementedError(f"Adapter {type(adapter).__name__} does not support tool calling")
 
+    @staticmethod
+    def _strip_hallucinated_dynamics(verification: VerificationResult) -> VerificationResult:
+        """Remove dynamics-only fields that the LLM hallucinated without data.
+
+        When compute_dynamics was not available, the LLM may still produce
+        bounds_check, dynamics_consistency, workspace_reachability, and
+        safety_assessment at inflated values. Strip them so the frontend
+        correctly shows 'VLM Assessment' instead of 'MuJoCo Dynamics'.
+        """
+        ap = verification.action_plausibility
+        if ap is None:
+            return verification
+        changed = False
+        for field in (
+            "bounds_check",
+            "dynamics_consistency",
+            "workspace_reachability",
+            "safety_assessment",
+        ):
+            if getattr(ap, field, None) is not None:
+                setattr(ap, field, None)
+                changed = True
+        if changed and verification.confidence > 0.5:
+            verification.confidence = min(verification.confidence, 0.5)
+        return verification
+
     def _parse_verify_response(self, response: Any, turn: int = 1) -> VerificationResult:
         """Parse a verify response into VerificationResult.
 
@@ -675,6 +701,9 @@ class EvaluationPipeline:
                         verification = self._apply_dynamics_sanity_checks(
                             verification, ctx.dynamics_analysis
                         )
+                    elif "compute_dynamics" not in executed_tools:
+                        # LLM may hallucinate dynamics fields — strip them
+                        verification = self._strip_hallucinated_dynamics(verification)
 
                     latency = (time.monotonic() - t0) * 1000
                     yield PipelineStageResult(
@@ -770,6 +799,8 @@ class EvaluationPipeline:
                 verification = self._apply_dynamics_sanity_checks(
                     verification, ctx.dynamics_analysis
                 )
+            elif "compute_dynamics" not in executed_tools:
+                verification = self._strip_hallucinated_dynamics(verification)
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="verify",
