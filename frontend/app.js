@@ -440,59 +440,6 @@ function renderInsightsCard(insights, parentEl) {
     card.appendChild(dsSection);
   }
 
-  // Model Comparison mini table
-  if (insights.model_comparison && insights.model_comparison.length > 0) {
-    var mcSection = document.createElement("div");
-    mcSection.className = "space-y-1.5";
-    var mcTitle = document.createElement("span");
-    mcTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
-    mcTitle.textContent = "Model Comparison";
-    mcSection.appendChild(mcTitle);
-
-    var table = document.createElement("div");
-    table.className = "border border-f-border rounded-lg overflow-hidden";
-
-    // Table header
-    var tHeader = document.createElement("div");
-    tHeader.className = "grid grid-cols-[1fr_90px_90px_50px] gap-2 px-3 py-1.5 bg-f-elevated text-[10px] text-gray-500 font-semibold uppercase";
-    ["Model", "Confidence", "Avg Latency", "N"].forEach(function(h) {
-      var c = document.createElement("span");
-      c.textContent = h;
-      tHeader.appendChild(c);
-    });
-    table.appendChild(tHeader);
-
-    insights.model_comparison.forEach(function(mc) {
-      var row = document.createElement("div");
-      row.className = "grid grid-cols-[1fr_90px_90px_50px] gap-2 px-3 py-1.5 border-t border-f-border/50 text-[11px]";
-
-      var nameC = document.createElement("span");
-      nameC.className = "text-gray-300 font-mono truncate";
-      nameC.textContent = mc.model_id;
-      row.appendChild(nameC);
-
-      var confVal = mc.avg_confidence != null ? mc.avg_confidence : mc.success_rate;
-      var srC = document.createElement("span");
-      var srPct = Math.round((confVal || 0) * 100);
-      srC.className = "font-mono " + (srPct >= 70 ? "text-green-400" : srPct >= 40 ? "text-amber-400" : "text-red-400");
-      srC.textContent = srPct + "%";
-      row.appendChild(srC);
-
-      var latC = document.createElement("span");
-      latC.className = "text-gray-400 font-mono";
-      latC.textContent = Math.round(mc.avg_latency_ms) + "ms";
-      row.appendChild(latC);
-
-      var nC = document.createElement("span");
-      nC.className = "text-gray-500 font-mono";
-      nC.textContent = String(mc.n);
-      row.appendChild(nC);
-
-      table.appendChild(row);
-    });
-    mcSection.appendChild(table);
-    card.appendChild(mcSection);
-  }
 
   // Reasoning Trail — collapsible per-strategy
   if (insights.reasoning_trail && Object.keys(insights.reasoning_trail).length > 0) {
@@ -4936,10 +4883,9 @@ function renderVerify(container, o) {
     apTitle.className = "text-[11px] text-gray-500 font-medium";
     apTitle.textContent = "Action Plausibility";
     apHeading.appendChild(apTitle);
-    // Show provider badge based on whether dynamics data was used
-    var hasDynamics = o.dynamics_analysis || (o.completed_stages && o.completed_stages.indexOf("dynamics") !== -1)
-      || (o.stage_checks && o.stage_checks.some(function(sc) { return sc.stage === "dynamics" || sc.stage === "compute_dynamics"; }))
-      || (ap && ap.bounds_check != null && ap.dynamics_consistency != null);
+    // Show provider badge based on whether dynamics-only fields are present in plausibility
+    var hasDynamics = ap.bounds_check != null || ap.dynamics_consistency != null
+      || ap.safety_assessment != null || ap.workspace_reachability != null;
     var apProvider = document.createElement("span");
     if (hasDynamics) {
       apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
