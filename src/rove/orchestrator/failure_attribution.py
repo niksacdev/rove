@@ -45,26 +45,39 @@ def attribute_failure(
         if confidence < 0.4:
             return "plan", "plan_low_confidence"
 
-    # Rule 4: dynamics violation (joint limits or self-collision)
+    # Rule 4: dynamics violation — check both dynamics stage and act output
+    dynamics = stage_map.get("dynamics")
     act = stage_map.get("act")
-    if act and act.get("output"):
+    dyn = None
+    dyn_stage_name = "act"
+    if dynamics and dynamics.get("output"):
+        dyn = dynamics["output"]
+        dyn_stage_name = "dynamics"
+    elif act and act.get("output"):
         dyn = act["output"].get("dynamics_analysis")
-        if dyn:
-            if not dyn.get("joint_limits_ok", True) or dyn.get("self_collision", False):
-                return "act", "action_dynamics_violation"
-            # Rule 4b: torque limit exceeded
-            if not dyn.get("torque_feasible", True):
-                return "act", "action_torque_violation"
-            # Rule 4c: near singularity
-            if dyn.get("near_singularity", False):
-                return "act", "action_singularity"
+    if dyn:
+        if not dyn.get("joint_limits_ok", True) or dyn.get("self_collision", False):
+            return dyn_stage_name, "action_dynamics_violation"
+        # Rule 4b: torque limit exceeded
+        if not dyn.get("torque_feasible", True):
+            return dyn_stage_name, "action_torque_violation"
+        # Rule 4c: near singularity
+        if dyn.get("near_singularity", False):
+            return dyn_stage_name, "action_singularity"
 
     # Rule 5: action plausibility bounds check failed
     verify = stage_map.get("verify")
     if verify and verify.get("output"):
         plaus = verify["output"].get("action_plausibility")
-        if plaus and not plaus.get("bounds_check", True):
-            return "act", "action_infeasible"
+        if plaus:
+            if not plaus.get("bounds_check", True):
+                return "act", "action_infeasible"
+            # Rule 5b: safety assessment too low
+            if plaus.get("safety_assessment", 1.0) < 0.3:
+                return "act", "action_unsafe"
+            # Rule 5c: workspace reachability too low
+            if plaus.get("workspace_reachability", 1.0) < 0.3:
+                return "act", "action_out_of_workspace"
 
     # Rule 6: verification mismatch (verify failed but no earlier stage caused it)
     if verify and verify.get("output") and not verify["output"].get("success", True):
@@ -72,3 +85,22 @@ def attribute_failure(
 
     # Fallback: unknown failure
     return None, None
+
+
+def get_failure_metadata(stages: list[dict]) -> dict:
+    """Extract additional failure metadata from pipeline results.
+
+    Includes resolution_path and verify_turns from the verify stage
+    when available.
+    """
+    metadata: dict = {}
+    for s in stages:
+        if s.get("stage") == "verify" and s.get("output"):
+            output = s["output"]
+            resolution_path = output.get("resolution_path", "")
+            if resolution_path:
+                metadata["resolution_path"] = resolution_path
+            verify_turns = output.get("verify_turns", 1)
+            if verify_turns > 1:
+                metadata["verify_turns"] = verify_turns
+    return metadata

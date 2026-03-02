@@ -1,0 +1,13 @@
+Evaluate this VLA action output for the following task.
+
+Task: {task}
+
+{action_summary}
+
+{robot_spec}
+
+Use the available tools to gather evidence, then evaluate whether this action trajectory is plausible and appropriate for the task.
+
+If a robot specification is provided above, check whether the VLA output is consistent with the target robot's embodiment — action dimensions, control space, and any observable characteristics. Inconsistencies suggest the VLA did not correctly account for the target robot.
+
+Return your evaluation as JSON.

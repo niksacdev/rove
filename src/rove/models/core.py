@@ -27,8 +27,9 @@ import hashlib
 import platform
 import sys
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class EvaluationProvenance(BaseModel):
@@ -120,6 +121,7 @@ class PipelineStage(StrEnum):
     PERCEIVE = "perceive"
     PLAN = "plan"
     ACT = "act"
+    DYNAMICS = "dynamics"
     VERIFY = "verify"
 
 
@@ -192,11 +194,21 @@ class SimObservation(BaseModel):
     done: bool = False
 
 
-class StageCheck(BaseModel):
-    stage: str  # "perceive" | "plan" | "act"
-    passed: bool
-    confidence: float
-    reasoning: str
+class StageCheck(BaseModel, extra="allow"):
+    """Per-stage check from the verifier. Extra fields from LLM are preserved."""
+
+    stage: str = ""  # "perceive" | "plan" | "act" | "dynamics" etc.
+    passed: bool = True
+    confidence: float = 0.0
+    reasoning: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_stage_field(cls, data: Any) -> Any:
+        """Accept 'source' as alias for 'stage' — LLMs use both."""
+        if isinstance(data, dict) and "stage" not in data and "source" in data:
+            data["stage"] = data.pop("source")
+        return data
 
 
 class GroundTruthCheck(BaseModel):
@@ -208,14 +220,22 @@ class GroundTruthCheck(BaseModel):
     confidence: float
 
 
-class ActionPlausibility(BaseModel):
-    """Structured plausibility checks derivable from VLA output without simulation."""
+class ActionPlausibility(BaseModel, extra="allow"):
+    """Structured plausibility checks derivable from VLA output without simulation.
 
-    bounds_check: bool = True  # action deltas within physically plausible ranges
-    smoothness: bool = True  # no sudden jumps between consecutive steps
-    gripper_consistency: bool = True  # gripper open/close pattern matches task type
+    All fields accept floats (0-1 scores). Bool values are coerced to 0.0/1.0.
+    """
+
+    bounds_check: float = 1.0  # 0-1, action deltas within physically plausible ranges
+    smoothness: float = 1.0  # 0-1, no sudden jumps between consecutive steps
+    gripper_consistency: float = 1.0  # 0-1, gripper open/close pattern matches task type
     plan_alignment: float = 0.0  # 0-1, how rigorously the VLA trajectory follows the plan steps
     reasoning: str = ""  # explanation of plausibility assessment
+    # Extended fields for dynamics-aware verification (GPT 5.2 / MuJoCo)
+    workspace_reachability: float = 1.0  # 0-1, does trajectory stay within reachable workspace?
+    task_completion_plausibility: float = 0.0  # 0-1, does endpoint displacement match task intent?
+    dynamics_consistency: float = 1.0  # 0-1, does LLM assessment agree with MuJoCo physics data?
+    safety_assessment: float = 1.0  # 0-1, composite: torque + collision + singularity safety
 
 
 class VerificationResult(BaseModel):
@@ -228,15 +248,18 @@ class VerificationResult(BaseModel):
     ground_truth: GroundTruthCheck | None = None
     action_plausibility: ActionPlausibility | None = None
     dynamics_analysis: dict | None = None
+    resolution_path: str = ""  # actionable suggestions for VLA improvement
+    verify_turns: int = 1  # how many turns the verify loop took
 
 
 class PipelineStageResult(BaseModel):
-    stage: str  # perceive | plan | act | verify
+    stage: str  # perceive | plan | act | dynamics | verify
     status: StageStatus
     latency_ms: float = 0.0
     output: dict | None = None  # serialized stage output
     error: str | None = None
     model_id: str = ""
+    phase: str = ""  # "execution" | "evaluation" (empty for sequential mode)
 
 
 class StageAssignment(BaseModel):
@@ -354,6 +377,8 @@ class Strategy(BaseModel):
     verify: str = ""  # model_id (required)
     sim: str | None = None  # sim_id (None when no sim available)
     compute_dynamics: bool = False
+    pipeline_mode: str = "sequential"  # "sequential" | "parallel"
+    verify_mode: str = "auto"  # "auto" | "agent_loop" | "precompute"
     tags: list[str] = Field(default_factory=list)
 
 

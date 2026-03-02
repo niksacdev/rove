@@ -13,50 +13,29 @@ import logging
 import os
 import re
 
+from rove.utils.prompt_loader import PromptManager
+
 logger = logging.getLogger(__name__)
 
-# Stage-specific system prompts that tell the agent what JSON schema to return
-_STAGE_PROMPTS: dict[str, str] = {
-    "perceive": (
-        "You are a robotics perception agent. Analyze the scene and return JSON with:\n"
-        '{"objects": [{"name": str, "bbox": [x,y,w,h], "position": [x,y,z] (meters, optional), "confidence": float}], '
-        '"spatial_relations": [str], "task_relevant": [str], '
-        '"environment_distribution": str (describe environment type, lighting, surfaces, clutter), '
-        '"raw_response": str}\n'
-        "Return ONLY valid JSON, no markdown fences."
-    ),
-    "plan": (
-        "You are a robotics task planning agent. Given a scene analysis and task, "
-        "create an execution plan. Return JSON with:\n"
-        '{"strategy": str, "reasoning": str, "steps": [str], '
-        '"target_object": str, "confidence": float, '
-        '"task_repertoire": [str] (domain-specific capabilities required), '
-        '"artifacts": [str] (measurable success markers), '
-        '"degradation_profile": [str] (what makes this domain/task hard), '
-        '"raw_response": str}\n'
-        "Return ONLY valid JSON, no markdown fences."
-    ),
-    "act": (
-        "You are a robotics action agent. Given a plan and task, determine "
-        "tool calls for execution. Return JSON with:\n"
-        '{"action_type": "tool_calls", "tool_calls": [{"tool": str, "args": dict}], '
-        '"num_steps": int, "confidence": float, "raw_response": str}\n'
-        "Return ONLY valid JSON, no markdown fences."
-    ),
-    "verify": (
-        "You are a robotics action plausibility assessor. Evaluate whether pipeline stage "
-        "outputs are reasonable and whether predicted actions are physically plausible. "
-        "You CANNOT determine task success without a simulator or post-execution observation — "
-        "assess plausibility only. Check whether the pipeline included environment_distribution, "
-        "task_repertoire, artifacts, and degradation_profile — note as a weakness if missing. "
-        "Return JSON with:\n"
-        '{"success": bool, "confidence": float, "reasoning": str, '
-        '"action_plausibility": {"bounds_check": bool, "smoothness": bool, '
-        '"gripper_consistency": bool, "plan_alignment": float, "reasoning": str}, '
-        '"raw_response": str}\n'
-        "Return ONLY valid JSON, no markdown fences."
-    ),
-}
+
+def _format_scene_dict(scene: dict) -> str:
+    """Format a serialized SceneAnalysis dict into a text summary for plan prompts."""
+    parts = []
+    for o in scene.get("objects", []):
+        name = o.get("name", "?")
+        pos = o.get("position")
+        if pos and len(pos) >= 3:
+            parts.append(f"{name} at [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]m")
+        else:
+            parts.append(name)
+    relations = scene.get("spatial_relations", [])
+    relevant = scene.get("task_relevant", [])
+    return (
+        f"Detected objects: {', '.join(parts) or 'none'}. "
+        f"Spatial relations: {'; '.join(relations) or 'none'}. "
+        f"Task-relevant: {', '.join(relevant) or 'none'}."
+    )
+
 
 # Fallback defaults when JSON parsing fails
 _STAGE_FALLBACKS: dict[str, dict] = {
@@ -77,7 +56,22 @@ _STAGE_FALLBACKS: dict[str, dict] = {
         "degradation_profile": [],
     },
     "act": {"action_type": "tool_calls", "tool_calls": [], "num_steps": 0, "confidence": 0.0},
-    "verify": {"success": False, "confidence": 0.0, "reasoning": "Could not parse agent response"},
+    "verify": {
+        "success": False,
+        "confidence": 0.0,
+        "reasoning": "Could not parse agent response",
+        "action_plausibility": {
+            "bounds_check": True,
+            "smoothness": True,
+            "gripper_consistency": True,
+            "plan_alignment": 0.0,
+            "reasoning": "",
+            "workspace_reachability": 1.0,
+            "task_completion_plausibility": 0.0,
+            "dynamics_consistency": 1.0,
+            "safety_assessment": 1.0,
+        },
+    },
 }
 
 
@@ -96,7 +90,12 @@ class AzureFoundryAgentAdapter:
     agent's tools (Bing grounding, code interpreter, etc.) execute server-side.
     """
 
-    def __init__(self, model_id: str = "foundry-agent", config: dict | None = None):
+    def __init__(
+        self,
+        model_id: str = "foundry-agent",
+        config: dict | None = None,
+        prompt_manager: PromptManager | None = None,
+    ):
         self.model_id = model_id
         cfg = config or {}
         self.display_name = cfg.get("display_name", "Foundry Agent")
@@ -105,6 +104,7 @@ class AzureFoundryAgentAdapter:
             os.environ.get("AZURE_AI_FOUNDRY_ENDPOINT", ""),
         )
         self._agent_name = cfg.get("agent_name", "")
+        self._prompts = prompt_manager or PromptManager()
 
         # Lazy-initialized
         self._ai_client = None
@@ -218,6 +218,38 @@ class AzureFoundryAgentAdapter:
 
         return await _call()
 
+    def _build_stage_prompts(self, stage: str, task: str, context: dict | None) -> tuple[str, str]:
+        """Build (system_prompt, user_prompt) for any stage.
+
+        Reuses the same prompt templates as GenericVLMAdapter for perceive,
+        plan, and verify — the agent gets identical guidance. Only the act
+        stage and verify system prompt are agent-specific.
+        """
+        ctx = context or {}
+
+        if stage == "perceive":
+            system = self._prompts.load("system")
+            user = self._prompts.render("perceive_user", task=task)
+            return system, user
+
+        if stage == "plan":
+            scene_summary = _format_scene_dict(ctx.get("scene", {}))
+            system = self._prompts.load("system")
+            user = self._prompts.render("plan_user", task=task, scene_summary=scene_summary)
+            return system, user
+
+        if stage == "verify":
+            system = self._prompts.load("agent_verify_system")
+            user = self._prompts.render_verify(task, ctx)
+            return system, user
+
+        # act — agent-specific (VLAs don't use text prompts)
+        system = self._prompts.load("agent_act")
+        user = f"Task: {task}"
+        if ctx:
+            user += f"\n\nContext: {json.dumps(ctx, default=str)}"
+        return system, user
+
     async def _responses_call(
         self,
         stage: str,
@@ -226,25 +258,17 @@ class AzureFoundryAgentAdapter:
         context: dict | None,
     ) -> dict:
         """Single-turn Responses API call."""
-        stage_prompt = _STAGE_PROMPTS.get(stage, _STAGE_PROMPTS["verify"])
+        system_prompt, user_prompt = self._build_stage_prompts(stage, task, context)
 
-        # Build instructions combining agent instructions + stage prompt
+        # Build instructions combining agent instructions + system prompt
         instructions = self._agent_instructions or ""
         if instructions:
             instructions += "\n\n"
-        instructions += stage_prompt
+        instructions += system_prompt
 
         # Build input items
         user_parts: list[dict] = []
-        user_parts.append({"type": "input_text", "text": f"Task: {task}"})
-
-        if context:
-            user_parts.append(
-                {
-                    "type": "input_text",
-                    "text": f"Context: {json.dumps(context, default=str)}",
-                }
-            )
+        user_parts.append({"type": "input_text", "text": user_prompt})
 
         if image_base64:
             user_parts.append(

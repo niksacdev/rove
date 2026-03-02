@@ -71,11 +71,14 @@ class LeRobotVLAAdapter:
 
         try:
             policy = policy_cls.from_pretrained(self._hf_repo, config=config)
+            # MPS doesn't fully support BFloat16 matmul — cast to Float32
+            if self._device == "mps":
+                policy = policy.to(dtype=torch.float32)
             policy = policy.to(self._device)
         except (RuntimeError, AssertionError):
             logger.warning("Device %s failed, falling back to cpu", self._device)
             policy = policy_cls.from_pretrained(self._hf_repo, config=config)
-            policy = policy.to("cpu")
+            policy = policy.to(dtype=torch.float32).to("cpu")
 
         policy.train(False)
         self._policy = policy

@@ -156,7 +156,30 @@ class AdapterRegistry:
         return _build_adapter(model_id, _VLA_ADAPTERS, self._vla_cache)
 
     def get_agent(self, model_id: str) -> AgentAdapter:
-        return _build_adapter(model_id, _AGENT_ADAPTERS, self._agent_cache)
+        if model_id in self._agent_cache:
+            return self._agent_cache[model_id]
+
+        ep = get_endpoint_config(model_id)
+        adapter_name = ep.adapter
+
+        if adapter_name not in _AGENT_ADAPTERS:
+            raise ValueError(
+                f"No agent adapter implementation for '{adapter_name}'. "
+                f"Available: {list(_AGENT_ADAPTERS.keys())}"
+            )
+
+        cls = _import_class(_AGENT_ADAPTERS[adapter_name])
+        config = dict(ep.config)
+        config["display_name"] = ep.display_name or model_id
+        if ep.endpoint:
+            config["endpoint"] = ep.endpoint
+
+        # Inject PromptManager for adapters that accept it (e.g. AzureFoundryAgentAdapter)
+        from rove.utils.prompt_loader import get_prompt_manager
+
+        instance = cls(model_id=model_id, config=config, prompt_manager=get_prompt_manager())
+        self._agent_cache[model_id] = instance
+        return instance
 
     def get_sim(self, model_id: str) -> SimAdapter:
         return _build_adapter(model_id, _SIM_ADAPTERS, self._sim_cache)

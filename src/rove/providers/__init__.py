@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["Provider", "create_provider"]
+__all__ = ["Provider", "ToolCallingProvider", "create_provider"]
 
 import importlib
 from typing import Protocol, runtime_checkable
@@ -27,6 +27,23 @@ class Provider(Protocol):
 
     async def health_check(self) -> bool:
         """Check if the provider's service is reachable."""
+        ...
+
+
+class ToolCallingProvider(Provider, Protocol):
+    """Extended provider that supports OpenAI-style function calling.
+
+    Used by the agentic verify loop to send multi-turn conversations
+    with tool definitions and handle function_call response items.
+    """
+
+    async def get_response_with_tools(
+        self,
+        input_items: list,
+        tools: list[dict],
+        instructions: str | None = None,
+    ) -> object:
+        """Send multi-turn input with tool definitions. Returns raw API response."""
         ...
 
 

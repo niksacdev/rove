@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from types import SimpleNamespace
 
 from rove.models import (
     ActionPlausibility,
@@ -321,12 +322,38 @@ class MockVLMAdapter:
                         "Dynamics: all checks passed, trajectory is physically plausible"
                     )
 
+                # Derive extended fields from dynamics
+                dyn_safety_penalties = sum(
+                    [
+                        not dyn_torque_ok,
+                        dyn_data.get("self_collision", False),
+                        dyn_singularity,
+                        not dyn_data.get("gravity_feasible", True),
+                    ]
+                )
+                dyn_safety = round(max(0.0, 1.0 - dyn_safety_penalties * 0.3), 2)
+                dyn_reachability = round(
+                    max(
+                        0.0,
+                        1.0
+                        - sum(
+                            [not dyn_bounds, not dyn_smoothness, not dyn_torque_ok, dyn_singularity]
+                        )
+                        * 0.25,
+                    ),
+                    2,
+                )
+
                 plausibility = ActionPlausibility(
                     bounds_check=dyn_bounds and dyn_torque_ok,
                     smoothness=dyn_smoothness,
                     gripper_consistency=self._rng.random() < self._quality,
                     plan_alignment=dyn_plan_align,
                     reasoning=" ".join(reasons),
+                    workspace_reachability=dyn_reachability,
+                    task_completion_plausibility=round(self._rng.uniform(0.3, 0.8), 2),
+                    dynamics_consistency=round(min(dyn_smooth, 0.9 if dyn_bounds else 0.4), 2),
+                    safety_assessment=dyn_safety,
                 )
             else:
                 plausibility = ActionPlausibility(
@@ -340,6 +367,10 @@ class MockVLMAdapter:
                         "Note: true success cannot be assessed without a simulator "
                         "or post-execution image."
                     ),
+                    workspace_reachability=round(self._rng.uniform(0.7, 1.0), 2),
+                    task_completion_plausibility=round(self._rng.uniform(0.3, 0.8), 2),
+                    dynamics_consistency=1.0,  # no dynamics data to disagree with
+                    safety_assessment=round(self._rng.uniform(0.7, 1.0), 2),
                 )
 
         success = all_passed if (stage_checks or gt_check) else self._rng.random() < self._quality
@@ -366,6 +397,187 @@ class MockVLMAdapter:
             stage_checks=stage_checks,
             ground_truth=gt_check,
             action_plausibility=plausibility,
+        )
+
+    async def verify_with_tools(
+        self,
+        input_items: list,
+        tools: list[dict],
+        instructions: str | None = None,
+    ) -> object:
+        """Multi-turn mock verify for agent_loop mode.
+
+        Turn 0 (no function_call_output in input): return function_call items
+        for all available tools (parallel request).
+        Turn 1+ (has function_call_output): return final verdict as text.
+        """
+        await self._simulate_latency()
+
+        # Check if this is a follow-up turn (has function_call_output items)
+        has_tool_results = any(
+            (isinstance(item, dict) and item.get("type") == "function_call_output")
+            for item in input_items
+        )
+
+        if not has_tool_results and tools:
+            # Turn 0: request all available tools
+            output_items = []
+            for i, tool in enumerate(tools):
+                tool_name = tool.get("name", f"tool_{i}")
+                output_items.append(
+                    SimpleNamespace(
+                        type="function_call",
+                        name=tool_name,
+                        call_id=f"mock_call_{tool_name}",
+                        arguments="{}",
+                    )
+                )
+            return SimpleNamespace(output=output_items)
+
+        # Turn 1+: generate final verdict with resolution_path
+        has_dynamics = any(t.get("name") == "compute_dynamics" for t in tools) if tools else False
+        success = self._rng.random() < self._quality
+        if has_dynamics:
+            confidence = self._rng.uniform(0.7, 0.95) if success else self._rng.uniform(0.3, 0.6)
+        else:
+            # Without dynamics, confidence should be low — we lack physics evidence
+            confidence = self._rng.uniform(0.35, 0.55) if success else self._rng.uniform(0.2, 0.4)
+
+        # Build reasoning based on available tools
+        if has_dynamics:
+            if success:
+                reasoning = (
+                    f"Verdict: Based on our evaluation, the VLA action trajectory is plausible for this task. "
+                    f"The trajectory aligns well with the expected manipulation sequence. Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 action steps with move_to and grasp/release tool calls. "
+                    "The trajectory moves from the target position to the destination with a gripper "
+                    "close-open pattern consistent with pick-and-place.\n\n"
+                    "Evidence — Scene Analysis: Our analysis of the scene found 2 task-relevant objects: "
+                    "target object at [0.25, -0.10, 0.32]m and destination at [0.50, 0.15, 0.30]m. "
+                    "The target is to the left of the destination on the workspace surface.\n\n"
+                    "Evidence — Planned Approach: For this task, the expected manipulation sequence is: "
+                    "(1) approach target object from above, (2) grasp with appropriate force, "
+                    "(3) transport to destination position, (4) release. "
+                    "The robot should move ~0.30m laterally to complete the transfer.\n\n"
+                    "Evidence — Dynamics Verification: MuJoCo dynamics analysis shows: all joint limits satisfied, "
+                    "workspace reachability 0.92, no collisions detected, smoothness score 0.87. "
+                    "No physics violations found."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: The VLA action trajectory shows significant issues for this task. "
+                    f"Dynamics violations and endpoint error reduce confidence. Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 action steps. The trajectory endpoint is 0.15m "
+                    "from the destination position, suggesting the transport phase was incomplete.\n\n"
+                    "Evidence — Scene Analysis: Our analysis of the scene found 2 task-relevant objects: "
+                    "target object at [0.25, -0.10, 0.32]m and destination at [0.50, 0.15, 0.30]m.\n\n"
+                    "Evidence — Planned Approach: The robot should approach the target, grasp it, "
+                    "transport to destination, and release.\n\n"
+                    "Evidence — Dynamics Verification: MuJoCo dynamics analysis shows joint limit violations "
+                    "near step 3. Smoothness score 0.45 indicates jerky motion."
+                )
+        else:
+            if success:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA action trajectory "
+                    f"appears task-aligned. However, physical plausibility cannot be verified without "
+                    f"dynamics analysis. Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 action steps with move_to and grasp/release tool calls. "
+                    "The gripper close-open pattern is consistent with pick-and-place. "
+                    "Step count appears reasonable for the task.\n\n"
+                    "Evidence — Scene Analysis: Our analysis of the scene found 2 task-relevant objects: "
+                    "target object at [0.25, -0.10, 0.32]m and destination at [0.50, 0.15, 0.30]m. "
+                    "The target is to the left of the destination on the workspace surface.\n\n"
+                    "Evidence — Planned Approach: For this task, the expected manipulation sequence is: "
+                    "(1) approach target, (2) grasp, (3) transport to destination, (4) release. "
+                    "Without dynamics data, we cannot verify whether the trajectory actually follows this plan."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA action trajectory "
+                    f"shows concerns with task alignment. Physical plausibility cannot be verified. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 action steps. The gripper pattern "
+                    "is unclear and step count may be insufficient for the task complexity.\n\n"
+                    "Evidence — Scene Analysis: Our analysis of the scene found 2 task-relevant objects: "
+                    "target object at [0.25, -0.10, 0.32]m and destination at [0.50, 0.15, 0.30]m.\n\n"
+                    "Evidence — Planned Approach: The robot should approach the target, grasp it, "
+                    "transport to destination, and release. Without dynamics data, alignment cannot be verified."
+                )
+
+        result_data = {
+            "success": success,
+            "confidence": round(confidence, 2),
+            "reasoning": reasoning,
+            "resolution_path": (
+                (
+                    "No critical issues found — action trajectory is well-aligned with task requirements. "
+                    "Minor refinement: consider increasing action resolution for smoother endpoint approach."
+                    if success
+                    else "Consider retraining VLA with tighter joint limit constraints. "
+                    "Increase action chunk size for smoother trajectories. "
+                    "Endpoint accuracy may improve with fine-tuning on similar displacement distances."
+                )
+                if has_dynamics
+                else (
+                    "Enable MuJoCo dynamics (compute_dynamics: true) for a reliable assessment. "
+                    "Without physics data, this evaluation cannot verify trajectory feasibility, "
+                    "joint limits, or endpoint accuracy."
+                )
+            ),
+            "completed_stages": ["perceive", "act"],
+            "stage_checks": [
+                {
+                    "stage": "perceive",
+                    "passed": True,
+                    "confidence": round(self._rng.uniform(0.8, 0.95), 2),
+                    "reasoning": "Scene analysis correctly identified task-relevant objects.",
+                },
+                {
+                    "stage": "act",
+                    "passed": success,
+                    "confidence": round(confidence, 2),
+                    "reasoning": (
+                        "Action plausibility assessment based on dynamics analysis."
+                        if has_dynamics
+                        else "Action plausibility assessment based on scene and task alignment."
+                    ),
+                },
+            ],
+        }
+
+        # Action plausibility — scores reflect available evidence
+        if has_dynamics:
+            ap: dict = {
+                "bounds_check": 1.0 if success else 0.0,
+                "smoothness": round(self._rng.uniform(0.6, 0.95), 2),
+                "gripper_consistency": round(self._rng.uniform(0.5, 0.95), 2),
+                "plan_alignment": round(self._rng.uniform(0.5, 0.9), 2),
+                "workspace_reachability": round(self._rng.uniform(0.7, 1.0), 2),
+                "dynamics_consistency": round(self._rng.uniform(0.7, 1.0), 2),
+                "task_completion_plausibility": round(self._rng.uniform(0.4, 0.8), 2),
+                "safety_assessment": round(self._rng.uniform(0.7, 1.0), 2),
+                "reasoning": "Plausibility assessment grounded in MuJoCo dynamics data.",
+            }
+        else:
+            # Without dynamics — scores must be low to reflect lack of evidence
+            ap = {
+                "smoothness": round(self._rng.uniform(0.2, 0.4), 2),
+                "gripper_consistency": round(self._rng.uniform(0.25, 0.45), 2),
+                "plan_alignment": round(self._rng.uniform(0.3, 0.5), 2),
+                "task_completion_plausibility": round(self._rng.uniform(0.2, 0.4), 2),
+                "reasoning": (
+                    "Without dynamics data, plausibility scores reflect high uncertainty — "
+                    "these are VLM estimates, not physics-grounded measurements. "
+                    "VLMs cannot reliably infer joint feasibility or trajectory smoothness "
+                    "from raw action vectors."
+                ),
+            }
+        result_data["action_plausibility"] = ap
+
+        return SimpleNamespace(
+            output=[SimpleNamespace(type="message", text="")],
+            data=result_data,
         )
 
     async def health_check(self) -> bool:

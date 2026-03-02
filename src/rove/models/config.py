@@ -71,6 +71,8 @@ class StrategyConfig(BaseModel):
     verify: str
     sim: str | None = None
     compute_dynamics: bool = False
+    pipeline_mode: str = "sequential"  # "sequential" | "parallel"
+    verify_mode: str = "auto"  # "auto" | "agent_loop" | "precompute"
     tags: list[str] = []
     latency_budget: dict[str, int] = {}  # per-stage overrides (ms), empty = use defaults
 
@@ -232,6 +234,8 @@ def get_strategies() -> dict[str, Strategy]:
             verify=entry.verify,
             sim=entry.sim,
             compute_dynamics=entry.compute_dynamics,
+            pipeline_mode=entry.pipeline_mode,
+            verify_mode=entry.verify_mode,
             tags=list(entry.tags),
         )
     return strategies

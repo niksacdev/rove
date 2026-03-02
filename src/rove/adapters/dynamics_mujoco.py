@@ -317,8 +317,15 @@ def compute_dynamics(
 
         near_singularity = min_singular_value < 0.01
 
+    # Extract robot name from URDF filename
+    robot_name = urdf.stem  # e.g. "panda" from "panda.urdf"
+
     return {
-        # Existing FK fields
+        # Robot specification
+        "robot_name": robot_name,
+        "robot_dof": n_dof,
+        "robot_actuators": n_act,
+        # Trajectory analysis
         "endpoint_trajectory": endpoint_trajectory,
         "final_endpoint": endpoint_trajectory[-1] if endpoint_trajectory else [0, 0, 0],
         "joint_limits_ok": joint_limits_ok,

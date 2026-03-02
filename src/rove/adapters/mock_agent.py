@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import random
+from types import SimpleNamespace
 
 
 class MockAgentAdapter:
     """Mock implementation of AgentAdapter — returns stage-appropriate dicts."""
 
-    def __init__(self, model_id: str = "mock-agent", config: dict | None = None):
+    def __init__(self, model_id: str = "mock-agent", config: dict | None = None, **_kwargs):
         self.model_id = model_id
         cfg = config or {}
         self.display_name = cfg.get("display_name", "Mock Agent")
@@ -194,6 +195,128 @@ class MockAgentAdapter:
         if gt_check is not None:
             result["ground_truth"] = gt_check
         return result
+
+    async def verify_with_tools(
+        self,
+        input_items: list,
+        tools: list[dict],
+        instructions: str | None = None,
+    ) -> object:
+        """Multi-turn mock verify for agent_loop mode."""
+        await self._simulate_latency()
+
+        has_tool_results = any(
+            (isinstance(item, dict) and item.get("type") == "function_call_output")
+            for item in input_items
+        )
+
+        if not has_tool_results and tools:
+            output_items = []
+            for tool in tools:
+                tool_name = tool.get("name", "unknown")
+                output_items.append(
+                    SimpleNamespace(
+                        type="function_call",
+                        name=tool_name,
+                        call_id=f"mock_call_{tool_name}",
+                        arguments="{}",
+                    )
+                )
+            return SimpleNamespace(output=output_items)
+
+        has_dynamics = any(t.get("name") == "compute_dynamics" for t in tools) if tools else False
+
+        quality = 0.85
+        success = self._rng.random() < quality
+        if has_dynamics:
+            confidence = self._rng.uniform(0.7, 0.95) if success else self._rng.uniform(0.3, 0.6)
+        else:
+            confidence = self._rng.uniform(0.35, 0.55) if success else self._rng.uniform(0.2, 0.4)
+
+        # Build reasoning — fundamentally different with and without dynamics
+        if has_dynamics:
+            if success:
+                reasoning = (
+                    f"Verdict: The VLA action trajectory is plausible and well-aligned with the task. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 tool calls (move_to, grasp, move_to, release) "
+                    "with consistent trajectory and appropriate gripper timing.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found in expected positions.\n\n"
+                    "Evidence — Planned Approach: Approach target, grasp, transport to destination, release.\n\n"
+                    "Evidence — Dynamics Verification: All joints within limits, no collisions, smooth motion."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: The VLA trajectory has issues — dynamics flagged violations. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: Trajectory shows potential misalignment at transport phase.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found.\n\n"
+                    "Evidence — Planned Approach: Approach, grasp, transport, release.\n\n"
+                    "Evidence — Dynamics Verification: Joint limit warnings at step 3, smoothness below threshold."
+                )
+        else:
+            if success:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA trajectory "
+                    f"appears task-aligned. Physical plausibility cannot be verified. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 tool calls (move_to, grasp, move_to, release). "
+                    "The pattern appears consistent with pick-and-place.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found in expected positions.\n\n"
+                    "Evidence — Planned Approach: Approach target, grasp, transport to destination, release. "
+                    "Without dynamics data, trajectory alignment cannot be verified."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA trajectory "
+                    f"shows task alignment concerns. Physical plausibility cannot be verified. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: Trajectory shows potential issues at transport phase.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found.\n\n"
+                    "Evidence — Planned Approach: Approach, grasp, transport, release. "
+                    "Without dynamics data, alignment cannot be verified."
+                )
+
+        result_data = {
+            "success": success,
+            "confidence": round(confidence, 2),
+            "reasoning": reasoning,
+            "resolution_path": (
+                (
+                    "No critical issues found — action trajectory is well-aligned with task requirements."
+                    if success
+                    else "Consider adjusting VLA training data distribution. "
+                    "Increase action chunk size for transport phase."
+                )
+                if has_dynamics
+                else "Enable MuJoCo dynamics for a reliable assessment. "
+                "Without physics data, this evaluation cannot verify trajectory feasibility."
+            ),
+            "completed_stages": ["perceive", "act"],
+            "stage_checks": [
+                {
+                    "stage": "perceive",
+                    "passed": True,
+                    "confidence": 0.9,
+                    "reasoning": "Scene analysis consistent with task.",
+                },
+                {
+                    "stage": "act",
+                    "passed": success,
+                    "confidence": round(confidence, 2),
+                    "reasoning": (
+                        "Action plausibility from dynamics."
+                        if has_dynamics
+                        else "Action plausibility from scene and task alignment."
+                    ),
+                },
+            ],
+        }
+
+        return SimpleNamespace(
+            output=[SimpleNamespace(type="message", text="")],
+            data=result_data,
+        )
 
     async def health_check(self) -> bool:
         return True

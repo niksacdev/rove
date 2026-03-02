@@ -284,7 +284,11 @@ class PromptManager:
                 stage_lines.append(
                     "Return an 'action_plausibility' object with: bounds_check (bool),"
                     " smoothness (bool), gripper_consistency (bool),"
-                    " plan_alignment (float 0-1), reasoning (string)."
+                    " plan_alignment (float 0-1), reasoning (string),"
+                    " workspace_reachability (float 0-1),"
+                    " task_completion_plausibility (float 0-1),"
+                    " dynamics_consistency (float 0-1),"
+                    " safety_assessment (float 0-1)."
                 )
             else:
                 stage_lines.append(
@@ -330,6 +334,70 @@ class PromptManager:
             ground_truth_section="\n".join(gt_lines),
             ground_truth_output_spec=_GT_OUTPUT_SPEC if ground_truth else "",
         )
+
+    def render_verify_loop_system(self, has_dynamics: bool = True) -> str:
+        """System prompt for the agentic verify loop.
+
+        Selects the appropriate prompt based on whether dynamics tools are available.
+        The two prompts are fundamentally different — not patched versions of each other.
+        """
+        if has_dynamics:
+            return self.load("verify_agent_loop_system_dynamics")
+        return self.load("verify_agent_loop_system_no_dynamics")
+
+    def render_verify_loop_user(self, task: str, action_summary: str, robot_spec: str = "") -> str:
+        """User prompt for the agentic verify loop with action data and robot spec."""
+        return self.render(
+            "verify_agent_loop_user",
+            task=task,
+            action_summary=action_summary,
+            robot_spec=robot_spec,
+        )
+
+    @staticmethod
+    def format_action_summary(action: dict) -> str:
+        """Format a compact VLA output description for the verify loop user prompt."""
+        action_type = action.get("action_type", "unknown")
+        num_steps = action.get("num_steps", 0)
+        confidence = action.get("confidence", 0.0)
+
+        lines = [
+            f"Action type: {action_type}",
+            f"Steps: {num_steps}",
+            f"VLA confidence: {confidence:.2f}",
+        ]
+
+        actions = action.get("actions", [])
+        if actions and isinstance(actions[0], list):
+            dof = len(actions[0])
+            lines.append(f"DOF: {dof}")
+
+            # Gripper events
+            gripper_events = action.get("gripper_events", [])
+            if gripper_events:
+                n_close = sum(1 for e in gripper_events if e.get("action") == "close")
+                n_open = sum(1 for e in gripper_events if e.get("action") == "open")
+                lines.append(f"Gripper events: {n_close} grasp(es), {n_open} release(s)")
+                for evt in gripper_events[:5]:
+                    lines.append(
+                        f"  Step {evt['step']}/{num_steps}: "
+                        f"gripper {evt['action']} (value={evt.get('grip_value', 0):.3f})"
+                    )
+
+            # Sample first/last step
+            if len(actions) >= 2:
+                first = ", ".join(f"{v:+.4f}" for v in actions[0])
+                last = ", ".join(f"{v:+.4f}" for v in actions[-1])
+                lines.append(f"First step: [{first}]")
+                lines.append(f"Last step:  [{last}]")
+
+        elif action_type == "tool_calls":
+            tool_calls = action.get("tool_calls", [])
+            lines.append(f"Tool calls: {len(tool_calls)}")
+            for tc in tool_calls[:5]:
+                lines.append(f"  - {tc.get('tool', '?')}({tc.get('args', {})})")
+
+        return "\n".join(lines)
 
 
 class _SafeDict(dict):
