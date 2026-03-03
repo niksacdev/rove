@@ -2,6 +2,27 @@
 
 from __future__ import annotations
 
+
+def _dynamics_all_ok(dyn_data: dict) -> bool:
+    """Check if all dynamics checks passed, supporting both new evidence and legacy format."""
+    # New evidence structure
+    summary = dyn_data.get("summary")
+    if summary:
+        return (
+            summary.get("joint_limits_ok", True)
+            and not summary.get("self_collision", False)
+            and summary.get("torque_feasible", True)
+            and not summary.get("near_singularity", False)
+        )
+    # Legacy flat format
+    return (
+        dyn_data.get("joint_limits_ok", True)
+        and not dyn_data.get("self_collision", False)
+        and dyn_data.get("torque_feasible", True)
+        and not dyn_data.get("near_singularity", False)
+    )
+
+
 # Human-readable labels for failure categories
 FAILURE_LABELS = {
     "perceive_error": "Perception Error",
@@ -41,6 +62,7 @@ def compute_run_insights(results: list[dict]) -> dict:
             "degradation_signals": [],
             "top_finding": "No results to analyze.",
             "reasoning_trail": {},
+            "confidence_scores": [],
         }
 
     n = len(results)
@@ -64,8 +86,11 @@ def compute_run_insights(results: list[dict]) -> dict:
     # 5. Top finding
     top_finding = _compute_top_finding(results, failure_breakdown, stage_health, n)
 
-    # 6. Reasoning trail
+    # 6. Reasoning trail (with full stage outputs for rich rendering)
     reasoning_trail = _compute_reasoning_trail(results)
+
+    # 7. Per-strategy confidence scores (from verify output)
+    confidence_scores = _compute_confidence_scores(results)
 
     return {
         "failure_breakdown": failure_breakdown,
@@ -74,6 +99,7 @@ def compute_run_insights(results: list[dict]) -> dict:
         "degradation_signals": degradation_signals,
         "top_finding": top_finding,
         "reasoning_trail": reasoning_trail,
+        "confidence_scores": confidence_scores,
     }
 
 
@@ -116,12 +142,7 @@ def _compute_stage_health(results: list[dict]) -> dict[str, float]:
             if d_stage and d_stage.get("output") and not d_stage["output"].get("skipped"):
                 dyn_data = d_stage["output"]
             if dyn_data:
-                ok = (
-                    dyn_data.get("joint_limits_ok", True)
-                    and not dyn_data.get("self_collision", False)
-                    and dyn_data.get("torque_feasible", True)
-                    and not dyn_data.get("near_singularity", False)
-                )
+                ok = _dynamics_all_ok(dyn_data)
                 stage_data["act"].append(1.0 if ok else 0.0)
             else:
                 stage_data["act"].append(1.0)
@@ -134,12 +155,7 @@ def _compute_stage_health(results: list[dict]) -> dict[str, float]:
             if d["output"].get("skipped"):
                 pass  # Don't score skipped dynamics
             else:
-                ok = (
-                    d["output"].get("joint_limits_ok", True)
-                    and not d["output"].get("self_collision", False)
-                    and d["output"].get("torque_feasible", True)
-                    and not d["output"].get("near_singularity", False)
-                )
+                ok = _dynamics_all_ok(d["output"])
                 stage_data["dynamics"].append(1.0 if ok else 0.0)
         elif d and d.get("status") == "error":
             stage_data["dynamics"].append(0.0)
@@ -273,39 +289,41 @@ def _compute_top_finding(
 
 
 def _compute_reasoning_trail(results: list[dict]) -> dict[str, dict]:
-    """Extract per-strategy reasoning from stage outputs."""
+    """Extract per-strategy stage outputs for rich rendering in insights card.
+
+    Includes full stage output dicts so the frontend can render them
+    using the same rich formatters as the per-strategy execution view.
+    """
     trail: dict[str, dict] = {}
 
     for r in results:
         sid = r.get("strategy_id", "")
         stages = r.get("stages", [])
         stage_map = {s["stage"]: s for s in stages}
-        entry: dict[str, str | list[dict]] = {}
+        entry: dict = {}
 
-        # Perceive raw_response
+        # Include full stage outputs for rich frontend rendering
+        stage_outputs: dict[str, dict] = {}
+        for stage_name in ("perceive", "plan", "act", "dynamics", "verify"):
+            stage = stage_map.get(stage_name)
+            if stage and stage.get("output"):
+                stage_outputs[stage_name] = stage["output"]
+        if stage_outputs:
+            entry["stage_outputs"] = stage_outputs
+
+        # Keep extracted reasoning strings for backward compat / text search
         p = stage_map.get("perceive")
         if p and p.get("output"):
             raw = p["output"].get("raw_response", "")
             if raw:
                 entry["perceive_reasoning"] = raw
 
-        # Plan reasoning + structured reasoning fields
         pl = stage_map.get("plan")
         if pl and pl.get("output"):
             reasoning = pl["output"].get("reasoning", "")
             if reasoning:
                 entry["plan_reasoning"] = reasoning
-            subtask_r = pl["output"].get("subtask_reasoning", "")
-            if subtask_r:
-                entry["subtask_reasoning"] = subtask_r
-            action_r = pl["output"].get("action_reasoning", "")
-            if action_r:
-                entry["action_reasoning"] = action_r
-            constraints_ack = pl["output"].get("constraints_acknowledged", [])
-            if constraints_ack:
-                entry["constraints_acknowledged"] = constraints_ack
 
-        # Verify reasoning + stage checks + task completion plausibility
         v = stage_map.get("verify")
         if v and v.get("output"):
             vr = v["output"].get("reasoning", "")
@@ -314,13 +332,27 @@ def _compute_reasoning_trail(results: list[dict]) -> dict[str, dict]:
             checks = v["output"].get("stage_checks", [])
             if checks:
                 entry["stage_checks"] = checks
-            plaus = v["output"].get("action_plausibility")
-            if plaus:
-                tcp = plaus.get("task_completion_plausibility")
-                if tcp is not None:
-                    entry["task_completion_plausibility"] = tcp
 
         if entry:
             trail[sid] = entry
 
     return trail
+
+
+def _compute_confidence_scores(results: list[dict]) -> list[dict]:
+    """Per-strategy confidence scores from verify output."""
+    scores = []
+    for r in results:
+        sid = r.get("strategy_id", "")
+        display_name = r.get("display_name", sid)
+        confidence = r.get("confidence", 0.0)
+        success = r.get("success", False)
+        scores.append(
+            {
+                "strategy_id": sid,
+                "display_name": display_name,
+                "confidence": confidence,
+                "success": success,
+            }
+        )
+    return scores

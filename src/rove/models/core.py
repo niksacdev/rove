@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = [
     "ActionPlausibility",
     "ActionPrediction",
+    "ActionSpace",
     "EvaluationProvenance",
     "ExampleData",
     "GraspPlan",
@@ -12,6 +13,7 @@ __all__ = [
     "PipelineContext",
     "PipelineStage",
     "PipelineStageResult",
+    "RobotEmbodiment",
     "SceneAnalysis",
     "SimObservation",
     "StageAssignment",
@@ -20,6 +22,7 @@ __all__ = [
     "Strategy",
     "TaskPlan",
     "TrialResult",
+    "VLACapabilities",
     "VerificationResult",
 ]
 
@@ -117,6 +120,50 @@ class EvaluationProvenance(BaseModel):
         )
 
 
+class ActionSpace(StrEnum):
+    """Coordinate frame of the action vector."""
+
+    JOINT_POSITION = "joint_position"
+    JOINT_DELTA = "joint_delta"
+    EEF_DELTA = "eef_delta"
+    EEF_ABSOLUTE = "eef_absolute"
+
+
+class RobotEmbodiment(BaseModel):
+    """Robot descriptor carried by tasks. Built from URDF + manifest metadata.
+
+    NOT a full URDF parser — only the metadata needed to broker VLA inference.
+    """
+
+    robot_type: str  # "panda", "ur5e", "so100"
+    arm_dof: int  # independent revolute/prismatic joints
+    gripper_dof: int = 1  # 0 for suction/fixed-tool
+    action_space: ActionSpace = ActionSpace.EEF_DELTA
+    proprioception_space: ActionSpace = ActionSpace.JOINT_POSITION
+    gripper_index: int | None = None  # which dim is gripper (typically last)
+    state_dim_override: int | None = None  # when state_dim != action_dim
+    urdf_path: str | None = None
+    embodiment_tag: str | None = None  # for GR00T-style models
+
+    @property
+    def action_dim(self) -> int:
+        return self.arm_dof + self.gripper_dof
+
+    @property
+    def state_dim(self) -> int:
+        return self.state_dim_override or self.action_dim
+
+
+class VLACapabilities(BaseModel):
+    """What a VLA adapter declares about its model checkpoint."""
+
+    native_action_dim: int  # raw output dim (32 for pi0.5, 6 for SmolVLA-base)
+    native_action_space: ActionSpace = ActionSpace.EEF_DELTA
+    supported_robot_types: list[str] | None = None  # None = cross-embodiment
+    max_action_dim: int | None = None  # for padded models (pi0.5 = 32)
+    requires_embodiment_tag: bool = False  # GR00T needs this
+
+
 class PipelineStage(StrEnum):
     PERCEIVE = "perceive"
     PLAN = "plan"
@@ -185,6 +232,11 @@ class ActionPrediction(BaseModel):
     num_steps: int = 0
     confidence: float = 0.0
     raw_response: str = ""
+    # Provenance fields — set by adapters to record what coordinate frame actions are in
+    declared_action_dim: int | None = None  # len(actions[0]) after slicing
+    action_space: ActionSpace | None = None  # coordinate frame
+    gripper_index: int | None = None  # which dim is gripper
+    raw_action_dim: int | None = None  # native dim before slicing (32 for pi0.5)
 
 
 class SimObservation(BaseModel):
@@ -223,19 +275,29 @@ class GroundTruthCheck(BaseModel):
 class ActionPlausibility(BaseModel, extra="allow"):
     """Structured plausibility checks derivable from VLA output without simulation.
 
-    All fields accept floats (0-1 scores). Bool values are coerced to 0.0/1.0.
+    All fields accept floats (0-1 scores) or None (not assessed).
+    Bool values are coerced to 0.0/1.0.
     """
 
-    bounds_check: float = 1.0  # 0-1, action deltas within physically plausible ranges
-    smoothness: float = 1.0  # 0-1, no sudden jumps between consecutive steps
-    gripper_consistency: float = 1.0  # 0-1, gripper open/close pattern matches task type
-    plan_alignment: float = 0.0  # 0-1, how rigorously the VLA trajectory follows the plan steps
+    bounds_check: float | None = None  # 0-1, action deltas within physically plausible ranges
+    smoothness: float | None = None  # 0-1, no sudden jumps between consecutive steps
+    gripper_consistency: float | None = None  # 0-1, gripper open/close pattern matches task type
+    plan_alignment: float | None = (
+        None  # 0-1, how rigorously the VLA trajectory follows the plan steps
+    )
     reasoning: str = ""  # explanation of plausibility assessment
-    # Extended fields for dynamics-aware verification (GPT 5.2 / MuJoCo)
-    workspace_reachability: float = 1.0  # 0-1, does trajectory stay within reachable workspace?
-    task_completion_plausibility: float = 0.0  # 0-1, does endpoint displacement match task intent?
-    dynamics_consistency: float = 1.0  # 0-1, does LLM assessment agree with MuJoCo physics data?
-    safety_assessment: float = 1.0  # 0-1, composite: torque + collision + singularity safety
+    # Extended fields for dynamics-aware verification
+    workspace_reachability: float | None = (
+        None  # 0-1, does trajectory stay within reachable workspace?
+    )
+    task_completion_plausibility: float | None = (
+        None  # 0-1, does endpoint displacement match task intent?
+    )
+    dynamics_consistency: float | None = None  # 0-1, does LLM assessment agree with physics data?
+    safety_assessment: float | None = (
+        None  # 0-1, composite: torque + collision + singularity safety
+    )
+    evidence_quality: str = ""  # "hard", "estimated", "perception_only"
 
 
 class VerificationResult(BaseModel):
@@ -250,6 +312,7 @@ class VerificationResult(BaseModel):
     dynamics_analysis: dict | None = None
     resolution_path: str = ""  # actionable suggestions for VLA improvement
     verify_turns: int = 1  # how many turns the verify loop took
+    contradictions: list[str] = Field(default_factory=list)  # physics vs LLM disagreements
 
 
 class PipelineStageResult(BaseModel):
@@ -286,6 +349,8 @@ class PipelineContext(BaseModel):
     # Task metadata from manifest (constraints, category, correction, expected_subtasks)
     # Flows from ExampleData.extras into prompts so real adapters can honor them
     task_metadata: dict = Field(default_factory=dict)
+    # Typed robot descriptor built from URDF + manifest metadata
+    robot_embodiment: RobotEmbodiment | None = None
 
     def to_dict(self) -> dict:
         """Serialize non-empty fields for adapter context bags.

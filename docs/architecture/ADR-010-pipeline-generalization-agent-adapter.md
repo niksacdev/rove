@@ -40,6 +40,7 @@ class AgentAdapter(Protocol):
 ```
 
 Key properties:
+
 - **One adapter, multiple stages** — an agent can serve `plan` and `act` (or all four stages). The orchestrator calls `run_stage("plan", ...)` and `run_stage("act", ...)` on the same adapter instance.
 - **Dict in, dict out** — agents return raw dicts; the pipeline converts to typed dataclasses (`_dict_to_plan`, `_dict_to_action`, etc.).
 - **`StageAdapter` union type** — `VLMAdapter | PolicyAdapter | AgentAdapter`. The pipeline dispatches by `isinstance` check.
@@ -59,6 +60,7 @@ VLAs produce trajectories (7-DOF deltas). Agents produce tool calls. The `action
 ### 5. Pipeline dispatch via `_call_adapter`
 
 Single dispatch method replaces per-stage adapter calls:
+
 - `isinstance(adapter, AgentAdapter)` → call `run_stage()`, convert dict to dataclass
 - Otherwise → call the type-specific method (`analyze_scene`, `plan_task`, `predict_action`, `verify_success`)
 

@@ -109,6 +109,10 @@ endpoints:
       action_space: ee_delta
       chunk_size: 10
       requires_proprio: true
+      vla_capabilities:
+        native_action_dim: 6
+        native_action_space: eef_delta
+        supported_robot_types: ["so100"]
     cost: { type: fixed, per_call: 0.00 }
     max_concurrent: 1
     availability:
@@ -130,6 +134,11 @@ endpoints:
       action_space: ee_delta
       chunk_size: 50
       requires_proprio: true
+      vla_capabilities:
+        native_action_dim: 32
+        native_action_space: eef_delta
+        max_action_dim: 32
+        supported_robot_types: null
     cost: { type: fixed, per_call: 0.00 }
     max_concurrent: 1
     availability:
@@ -148,6 +157,9 @@ endpoints:
     config:
       mock_success_rate: 0.80
       mock_latency_ms: [50, 150]
+      vla_capabilities:
+        native_action_dim: 7
+        native_action_space: eef_delta
 
   # --- LLMs for task planning ---
   qwen3-8b:

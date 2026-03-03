@@ -6,6 +6,8 @@ import asyncio
 import random
 from types import SimpleNamespace
 
+from rove.models import VLACapabilities
+
 
 class MockAgentAdapter:
     """Mock implementation of AgentAdapter — returns stage-appropriate dicts."""
@@ -17,6 +19,16 @@ class MockAgentAdapter:
         self._latency_range = cfg.get("mock_latency_ms", [300, 800])
         seed = cfg.get("seed")
         self._rng = random.Random(seed) if seed is not None else random.Random()
+
+        # Build capabilities from YAML config; fall back to sensible defaults
+        caps_data = cfg.get("vla_capabilities", {})
+        self._capabilities = (
+            VLACapabilities(**caps_data) if caps_data else VLACapabilities(native_action_dim=7)
+        )
+
+    @property
+    def capabilities(self) -> VLACapabilities:
+        return self._capabilities
 
     async def _simulate_latency(self) -> None:
         lo, hi = self._latency_range
@@ -115,6 +127,7 @@ class MockAgentAdapter:
             "num_steps": 4,
             "confidence": 0.82,
             "raw_response": '{"mock_agent": true}',
+            "action_space": "eef_delta",
         }
 
     def _mock_verify(self, task: str, context: dict | None) -> dict:
@@ -277,6 +290,8 @@ class MockAgentAdapter:
                     "Without dynamics data, alignment cannot be verified."
                 )
 
+        evidence_quality = "hard" if has_dynamics else "perception_only"
+
         result_data = {
             "success": success,
             "confidence": round(confidence, 2),
@@ -307,12 +322,30 @@ class MockAgentAdapter:
                     "passed": success,
                     "confidence": round(confidence, 2),
                     "reasoning": (
-                        "Action plausibility from dynamics."
+                        "Action plausibility from dynamics evidence."
                         if has_dynamics
-                        else "Action plausibility from scene and task alignment."
+                        else "Action plausibility from scene and task alignment only."
                     ),
                 },
             ],
+            "action_plausibility": {
+                "bounds_check": (1.0 if success else 0.2) if has_dynamics else None,
+                "smoothness": round(self._rng.uniform(0.5, 0.9), 2),
+                "gripper_consistency": round(self._rng.uniform(0.5, 0.9), 2),
+                "plan_alignment": round(self._rng.uniform(0.5, 0.9), 2),
+                "workspace_reachability": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "dynamics_consistency": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "task_completion_plausibility": round(self._rng.uniform(0.4, 0.8), 2),
+                "safety_assessment": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "evidence_quality": evidence_quality,
+                "reasoning": f"Assessment based on {evidence_quality} evidence.",
+            },
         }
 
         return SimpleNamespace(

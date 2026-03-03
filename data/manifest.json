@@ -508,7 +508,17 @@
       "put the white mug on the left plate",
       "put the yellow",
       "white mug on the right plate"
-    ]
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero/libero_002.jpg",
@@ -547,7 +557,17 @@
       "put the yellow",
       "white mug in the microwave",
       "close it"
-    ]
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero/libero_004.jpg",
@@ -585,7 +605,17 @@
     "expected_subtasks": [
       "put both the alphabet soup",
       "the cream cheese box in the basket"
-    ]
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero/libero_008.jpg",
@@ -623,7 +653,17 @@
     "expected_subtasks": [
       "put the black bowl in the bottom drawer of the cabinet",
       "close it"
-    ]
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero/libero_009.jpg",
@@ -661,7 +701,17 @@
     "expected_subtasks": [
       "pick up the book",
       "place it in the back compartment of the caddy"
-    ]
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero/libero_003_006.jpg",
@@ -1236,7 +1286,20 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["pick up the bowl", "place on the plate"]
+    "expected_subtasks": [
+      "pick up the bowl",
+      "place on the plate"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero_goal/goal_wine_on_rack.jpg",
@@ -1253,7 +1316,20 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["pick up the wine bottle", "place on the rack"]
+    "expected_subtasks": [
+      "pick up the wine bottle",
+      "place on the rack"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero_goal/goal_cream_cheese_in_bowl.jpg",
@@ -1270,7 +1346,20 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["pick up the cream cheese", "place in the bowl"]
+    "expected_subtasks": [
+      "pick up the cream cheese",
+      "place in the bowl"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero_goal/goal_push_plate.jpg",
@@ -1287,7 +1376,19 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["push plate toward stove"]
+    "expected_subtasks": [
+      "push plate toward stove"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero_goal/goal_turn_on_stove.jpg",
@@ -1304,7 +1405,20 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["reach stove knob", "turn knob"]
+    "expected_subtasks": [
+      "reach stove knob",
+      "turn knob"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   },
   {
     "filename": "libero_goal/goal_open_drawer.jpg",
@@ -1321,6 +1435,19 @@
     "state_dim": 8,
     "eval_category": "atomic",
     "difficulty": "easy",
-    "expected_subtasks": ["grasp drawer handle", "pull drawer open"]
+    "expected_subtasks": [
+      "grasp drawer handle",
+      "pull drawer open"
+    ],
+    "control_space": "end_effector_delta",
+    "action_space_desc": "3 position deltas (xyz) + 3 rotation deltas (axis-angle) + 1 gripper command",
+    "robot_descriptor": {
+      "robot_type": "panda",
+      "arm_dof": 6,
+      "gripper_dof": 1,
+      "action_space": "eef_delta",
+      "proprioception_space": "joint_position",
+      "gripper_index": 6
+    }
   }
 ]

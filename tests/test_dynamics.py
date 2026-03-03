@@ -102,39 +102,84 @@ class TestVerifyPromptDynamics:
                 "gripper_events": [{"step": 5, "action": "close", "grip_value": 0.0}],
             },
             "dynamics_analysis": {
-                "final_endpoint": [0.340, 0.210, 0.460],
-                "total_displacement_m": 0.34,
-                "joint_limits_ok": True,
-                "self_collision": False,
-                "smoothness_score": 0.95,
-                "max_velocity_rad_s": 1.2,
-                "steps_analyzed": 10,
-                "endpoint_trajectory": [
-                    [0.3, 0.2, 0.4],
-                    [0.32, 0.21, 0.44],
-                    [0.34, 0.21, 0.46],
+                "analysis_mode": "joint_space",
+                "robot": {"name": "panda", "dof": 7, "actuators": 7},
+                "evidence": [
+                    {
+                        "field": "joint_limits_ok",
+                        "value": True,
+                        "confidence": "hard",
+                        "source": "joint_space",
+                        "detail": "All joints within limits",
+                    },
+                    {
+                        "field": "self_collision",
+                        "value": False,
+                        "confidence": "hard",
+                        "source": "joint_space",
+                    },
+                    {
+                        "field": "torque_feasible",
+                        "value": True,
+                        "confidence": "hard",
+                        "source": "mj_inverse",
+                        "detail": "feasible",
+                    },
+                    {
+                        "field": "endpoint_trajectory",
+                        "value": [[0.3, 0.2, 0.4], [0.32, 0.21, 0.44], [0.34, 0.21, 0.46]],
+                        "confidence": "hard",
+                        "source": "mj_forward",
+                    },
+                    {
+                        "field": "manipulability",
+                        "value": 0.0142,
+                        "confidence": "hard",
+                        "source": "jacobian_svd",
+                        "detail": "min singular value 0.0500",
+                    },
+                    {
+                        "field": "gravity_feasible",
+                        "value": True,
+                        "confidence": "hard",
+                        "source": "mj_inverse",
+                        "detail": "feasible for 0.5kg payload",
+                    },
+                    {
+                        "field": "near_singularity",
+                        "value": False,
+                        "confidence": "hard",
+                        "source": "jacobian_svd",
+                    },
                 ],
-                "torque_feasible": True,
-                "torque_violations": [],
-                "peak_torques": [1.2, 0.8, 0.5, 0.3, 0.2, 0.1, 0.05],
-                "gravity_torques": [0.5, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01],
-                "gravity_feasible": True,
-                "payload_kg": 0.5,
-                "manipulability": 0.0142,
-                "min_singular_value": 0.05,
-                "near_singularity": False,
+                "not_computed": [],
+                "gripper_events": [{"step": 5, "type": "close"}],
+                "summary": {
+                    "total_displacement_m": 0.34,
+                    "smoothness_score": 0.95,
+                    "steps_analyzed": 10,
+                    "joint_limits_ok": True,
+                    "torque_feasible": True,
+                    "gravity_feasible": True,
+                    "self_collision": False,
+                    "near_singularity": False,
+                    "peak_torque_nm": 1.2,
+                    "manipulability": 0.0142,
+                    "final_endpoint": [0.340, 0.210, 0.460],
+                },
             },
         }
         prompt = pm.render_verify("pick bolt", ctx)
-        assert "MUJOCO DYNAMICS ANALYSIS" in prompt
-        assert "0.340" in prompt
-        assert "within bounds" in prompt
-        assert "SPATIAL CONTEXT" in prompt
-        assert "Torque feasibility" in prompt
-        assert "Gravity compensation" in prompt
+        assert "PHYSICS EVIDENCE" in prompt
+        assert "joint_space" in prompt
+        assert "confidence" in prompt.lower()
+        assert "hard" in prompt
+        # Should contain evidence items
+        assert "Joint Limits Ok" in prompt
+        assert "Torque Feasible" in prompt
         assert "Manipulability" in prompt
-        # Should NOT contain the "CANNOT determine" disclaimer
-        assert "CANNOT determine" not in prompt
+        # Should NOT contain the no-dynamics disclaimer
+        assert "No dynamics data available" not in prompt
 
     def test_no_dynamics_shows_disclaimer(self):
         pm = get_prompt_manager()
@@ -152,8 +197,8 @@ class TestVerifyPromptDynamics:
             },
         }
         prompt = pm.render_verify("pick bolt", ctx)
-        assert "CANNOT determine" in prompt
-        assert "MUJOCO DYNAMICS" not in prompt
+        assert "No dynamics data available" in prompt
+        assert "PHYSICS EVIDENCE" not in prompt
 
 
 class TestComputeDynamics:
@@ -179,48 +224,62 @@ class TestComputeDynamics:
         ]
         result = compute_dynamics(panda_urdf, actions)
 
-        # Existing FK fields
-        assert "endpoint_trajectory" in result
-        assert "final_endpoint" in result
-        assert "joint_limits_ok" in result
-        assert "self_collision" in result
-        assert "total_displacement_m" in result
-        assert "smoothness_score" in result
-        assert "steps_analyzed" in result
-        assert result["steps_analyzed"] == 3
-        assert len(result["endpoint_trajectory"]) == 4  # initial + 3 steps
-        assert len(result["final_endpoint"]) == 3
-        assert isinstance(result["smoothness_score"], float)
-        assert 0.0 <= result["smoothness_score"] <= 1.0
+        # Evidence structure
+        assert result["analysis_mode"] == "joint_space"
+        assert "robot" in result
+        assert result["robot"]["name"] == "panda"
+        assert "evidence" in result
+        assert isinstance(result["evidence"], list)
+        assert len(result["evidence"]) >= 5
 
-        # New dynamics fields
-        assert "torque_feasible" in result
-        assert isinstance(result["torque_feasible"], bool)
-        assert "torque_violations" in result
-        assert isinstance(result["torque_violations"], list)
-        assert "peak_torques" in result
-        assert isinstance(result["peak_torques"], list)
-        assert "gravity_torques" in result
-        assert "gravity_feasible" in result
-        assert isinstance(result["gravity_feasible"], bool)
-        assert "payload_kg" in result
-        assert result["payload_kg"] == 0.5
-        assert "manipulability" in result
-        assert isinstance(result["manipulability"], float)
-        assert "min_singular_value" in result
-        assert "near_singularity" in result
-        assert isinstance(result["near_singularity"], bool)
+        # Check evidence fields exist
+        evidence_fields = {e["field"] for e in result["evidence"]}
+        assert "joint_limits_ok" in evidence_fields
+        assert "self_collision" in evidence_fields
+        assert "torque_feasible" in evidence_fields
+        assert "endpoint_trajectory" in evidence_fields
+        assert "manipulability" in evidence_fields
+        assert "gravity_feasible" in evidence_fields
+        assert "near_singularity" in evidence_fields
+
+        # All evidence should have confidence and source
+        for e in result["evidence"]:
+            assert "confidence" in e
+            assert "source" in e
+
+        # Summary fields
+        summary = result["summary"]
+        assert summary["steps_analyzed"] == 3
+        assert isinstance(summary["smoothness_score"], float)
+        assert 0.0 <= summary["smoothness_score"] <= 1.0
+        assert isinstance(summary["joint_limits_ok"], bool)
+        assert isinstance(summary["torque_feasible"], bool)
+        assert isinstance(summary["gravity_feasible"], bool)
+        assert isinstance(summary["near_singularity"], bool)
+        assert len(summary["final_endpoint"]) == 3
+
+        # Endpoint trajectory from evidence
+        traj_evidence = next(e for e in result["evidence"] if e["field"] == "endpoint_trajectory")
+        assert len(traj_evidence["value"]) == 4  # initial + 3 steps
+
+        # Not-computed should be empty for joint-space mode
+        assert result["not_computed"] == []
+
+        # Gripper events
+        assert "gripper_events" in result
 
     def test_compute_dynamics_empty_actions(self, panda_urdf):
         mujoco = pytest.importorskip("mujoco")  # noqa: F841
         from rove.adapters.dynamics_mujoco import compute_dynamics
 
         result = compute_dynamics(panda_urdf, [])
-        assert result["steps_analyzed"] == 0
-        assert len(result["endpoint_trajectory"]) == 1  # just initial position
-        assert result["torque_feasible"] is True
-        assert result["gravity_feasible"] is True
-        assert result["near_singularity"] is False
+        summary = result["summary"]
+        assert summary["steps_analyzed"] == 0
+        traj_evidence = next(e for e in result["evidence"] if e["field"] == "endpoint_trajectory")
+        assert len(traj_evidence["value"]) == 1  # just initial position
+        assert summary["torque_feasible"] is True
+        assert summary["gravity_feasible"] is True
+        assert summary["near_singularity"] is False
 
     def test_compute_dynamics_file_not_found(self):
         """Test graceful error for missing URDF file."""

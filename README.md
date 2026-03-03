@@ -1,5 +1,6 @@
 # ROVE
-### Robot Observation & Vision Evaluation
+
+## Robot Observation & Vision Evaluation
 
 > Roving through model space so you don't have to.
 
@@ -35,7 +36,7 @@ ROVE runs pipelines in two modes, automatically selected based on whether a VLA 
 
 Each stage feeds the next in a linear chain. Used when no VLA is assigned to the act stage.
 
-```
+```text
  ┌──────────┐    ┌──────────┐    ┌──────────┐
  │ perceive │───>│   plan   │───>│  verify  │
  │   (VLM)  │    │  (VLM)   │    │  (VLM)   │
@@ -49,7 +50,7 @@ VLAs (pi0.5, SmolVLA, etc.) take only `image + task + proprioception` — they n
 1. **Execution phase**: VLA runs independently (image + task → actions)
 2. **Evaluation phase**: Perceive, plan, dynamics, and verify assess the VLA output
 
-```
+```text
  EXECUTION                    EVALUATION
  ┌──────────┐                ┌──────────┐    ┌──────────┐
  │ VLA Act  │                │ perceive │───>│   plan   │
@@ -81,7 +82,7 @@ full dynamics analysis on the predicted trajectory using MuJoCo. Upload your
 robot's URDF alongside the scene image, and ROVE converts raw action arrays
 into spatial and physical analysis the verifier can reason about.
 
-```
+```text
  act stage output              Dynamics analysis (MuJoCo)
  ─────────────────             ──────────────────────────
  [[0.02, -0.01, ...], ...]  →  Endpoint: [0.34, 0.21, 0.46]

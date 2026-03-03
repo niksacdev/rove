@@ -46,7 +46,7 @@ This ADR evaluates all three proposals and recommends a concrete path forward.
 
 ## Decision
 
-### D1: Retain deterministic orchestration. Do NOT use an LLM or agent framework for pipeline routing.
+### D1: Retain deterministic orchestration. Do NOT use an LLM or agent framework for pipeline routing
 
 The 5-step pipeline is replaced by a **Stage-Graph Orchestrator** that builds a deterministic
 execution graph from adapter capability declarations at initialization time. The graph is static
@@ -61,7 +61,7 @@ ROVE needs none of these. Using SK/AutoGen for deterministic pipeline execution 
 non-determinism to the orchestrator, breaking the ability to isolate model performance from
 orchestrator behavior.
 
-### D2: Collapse to Perceive → Plan → Act + Verify (3 + 1 stages).
+### D2: Collapse to Perceive → Plan → Act + Verify (3 + 1 stages)
 
 "Ground" merges into "Perceive" as a sub-capability. Some adapters produce a bounding box as
 part of scene analysis (VLMs with native grounding: Qwen2.5-VL); others require a separate
@@ -74,14 +74,14 @@ A pipeline that cannot verify outcome is not an evaluation framework.
 
 The 3+1 stage model:
 
-```
+```text
 Stage 1: Perceive     = scene understanding + spatial localization (output: SceneAnalysis + Localization)
 Stage 2: Plan         = grasp strategy (output: GraspPlan)
 Stage 3: Act          = motor control + sim execution (output: ActionPrediction + SimStepResults)
 Stage 4: Verify       = outcome assessment — invariant, always separate (output: VerificationResult)
 ```
 
-### D3: Add UnifiedAdapter Protocol for VLAs that span Stages 1-3.
+### D3: Add UnifiedAdapter Protocol for VLAs that span Stages 1-3
 
 Models like pi0, pi0-FAST, and (when available) GR00T N1.6 handle perception, planning, and
 action in a single forward pass. They implement `UnifiedAdapter`, which has a single
@@ -92,7 +92,7 @@ The leaderboard handles NULL metrics by excluding the combination from metric-sp
 and labeling it `"no-intermediate-outputs"` in the display. The combination still participates
 in success rate, total latency, and cost rankings.
 
-### D4: Add adapter capability declarations to all Protocols.
+### D4: Add adapter capability declarations to all Protocols
 
 Each adapter declares which stages it covers and whether it produces intermediate outputs:
 
@@ -108,7 +108,7 @@ The StageGraph builder reads these declarations and constructs the execution gra
 hardcoded conditionals in the orchestrator — the graph derives entirely from declared
 capabilities.
 
-### D5: Revise MCP server topology for Phase 4.
+### D5: Revise MCP server topology for Phase 4
 
 **Remove**: VLM MCP server (port 8081). An external LLM agent has its own VLM capability;
 it does not need ROVE to proxy VLM calls. The current `analyze_scene`, `plan_grasp`,
@@ -126,7 +126,7 @@ call `run_evaluation(config)` and get ranked results without importing the ROVE 
 
 **Final MCP topology (Phase 4)**:
 
-```
+```text
 rove-grounding-tools (port 8083):
   localize(image_b64, query, model_id?)    → Localization
   segment(image_b64, bbox, model_id?)      → SegmentationMask
@@ -151,7 +151,7 @@ rove-eval-tools (port 8081):
 
 ### Case A — Full Multi-Model Chain (GPT-4o + GroundingDINO + SmolVLA)
 
-```
+```text
 StageGraph built from:
   vlm = GPT-4o (VLMAdapter, no native_grounding)
   grounding = GroundingDINO (GroundingAdapter)
@@ -173,7 +173,7 @@ Metrics available: ALL
 
 ### Case B — Monolithic VLA (pi0-FAST)
 
-```
+```text
 StageGraph built from:
   vla = pi0-FAST (UnifiedAdapter, stages_covered=["perceive","plan","act"])
   verifier_vlm = gpt-4o (optional, from rove.yaml)
@@ -203,7 +203,7 @@ Metrics available: PARTIAL
 
 ### Case C — VLM with Native Grounding + VLA (Qwen2.5-VL + SmolVLA)
 
-```
+```text
 StageGraph built from:
   vlm = Qwen2.5-VL (VLMAdapter, native_grounding=True)
   vla = SmolVLA (VLAAdapter)

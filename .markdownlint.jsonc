@@ -1,0 +1,12 @@
+{
+  // Line length — disabled, changelogs and docs have long descriptive lines
+  "MD013": false,
+  // Multiple headings with same content — common in changelogs (same date sections)
+  "MD024": { "siblings_only": true },
+  // Inline HTML — allow for badges, details tags, etc.
+  "MD033": false,
+  // Emphasis as heading — used intentionally for subtitles in proposals
+  "MD036": false,
+  // First line must be top-level heading — allow frontmatter
+  "MD041": false
+}

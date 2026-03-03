@@ -8,10 +8,12 @@ from typing import Protocol, runtime_checkable
 
 from rove.models import (
     ActionPrediction,
+    RobotEmbodiment,
     SceneAnalysis,
     SimObservation,
     TaskPlan,
     VerificationResult,
+    VLACapabilities,
 )
 
 
@@ -57,6 +59,7 @@ class VLAAdapter(Protocol):
 
     model_id: str
     display_name: str
+    capabilities: VLACapabilities
 
     async def predict_action(
         self,
@@ -64,6 +67,7 @@ class VLAAdapter(Protocol):
         task: str,
         proprioception: list[float] | None = None,
         plan: TaskPlan | None = None,
+        embodiment: RobotEmbodiment | None = None,
     ) -> ActionPrediction:
         """Predict action(s) given current observation and task."""
         ...

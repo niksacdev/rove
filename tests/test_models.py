@@ -5,14 +5,17 @@ from __future__ import annotations
 from rove.models import (
     ActionPlausibility,
     ActionPrediction,
+    ActionSpace,
     PipelineContext,
     PipelineStage,
     PipelineStageResult,
+    RobotEmbodiment,
     SceneAnalysis,
     StageStatus,
     Strategy,
     TaskPlan,
     VerificationResult,
+    VLACapabilities,
 )
 from rove.models.config import DefaultsConfig, StrategyConfig
 
@@ -216,15 +219,17 @@ class TestStrategyConfig:
 class TestActionPlausibility:
     def test_defaults(self):
         ap = ActionPlausibility()
-        assert ap.bounds_check == 1.0
-        assert ap.smoothness == 1.0
-        assert ap.gripper_consistency == 1.0
-        assert ap.plan_alignment == 0.0
+        # All score fields default to None (not assessed)
+        assert ap.bounds_check is None
+        assert ap.smoothness is None
+        assert ap.gripper_consistency is None
+        assert ap.plan_alignment is None
         assert ap.reasoning == ""
-        assert ap.workspace_reachability == 1.0
-        assert ap.task_completion_plausibility == 0.0
-        assert ap.dynamics_consistency == 1.0
-        assert ap.safety_assessment == 1.0
+        assert ap.workspace_reachability is None
+        assert ap.task_completion_plausibility is None
+        assert ap.dynamics_consistency is None
+        assert ap.safety_assessment is None
+        assert ap.evidence_quality == ""
 
     def test_custom_values(self):
         ap = ActionPlausibility(
@@ -298,3 +303,131 @@ class TestActionPlausibility:
         assert ap.task_completion_plausibility == 0.6
         assert ap.dynamics_consistency == 0.5
         assert ap.safety_assessment == 0.4
+
+
+class TestActionSpace:
+    def test_enum_values(self):
+        assert ActionSpace.JOINT_POSITION == "joint_position"
+        assert ActionSpace.JOINT_DELTA == "joint_delta"
+        assert ActionSpace.EEF_DELTA == "eef_delta"
+        assert ActionSpace.EEF_ABSOLUTE == "eef_absolute"
+
+    def test_from_string(self):
+        assert ActionSpace("eef_delta") == ActionSpace.EEF_DELTA
+        assert ActionSpace("joint_position") == ActionSpace.JOINT_POSITION
+
+
+class TestRobotEmbodiment:
+    def test_construction(self):
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6)
+        assert emb.robot_type == "panda"
+        assert emb.arm_dof == 6
+        assert emb.gripper_dof == 1
+        assert emb.action_space == ActionSpace.EEF_DELTA
+
+    def test_action_dim_property(self):
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6, gripper_dof=1)
+        assert emb.action_dim == 7
+
+    def test_action_dim_no_gripper(self):
+        emb = RobotEmbodiment(robot_type="suction_bot", arm_dof=6, gripper_dof=0)
+        assert emb.action_dim == 6
+
+    def test_state_dim_default(self):
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6)
+        assert emb.state_dim == 7  # same as action_dim
+
+    def test_state_dim_override(self):
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6, state_dim_override=8)
+        assert emb.state_dim == 8
+
+    def test_all_fields(self):
+        emb = RobotEmbodiment(
+            robot_type="panda",
+            arm_dof=6,
+            gripper_dof=1,
+            action_space=ActionSpace.EEF_DELTA,
+            proprioception_space=ActionSpace.JOINT_POSITION,
+            gripper_index=6,
+            state_dim_override=8,
+            urdf_path="/path/to/panda.urdf",
+            embodiment_tag="franka_panda",
+        )
+        assert emb.gripper_index == 6
+        assert emb.urdf_path == "/path/to/panda.urdf"
+        assert emb.embodiment_tag == "franka_panda"
+
+
+class TestVLACapabilities:
+    def test_construction(self):
+        caps = VLACapabilities(native_action_dim=7)
+        assert caps.native_action_dim == 7
+        assert caps.native_action_space == ActionSpace.EEF_DELTA
+        assert caps.supported_robot_types is None
+        assert caps.max_action_dim is None
+        assert caps.requires_embodiment_tag is False
+
+    def test_cross_embodiment(self):
+        caps = VLACapabilities(
+            native_action_dim=32,
+            max_action_dim=32,
+            supported_robot_types=None,
+        )
+        assert caps.supported_robot_types is None
+
+    def test_checkpoint_bound(self):
+        caps = VLACapabilities(
+            native_action_dim=6,
+            supported_robot_types=["so100"],
+        )
+        assert caps.supported_robot_types == ["so100"]
+
+    def test_groot_style(self):
+        caps = VLACapabilities(
+            native_action_dim=7,
+            requires_embodiment_tag=True,
+        )
+        assert caps.requires_embodiment_tag is True
+
+
+class TestActionPredictionProvenance:
+    def test_provenance_defaults_none(self):
+        ap = ActionPrediction()
+        assert ap.declared_action_dim is None
+        assert ap.action_space is None
+        assert ap.gripper_index is None
+        assert ap.raw_action_dim is None
+
+    def test_provenance_set(self):
+        ap = ActionPrediction(
+            actions=[[0.1] * 7],
+            declared_action_dim=7,
+            action_space=ActionSpace.EEF_DELTA,
+            gripper_index=6,
+            raw_action_dim=32,
+        )
+        assert ap.declared_action_dim == 7
+        assert ap.action_space == ActionSpace.EEF_DELTA
+        assert ap.gripper_index == 6
+        assert ap.raw_action_dim == 32
+
+    def test_provenance_in_model_dump(self):
+        ap = ActionPrediction(
+            declared_action_dim=7,
+            action_space=ActionSpace.EEF_DELTA,
+        )
+        d = ap.model_dump()
+        assert d["declared_action_dim"] == 7
+        assert d["action_space"] == "eef_delta"
+
+
+class TestPipelineContextRobotEmbodiment:
+    def test_default_none(self):
+        ctx = PipelineContext(task="test")
+        assert ctx.robot_embodiment is None
+
+    def test_with_embodiment(self):
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6)
+        ctx = PipelineContext(task="test", robot_embodiment=emb)
+        assert ctx.robot_embodiment is not None
+        assert ctx.robot_embodiment.robot_type == "panda"

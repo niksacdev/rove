@@ -1,8 +1,8 @@
 """MuJoCo dynamics engine — FK, inverse dynamics, gravity compensation, manipulability.
 
-Converts VLA action arrays (joint-space deltas) into Cartesian end-effector
-positions and computes torque feasibility, gravity compensation, and
-manipulability analysis for the verify stage.
+Converts VLA action arrays into Cartesian end-effector positions and computes
+torque feasibility, gravity compensation, and manipulability analysis for the
+verify stage.  Supports both joint-space and end-effector delta control spaces.
 
 Requires: pip install rove-eval[kinematics]
 """
@@ -74,24 +74,39 @@ def _find_grasp_step(actions: list[list[float]]) -> int:
     return len(actions) // 2
 
 
+def _extract_gripper_events(actions: list[list[float]]) -> list[dict]:
+    """Extract gripper open/close transitions from an action trajectory."""
+    events: list[dict] = []
+    prev_open = True
+    for i, a in enumerate(actions):
+        grip = a[-1]
+        is_open = grip > 0.0
+        if is_open != prev_open:
+            events.append({"step": i, "type": "open" if is_open else "close"})
+            prev_open = is_open
+    return events
+
+
 def compute_dynamics(
     urdf_path: str,
     actions: list[list[float]],
     initial_qpos: list[float] | None = None,
     payload_kg: float = 0.5,
+    control_space: str = "joint_space",
 ) -> dict:
     """Compute full dynamics analysis for a VLA trajectory.
 
     Args:
         urdf_path: Path to URDF/MJCF file describing the robot.
-        actions: List of action arrays (joint-space deltas, typically 7-DOF).
+        actions: List of action arrays (joint-space deltas or EE deltas).
         initial_qpos: Optional initial joint positions. If None, uses model defaults.
         payload_kg: Assumed payload mass for gravity compensation check.
+        control_space: "joint_space" or "end_effector_delta". Controls how
+            actions are interpreted and applied.
 
     Returns:
-        Dict with endpoint trajectory, joint limit checks, collision info,
-        smoothness score, trajectory statistics, inverse dynamics (torque
-        feasibility), gravity compensation, and manipulability analysis.
+        Evidence-structured dict with analysis_mode, robot info, evidence list,
+        not_computed list, gripper_events, and summary.
     """
     try:
         import mujoco
@@ -129,7 +144,6 @@ def compute_dynamics(
     n_act = model.nu  # number of actuators
     n_qpos = model.nq  # number of generalized coordinates
     n_dof = model.nv  # number of degrees of freedom (velocity space)
-    # Apply deltas to qpos directly; use nq if no actuators defined
     n_apply_max = n_qpos if n_act == 0 else n_act
 
     # Set initial joint positions
@@ -140,9 +154,17 @@ def compute_dynamics(
 
     # Track end-effector via the last body in the kinematic chain
     ee_body_id = model.nbody - 1
+
+    # Determine analysis mode
+    is_ee_delta = control_space == "end_effector_delta"
+    analysis_mode = "ee_delta_jacobian_ik" if is_ee_delta else "joint_space"
+    evidence_source = "jacobian_ik" if is_ee_delta else "joint_space"
+
+    # Run trajectory integration
     endpoint_trajectory: list[list[float]] = []
     velocities: list[float] = []
     joint_limits_ok = True
+    joint_limit_details: list[str] = []
     self_collision = False
 
     # Record initial position
@@ -154,16 +176,37 @@ def compute_dynamics(
     # Record qpos at each step for inverse dynamics
     qpos_trajectory: list[np.ndarray] = [data.qpos[:n_dof].copy()]
 
-    for step_actions in actions:
+    for step_idx, step_actions in enumerate(actions):
         action_arr = np.array(step_actions, dtype=np.float64)
 
-        # Apply deltas to joint positions (skip gripper DOF if action has extra)
-        n_apply = min(len(action_arr), n_apply_max)
-        data.qpos[:n_apply] += action_arr[:n_apply]
+        if is_ee_delta:
+            # EE-delta mode: use Jacobian pseudoinverse to convert EE deltas → joint deltas
+            jacp = np.zeros((3, n_dof))
+            jacr = np.zeros((3, n_dof))
+            mujoco.mj_jac(model, data, jacp, jacr, data.xpos[ee_body_id], ee_body_id)
+            J = np.vstack([jacp, jacr])  # 6 x N
+            J_pinv = np.linalg.pinv(J)  # N x 6
 
-        # Handle gripper actuator if action has extra DOF and actuators exist
-        if len(action_arr) > n_apply_max and n_act > 0:
-            data.ctrl[-1] = action_arr[-1]
+            # Extract EE delta (first 6 values: 3 pos + 3 rot)
+            n_ee = min(len(action_arr), 6)
+            ee_delta = np.zeros(6)
+            ee_delta[:n_ee] = action_arr[:n_ee]
+
+            # Convert EE delta → joint delta
+            joint_delta = J_pinv @ ee_delta
+            data.qpos[:n_dof] += joint_delta
+
+            # Handle gripper separately (last DOF in action)
+            if len(action_arr) > 6 and n_act > 0:
+                data.ctrl[-1] = action_arr[-1]
+        else:
+            # Joint-space mode: apply deltas directly to joint positions
+            n_apply = min(len(action_arr), n_apply_max)
+            data.qpos[:n_apply] += action_arr[:n_apply]
+
+            # Handle gripper actuator if action has extra DOF
+            if len(action_arr) > n_apply_max and n_act > 0:
+                data.ctrl[-1] = action_arr[-1]
 
         mujoco.mj_forward(model, data)
 
@@ -188,8 +231,12 @@ def compute_dynamics(
                 hi = model.jnt_range[i, 1]
                 if data.qpos[i] < lo - 0.01 or data.qpos[i] > hi + 0.01:
                     joint_limits_ok = False
+                    exceeded = data.qpos[i] - hi if data.qpos[i] > hi else lo - data.qpos[i]
+                    joint_limit_details.append(
+                        f"Joint {i} exceeded by {exceeded:.3f} rad at step {step_idx}"
+                    )
 
-        # Collision check (only if geometry is loaded)
+        # Collision check
         if data.ncon > 0:
             for c in range(data.ncon):
                 body1 = model.geom_bodyid[data.contact[c].geom1]
@@ -210,7 +257,7 @@ def compute_dynamics(
 
     # --- Inverse Dynamics (torque feasibility) ---
     torque_feasible = True
-    torque_violations: list[dict] = []
+    torque_detail = "feasible"
     peak_torques: list[float] = [0.0] * n_dof
 
     if len(qpos_trajectory) >= 3:
@@ -233,37 +280,30 @@ def compute_dynamics(
 
             torques = inv_data.qfrc_inverse[:n_dof].copy()
 
-            # Update peak torques
             for j in range(n_dof):
                 abs_torque = abs(float(torques[j]))
                 if abs_torque > peak_torques[j]:
                     peak_torques[j] = abs_torque
 
-            # Check against actuator force limits if available
             if n_act > 0 and hasattr(model, "actuator_forcerange"):
                 n_check = min(n_dof, n_act)
                 for j in range(n_check):
                     limit_lo = model.actuator_forcerange[j, 0]
                     limit_hi = model.actuator_forcerange[j, 1]
-                    # Only check if limits are defined (non-zero range)
                     if (limit_lo != 0.0 or limit_hi != 0.0) and (
                         float(torques[j]) < limit_lo or float(torques[j]) > limit_hi
                     ):
                         torque_feasible = False
-                        torque_violations.append(
-                            {
-                                "step": step_idx,
-                                "joint": j,
-                                "torque": round(float(torques[j]), 4),
-                                "limit": round(float(limit_hi), 4),
-                            }
+                        torque_detail = (
+                            f"exceeded at step {step_idx} joint {j} "
+                            f"(torque {float(torques[j]):.2f}, limit {float(limit_hi):.2f})"
                         )
 
     peak_torques = [round(t, 4) for t in peak_torques]
+    peak_torque_max = max(peak_torques) if peak_torques else 0.0
 
     # --- Gravity Compensation (payload hold feasibility) ---
     grasp_step = _find_grasp_step(actions) if actions else 0
-    gravity_torques: list[float] = [0.0] * n_dof
     gravity_feasible = True
 
     if actions and grasp_step < len(qpos_trajectory):
@@ -271,19 +311,13 @@ def compute_dynamics(
         grasp_data.qpos[:n_dof] = qpos_trajectory[min(grasp_step, len(qpos_trajectory) - 1)]
         mujoco.mj_forward(model, grasp_data)
 
-        # Compute body Jacobian at end-effector
         jacp = np.zeros((3, n_dof))
         jacr = np.zeros((3, n_dof))
         mujoco.mj_jac(model, grasp_data, jacp, jacr, data.xpos[ee_body_id], ee_body_id)
 
-        # Gravity force on payload: [0, 0, -9.81 * payload_kg]
         gravity_force = np.array([0.0, 0.0, -9.81 * payload_kg])
-
-        # Holding torques: J^T * F
         holding_torques = jacp.T @ gravity_force
-        gravity_torques = [round(float(t), 4) for t in holding_torques]
 
-        # Check if holding + peak trajectory torques exceed limits
         if n_act > 0 and hasattr(model, "actuator_forcerange"):
             n_check = min(n_dof, n_act)
             for j in range(n_check):
@@ -303,47 +337,109 @@ def compute_dynamics(
         manip_data.qpos[:n_dof] = qpos_trajectory[min(grasp_step, len(qpos_trajectory) - 1)]
         mujoco.mj_forward(model, manip_data)
 
-        # Full 6xN Jacobian (position + rotation)
         jacp = np.zeros((3, n_dof))
         jacr = np.zeros((3, n_dof))
         mujoco.mj_jac(model, manip_data, jacp, jacr, manip_data.xpos[ee_body_id], ee_body_id)
 
         full_jac = np.vstack([jacp, jacr])  # 6 x N
-
-        # SVD for manipulability
         singular_values = np.linalg.svd(full_jac, compute_uv=False)
         min_singular_value = float(np.min(singular_values)) if len(singular_values) > 0 else 0.0
         manipulability = float(np.prod(singular_values)) if len(singular_values) > 0 else 0.0
-
         near_singularity = min_singular_value < 0.01
 
     # Extract robot name from URDF filename
-    robot_name = urdf.stem  # e.g. "panda" from "panda.urdf"
+    robot_name = urdf.stem
+
+    # --- Build evidence-structured output ---
+    evidence: list[dict] = [
+        {
+            "field": "joint_limits_ok",
+            "value": joint_limits_ok,
+            "confidence": "hard",
+            "source": evidence_source,
+            "detail": "All joints within limits"
+            if joint_limits_ok
+            else "; ".join(joint_limit_details[:5]),
+        },
+        {
+            "field": "self_collision",
+            "value": self_collision,
+            "confidence": "hard",
+            "source": evidence_source,
+            "detail": "Self-collision detected" if self_collision else "No self-collision detected",
+        },
+        {
+            "field": "torque_feasible",
+            "value": torque_feasible,
+            "confidence": "hard",
+            "source": "mj_inverse",
+            "detail": torque_detail,
+        },
+        {
+            "field": "endpoint_trajectory",
+            "value": endpoint_trajectory,
+            "confidence": "hard",
+            "source": "mj_forward",
+        },
+        {
+            "field": "manipulability",
+            "value": round(manipulability, 6),
+            "confidence": "hard",
+            "source": "jacobian_svd",
+            "detail": f"min singular value {min_singular_value:.4f}"
+            + (" — near singularity" if near_singularity else ""),
+        },
+        {
+            "field": "gravity_feasible",
+            "value": gravity_feasible,
+            "confidence": "hard",
+            "source": "mj_inverse",
+            "detail": f"feasible for {payload_kg}kg payload"
+            if gravity_feasible
+            else f"infeasible for {payload_kg}kg payload",
+        },
+        {
+            "field": "near_singularity",
+            "value": near_singularity,
+            "confidence": "hard",
+            "source": "jacobian_svd",
+        },
+    ]
+
+    # Not-computed fields
+    not_computed: list[dict] = []
+    if is_ee_delta:
+        not_computed.append(
+            {
+                "field": "exact_controller_trajectory",
+                "reason": (
+                    "Jacobian IK is a first-order approximation. "
+                    "The robot's actual low-level controller may resolve EE deltas differently."
+                ),
+                "would_need": "Simulation with the robot's actual controller",
+            }
+        )
+
+    gripper_events = _extract_gripper_events(actions)
 
     return {
-        # Robot specification
-        "robot_name": robot_name,
-        "robot_dof": n_dof,
-        "robot_actuators": n_act,
-        # Trajectory analysis
-        "endpoint_trajectory": endpoint_trajectory,
-        "final_endpoint": endpoint_trajectory[-1] if endpoint_trajectory else [0, 0, 0],
-        "joint_limits_ok": joint_limits_ok,
-        "self_collision": self_collision,
-        "total_displacement_m": round(total_displacement, 4),
-        "max_velocity_rad_s": round(max_velocity, 4),
-        "smoothness_score": round(smoothness_score, 4),
-        "steps_analyzed": len(actions),
-        # Inverse dynamics
-        "torque_feasible": torque_feasible,
-        "torque_violations": torque_violations,
-        "peak_torques": peak_torques,
-        # Gravity compensation
-        "gravity_torques": gravity_torques,
-        "gravity_feasible": gravity_feasible,
-        "payload_kg": payload_kg,
-        # Manipulability
-        "manipulability": round(manipulability, 6),
-        "min_singular_value": round(min_singular_value, 6),
-        "near_singularity": near_singularity,
+        "analysis_mode": analysis_mode,
+        "robot": {"name": robot_name, "dof": n_dof, "actuators": n_act},
+        "evidence": evidence,
+        "not_computed": not_computed,
+        "gripper_events": gripper_events,
+        "summary": {
+            "total_displacement_m": round(total_displacement, 4),
+            "smoothness_score": round(smoothness_score, 4),
+            "max_velocity_rad_s": round(max_velocity, 4),
+            "steps_analyzed": len(actions),
+            "joint_limits_ok": joint_limits_ok,
+            "torque_feasible": torque_feasible,
+            "gravity_feasible": gravity_feasible,
+            "self_collision": self_collision,
+            "near_singularity": near_singularity,
+            "peak_torque_nm": round(peak_torque_max, 4),
+            "manipulability": round(manipulability, 6),
+            "final_endpoint": endpoint_trajectory[-1] if endpoint_trajectory else [0, 0, 0],
+        },
     }

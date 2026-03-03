@@ -44,6 +44,7 @@ graph TD
 ```
 
 Key properties:
+
 - **VLA runs first** — it only needs `image + task + proprioception`, not perceive/plan output
 - **Perceive and plan are evaluation context** — they inform the verifier, not the VLA
 - **Dynamics is a first-class stage** — extracted from act, with its own latency tracking

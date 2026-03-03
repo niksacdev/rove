@@ -72,7 +72,7 @@ A **domain evaluation module** (`src/evaluation/`) that works at the agent layer
 
 ### The evaluation pipeline
 
-```
+```text
 Input:  Task description + scene image + agent stack configuration
         "Pick the red bracket and place it in bin A"
         bracket_scene.jpg
@@ -101,7 +101,7 @@ The pipeline is **deterministic** — no LLM decides which step runs next. The o
 
 When a VLM judges "did the task succeed?" by comparing before/after images, how reliable is that judgment? This framework calibrates VLM judges against sim ground truth:
 
-```
+```text
 judge_calibration = agreement_rate(vlm_judge_verdict, sim_ground_truth)
 ```
 
@@ -271,7 +271,7 @@ This format works directly with `azure-ai-evaluation` SDK's `evaluate()` functio
 
 The repo has training (Isaac Lab RL + LeRobot IL) and inference (LeRobot ACT PolicyRunner). Evaluation is the missing third pillar:
 
-```
+```text
 Train policy (existing)  →  Evaluate on domain task (this proposal)  →  Deploy (existing)
         ↑                            |
         └── Fine-tune on failures ←──┘
@@ -502,7 +502,7 @@ evaluations:
 
 ### Proposed module structure
 
-```
+```text
 src/evaluation/                          # NEW — parallel to training/ and inference/
 ├── __init__.py
 ├── adapters/

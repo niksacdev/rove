@@ -4,6 +4,7 @@
 **Date**: 2026-02-25
 **Authors**: Product Advisor, System Architect
 **Related Docs**:
+
 - `docs/architecture/ADR-004-pipeline-data-flow-strategies-concurrency.md`
 - `docs/architecture/ADR-011-simulation-adapter-strategy-and-dual-mode-verify.md`
 - `src/rove/models/core.py`
@@ -48,6 +49,7 @@ class EvaluationProvenance(BaseModel):
 ```
 
 **Key decisions**:
+
 - Provenance is **mandatory and always on**. If it's optional, 90% of runs won't have it.
 - Images are stored as **SHA256 fingerprints**, not raw bytes. A single LIBERO trial is ~2MB of base64; storing raw images in JSONL would hit storage limits quickly.
 - `resolved_models` captures the actual adapter class used, not just the model_id string. This catches cases where the same model_id maps to different adapters across ROVE versions.
@@ -73,6 +75,7 @@ failure_category: str | None  # specific failure type
 | Verify `success=False` but all stages passed | `"verify"` | `"verification_mismatch"` |
 
 **Key decisions**:
+
 - Attribution is **deterministic and rules-based**, not LLM-generated. It uses data already in the pipeline.
 - Attribution is computed **after the pipeline completes**, in the run manager, not inside the pipeline itself.
 - `failure_stage=None` and `failure_category=None` when the evaluation succeeds.
@@ -87,6 +90,7 @@ A `seed` parameter propagates from CLI/API through to all mock adapters:
 - The seed is stored in `EvaluationProvenance`
 
 **Key decisions**:
+
 - Each mock adapter gets its own `random.Random` instance to avoid cross-adapter state leakage.
 - Real adapters that support seed/temperature parameters will receive them in Phase 2+ via adapter config. This ADR only covers mocks.
 - Without a seed, mock behavior remains stochastic (current behavior).
@@ -120,16 +124,19 @@ Add `--seed` flag to the `serve` command. Passed through to the app as an enviro
 ## Consequences
 
 **Positive**:
+
 - Every evaluation is reproducible (given the same config + seed + image)
 - Failure analysis becomes actionable: "65% of failures are at the plan stage with low confidence" instead of "65% of evaluations fail"
 - Seed control enables regression testing: mock results are deterministic and diffable
 - Zero new dependencies — all features use stdlib + existing Pydantic models
 
 **Negative**:
+
 - JSONL records grow by ~500 bytes per evaluation (provenance JSON). Negligible.
 - Failure attribution rules are heuristic — they may misattribute in edge cases. This is acceptable: rules can be refined, and wrong attribution is better than no attribution.
 
 **Future extensions** (Phase 2+):
+
 - `raw_prompt` capture per stage (needed for fine-tuning dataset construction)
 - Adapter metadata protocol (model_version, token_counts from real adapters)
 - LeRobot dataset export using provenance + failure data

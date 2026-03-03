@@ -8,7 +8,7 @@ from rove.adapters.mock_agent import MockAgentAdapter
 from rove.adapters.mock_sim import MockSimAdapter
 from rove.adapters.mock_vla import MockVLAAdapter
 from rove.adapters.mock_vlm import MockVLMAdapter
-from rove.models import SceneAnalysis, TaskPlan
+from rove.models import ActionSpace, RobotEmbodiment, SceneAnalysis, TaskPlan, VLACapabilities
 
 
 class TestMockSimAdapter:
@@ -136,16 +136,19 @@ class TestMockVLMVerifyStageAware:
         }
         result = await vlm.verify_success("before", "after", "test", context=ctx)
         assert result.action_plausibility is not None
-        assert isinstance(result.action_plausibility.bounds_check, float)
-        assert isinstance(result.action_plausibility.smoothness, float)
-        assert isinstance(result.action_plausibility.gripper_consistency, float)
-        assert 0.0 <= result.action_plausibility.plan_alignment <= 1.0
-        assert result.action_plausibility.reasoning != ""
-        # Extended fields
-        assert 0.0 <= result.action_plausibility.workspace_reachability <= 1.0
-        assert 0.0 <= result.action_plausibility.task_completion_plausibility <= 1.0
-        assert 0.0 <= result.action_plausibility.dynamics_consistency <= 1.0
-        assert 0.0 <= result.action_plausibility.safety_assessment <= 1.0
+        ap = result.action_plausibility
+        # Physics-dependent fields are None without dynamics evidence
+        assert ap.bounds_check is None
+        assert ap.workspace_reachability is None
+        assert ap.dynamics_consistency is None
+        assert ap.safety_assessment is None
+        # Perception-based fields are still floats
+        assert isinstance(ap.smoothness, float)
+        assert isinstance(ap.gripper_consistency, float)
+        assert 0.0 <= ap.plan_alignment <= 1.0
+        assert ap.reasoning != ""
+        assert 0.0 <= ap.task_completion_plausibility <= 1.0
+        assert ap.evidence_quality == "perception_only"
 
     @pytest.mark.asyncio
     async def test_verify_plausibility_without_act(self):
@@ -176,6 +179,69 @@ class TestMockVLAAdapter:
         vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
         pred = await vla.predict_action("img", "task")
         assert pred.num_steps == 5  # default
+
+    def test_capabilities_from_config(self):
+        """Capabilities come from vla_capabilities in config dict."""
+        vla = MockVLAAdapter(
+            config={
+                "mock_latency_ms": [1, 2],
+                "vla_capabilities": {
+                    "native_action_dim": 6,
+                    "native_action_space": "eef_delta",
+                    "supported_robot_types": ["so100"],
+                },
+            }
+        )
+        caps = vla.capabilities
+        assert isinstance(caps, VLACapabilities)
+        assert caps.native_action_dim == 6
+        assert caps.native_action_space == ActionSpace.EEF_DELTA
+        assert caps.supported_robot_types == ["so100"]
+
+    def test_capabilities_fallback_without_config(self):
+        """Without vla_capabilities block, falls back to defaults."""
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
+        caps = vla.capabilities
+        assert isinstance(caps, VLACapabilities)
+        assert caps.native_action_dim == 7
+        assert caps.native_action_space == ActionSpace.EEF_DELTA
+        assert caps.supported_robot_types is None
+
+    def test_capabilities_fallback_no_config(self):
+        """Without any config, falls back to defaults."""
+        vla = MockVLAAdapter()
+        caps = vla.capabilities
+        assert isinstance(caps, VLACapabilities)
+        assert caps.native_action_dim == 7
+
+    @pytest.mark.asyncio
+    async def test_embodiment_shapes_output(self):
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
+        emb = RobotEmbodiment(robot_type="panda", arm_dof=6, gripper_dof=1, gripper_index=6)
+        pred = await vla.predict_action("img", "task", embodiment=emb)
+        assert pred.declared_action_dim == 7
+        assert pred.action_space == ActionSpace.EEF_DELTA
+        assert pred.gripper_index == 6
+        assert pred.raw_action_dim == 7
+        for action in pred.actions:
+            assert len(action) == 7
+
+    @pytest.mark.asyncio
+    async def test_embodiment_different_dof(self):
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
+        emb = RobotEmbodiment(robot_type="so100", arm_dof=5, gripper_dof=1, gripper_index=5)
+        pred = await vla.predict_action("img", "task", embodiment=emb)
+        assert pred.declared_action_dim == 6
+        for action in pred.actions:
+            assert len(action) == 6
+
+    @pytest.mark.asyncio
+    async def test_no_embodiment_defaults_to_7dof(self):
+        vla = MockVLAAdapter(config={"mock_latency_ms": [1, 2]})
+        pred = await vla.predict_action("img", "task")
+        assert pred.declared_action_dim == 7
+        for action in pred.actions:
+            assert len(action) == 7
 
 
 class TestMockAgentAdapter:
@@ -208,3 +274,68 @@ class TestMockAgentAdapter:
         ctx = {"plan": {"target_object": "gear"}}
         result = await agent.run_stage("verify", "img", "test", ctx)
         assert "gear" in result["reasoning"]
+
+    def test_capabilities_from_config(self):
+        agent = MockAgentAdapter(
+            config={
+                "mock_latency_ms": [1, 2],
+                "vla_capabilities": {
+                    "native_action_dim": 6,
+                    "supported_robot_types": ["so100"],
+                },
+            }
+        )
+        caps = agent.capabilities
+        assert isinstance(caps, VLACapabilities)
+        assert caps.native_action_dim == 6
+        assert caps.supported_robot_types == ["so100"]
+
+    def test_capabilities_fallback(self):
+        agent = MockAgentAdapter(config={"mock_latency_ms": [1, 2]})
+        caps = agent.capabilities
+        assert isinstance(caps, VLACapabilities)
+        assert caps.native_action_dim == 7
+        assert caps.supported_robot_types is None
+
+    @pytest.mark.asyncio
+    async def test_act_includes_action_space(self):
+        agent = MockAgentAdapter(config={"mock_latency_ms": [1, 2]})
+        result = await agent.run_stage("act", "img", "grab bolt")
+        assert result["action_space"] == "eef_delta"
+
+
+class TestActionNormalizer:
+    def test_slice_to_target_dim(self):
+        from rove.adapters.normalizer import slice_to_target_dim
+
+        raw = [[0.1] * 32, [0.2] * 32]
+        sliced = slice_to_target_dim(raw, 7)
+        assert len(sliced) == 2
+        assert len(sliced[0]) == 7
+        assert len(sliced[1]) == 7
+
+    def test_slice_already_correct_size(self):
+        from rove.adapters.normalizer import slice_to_target_dim
+
+        raw = [[0.1] * 7, [0.2] * 7]
+        sliced = slice_to_target_dim(raw, 7)
+        assert sliced == raw
+
+    def test_normalize_proprioception(self):
+        from rove.adapters.normalizer import normalize_proprioception
+
+        state = [1.0, 2.0, 3.0]
+        mean = [0.0, 1.0, 2.0]
+        std = [1.0, 1.0, 1.0]
+        result = normalize_proprioception(state, mean, std)
+        assert result == [1.0, 1.0, 1.0]
+
+    def test_denormalize_actions(self):
+        from rove.adapters.normalizer import denormalize_actions
+
+        actions = [[1.0, 1.0], [2.0, 2.0]]
+        mean = [0.0, 1.0]
+        std = [1.0, 2.0]
+        result = denormalize_actions(actions, mean, std)
+        assert result[0] == [1.0, 3.0]
+        assert result[1] == [2.0, 5.0]

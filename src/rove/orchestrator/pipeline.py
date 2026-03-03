@@ -24,13 +24,16 @@ from rove.adapters.protocols import (
 from rove.adapters.registry import AdapterRegistry
 from rove.models import (
     ActionPrediction,
+    ActionSpace,
     ExampleData,
     PipelineContext,
     PipelineStageResult,
+    RobotEmbodiment,
     SceneAnalysis,
     StageStatus,
     TaskPlan,
     VerificationResult,
+    VLACapabilities,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,6 +123,114 @@ class EvaluationPipeline:
             logger.warning("Failed to parse URDF for robot info", exc_info=True)
             return {}
 
+    def _build_robot_embodiment(self, ctx: PipelineContext) -> RobotEmbodiment | None:
+        """Build typed robot descriptor from URDF + manifest metadata.
+
+        Uses the same data that _build_robot_spec() currently formats as text.
+        Returns None if no robot metadata available (e.g., perceive-only tasks).
+        """
+        meta = ctx.task_metadata or {}
+        urdf_info = self._urdf_robot_info
+
+        # Try nested robot block first (new format), then flat fields (legacy)
+        robot_block = meta.get("robot_descriptor", {})
+        if robot_block and isinstance(robot_block, dict):
+            # New nested format — map directly to RobotEmbodiment
+            return RobotEmbodiment(
+                robot_type=robot_block.get("robot_type", ""),
+                arm_dof=robot_block.get("arm_dof", 6),
+                gripper_dof=robot_block.get("gripper_dof", 1),
+                action_space=ActionSpace(robot_block["action_space"])
+                if robot_block.get("action_space")
+                else ActionSpace.EEF_DELTA,
+                proprioception_space=ActionSpace(robot_block["proprioception_space"])
+                if robot_block.get("proprioception_space")
+                else ActionSpace.JOINT_POSITION,
+                gripper_index=robot_block.get("gripper_index"),
+                state_dim_override=robot_block.get("state_dim_override"),
+                urdf_path=self._urdf_path,
+                embodiment_tag=robot_block.get("embodiment_tag"),
+            )
+
+        # Legacy flat format
+        robot_type = meta.get("robot", "") or urdf_info.get("robot_name", "")
+        if not robot_type:
+            return None
+
+        action_dim = meta.get("action_dim")
+        arm_dof = urdf_info.get("dof") or (action_dim - 1 if action_dim else 6)
+        state_dim = meta.get("state_dim")
+        control_space = meta.get("control_space", "")
+
+        # Map legacy control_space strings to ActionSpace enum
+        space_map = {
+            "end_effector_delta": ActionSpace.EEF_DELTA,
+            "eef_delta": ActionSpace.EEF_DELTA,
+            "joint_position": ActionSpace.JOINT_POSITION,
+            "joint_delta": ActionSpace.JOINT_DELTA,
+            "eef_absolute": ActionSpace.EEF_ABSOLUTE,
+        }
+        action_space = space_map.get(control_space, ActionSpace.EEF_DELTA)
+
+        return RobotEmbodiment(
+            robot_type=robot_type,
+            arm_dof=arm_dof,
+            gripper_dof=1,
+            action_space=action_space,
+            gripper_index=(action_dim - 1) if action_dim else None,
+            state_dim_override=state_dim
+            if state_dim and action_dim and state_dim != action_dim
+            else None,
+            urdf_path=self._urdf_path,
+        )
+
+    def _validate_embodiment_compat(
+        self,
+        embodiment: RobotEmbodiment,
+        capabilities: VLACapabilities,
+        model_id: str,
+    ) -> list[str]:
+        """Validate robot embodiment is compatible with VLA capabilities.
+
+        Returns a list of warnings. Raises ValueError for hard incompatibilities.
+        """
+        warnings: list[str] = []
+
+        # Checkpoint-bound model on wrong robot
+        if (
+            capabilities.supported_robot_types is not None
+            and embodiment.robot_type not in capabilities.supported_robot_types
+        ):
+            raise ValueError(
+                f"VLA '{model_id}' supports robots {capabilities.supported_robot_types} "
+                f"but task requires '{embodiment.robot_type}'"
+            )
+
+        # Target action_dim exceeds model's max
+        if (
+            capabilities.max_action_dim is not None
+            and embodiment.action_dim > capabilities.max_action_dim
+        ):
+            raise ValueError(
+                f"VLA '{model_id}' max action dim is {capabilities.max_action_dim} "
+                f"but robot requires {embodiment.action_dim}"
+            )
+
+        # Embodiment tag required but missing
+        if capabilities.requires_embodiment_tag and not embodiment.embodiment_tag:
+            raise ValueError(
+                f"VLA '{model_id}' requires an embodiment_tag but none provided in robot metadata"
+            )
+
+        # Action space mismatch — warning, not error (valid research configuration)
+        if capabilities.native_action_space != embodiment.action_space:
+            warnings.append(
+                f"Action space mismatch: VLA outputs {capabilities.native_action_space.value} "
+                f"but robot expects {embodiment.action_space.value}"
+            )
+
+        return warnings
+
     async def _call_adapter(
         self,
         stage: str,
@@ -179,6 +290,7 @@ class EvaluationPipeline:
                 task,
                 proprioception=context.get("proprioception"),
                 plan=context.get("plan"),
+                embodiment=context.get("embodiment"),
             )
         elif stage == "verify":
             after_image = context.get("after_image", image_base64)
@@ -195,133 +307,106 @@ class EvaluationPipeline:
         return adapter.model_id
 
     @staticmethod
-    def _apply_dynamics_sanity_checks(
-        verification: VerificationResult, dynamics_analysis: dict
+    @staticmethod
+    def _validate_evidence_consistency(
+        verification: VerificationResult, dynamics: dict | None
     ) -> VerificationResult:
-        """Override VLM plausibility scores when dynamics data objectively contradicts them.
+        """Lightweight consistency check. Flags contradictions, nullifies
+        hallucinated fields, but does NOT override LLM scores.
 
-        MuJoCo dynamics provides ground-truth physics checks (joint limits,
-        collisions, displacement, torques, singularity) that should override
-        subjective VLM scores.
+        Three rules:
+        1. If no dynamics was provided, null out fields that require physics data.
+        2. If dynamics was provided, flag contradictions between LLM scores and
+           hard evidence (without changing the scores).
+        3. Log if confidence seems miscalibrated vs evidence quality.
         """
-        if not verification.action_plausibility:
+        ap = verification.action_plausibility
+        if ap is None:
             return verification
 
-        plaus = verification.action_plausibility.model_copy()
-        overrides: list[str] = []
-        dyn_failures = 0
+        contradictions: list[str] = []
 
-        # Joint limits violation
-        if not dynamics_analysis.get("joint_limits_ok", True):
-            if plaus.bounds_check:
-                plaus.bounds_check = 0.0
-                overrides.append("bounds_check=False: joint limits exceeded")
-            dyn_failures += 1
+        if dynamics is None:
+            # No dynamics — null out fields that require physics data
+            changed = False
+            for field in (
+                "bounds_check",
+                "dynamics_consistency",
+                "workspace_reachability",
+                "safety_assessment",
+            ):
+                if getattr(ap, field, None) is not None:
+                    setattr(ap, field, None)
+                    changed = True
+            if changed and not ap.evidence_quality:
+                ap.evidence_quality = "perception_only"
+        else:
+            # Dynamics was provided — flag contradictions without overriding
+            evidence_map = {e["field"]: e for e in dynamics.get("evidence", [])}
 
-        # Self-collision
-        if dynamics_analysis.get("self_collision", False):
-            if plaus.bounds_check:
-                plaus.bounds_check = 0.0
-                overrides.append("bounds_check=False: self-collision detected")
-            dyn_failures += 1
-
-        # Excessive displacement
-        total_disp = dynamics_analysis.get("total_displacement_m", 0.0)
-        if total_disp > 2.0:
-            if plaus.smoothness:
-                plaus.smoothness = 0.0
-                overrides.append(
-                    f"smoothness=False: displacement {total_disp:.1f}m exceeds 2.0m limit"
+            # Check joint limits contradiction
+            jl = evidence_map.get("joint_limits_ok")
+            if (
+                jl
+                and jl["confidence"] == "hard"
+                and not jl["value"]
+                and ap.bounds_check is not None
+                and ap.bounds_check > 0.5
+            ):
+                contradictions.append(
+                    f"bounds_check={ap.bounds_check} but hard evidence shows joint limit violations"
                 )
-            dyn_failures += 1
 
-        # Very low smoothness score
-        smoothness_score = dynamics_analysis.get("smoothness_score", 1.0)
-        if smoothness_score < 0.1:
-            dyn_failures += 1
+            # Check self-collision contradiction
+            sc = evidence_map.get("self_collision")
+            if (
+                sc
+                and sc["confidence"] == "hard"
+                and sc["value"]
+                and ap.safety_assessment is not None
+                and ap.safety_assessment > 0.7
+            ):
+                contradictions.append(
+                    f"safety_assessment={ap.safety_assessment} but hard evidence "
+                    f"shows self-collision"
+                )
 
-        # Torque feasibility violation
-        if not dynamics_analysis.get("torque_feasible", True):
-            if plaus.bounds_check:
-                plaus.bounds_check = 0.0
-                overrides.append("bounds_check=False: torque limits exceeded")
-            dyn_failures += 1
+            # Check torque contradiction
+            tf = evidence_map.get("torque_feasible")
+            if (
+                tf
+                and tf["confidence"] == "hard"
+                and not tf["value"]
+                and ap.safety_assessment is not None
+                and ap.safety_assessment > 0.7
+            ):
+                contradictions.append(
+                    f"safety_assessment={ap.safety_assessment} but hard evidence "
+                    f"shows torque infeasibility"
+                )
 
-        # Near singularity — cap plan_alignment
-        if dynamics_analysis.get("near_singularity", False):
-            if plaus.plan_alignment > 0.3:
-                overrides.append("plan_alignment capped 0.3: near singularity at grasp config")
-                plaus.plan_alignment = 0.3
-            dyn_failures += 1
+            # Set evidence_quality if not already set
+            if not ap.evidence_quality:
+                ap.evidence_quality = "hard"
 
-        # Gravity compensation infeasible
-        if not dynamics_analysis.get("gravity_feasible", True):
-            if plaus.bounds_check:
-                plaus.bounds_check = 0.0
-                overrides.append("bounds_check=False: gravity compensation infeasible")
-            dyn_failures += 1
-
-        # Workspace reachability — cap based on dynamics failure count
-        reachability = max(0.0, 1.0 - dyn_failures * 0.25)
-        if reachability < plaus.workspace_reachability:
-            overrides.append(
-                f"workspace_reachability={reachability:.2f}: {dyn_failures} dynamics failure(s)"
+            # Log miscalibration warning (don't override)
+            summary = dynamics.get("summary", {})
+            has_violations = (
+                not summary.get("joint_limits_ok", True)
+                or summary.get("self_collision", False)
+                or not summary.get("torque_feasible", True)
             )
-            plaus.workspace_reachability = reachability
+            if has_violations and verification.confidence > 0.8:
+                logger.warning(
+                    "Confidence %.2f seems high given physics violations — "
+                    "prompt calibration may need tuning",
+                    verification.confidence,
+                )
 
-        # Safety assessment — compute from 4 binary signals
-        safety_penalties = 0
-        if not dynamics_analysis.get("torque_feasible", True):
-            safety_penalties += 1
-        if dynamics_analysis.get("self_collision", False):
-            safety_penalties += 1
-        if dynamics_analysis.get("near_singularity", False):
-            safety_penalties += 1
-        if not dynamics_analysis.get("gravity_feasible", True):
-            safety_penalties += 1
-        safety_score = max(0.0, 1.0 - safety_penalties * 0.3)
-        if safety_score < plaus.safety_assessment:
-            overrides.append(
-                f"safety_assessment={safety_score:.2f}: {safety_penalties} safety issue(s)"
-            )
-            plaus.safety_assessment = safety_score
+        if contradictions:
+            verification = verification.model_copy(update={"contradictions": contradictions})
 
-        # Dynamics consistency — each override applied = disagreement between LLM and physics
-        # Count how many overrides we've accumulated so far (before this point)
-        n_overrides = len(overrides)
-        consistency = max(0.0, 1.0 - n_overrides * 0.15)
-        if consistency < plaus.dynamics_consistency:
-            overrides.append(
-                f"dynamics_consistency={consistency:.2f}: {n_overrides} LLM-physics disagreement(s)"
-            )
-            plaus.dynamics_consistency = consistency
-
-        # NOTE: task_completion_plausibility is NOT overridden — it's a semantic
-        # assessment that only the LLM can make (requires understanding task intent)
-
-        # Cap plan_alignment if any dynamics failure
-        if dyn_failures >= 1 and plaus.plan_alignment > 0.3:
-            overrides.append(f"plan_alignment capped 0.3: {dyn_failures} dynamics failure(s)")
-            plaus.plan_alignment = 0.3
-
-        # Cap overall confidence if 2+ dynamics failures
-        new_confidence = verification.confidence
-        if dyn_failures >= 2 and verification.confidence > 0.4:
-            overrides.append(f"confidence capped 0.4: {dyn_failures} dynamics failures")
-            new_confidence = 0.4
-
-        if overrides:
-            override_text = " | ".join(f"[Dynamics override: {o}]" for o in overrides)
-            plaus.reasoning = (
-                f"{plaus.reasoning} {override_text}" if plaus.reasoning else override_text
-            )
-
-        return verification.model_copy(
-            update={
-                "action_plausibility": plaus,
-                "confidence": new_confidence,
-            }
-        )
+        return verification
 
     def _resolve_verify_mode(self) -> str:
         """Resolve 'auto' verify_mode to a concrete mode.
@@ -378,9 +463,10 @@ class EvaluationPipeline:
                     "type": "function",
                     "name": "compute_dynamics",
                     "description": (
-                        "Run MuJoCo dynamics analysis on the VLA action trajectory. "
-                        "Returns end-effector positions, joint limit violations, "
-                        "collisions, torque feasibility, smoothness. Physics ground truth."
+                        "Run MuJoCo analysis on the VLA action trajectory. "
+                        "Returns structured evidence categorized as 'hard' (physics ground truth) "
+                        "or 'estimated' (approximate). Also reports what CANNOT be computed "
+                        "and what additional tooling would help."
                     ),
                     "parameters": {"type": "object", "properties": {}},
                 }
@@ -426,13 +512,51 @@ class EvaluationPipeline:
         return [{"role": "user", "content": user_parts}]
 
     def _build_robot_spec(self, ctx: PipelineContext) -> str:
-        """Build robot embodiment spec from manifest metadata and/or URDF.
+        """Build robot embodiment spec for the verifier.
 
-        Provides the verifier with ground truth about the target robot so it can
-        detect embodiment mismatches in VLA output (wrong DOF, action space,
-        control mode, etc.). All data comes from the dataset manifest or URDF —
-        no hardcoded robot knowledge.
+        Uses the typed RobotEmbodiment if available, falls back to raw metadata
+        for backward compatibility. Provides the verifier with ground truth about
+        the target robot so it can detect embodiment mismatches in VLA output.
         """
+        emb = ctx.robot_embodiment
+        if emb is not None:
+            lines = [
+                f"Robot: {emb.robot_type}",
+                f"Arm DOF: {emb.arm_dof} (+ {emb.gripper_dof} gripper)",
+                f"Action dim: {emb.action_dim}",
+                f"Action space: {emb.action_space.value}",
+                f"State space: {emb.proprioception_space.value}",
+            ]
+            if emb.state_dim_override:
+                lines.append(f"State dimensions: {emb.state_dim}")
+            # Add URDF joint info if available
+            urdf_info = self._urdf_robot_info
+            if urdf_info.get("joint_names"):
+                lines.append(f"Joint names: {', '.join(urdf_info['joint_names'])}")
+            if urdf_info.get("mimic_joints"):
+                lines.append(
+                    f"Mimic joints (not independent): {', '.join(urdf_info['mimic_joints'])}"
+                )
+            # Note EE-delta vs joint DOF mismatch
+            dof = urdf_info.get("dof")
+            if (
+                dof is not None
+                and dof != emb.action_dim
+                and emb.action_space == ActionSpace.EEF_DELTA
+            ):
+                lines.append(
+                    f"NOTE: Action dim ({emb.action_dim}) != joint DOF ({dof}) — "
+                    f"EE-delta control space. A low-level controller maps EE deltas to joints."
+                )
+            # Action space description from metadata (human-readable)
+            action_space_desc = (ctx.task_metadata or {}).get("action_space_desc", "")
+            if action_space_desc:
+                lines.append(f"Action space description: {action_space_desc}")
+            if ctx.proprioception:
+                lines.append(f"Proprioception dimensions: {len(ctx.proprioception)}")
+            return "\n".join(lines)
+
+        # Fallback: raw metadata (no RobotEmbodiment available)
         lines: list[str] = []
         meta = ctx.task_metadata or {}
         urdf_info = self._urdf_robot_info
@@ -445,18 +569,35 @@ class EvaluationPipeline:
         if not robot_name and not action_dim and not dof:
             return ""
 
+        control_space = meta.get("control_space", "")
+        action_space_desc = meta.get("action_space_desc", "")
+
         if robot_name:
             lines.append(f"Robot: {robot_name}")
         if dof is not None:
             joint_names = urdf_info.get("joint_names", [])
             mimic_joints = urdf_info.get("mimic_joints", [])
-            lines.append(f"DOF (from URDF): {dof} independent joints")
+            lines.append(f"Joint DOF (from URDF): {dof} independent joints")
             if joint_names:
                 lines.append(f"Joint names: {', '.join(joint_names)}")
             if mimic_joints:
                 lines.append(f"Mimic joints (not independent): {', '.join(mimic_joints)}")
         if action_dim is not None:
-            lines.append(f"Expected action dimensions: {action_dim}")
+            lines.append(f"Action dimensions: {action_dim}")
+        if control_space:
+            lines.append(f"Control space: {control_space}")
+        if action_space_desc:
+            lines.append(f"Action space: {action_space_desc}")
+        if (
+            dof is not None
+            and action_dim is not None
+            and dof != action_dim
+            and control_space == "end_effector_delta"
+        ):
+            lines.append(
+                f"NOTE: Action dim ({action_dim}) != joint DOF ({dof}) — "
+                f"EE-delta control space. A low-level controller maps EE deltas to joints."
+            )
         if state_dim is not None:
             lines.append(f"State dimensions: {state_dim}")
         if ctx.proprioception:
@@ -478,8 +619,7 @@ class EvaluationPipeline:
         from rove.utils.prompt_loader import get_prompt_manager
 
         pm = get_prompt_manager()
-        has_dynamics = any(t.get("name") == "compute_dynamics" for t in tool_schemas)
-        instructions = pm.render_verify_loop_system(has_dynamics=has_dynamics)
+        instructions = pm.render_verify_loop_system()
 
         adapter = self.verify_adapter
 
@@ -525,31 +665,95 @@ class EvaluationPipeline:
         # Fallback: single-call verify (no tool support)
         raise NotImplementedError(f"Adapter {type(adapter).__name__} does not support tool calling")
 
-    @staticmethod
-    def _strip_hallucinated_dynamics(verification: VerificationResult) -> VerificationResult:
-        """Remove dynamics-only fields that the LLM hallucinated without data.
+    def _compile_physics_evidence(self, dynamics_analysis: dict | None) -> str:
+        """Format dynamics analysis into evidence text for the verifier.
 
-        When compute_dynamics was not available, the LLM may still produce
-        bounds_check, dynamics_consistency, workspace_reachability, and
-        safety_assessment at inflated values. Strip them so the frontend
-        correctly shows 'VLM Assessment' instead of 'MuJoCo Dynamics'.
+        No score modification. The LLM reasons about this evidence.
         """
-        ap = verification.action_plausibility
-        if ap is None:
-            return verification
-        changed = False
-        for field in (
-            "bounds_check",
-            "dynamics_consistency",
-            "workspace_reachability",
-            "safety_assessment",
-        ):
-            if getattr(ap, field, None) is not None:
-                setattr(ap, field, None)
-                changed = True
-        if changed and verification.confidence > 0.5:
-            verification.confidence = min(verification.confidence, 0.5)
-        return verification
+        if not dynamics_analysis:
+            return ""
+
+        lines = ["## Physics Evidence (MuJoCo Dynamics Analysis)", ""]
+        mode = dynamics_analysis.get("analysis_mode", "unknown")
+        mode_desc = {
+            "joint_space": "joint-space (exact)",
+            "ee_delta_jacobian_ik": "end-effector delta (resolved via Jacobian pseudoinverse IK)",
+        }.get(mode, mode)
+        lines.append(f"Analysis mode: {mode_desc}")
+        lines.append("")
+
+        # Evidence items
+        evidence = dynamics_analysis.get("evidence", [])
+        summary = dynamics_analysis.get("summary", {})
+
+        lines.append("### Trajectory Analysis")
+        for item in evidence:
+            field = item.get("field", "")
+            value = item.get("value")
+            detail = item.get("detail", "")
+            source = item.get("source", "")
+
+            if field == "endpoint_trajectory":
+                traj = value or []
+                if traj:
+                    lines.append(
+                        f"- EE trajectory: {traj[0]} -> {traj[-1]} ({len(traj)} points, source: {source})"
+                    )
+                continue
+            if field in (
+                "joint_limits_ok",
+                "self_collision",
+                "torque_feasible",
+                "gravity_feasible",
+                "near_singularity",
+            ):
+                label = field.replace("_", " ").title()
+                status = (
+                    "OK"
+                    if (value and field != "self_collision")
+                    or (not value and field == "self_collision")
+                    else "VIOLATED"
+                    if field != "self_collision"
+                    else "DETECTED"
+                )
+                detail_str = f" ({detail})" if detail else ""
+                lines.append(f"- {label}: {status}{detail_str} [source: {source}]")
+            elif field == "manipulability":
+                lines.append(
+                    f"- Manipulability: {value}{' (' + detail + ')' if detail else ''} [source: {source}]"
+                )
+
+        # Summary stats
+        if summary:
+            lines.append("")
+            lines.append("### Summary Statistics")
+            lines.append(f"- Total displacement: {summary.get('total_displacement_m', 0):.3f}m")
+            lines.append(f"- Smoothness score: {summary.get('smoothness_score', 0):.2f}")
+            lines.append(f"- Steps analyzed: {summary.get('steps_analyzed', 0)}")
+            ep = summary.get("final_endpoint", [0, 0, 0])
+            lines.append(f"- Final endpoint: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}]m")
+            if summary.get("peak_torque_nm", 0) > 0:
+                lines.append(f"- Peak torque: {summary['peak_torque_nm']:.2f} Nm")
+
+        # Gripper events
+        gripper_events = dynamics_analysis.get("gripper_events", [])
+        if gripper_events:
+            lines.append("")
+            lines.append("### Gripper Events")
+            for evt in gripper_events:
+                lines.append(f"- {evt['type'].title()} at step {evt['step']}")
+
+        # Not computed
+        not_computed = dynamics_analysis.get("not_computed", [])
+        if not_computed:
+            lines.append("")
+            lines.append("### Not Computed")
+            for nc in not_computed:
+                lines.append(f"- {nc.get('field', '?')}: {nc.get('reason', '')}")
+                if nc.get("would_need"):
+                    lines.append(f"  Would need: {nc['would_need']}")
+
+        return "\n".join(lines)
 
     def _parse_verify_response(self, response: Any, turn: int = 1) -> VerificationResult:
         """Parse a verify response into VerificationResult.
@@ -696,14 +900,11 @@ class EvaluationPipeline:
                     # Final verdict — no more tool calls
                     verification = self._parse_verify_response(response, turn=turn + 1)
 
-                    # Apply dynamics sanity checks if we have dynamics data
-                    if ctx.dynamics_analysis:
-                        verification = self._apply_dynamics_sanity_checks(
-                            verification, ctx.dynamics_analysis
-                        )
-                    elif "compute_dynamics" not in executed_tools:
-                        # LLM may hallucinate dynamics fields — strip them
-                        verification = self._strip_hallucinated_dynamics(verification)
+                    # Validate evidence consistency (flags contradictions, nullifies hallucinations)
+                    has_dynamics = "compute_dynamics" in executed_tools and ctx.dynamics_analysis
+                    verification = self._validate_evidence_consistency(
+                        verification, ctx.dynamics_analysis if has_dynamics else None
+                    )
 
                     latency = (time.monotonic() - t0) * 1000
                     yield PipelineStageResult(
@@ -795,12 +996,10 @@ class EvaluationPipeline:
 
             # Max turns exhausted — parse whatever we have
             verification = self._parse_verify_response(response, turn=max_turns)
-            if ctx.dynamics_analysis:
-                verification = self._apply_dynamics_sanity_checks(
-                    verification, ctx.dynamics_analysis
-                )
-            elif "compute_dynamics" not in executed_tools:
-                verification = self._strip_hallucinated_dynamics(verification)
+            has_dynamics = "compute_dynamics" in executed_tools and ctx.dynamics_analysis
+            verification = self._validate_evidence_consistency(
+                verification, ctx.dynamics_analysis if has_dynamics else None
+            )
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="verify",
@@ -850,6 +1049,8 @@ class EvaluationPipeline:
                 "robot",
                 "action_dim",
                 "state_dim",
+                "control_space",
+                "action_space_desc",
             ):
                 val = example.extras.get(key)
                 if val is not None:
@@ -868,6 +1069,19 @@ class EvaluationPipeline:
                 if candidate.exists():
                     self._urdf_path = str(candidate)
                     logger.info("Auto-detected URDF for robot '%s': %s", robot, candidate)
+
+        # Build typed robot embodiment from URDF + manifest metadata
+        ctx.robot_embodiment = self._build_robot_embodiment(ctx)
+
+        # Validate VLA compatibility at config time (fail fast)
+        if ctx.robot_embodiment and self.act_adapter is not None:
+            caps = getattr(self.act_adapter, "capabilities", None)
+            if caps is not None:
+                warnings = self._validate_embodiment_compat(
+                    ctx.robot_embodiment, caps, self.act_adapter.model_id
+                )
+                for w in warnings:
+                    logger.warning("Embodiment compat: %s", w)
 
         return ctx
 
@@ -994,6 +1208,7 @@ class EvaluationPipeline:
                     scene=scene,
                     plan=plan,
                     proprioception=ctx.proprioception,
+                    embodiment=ctx.robot_embodiment,
                 )
                 ctx.action = action_pred
                 ctx.completed_stages.append("act")
@@ -1161,6 +1376,7 @@ class EvaluationPipeline:
                 image_base64,
                 task,
                 proprioception=ctx.proprioception,
+                embodiment=ctx.robot_embodiment,
             )
             ctx.action = action_pred
             ctx.completed_stages.append("act")
@@ -1320,6 +1536,10 @@ class EvaluationPipeline:
         if not action_pred.actions:
             logger.warning("Dynamics enabled but no actions — skipping")
             return "No trajectory actions to analyze"
+
+        meta = ctx.task_metadata or {}
+        control_space = meta.get("control_space", "joint_space")
+
         try:
             from rove.adapters.dynamics_mujoco import compute_dynamics
 
@@ -1327,9 +1547,14 @@ class EvaluationPipeline:
                 self._urdf_path,
                 action_pred.actions,
                 initial_qpos=ctx.proprioception or None,
+                control_space=control_space,
             )
             ctx.dynamics_analysis = dyn
-            logger.info("Dynamics analysis: %d steps", dyn.get("steps_analyzed", 0))
+            logger.info(
+                "Dynamics analysis: %d steps, mode=%s",
+                dyn.get("summary", {}).get("steps_analyzed", 0),
+                dyn.get("analysis_mode", "unknown"),
+            )
             return None
         except ImportError:
             logger.warning("MuJoCo not installed — skipping dynamics")
@@ -1419,10 +1644,7 @@ class EvaluationPipeline:
                 after_image=after_image,
                 pipeline_context=ctx.to_dict(),
             )
-            if ctx.dynamics_analysis:
-                verification = self._apply_dynamics_sanity_checks(
-                    verification, ctx.dynamics_analysis
-                )
+            verification = self._validate_evidence_consistency(verification, ctx.dynamics_analysis)
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(
                 stage="verify",

@@ -289,86 +289,55 @@ class MockVLMAdapter:
         dyn_data = context.get("dynamics_analysis") if context else None
         if "act" in completed_stages:
             if dyn_data:
-                # Derive scores from dynamics analysis instead of random
-                dyn_bounds = dyn_data.get("joint_limits_ok", True) and not dyn_data.get(
+                # Derive scores from dynamics evidence
+                summary = dyn_data.get("summary", {})
+                dyn_bounds = summary.get("joint_limits_ok", True) and not summary.get(
                     "self_collision", False
                 )
-                dyn_disp = dyn_data.get("total_displacement_m", 0.0)
-                dyn_smooth = dyn_data.get("smoothness_score", 1.0)
-                dyn_smoothness = dyn_disp < 2.0 and dyn_smooth > 0.1
-                dyn_torque_ok = dyn_data.get("torque_feasible", True)
-                dyn_singularity = dyn_data.get("near_singularity", False)
-                dyn_plan_align = round(
-                    min(dyn_smooth, 0.3 if (not dyn_bounds or dyn_singularity) else 1.0), 2
-                )
+                dyn_smooth = summary.get("smoothness_score", 1.0)
+                dyn_torque_ok = summary.get("torque_feasible", True)
+                dyn_singularity = summary.get("near_singularity", False)
 
                 reasons = []
                 if not dyn_bounds:
-                    reasons.append("Dynamics: joint limits exceeded or self-collision detected")
-                    all_passed = False
-                if not dyn_smoothness:
-                    reasons.append(
-                        f"Dynamics: displacement {dyn_disp:.1f}m or smoothness "
-                        f"{dyn_smooth:.2f} out of range"
-                    )
+                    reasons.append("Hard evidence: joint limits exceeded or self-collision")
                     all_passed = False
                 if not dyn_torque_ok:
-                    reasons.append("Dynamics: torque limits exceeded")
+                    reasons.append("Hard evidence: torque limits exceeded")
                     all_passed = False
                 if dyn_singularity:
-                    reasons.append("Dynamics: near singularity at grasp configuration")
+                    reasons.append("Hard evidence: near singularity at grasp config")
                 if not reasons:
-                    reasons.append(
-                        "Dynamics: all checks passed, trajectory is physically plausible"
-                    )
-
-                # Derive extended fields from dynamics
-                dyn_safety_penalties = sum(
-                    [
-                        not dyn_torque_ok,
-                        dyn_data.get("self_collision", False),
-                        dyn_singularity,
-                        not dyn_data.get("gravity_feasible", True),
-                    ]
-                )
-                dyn_safety = round(max(0.0, 1.0 - dyn_safety_penalties * 0.3), 2)
-                dyn_reachability = round(
-                    max(
-                        0.0,
-                        1.0
-                        - sum(
-                            [not dyn_bounds, not dyn_smoothness, not dyn_torque_ok, dyn_singularity]
-                        )
-                        * 0.25,
-                    ),
-                    2,
-                )
+                    reasons.append("All physics checks passed — trajectory is plausible")
 
                 plausibility = ActionPlausibility(
-                    bounds_check=dyn_bounds and dyn_torque_ok,
-                    smoothness=dyn_smoothness,
-                    gripper_consistency=self._rng.random() < self._quality,
-                    plan_alignment=dyn_plan_align,
+                    bounds_check=round(1.0 if dyn_bounds and dyn_torque_ok else 0.2, 2),
+                    smoothness=round(min(dyn_smooth, 1.0), 2),
+                    gripper_consistency=round(self._rng.uniform(0.6, 0.95), 2),
+                    plan_alignment=round(self._rng.uniform(0.5, 0.9), 2),
                     reasoning=" ".join(reasons),
-                    workspace_reachability=dyn_reachability,
+                    workspace_reachability=round(
+                        1.0 if dyn_bounds else self._rng.uniform(0.3, 0.6), 2
+                    ),
                     task_completion_plausibility=round(self._rng.uniform(0.3, 0.8), 2),
-                    dynamics_consistency=round(min(dyn_smooth, 0.9 if dyn_bounds else 0.4), 2),
-                    safety_assessment=dyn_safety,
+                    dynamics_consistency=round(self._rng.uniform(0.7, 1.0), 2),
+                    safety_assessment=round(
+                        1.0 if dyn_torque_ok and not dyn_singularity else 0.3, 2
+                    ),
+                    evidence_quality="hard",
                 )
             else:
-                # No dynamics — only score fields that don't require physics data.
-                # Omit bounds_check, dynamics_consistency, workspace_reachability,
-                # safety_assessment as these need MuJoCo dynamics to be meaningful.
+                # No dynamics — set physics-dependent fields to None
                 plausibility = ActionPlausibility(
-                    smoothness=round(self._rng.uniform(0.2, 0.4), 2),
-                    gripper_consistency=round(self._rng.uniform(0.25, 0.45), 2),
+                    smoothness=round(self._rng.uniform(0.3, 0.5), 2),
+                    gripper_consistency=round(self._rng.uniform(0.3, 0.5), 2),
                     plan_alignment=round(self._rng.uniform(0.3, 0.5), 2),
                     task_completion_plausibility=round(self._rng.uniform(0.2, 0.4), 2),
                     reasoning=(
                         "Without dynamics data, plausibility scores reflect high "
-                        "uncertainty — these are VLM estimates, not physics-grounded "
-                        "measurements. Enable MuJoCo dynamics for reliable assessment."
+                        "uncertainty. Physics-dependent fields set to null."
                     ),
+                    evidence_quality="perception_only",
                 )
 
         success = all_passed if (stage_checks or gt_check) else self._rng.random() < self._quality
@@ -548,7 +517,7 @@ class MockVLMAdapter:
         # Action plausibility — scores reflect available evidence
         if has_dynamics:
             ap: dict = {
-                "bounds_check": 1.0 if success else 0.0,
+                "bounds_check": 1.0 if success else 0.2,
                 "smoothness": round(self._rng.uniform(0.6, 0.95), 2),
                 "gripper_consistency": round(self._rng.uniform(0.5, 0.95), 2),
                 "plan_alignment": round(self._rng.uniform(0.5, 0.9), 2),
@@ -556,20 +525,24 @@ class MockVLMAdapter:
                 "dynamics_consistency": round(self._rng.uniform(0.7, 1.0), 2),
                 "task_completion_plausibility": round(self._rng.uniform(0.4, 0.8), 2),
                 "safety_assessment": round(self._rng.uniform(0.7, 1.0), 2),
-                "reasoning": "Plausibility assessment grounded in MuJoCo dynamics data.",
+                "evidence_quality": "hard",
+                "reasoning": "Plausibility assessment grounded in MuJoCo dynamics evidence.",
             }
         else:
-            # Without dynamics — scores must be low to reflect lack of evidence
+            # Without dynamics — physics-dependent fields are null
             ap = {
-                "smoothness": round(self._rng.uniform(0.2, 0.4), 2),
-                "gripper_consistency": round(self._rng.uniform(0.25, 0.45), 2),
+                "bounds_check": None,
+                "smoothness": round(self._rng.uniform(0.3, 0.5), 2),
+                "gripper_consistency": round(self._rng.uniform(0.3, 0.5), 2),
                 "plan_alignment": round(self._rng.uniform(0.3, 0.5), 2),
                 "task_completion_plausibility": round(self._rng.uniform(0.2, 0.4), 2),
+                "dynamics_consistency": None,
+                "workspace_reachability": None,
+                "safety_assessment": None,
+                "evidence_quality": "perception_only",
                 "reasoning": (
-                    "Without dynamics data, plausibility scores reflect high uncertainty — "
-                    "these are VLM estimates, not physics-grounded measurements. "
-                    "VLMs cannot reliably infer joint feasibility or trajectory smoothness "
-                    "from raw action vectors."
+                    "Without dynamics data, physics-dependent fields are null. "
+                    "Remaining scores reflect perception-only assessment."
                 ),
             }
         result_data["action_plausibility"] = ap

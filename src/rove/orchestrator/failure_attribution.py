@@ -3,6 +3,30 @@
 from __future__ import annotations
 
 
+def _get_evidence_value(dyn: dict, field: str) -> bool | None:
+    """Extract a boolean evidence value from the new evidence structure.
+
+    Supports both new evidence-structured format and legacy flat format.
+    Returns None if field not found.
+    """
+    # New evidence structure
+    evidence = dyn.get("evidence", [])
+    for item in evidence:
+        if item.get("field") == field and item.get("confidence") == "hard":
+            return item.get("value")
+
+    # Legacy flat format fallback (for backward compat)
+    if field in dyn:
+        return dyn[field]
+
+    # Check summary (new format stores booleans there too)
+    summary = dyn.get("summary", {})
+    if field in summary:
+        return summary[field]
+
+    return None
+
+
 def attribute_failure(
     stages: list[dict],
     success: bool,
@@ -15,9 +39,9 @@ def attribute_failure(
     1. Stage with status "error" → {stage}_error
     2. Perceive produced no task_relevant objects → perceive_miss
     3. Plan confidence < 0.4 → plan_low_confidence
-    4. Dynamics violation (joint limits or self-collision) → action_dynamics_violation
-    4b. Torque limit exceeded → action_torque_violation
-    4c. Near singularity at grasp config → action_singularity
+    4. Dynamics violation (joint limits or self-collision) from hard evidence → action_dynamics_violation
+    4b. Torque limit exceeded from hard evidence → action_torque_violation
+    4c. Near singularity at grasp config from hard evidence → action_singularity
     5. Action bounds_check failed → action_infeasible
     6. Verify success=False but all stages passed → verification_mismatch
     """
@@ -56,13 +80,20 @@ def attribute_failure(
     elif act and act.get("output"):
         dyn = act["output"].get("dynamics_analysis")
     if dyn:
-        if not dyn.get("joint_limits_ok", True) or dyn.get("self_collision", False):
+        # Only attribute failures from hard evidence
+        jl_ok = _get_evidence_value(dyn, "joint_limits_ok")
+        self_col = _get_evidence_value(dyn, "self_collision")
+        if (jl_ok is not None and not jl_ok) or (self_col is not None and self_col):
             return dyn_stage_name, "action_dynamics_violation"
+
         # Rule 4b: torque limit exceeded
-        if not dyn.get("torque_feasible", True):
+        torque_ok = _get_evidence_value(dyn, "torque_feasible")
+        if torque_ok is not None and not torque_ok:
             return dyn_stage_name, "action_torque_violation"
+
         # Rule 4c: near singularity
-        if dyn.get("near_singularity", False):
+        near_sing = _get_evidence_value(dyn, "near_singularity")
+        if near_sing is not None and near_sing:
             return dyn_stage_name, "action_singularity"
 
     # Rule 5: action plausibility bounds check failed
@@ -70,13 +101,16 @@ def attribute_failure(
     if verify and verify.get("output"):
         plaus = verify["output"].get("action_plausibility")
         if plaus:
-            if not plaus.get("bounds_check", True):
+            bc = plaus.get("bounds_check")
+            if bc is not None and not bc:
                 return "act", "action_infeasible"
             # Rule 5b: safety assessment too low
-            if plaus.get("safety_assessment", 1.0) < 0.3:
+            sa = plaus.get("safety_assessment")
+            if sa is not None and sa < 0.3:
                 return "act", "action_unsafe"
             # Rule 5c: workspace reachability too low
-            if plaus.get("workspace_reachability", 1.0) < 0.3:
+            wr = plaus.get("workspace_reachability")
+            if wr is not None and wr < 0.3:
                 return "act", "action_out_of_workspace"
 
     # Rule 6: verification mismatch (verify failed but no earlier stage caused it)
@@ -103,4 +137,7 @@ def get_failure_metadata(stages: list[dict]) -> dict:
             verify_turns = output.get("verify_turns", 1)
             if verify_turns > 1:
                 metadata["verify_turns"] = verify_turns
+            contradictions = output.get("contradictions", [])
+            if contradictions:
+                metadata["contradictions"] = contradictions
     return metadata

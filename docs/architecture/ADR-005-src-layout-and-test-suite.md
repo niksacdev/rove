@@ -15,12 +15,14 @@ The project used a flat layout (`rove/` at repo root) which is discouraged in mo
 Move `rove/` → `src/rove/`. The namespace (`import rove`) is unchanged — only the filesystem location changes.
 
 **pyproject.toml update**:
+
 ```toml
 [tool.hatch.build.targets.wheel]
 packages = ["src/rove"]
 ```
 
 **Path fixes**: Two files used `Path(__file__)` relative paths to find project root:
+
 - `src/rove/config.py` — added one `.parent` level to reach repo root
 - `src/rove/api/app.py` — added one `.parent` level to find `frontend/`
 
@@ -47,6 +49,7 @@ Created `tests/` directory with 7 test files covering all pipeline components:
 | `tests/test_api.py` | 5 | GET /api/strategies, GET /api/models, POST /api/evaluate, SSE stream |
 
 **pytest configuration** in pyproject.toml:
+
 ```toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -27,6 +27,7 @@ ROVE is inference-only. It does not train, fine-tune, or modify models. It runs 
 ## Technology Stack
 
 ### Backend (Python)
+
 - **FastAPI** — async REST + WebSocket + OpenAPI spec generation
 - **Click** — CLI (`rove evaluate`, `rove models`, `rove export`)
 - **PyYAML** — model registry configuration
@@ -35,17 +36,19 @@ ROVE is inference-only. It does not train, fine-tune, or modify models. It runs 
 - **Pydantic** — request/response models
 
 ### Frontend (Plain HTML+JS)
+
 - **Static HTML + vanilla JS** — no React, no npm, no build step
 - Served by FastAPI as static files
 - Dark theme (`#09090b` background)
 - **SSE (Server-Sent Events)** — real-time streaming via `EventSource`
 
 ### ML Libraries (Phase 2+)
+
 - `torch` (MPS backend), `transformers`, `mlx`, `lerobot`, `mujoco`, `coremltools`
 
 ## Project Structure
 
-```
+```text
 src/
 └── rove/                          # Python package (import rove) — src layout
     ├── adapters/
@@ -73,9 +76,22 @@ tests/                             # pytest test suite
 └── test_api.py
 ```
 
+## Changelog
+
+When creating a PR, always update `CHANGELOG.md`:
+
+- Move entries from `## Unreleased` to a dated section (`## YYYY-MM-DD`) matching the PR date
+- Or add new entries under `## Unreleased` if the PR hasn't merged yet
+- Write a short descriptive title (`###` heading) and 1-3 sentences explaining what capability was added or changed
+- Focus on **what the user/system can now do**, not implementation details
+- Include the PR number at the end: `*(PR #N)*`
+- Keep entries concise — no bullet-point dumps of every file touched
+- Entries are ordered newest-first, `## Unreleased` always at the top
+
 ## Coding Conventions
 
 ### Python
+
 - Python 3.11+ (use modern type hints: `str | None`, `list[str]`)
 - Async-first: all adapter methods and orchestrator are `async`
 - Dataclasses for domain objects (`SceneAnalysis`, `TaskPlan`, `ActionPrediction`, etc.)
@@ -84,12 +100,14 @@ tests/                             # pytest test suite
 - Protocol pattern: adapters implement `@runtime_checkable` Protocols, never inherit from ABC
 
 ### TypeScript/React
+
 - Strict mode TypeScript
 - Types auto-generated from FastAPI OpenAPI spec
 - Functional components with hooks
 - No business logic in frontend — render what API tells it, send user actions to API
 
 ### Testing
+
 - Mock adapters are the primary testing tool for Phase 1
 - Test the pipeline end-to-end with mocks before adding real adapters
 - Use `pytest` with `pytest-asyncio` for async tests

@@ -337,111 +337,47 @@ function renderInsightsCard(insights, parentEl) {
     card.appendChild(banner);
   }
 
-  // Failure Breakdown — horizontal bar chart
-  if (insights.failure_breakdown && Object.keys(insights.failure_breakdown).length > 0) {
-    var fbSection = document.createElement("div");
-    fbSection.className = "space-y-1.5";
-    var fbTitle = document.createElement("span");
-    fbTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
-    fbTitle.textContent = "Failure Breakdown";
-    fbSection.appendChild(fbTitle);
+  // Confidence Scores — per-strategy confidence bars
+  if (insights.confidence_scores && insights.confidence_scores.length > 0) {
+    var csSection = document.createElement("div");
+    csSection.className = "space-y-1.5";
+    var csTitle = document.createElement("span");
+    csTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    csTitle.textContent = "Confidence Scores";
+    csSection.appendChild(csTitle);
 
-    var maxCount = Math.max.apply(null, Object.values(insights.failure_breakdown));
-    Object.keys(insights.failure_breakdown).forEach(function(cat) {
-      var count = insights.failure_breakdown[cat];
+    insights.confidence_scores.forEach(function(entry) {
+      var score = entry.confidence || 0;
+      var pct = (score * 100).toFixed(1);
+      var color = score >= 0.7 ? "green" : (score >= 0.4 ? "yellow" : "red");
+
       var barWrap = document.createElement("div");
       barWrap.className = "flex items-center gap-2";
 
       var label = document.createElement("span");
-      label.className = "text-[11px] text-gray-400 w-32 shrink-0 truncate";
-      label.textContent = getFailureLabel(cat);
+      label.className = "text-[11px] text-gray-400 w-40 shrink-0 truncate";
+      label.textContent = entry.display_name || entry.strategy_id;
 
       var barBg = document.createElement("div");
-      barBg.className = "flex-1 h-4 bg-f-elevated rounded overflow-hidden";
+      barBg.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden";
       var bar = document.createElement("div");
-      var pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
-      bar.className = "h-full rounded " + (cat.indexOf("error") !== -1 ? "bg-red-500/60" : "bg-amber-500/60");
-      bar.style.width = pct + "%";
-      bar.style.minWidth = "20px";
-      barBg.appendChild(bar);
-
-      var countSpan = document.createElement("span");
-      countSpan.className = "text-[11px] text-gray-400 font-mono w-6 text-right";
-      countSpan.textContent = String(count);
-
-      barWrap.appendChild(label);
-      barWrap.appendChild(barBg);
-      barWrap.appendChild(countSpan);
-      fbSection.appendChild(barWrap);
-    });
-    card.appendChild(fbSection);
-  }
-
-  // Stage Health — 4 colored progress bars
-  if (insights.stage_health && Object.keys(insights.stage_health).length > 0) {
-    var shSection = document.createElement("div");
-    shSection.className = "space-y-1.5";
-    var shTitle = document.createElement("span");
-    shTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
-    shTitle.textContent = "Stage Health";
-    shSection.appendChild(shTitle);
-
-    ["perceive", "plan", "act", "verify"].forEach(function(stage) {
-      var score = insights.stage_health[stage];
-      if (score == null) return;
-      var barWrap = document.createElement("div");
-      barWrap.className = "flex items-center gap-2";
-
-      var label = document.createElement("span");
-      label.className = "text-[11px] text-gray-400 w-20 shrink-0 capitalize";
-      label.textContent = stage;
-
-      var barBg = document.createElement("div");
-      barBg.className = "flex-1 h-3 bg-f-elevated rounded-full overflow-hidden";
-      var bar = document.createElement("div");
-      var barColor = score > 0.7 ? "bg-green-500" : score > 0.4 ? "bg-amber-500" : "bg-red-500";
-      bar.className = "h-full rounded-full transition-all " + barColor;
-      bar.style.width = Math.max(score * 100, 2) + "%";
+      bar.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
+      bar.style.width = Math.max(parseFloat(pct), 2) + "%";
       barBg.appendChild(bar);
 
       var pctLabel = document.createElement("span");
-      pctLabel.className = "text-[11px] font-mono w-10 text-right " + (score > 0.7 ? "text-green-400" : score > 0.4 ? "text-amber-400" : "text-red-400");
-      pctLabel.textContent = Math.round(score * 100) + "%";
+      pctLabel.className = "text-[11px] font-mono w-12 text-right text-" + color + "-400";
+      pctLabel.textContent = pct + "%";
 
       barWrap.appendChild(label);
       barWrap.appendChild(barBg);
       barWrap.appendChild(pctLabel);
-      shSection.appendChild(barWrap);
+      csSection.appendChild(barWrap);
     });
-    card.appendChild(shSection);
+    card.appendChild(csSection);
   }
 
-  // Degradation Signals
-  if (insights.degradation_signals && insights.degradation_signals.length > 0) {
-    var dsSection = document.createElement("div");
-    dsSection.className = "space-y-1";
-    var dsTitle = document.createElement("span");
-    dsTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
-    dsTitle.textContent = "Degradation Signals";
-    dsSection.appendChild(dsTitle);
-
-    insights.degradation_signals.forEach(function(signal) {
-      var item = document.createElement("div");
-      item.className = "flex items-start gap-2 text-[11px] text-amber-400";
-      var warnIcon = document.createElement("span");
-      warnIcon.className = "shrink-0 mt-px";
-      warnIcon.textContent = "\u26A0";
-      var signalText = document.createElement("span");
-      signalText.textContent = signal;
-      item.appendChild(warnIcon);
-      item.appendChild(signalText);
-      dsSection.appendChild(item);
-    });
-    card.appendChild(dsSection);
-  }
-
-
-  // Reasoning Trail — collapsible per-strategy
+  // Reasoning Trail — collapsible per-strategy with rich stage rendering
   if (insights.reasoning_trail && Object.keys(insights.reasoning_trail).length > 0) {
     var rtSection = document.createElement("div");
     rtSection.className = "space-y-1.5";
@@ -463,129 +399,108 @@ function renderInsightsCard(insights, parentEl) {
       details.appendChild(summary);
 
       var body = document.createElement("div");
-      body.className = "px-3 pb-3 space-y-2";
+      body.className = "px-3 pb-3 space-y-3";
 
-      // Plan reasoning
-      if (trail.plan_reasoning) {
-        var planBlock = document.createElement("div");
-        planBlock.className = "space-y-0.5";
-        var planLabel = document.createElement("span");
-        planLabel.className = "text-[10px] font-semibold text-purple-400 uppercase";
-        planLabel.textContent = "Plan Reasoning";
-        planBlock.appendChild(planLabel);
-        var planText = document.createElement("p");
-        planText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
-        planText.textContent = trail.plan_reasoning;
-        planBlock.appendChild(planText);
-        body.appendChild(planBlock);
-      }
+      var outputs = trail.stage_outputs || {};
 
-      // Structured Reasoning: Subtask Reasoning
-      if (trail.subtask_reasoning) {
-        var srBlock = document.createElement("div");
-        srBlock.className = "space-y-0.5";
-        var srLabel = document.createElement("span");
-        srLabel.className = "text-[10px] font-semibold text-cyan-400 uppercase";
-        srLabel.textContent = "Subtask Reasoning";
-        srBlock.appendChild(srLabel);
-        var srText = document.createElement("p");
-        srText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
-        srText.textContent = trail.subtask_reasoning;
-        srBlock.appendChild(srText);
-        body.appendChild(srBlock);
-      }
-
-      // Structured Reasoning: Action Reasoning
-      if (trail.action_reasoning) {
-        var arBlock = document.createElement("div");
-        arBlock.className = "space-y-0.5";
-        var arLabel = document.createElement("span");
-        arLabel.className = "text-[10px] font-semibold text-violet-400 uppercase";
-        arLabel.textContent = "Action Reasoning";
-        arBlock.appendChild(arLabel);
-        var arText = document.createElement("p");
-        arText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
-        arText.textContent = trail.action_reasoning;
-        arBlock.appendChild(arText);
-        body.appendChild(arBlock);
-      }
-
-      // Constraints Acknowledged
-      if (trail.constraints_acknowledged && trail.constraints_acknowledged.length > 0) {
-        var caBlock = document.createElement("div");
-        caBlock.className = "space-y-0.5";
-        var caLabel = document.createElement("span");
-        caLabel.className = "text-[10px] font-semibold text-red-400 uppercase";
-        caLabel.textContent = "Constraints Acknowledged";
-        caBlock.appendChild(caLabel);
-        var caWrap = document.createElement("div");
-        caWrap.className = "flex flex-wrap gap-1.5 mt-1";
-        trail.constraints_acknowledged.forEach(function(c) {
-          var tag = document.createElement("span");
-          tag.className = "text-[10px] bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-0.5 rounded";
-          tag.textContent = c;
-          caWrap.appendChild(tag);
-        });
-        caBlock.appendChild(caWrap);
-        body.appendChild(caBlock);
-      }
-
-      // Verify reasoning
-      if (trail.verify_reasoning) {
-        var verifyBlock = document.createElement("div");
-        verifyBlock.className = "space-y-0.5";
-        var verifyLabel = document.createElement("span");
-        verifyLabel.className = "text-[10px] font-semibold text-amber-400 uppercase";
-        verifyLabel.textContent = "Verify Reasoning";
-        verifyBlock.appendChild(verifyLabel);
-        var verifyText = document.createElement("p");
-        verifyText.className = "text-[11px] text-gray-400 whitespace-pre-wrap";
-        verifyText.textContent = trail.verify_reasoning;
-        verifyBlock.appendChild(verifyText);
-        body.appendChild(verifyBlock);
-      }
-
-      // Stage checks
-      if (trail.stage_checks && trail.stage_checks.length > 0) {
-        var checksBlock = document.createElement("div");
-        checksBlock.className = "space-y-1";
-        var checksLabel = document.createElement("span");
-        checksLabel.className = "text-[10px] font-semibold text-gray-500 uppercase";
-        checksLabel.textContent = "Stage Checks";
-        checksBlock.appendChild(checksLabel);
-        trail.stage_checks.forEach(function(check) {
-          var checkItem = document.createElement("div");
-          checkItem.className = "flex items-start gap-2 text-[11px]";
-          var icon = document.createElement("span");
-          icon.className = "shrink-0";
-          icon.textContent = check.passed ? "\u2705" : "\u274C";
-          var stageSpan = document.createElement("span");
-          stageSpan.className = "text-gray-500";
-          stageSpan.textContent = (check.stage ? check.stage.charAt(0).toUpperCase() + check.stage.slice(1) : "") + ":";
-          var reasonSpan = document.createElement("span");
-          reasonSpan.className = "text-gray-400";
-          reasonSpan.textContent = check.reasoning || "";
-          checkItem.appendChild(icon);
-          checkItem.appendChild(stageSpan);
-          checkItem.appendChild(reasonSpan);
-          checksBlock.appendChild(checkItem);
-        });
-        body.appendChild(checksBlock);
-      }
-
-      // Perceive raw_response
-      if (trail.perceive_reasoning) {
-        var percBlock = document.createElement("div");
-        percBlock.className = "space-y-0.5";
+      // Perceive — rich rendering via renderPerceive
+      if (outputs.perceive) {
+        var percSection = document.createElement("div");
+        percSection.className = "space-y-1";
         var percLabel = document.createElement("span");
         percLabel.className = "text-[10px] font-semibold text-blue-400 uppercase";
-        percLabel.textContent = "Perceive Output";
-        percBlock.appendChild(percLabel);
-        var percText = document.createElement("p");
-        percText.className = "text-[11px] text-gray-400 whitespace-pre-wrap max-h-32 overflow-y-auto";
-        percText.textContent = trail.perceive_reasoning.length > 500 ? trail.perceive_reasoning.substring(0, 500) + "..." : trail.perceive_reasoning;
-        percBlock.appendChild(percText);
-        body.appendChild(percBlock);
+        percLabel.textContent = "Perceive";
+        percSection.appendChild(percLabel);
+        var percBody = document.createElement("div");
+        renderPerceive(percBody, outputs.perceive);
+        percSection.appendChild(percBody);
+        body.appendChild(percSection);
+      }
+
+      // Plan — rich rendering via renderPlan
+      if (outputs.plan) {
+        var planSection = document.createElement("div");
+        planSection.className = "space-y-1";
+        var planLabel = document.createElement("span");
+        planLabel.className = "text-[10px] font-semibold text-purple-400 uppercase";
+        planLabel.textContent = "Plan";
+        planSection.appendChild(planLabel);
+        var planBody = document.createElement("div");
+        renderPlan(planBody, outputs.plan);
+        planSection.appendChild(planBody);
+        body.appendChild(planSection);
+      }
+
+      // Act — rich rendering via renderAct
+      if (outputs.act) {
+        var actSection = document.createElement("div");
+        actSection.className = "space-y-1";
+        var actLabel = document.createElement("span");
+        actLabel.className = "text-[10px] font-semibold text-emerald-400 uppercase";
+        actLabel.textContent = "Act";
+        actSection.appendChild(actLabel);
+        var actBody = document.createElement("div");
+        renderAct(actBody, outputs.act);
+        actSection.appendChild(actBody);
+        body.appendChild(actSection);
+      }
+
+      // Dynamics — rich rendering via renderDynamics (if not embedded in act)
+      if (outputs.dynamics && !outputs.dynamics.skipped) {
+        var dynSection = document.createElement("div");
+        dynSection.className = "space-y-1";
+        var dynLabel = document.createElement("span");
+        dynLabel.className = "text-[10px] font-semibold text-blue-400 uppercase";
+        dynLabel.textContent = "Dynamics";
+        dynSection.appendChild(dynLabel);
+        var dynBody = document.createElement("div");
+        renderDynamics(dynBody, outputs.dynamics);
+        dynSection.appendChild(dynBody);
+        body.appendChild(dynSection);
+      }
+
+      // Verify — rich rendering via renderVerify
+      if (outputs.verify) {
+        var verifySection = document.createElement("div");
+        verifySection.className = "space-y-1";
+        var verifyLabel = document.createElement("span");
+        verifyLabel.className = "text-[10px] font-semibold text-amber-400 uppercase";
+        verifyLabel.textContent = "Verify";
+        verifySection.appendChild(verifyLabel);
+        var verifyBody = document.createElement("div");
+        renderVerify(verifyBody, outputs.verify);
+        verifySection.appendChild(verifyBody);
+        body.appendChild(verifySection);
+      }
+
+      // Raw JSON toggle per stage
+      if (outputs && Object.keys(outputs).length > 0) {
+        var rawToggleBtn = document.createElement("button");
+        rawToggleBtn.className = "flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors mt-1";
+        rawToggleBtn.type = "button";
+        var rawChevron = document.createElement("span");
+        rawChevron.className = "text-[10px]";
+        rawChevron.textContent = "\u25B6";
+        rawToggleBtn.appendChild(rawChevron);
+        var rawToggleText = document.createElement("span");
+        rawToggleText.textContent = "Raw output";
+        rawToggleBtn.appendChild(rawToggleText);
+        body.appendChild(rawToggleBtn);
+
+        var rawPanel = document.createElement("div");
+        rawPanel.className = "json-expand";
+        var rawPre = document.createElement("pre");
+        rawPre.className = "text-[11px] text-gray-500 bg-black/30 rounded-lg p-3 overflow-x-auto";
+        rawPre.textContent = JSON.stringify(outputs, null, 2);
+        rawPanel.appendChild(rawPre);
+        body.appendChild(rawPanel);
+
+        (function(panel, chevron) {
+          rawToggleBtn.addEventListener("click", function() {
+            panel.classList.toggle("open");
+            chevron.textContent = panel.classList.contains("open") ? "\u25BC" : "\u25B6";
+          });
+        })(rawPanel, rawChevron);
       }
 
       details.appendChild(body);
@@ -3296,10 +3211,11 @@ function cmpRenderVerify(col, output, otherOutput) {
   cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
   cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
 
-  // Stage checks
+  // Stage checks — skip for agent_loop mode (same logic as renderVerify)
+  var isAgentLoop = (o.verify_turns && o.verify_turns > 1) || o.resolution_path;
   var myChecks = o.stage_checks || [];
   var otherChecks = oo.stage_checks || [];
-  if (myChecks.length > 0 || otherChecks.length > 0) {
+  if (!isAgentLoop && (myChecks.length > 0 || otherChecks.length > 0)) {
     var otherMap = {};
     otherChecks.forEach(function(c) { otherMap[c.stage || c.name || ""] = c; });
     var wrap = document.createElement("div");
@@ -3376,10 +3292,10 @@ function cmpRenderVerify(col, output, otherOutput) {
     apWrap.className = "mb-3";
     cmpLabel(apWrap, "Action Plausibility");
     if (ap) {
-      cmpBoolDiff(apWrap, "Bounds Check", ap.bounds_check, oap ? oap.bounds_check : undefined);
-      cmpBoolDiff(apWrap, "Smoothness", ap.smoothness, oap ? oap.smoothness : undefined);
-      cmpBoolDiff(apWrap, "Gripper Consistency", ap.gripper_consistency, oap ? oap.gripper_consistency : undefined);
-      cmpConfidenceBar(apWrap, "Plan Alignment", ap.plan_alignment, oap ? oap.plan_alignment : undefined);
+      if (ap.bounds_check != null) cmpBoolDiff(apWrap, "Bounds Check", ap.bounds_check, oap ? oap.bounds_check : undefined);
+      if (ap.smoothness != null) cmpBoolDiff(apWrap, "Smoothness", ap.smoothness, oap ? oap.smoothness : undefined);
+      if (ap.gripper_consistency != null) cmpBoolDiff(apWrap, "Gripper Consistency", ap.gripper_consistency, oap ? oap.gripper_consistency : undefined);
+      if (ap.plan_alignment != null) cmpConfidenceBar(apWrap, "Plan Alignment", ap.plan_alignment, oap ? oap.plan_alignment : undefined);
       if (ap.reasoning) {
         cmpStringDiff(apWrap, "Plausibility Reasoning", ap.reasoning, oap ? oap.reasoning : undefined);
       }
@@ -4884,16 +4800,24 @@ function renderVerify(container, o) {
     apTitle.className = "text-[11px] text-gray-500 font-medium";
     apTitle.textContent = "Action Plausibility";
     apHeading.appendChild(apTitle);
-    // Show provider badge based on whether dynamics-only fields are present in plausibility
-    var hasDynamics = ap.bounds_check != null || ap.dynamics_consistency != null
+    // Show evidence quality badge
+    var evidenceQuality = ap.evidence_quality || "";
+    var hasDynamics = evidenceQuality === "hard" || evidenceQuality === "estimated"
+      || ap.bounds_check != null || ap.dynamics_consistency != null
       || ap.safety_assessment != null || ap.workspace_reachability != null;
     var apProvider = document.createElement("span");
-    if (hasDynamics) {
+    if (evidenceQuality === "hard") {
+      apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Hard Evidence";
+    } else if (evidenceQuality === "estimated") {
+      apProvider.className = "text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Estimated";
+    } else if (hasDynamics) {
       apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
       apProvider.textContent = "MuJoCo Dynamics";
     } else {
       apProvider.className = "text-[9px] bg-gray-500/15 text-gray-400 px-1.5 py-0.5 rounded";
-      apProvider.textContent = "VLM Assessment";
+      apProvider.textContent = "Perception Only";
     }
     apHeading.appendChild(apProvider);
     apSection.appendChild(apHeading);
@@ -4904,7 +4828,7 @@ function renderVerify(container, o) {
       noPhysWarn.className = "mt-1 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md";
       var noPhysText = document.createElement("p");
       noPhysText.className = "text-[11px] text-red-400/90";
-      noPhysText.textContent = "\u26A0 No dynamics data — scores below are VLM estimates only. LLMs are not trained on robot kinematics and cannot reliably infer joint feasibility, trajectory smoothness, or safety from raw action vectors. Scores reflect high uncertainty and should not be used for production decisions. Enable MuJoCo dynamics for physics-grounded assessment.";
+      noPhysText.textContent = "\u26A0 No dynamics data — scores are perception-only estimates. Physics-dependent fields show as 'Not assessed'. Enable MuJoCo dynamics for physics-grounded assessment.";
       noPhysWarn.appendChild(noPhysText);
       apSection.appendChild(noPhysWarn);
     }
@@ -4925,30 +4849,38 @@ function renderVerify(container, o) {
     ];
     scoreChecks.forEach(function(sc) {
       var val = ap[sc.key];
-      if (val == null) return;
-      // Coerce booleans to float for backward compat
-      if (val === true) val = 1.0;
-      if (val === false) val = 0.0;
-      var pct = (val * 100).toFixed(0);
-      var color = val >= 0.7 ? "emerald" : (val >= 0.4 ? "yellow" : "red");
-
       var row = document.createElement("div");
       row.className = "flex items-center gap-2";
       var lbl = document.createElement("span");
       lbl.className = "text-[10px] text-gray-400 w-[130px] shrink-0";
       lbl.textContent = sc.label;
       row.appendChild(lbl);
-      var barOuter = document.createElement("div");
-      barOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[140px]";
-      var barInner = document.createElement("div");
-      barInner.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
-      barInner.style.width = pct + "%";
-      barOuter.appendChild(barInner);
-      row.appendChild(barOuter);
-      var pctSpan = document.createElement("span");
-      pctSpan.className = "text-[10px] font-mono text-" + color + "-400 w-[36px] text-right";
-      pctSpan.textContent = pct + "%";
-      row.appendChild(pctSpan);
+
+      if (val == null) {
+        // Null field — show "Not assessed"
+        var naSpan = document.createElement("span");
+        naSpan.className = "text-[10px] text-gray-600 italic";
+        naSpan.textContent = "Not assessed";
+        row.appendChild(naSpan);
+      } else {
+        // Coerce booleans to float for backward compat
+        if (val === true) val = 1.0;
+        if (val === false) val = 0.0;
+        var pct = (val * 100).toFixed(0);
+        var color = val >= 0.7 ? "emerald" : (val >= 0.4 ? "yellow" : "red");
+
+        var barOuter = document.createElement("div");
+        barOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[140px]";
+        var barInner = document.createElement("div");
+        barInner.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
+        barInner.style.width = pct + "%";
+        barOuter.appendChild(barInner);
+        row.appendChild(barOuter);
+        var pctSpan = document.createElement("span");
+        pctSpan.className = "text-[10px] font-mono text-" + color + "-400 w-[36px] text-right";
+        pctSpan.textContent = pct + "%";
+        row.appendChild(pctSpan);
+      }
       apCard.appendChild(row);
     });
 

@@ -49,6 +49,7 @@ constraints_acknowledged: list[str] = Field(default_factory=list)
 ```
 
 These fields are:
+
 - **Requested in prompts** — `plan_user.txt` asks models to produce structured decomposition
 - **Rendered in the dashboard** — plan stage bubble shows subtask reasoning, action reasoning, and constraint acknowledgment as separate labeled sections
 - **Compared across strategies** — the comparison view shows structured reasoning fields side-by-side
@@ -58,11 +59,12 @@ These fields are:
 
 Evaluation metadata flows from manifest to model prompts:
 
-```
+```text
 manifest.json → ExampleData.extras → PipelineContext.task_metadata → prompt templates → VLM/Agent adapters
 ```
 
 Specifically:
+
 - `constraints` are injected into plan prompts so models can acknowledge them
 - `correction` feedback is injected so models can demonstrate adaptation
 - `expected_subtasks` are used by the verify prompt to check plan completeness
@@ -75,17 +77,20 @@ The pattern of subtask decomposition + action reasoning is inspired by academic 
 ## Consequences
 
 **Positive:**
+
 - Pipeline evaluation now covers 6 distinct capability dimensions, not just "can it pick things up"
 - Structured reasoning fields make plan quality evaluable beyond binary success/fail
 - Category filtering enables targeted testing (e.g., "how does GPT-4o handle constraints vs Phi-4?")
 - task_metadata flow ensures real VLM/LLM strategies see constraints and corrections in their prompts
 
 **Negative:**
+
 - 18 new ROVE-curated manifest entries need placeholder images (not yet created)
 - Structured reasoning fields are optional — models that don't produce them get empty strings, which the verify stage notes as a weakness
 - Expected subtask matching in the UI is substring-based, which may produce false positives/negatives
 
 **Risks:**
+
 - Category taxonomy may need refinement as real-world usage reveals gaps (e.g., "temporal" tasks, "collaborative" tasks)
 - Constraint acknowledgment is self-reported by the model — a model can claim to respect a constraint while its plan violates it. FK analysis and sim verification (Phase 2+) provide ground truth
 

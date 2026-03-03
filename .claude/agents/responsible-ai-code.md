@@ -295,7 +295,7 @@ Remember: If it doesn't work for everyone, it's not done.
 
 ### Collaboration Pattern
 
-```
+```text
 "I'm creating RAI-ADR-[number] for [decision].
 UX Designer agent: Any accessibility barriers this creates?
 Product Manager agent: What user groups are affected?

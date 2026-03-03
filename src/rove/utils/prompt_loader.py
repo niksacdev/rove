@@ -171,124 +171,94 @@ class PromptManager:
                 if action.get("actions_truncated"):
                     stage_lines.append(f"  (first 5 + last 5 of {total_steps})")
 
-                # Dynamics analysis provides spatial context when available
+                # Dynamics analysis provides structured evidence when available
                 dyn = context.get("dynamics_analysis")
                 if dyn:
                     stage_lines.append("")
-                    stage_lines.append("--- MUJOCO DYNAMICS ANALYSIS ---")
-                    ep = dyn.get("final_endpoint", [0, 0, 0])
-                    stage_lines.append(
-                        f"Final end-effector position: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] meters"
-                    )
-                    stage_lines.append(
-                        f"Total displacement: {dyn.get('total_displacement_m', 0):.3f}m"
-                    )
-                    stage_lines.append(
-                        "Joint limits: "
-                        + ("all within bounds" if dyn.get("joint_limits_ok") else "EXCEEDED")
-                    )
-                    stage_lines.append(
-                        "Self-collision: "
-                        + ("DETECTED" if dyn.get("self_collision") else "none detected")
-                    )
-                    stage_lines.append(f"Smoothness score: {dyn.get('smoothness_score', 0):.2f}")
-                    stage_lines.append(
-                        f"Max angular velocity: {dyn.get('max_velocity_rad_s', 0):.2f} rad/s"
-                    )
-                    stage_lines.append(f"Steps analyzed: {dyn.get('steps_analyzed', 0)}")
-
-                    # Inverse dynamics
+                    stage_lines.append("--- PHYSICS EVIDENCE (MuJoCo Dynamics) ---")
+                    mode = dyn.get("analysis_mode", "unknown")
+                    stage_lines.append(f"Analysis mode: {mode}")
                     stage_lines.append("")
-                    torque_ok = dyn.get("torque_feasible", True)
-                    stage_lines.append(
-                        "Torque feasibility: " + ("feasible" if torque_ok else "VIOLATED")
-                    )
-                    peak = dyn.get("peak_torques", [])
-                    if peak:
-                        stage_lines.append(
-                            f"  Peak torques: [{', '.join(f'{t:.2f}' for t in peak)}]"
-                        )
-                    violations = dyn.get("torque_violations", [])
-                    for v in violations[:5]:
-                        stage_lines.append(
-                            f"  Violation: step {v['step']} joint {v['joint']}"
-                            f" (torque {v['torque']:.2f} > limit {v['limit']:.2f})"
-                        )
 
-                    # Gravity compensation
-                    payload = dyn.get("payload_kg", 0.5)
-                    grav_ok = dyn.get("gravity_feasible", True)
-                    stage_lines.append(
-                        f"Gravity compensation at grasp ({payload}kg payload): "
-                        + ("feasible" if grav_ok else "INFEASIBLE")
-                    )
-                    grav_torques = dyn.get("gravity_torques", [])
-                    if grav_torques:
-                        stage_lines.append(
-                            f"  Holding torques: [{', '.join(f'{t:.2f}' for t in grav_torques)}]"
-                        )
+                    # Evidence items
+                    for item in dyn.get("evidence", []):
+                        field = item.get("field", "")
+                        value = item.get("value")
+                        conf = item.get("confidence", "")
+                        source = item.get("source", "")
+                        detail = item.get("detail", "")
 
-                    # Manipulability
-                    manip = dyn.get("manipulability", 0.0)
-                    min_sv = dyn.get("min_singular_value", 0.0)
-                    sing = dyn.get("near_singularity", False)
-                    stage_lines.append(f"Manipulability at grasp: {manip:.4f}")
-                    stage_lines.append(f"  Min singular value: {min_sv:.4f}")
-                    stage_lines.append(
-                        "  Near singularity: " + ("YES — reduced dexterity" if sing else "no")
-                    )
-
-                    traj = dyn.get("endpoint_trajectory", [])
-                    if traj:
-                        stage_lines.append("")
-                        stage_lines.append("End-effector trajectory (sample):")
-                        for i, pt in enumerate(traj[:5]):
+                        if field == "endpoint_trajectory":
+                            traj = value or []
+                            if traj:
+                                stage_lines.append(
+                                    f"EE trajectory: {traj[0]} → {traj[-1]} "
+                                    f"({len(traj)} points) [confidence: {conf}, source: {source}]"
+                                )
+                                for i, pt in enumerate(traj[:5]):
+                                    stage_lines.append(
+                                        f"  step {i + 1}: [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}]m"
+                                    )
+                                if len(traj) > 5:
+                                    stage_lines.append(f"  ... ({len(traj)} total)")
+                        else:
+                            label = field.replace("_", " ").title()
+                            detail_str = f" — {detail}" if detail else ""
                             stage_lines.append(
-                                f"  step {i + 1}: [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}]m"
+                                f"{label}: {value}{detail_str} "
+                                f"[confidence: {conf}, source: {source}]"
                             )
-                        if len(traj) > 5:
-                            stage_lines.append(f"  ... ({len(traj)} total steps)")
+
+                    # Summary stats
+                    summary = dyn.get("summary", {})
+                    if summary:
+                        stage_lines.append("")
+                        ep = summary.get("final_endpoint", [0, 0, 0])
+                        stage_lines.append(
+                            f"Final endpoint: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}]m"
+                        )
+                        stage_lines.append(
+                            f"Displacement: {summary.get('total_displacement_m', 0):.3f}m, "
+                            f"smoothness: {summary.get('smoothness_score', 0):.2f}, "
+                            f"steps: {summary.get('steps_analyzed', 0)}"
+                        )
+
+                    # Gripper events
+                    gevts = dyn.get("gripper_events", [])
+                    if gevts:
+                        stage_lines.append(
+                            "Gripper: "
+                            + ", ".join(f"{e['type']} at step {e['step']}" for e in gevts)
+                        )
+
+                    # Not computed
+                    for nc in dyn.get("not_computed", []):
+                        stage_lines.append(
+                            f"NOT COMPUTED: {nc.get('field', '?')} — {nc.get('reason', '')}"
+                        )
 
                     stage_lines.append("")
                     stage_lines.append(
-                        "IMPORTANT: Dynamics analysis provides SPATIAL CONTEXT for the VLA trajectory."
-                        " You can now reason about WHERE the robot arm moves, not just the raw deltas."
-                        " Use the end-effector positions to assess:\n"
-                        "- Does the trajectory reach the target object's perceived position?\n"
-                        "- Does the lift height clear obstacles?\n"
-                        "- Is the placement position near the goal?\n"
-                        "- Do joint limit violations, self-collisions, or torque violations"
-                        " indicate an unsafe plan?\n"
-                        "- Does near-singularity suggest the grasp pose is poorly configured?\n"
-                        "Cross-reference dynamics positions with the PERCEIVE stage's object positions."
+                        "Use evidence confidence levels to calibrate your assessment. "
+                        "'hard' evidence is physics ground truth. "
+                        "Cross-reference dynamics positions with PERCEIVE object positions."
                     )
                 else:
                     stage_lines.append("")
                     stage_lines.append(
-                        "IMPORTANT: Without before/after images from a simulator,"
-                        " you CANNOT determine whether the trajectory reached the"
-                        " correct object or destination. Assess action PLAUSIBILITY,"
-                        " not action SUCCESS. Evaluate what IS observable:\n"
-                        "- Does the gripper open/close pattern match the task"
-                        " (e.g., pick-and-place needs close->open)?\n"
-                        "- Is the number of steps reasonable?\n"
-                        "- Are the delta magnitudes physically plausible?\n"
-                        "- Does the trajectory show distinct phases (approach,"
-                        " grasp, transport, place)?\n"
-                        "- How faithfully does the VLA trajectory follow the planned steps?\n"
-                        "Do NOT fail the act stage solely because you cannot verify"
-                        " the exact target position from delta values alone."
+                        "No dynamics data available. Assess action PLAUSIBILITY "
+                        "from observable trajectory features only. "
+                        "Set physics-dependent fields (bounds_check, dynamics_consistency, "
+                        "workspace_reachability, safety_assessment) to null."
                     )
 
                 stage_lines.append("")
                 stage_lines.append(
-                    "Return an 'action_plausibility' object with: bounds_check (bool),"
-                    " smoothness (bool), gripper_consistency (bool),"
-                    " plan_alignment (float 0-1), reasoning (string),"
-                    " workspace_reachability (float 0-1),"
-                    " task_completion_plausibility (float 0-1),"
-                    " dynamics_consistency (float 0-1),"
-                    " safety_assessment (float 0-1)."
+                    "Return an 'action_plausibility' object with float 0-1 or null: "
+                    "bounds_check, smoothness, gripper_consistency, plan_alignment, "
+                    "workspace_reachability, task_completion_plausibility, "
+                    "dynamics_consistency, safety_assessment, evidence_quality, reasoning. "
+                    "Set fields to null when you lack evidence to assess them."
                 )
             else:
                 stage_lines.append(
@@ -335,15 +305,13 @@ class PromptManager:
             ground_truth_output_spec=_GT_OUTPUT_SPEC if ground_truth else "",
         )
 
-    def render_verify_loop_system(self, has_dynamics: bool = True) -> str:
+    def render_verify_loop_system(self, **_kwargs) -> str:
         """System prompt for the agentic verify loop.
 
-        Selects the appropriate prompt based on whether dynamics tools are available.
-        The two prompts are fundamentally different — not patched versions of each other.
+        Single unified prompt handles all evidence levels (full dynamics,
+        partial, none). The LLM reasons about evidence quality directly.
         """
-        if has_dynamics:
-            return self.load("verify_agent_loop_system_dynamics")
-        return self.load("verify_agent_loop_system_no_dynamics")
+        return self.load("verify_agent_loop_system")
 
     def render_verify_loop_user(self, task: str, action_summary: str, robot_spec: str = "") -> str:
         """User prompt for the agentic verify loop with action data and robot spec."""
