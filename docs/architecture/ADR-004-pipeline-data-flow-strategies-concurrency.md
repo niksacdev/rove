@@ -23,7 +23,7 @@ Additionally evaluated: **Microsoft Agent Framework** (formerly Semantic Kernel 
 
 A `PipelineContext` dataclass accumulates results as the pipeline progresses:
 
-```
+```text
 ctx.scene      ← set after perceive
 ctx.proprioception ← set after sim.reset()
 ctx.plan       ← set after plan
@@ -32,6 +32,7 @@ ctx.after_image_base64 ← set after sim observation
 ```
 
 Each downstream stage receives upstream data:
+
 - **plan** receives `scene` (perceive output)
 - **act** receives `plan` + `proprioception` (from sim reset)
 - **verify** receives full `ctx.to_dict()` (scene, plan, action, proprioception)
@@ -55,6 +56,7 @@ strategies:
 ```
 
 vs. the old `evaluations` which defined *sweeps*:
+
 ```yaml
 evaluations:
   pick_bracket:

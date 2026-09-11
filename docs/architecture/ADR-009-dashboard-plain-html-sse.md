@@ -34,6 +34,7 @@ Industry default for new projects is React/Next.js with a build toolchain (npm, 
 ### Rejected: WebSocket
 
 WebSocket was considered but rejected because:
+
 - Bidirectional communication is unnecessary — the client never sends messages during an evaluation
 - WebSocket requires explicit reconnection logic; SSE handles it natively
 - WebSocket adds connection lifecycle complexity (open/close/error handlers, heartbeats)

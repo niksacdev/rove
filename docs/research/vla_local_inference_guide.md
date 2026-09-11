@@ -17,6 +17,7 @@
 | Octo-Base 93M  | 93M    | JAX                               | Experimental (jax-metal)     | Yes  | Yes        | ~2 GB            |
 
 **Bottom line for ROVE on Apple Silicon M-series:**
+
 - SmolVLA 450M: works on MPS, best option for local dev
 - OpenVLA-OFT 7B: run on CPU with bf16, expect ~0.1 Hz — use mock for dev
 - pi0 / pi0-FAST: JAX-Metal is too experimental; use mock or remote endpoint
@@ -324,6 +325,7 @@ actions = get_vla_action(
 for running a 7B model comfortably on Apple Silicon without a custom MLX port.
 
 Options for Apple Silicon:
+
 - Run in bf16 on CPU: ~14 GB RAM, ~0.05 Hz (20+ seconds per action)
 - Convert to MLX format via `mlx-lm`: requires significant engineering effort
 - Use the mock adapter for local dev; run real inference on a remote CUDA endpoint
@@ -363,6 +365,7 @@ encoder + SmolLM2-1.7B with layer skipping that halves compute). Images are comp
 to 64 tokens via PixelShuffle.
 
 This is the best model for Apple Silicon local development:
+
 - Small enough to run comfortably (2-4 GB RAM)
 - Flow matching = one forward pass per chunk (not iterative like diffusion)
 - LeRobot explicitly tests and supports MPS
@@ -516,6 +519,7 @@ MPS op coverage and will run faster.
 ### Architecture
 
 CogACT (Microsoft Research) uses a componentized VLA design:
+
 - **VLM backbone**: CogVLM (LLaMA-2 + DINOv2 ViT-L/14 + SigLIP ViT-So400M/14 dual encoder)
 - **Action module**: DiT (Diffusion Transformer) conditioned on VLM output
 
@@ -652,6 +656,7 @@ It uses a diffusion policy as its action decoder. Observations are tokenized usi
 learned encoders and attended to by a causal transformer.
 
 Key properties:
+
 - 93M parameters (Octo-Base) or 27M (Octo-Small)
 - Predicts 4 future actions (chunk_size=4) per call
 - Supports both language-conditioned and goal-image-conditioned inference
@@ -753,6 +758,7 @@ Status as of early 2026:
 - Version mismatch causes silent CPU fallback with no error message
 
 **How to confirm Metal acceleration is active:**
+
 ```python
 import jax
 print(jax.default_backend())  # "METAL" = GPU, "cpu" = no acceleration
@@ -797,6 +803,7 @@ without JAX-Metal version wrestling.
 ### Translation Layer per Model
 
 The ROVE `VLAAdapter` Protocol requires:
+
 ```python
 async def predict_action(
     image: bytes,
@@ -808,26 +815,31 @@ async def predict_action(
 Each adapter needs to bridge that interface to the model's actual API:
 
 **pi0 adapter (`local_openpi`)**
+
 - On init: `policy_config.create_trained_policy(config, checkpoint_dir)`
 - On call: `bytes` → `np.uint8 array` → observation dict → `policy.infer(obs)["actions"][0].tolist()`
 - Return: `[[a1..a7]]` (first step wrapped in list for `list[list[float]]`)
 
 **OpenVLA-OFT adapter (`local_openvla`)**
+
 - On init: `AutoModelForVision2Seq.from_pretrained(...)` + `AutoProcessor.from_pretrained(...)`
 - On call: `bytes` → `PIL.Image` → `processor(prompt, image)` → `vla.predict_action(**inputs, unnorm_key=...)`
 - Return: `[[float(v) for v in action]]` — single step wrapped in list
 
 **SmolVLA adapter (`local_lerobot`)**
+
 - On init: `SmolVLAPolicy.from_pretrained("lerobot/smolvla_base")` + `make_pre_post_processors`
 - On call: `bytes` → `np.uint8` → obs dict → `pre(obs)` → `policy.select_action(obs)` → `post(action)`
 - Return: `[[float(v) for v in action]]`
 
 **CogACT adapter (`local_cogact`)**
+
 - On init: `load_vla("CogACT/CogACT-Base", ...)` with `model.vlm.to(torch.bfloat16)`
 - On call: `bytes` → `PIL.Image` → `model.predict_action(image, prompt, num_ddim_steps=10)`
 - Return: `actions.tolist()` — full chunk, shape `[16, 7]` as `list[list[float]]`
 
 **Octo adapter (`local_octo`)**
+
 - On init: `OctoModel.load_pretrained("hf://rail-berkeley/octo-base-1.5")` + warm-up call
 - On call: maintain 2-step history buffer; `bytes` → `np.uint8 [256,256,3]` → stack into `[1,2,256,256,3]` → `model.sample_actions(obs, task, rng=...)`
 - Return: `np.array(actions[0]).tolist()` — shape `[4, 7]` as `list[list[float]]`

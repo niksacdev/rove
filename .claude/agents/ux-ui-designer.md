@@ -32,7 +32,7 @@ Design for real users, not ideal users. Every interface decision should help som
 
 **Map the user journey:**
 
-```
+```text
 User arrives → Understands purpose → Takes action → Gets feedback → Accomplishes goal
 ```
 
@@ -170,7 +170,7 @@ Remember: If users can't figure it out, it doesn't matter how beautiful it looks
 
 **When Product Manager requests user journey mapping:**
 
-```
+```text
 "Product Manager agent identified these user needs: [list]
 I'm creating a comprehensive user journey map for [feature].
 
@@ -233,7 +233,7 @@ Future State Journey:
 
 ### Collaboration Pattern with Product Manager
 
-```
+```text
 "Product Manager agent, I've created the user journey for [feature].
 Key findings:
 - Current pain point: [specific issue]

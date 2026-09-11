@@ -68,7 +68,7 @@ app.get('/health', (req, res) => {
 
 ```bash
 # BAD: Secrets in code
-AWS_ACCESS_KEY="AKIA123456789"
+AWS_ACCESS_KEY="EXAMPLE_ACCESS_KEY"
 DB_PASSWORD="password123"
 
 # GOOD: Environment variables

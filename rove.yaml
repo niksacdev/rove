@@ -109,6 +109,10 @@ endpoints:
       action_space: ee_delta
       chunk_size: 10
       requires_proprio: true
+      vla_capabilities:
+        native_action_dim: 6
+        native_action_space: eef_delta
+        supported_robot_types: ["so100"]
     cost: { type: fixed, per_call: 0.00 }
     max_concurrent: 1
     availability:
@@ -130,6 +134,11 @@ endpoints:
       action_space: ee_delta
       chunk_size: 50
       requires_proprio: true
+      vla_capabilities:
+        native_action_dim: 32
+        native_action_space: eef_delta
+        max_action_dim: 32
+        supported_robot_types: null
     cost: { type: fixed, per_call: 0.00 }
     max_concurrent: 1
     availability:
@@ -148,6 +157,9 @@ endpoints:
     config:
       mock_success_rate: 0.80
       mock_latency_ms: [50, 150]
+      vla_capabilities:
+        native_action_dim: 7
+        native_action_space: eef_delta
 
   # --- LLMs for task planning ---
   qwen3-8b:
@@ -221,12 +233,18 @@ endpoints:
     adapter: azure_foundry_agent
     display_name: "Bing Grounding Agent"
     deployment_type: azure_managed
-    capabilities: [task_planning]
+    capabilities: [task_planning, verification]
     config:
-      project_endpoint: "https://niksac-agent-resource.services.ai.azure.com/api/projects/niksac-agent"
-      agent_name: "binggroundingagent"
+      project_endpoint: ""  # Set AZURE_AI_FOUNDRY_ENDPOINT in your environment
+      agent_name: "your-agent-name"
 
   # --- Simulation environments ---
+  mock-sim:
+    type: sim
+    adapter: mock_sim
+    display_name: "Mock Sim"
+    deployment_type: local
+
   mujoco-libero:
     type: sim
     adapter: local_mujoco
@@ -236,11 +254,6 @@ endpoints:
       task_suite: libero_spatial
       render_size: [640, 480]
 
-  mock-sim:
-    type: sim
-    adapter: mock_sim
-    display_name: "Mock Sim"
-    deployment_type: local
 
 # =============================================================================
 # Strategies — Named pipeline configurations (map endpoints to stages)
@@ -252,102 +265,83 @@ strategies:
     display_name: "Mock (Test)"
     description: "All mock adapters — for testing pipeline plumbing without real models"
     perceive: mock-vlm
-    plan: mock-vlm
     act: mock-vla
     verify: mock-vlm
     sim: mock-sim
-    forward_kinematics: true
+    compute_dynamics: true
+    pipeline_mode: parallel
+    verify_mode: agent_loop
     tags: [test, mock]
 
-  # --- Scene Detection (perceive → verify only) ---
+  # --- Scene-Only (no VLA) ---
   scene_detect:
     display_name: "Scene Detection"
-    description: "Qwen3-VL 8B perceives the scene and verifies — no planning or action"
+    description: "Qwen3-VL perceives the scene, Foundry agent verifies — no action, no planning"
     perceive: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
+    verify: bing-grounding-agent
     tags: [scene, vlm, local]
     latency_budget:
       perceive: 2000
       verify: 1000
 
-  # --- Scene + Plan (perceive → plan → verify) ---
   scene_plan:
     display_name: "Scene + Plan"
-    description: "Qwen3-VL 8B perceives the scene, plans a strategy, and verifies"
+    description: "Qwen3-VL perceives and plans a manipulation strategy — no VLA execution"
     perceive: qwen3-vl-8b
     plan: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
+    verify: bing-grounding-agent
     tags: [scene, plan, vlm, local]
 
-  # --- Scene + Action (perceive → act → verify) ---
-  scene_action:
-    display_name: "Scene + Action (pi0.5)"
-    description: "Qwen3-VL 8B perceives, pi0.5 executes 7-DOF trajectory, Qwen verifies"
+  # --- VLA Evaluation (agent_loop: verifier calls perceive + dynamics as tools) ---
+  vla_pi05:
+    display_name: "VLA Eval — pi0.5"
+    description: "pi0.5 executes 7-DOF trajectory, verifier analyzes scene + dynamics to evaluate"
     perceive: qwen3-vl-8b
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
-    tags: [scene, vla, local, lerobot, pi05]
+    verify: bing-grounding-agent
+    compute_dynamics: true
+    pipeline_mode: parallel
+    verify_mode: agent_loop
+    tags: [vla, pi05, lerobot, dynamics]
 
-  # --- Scene + Plan + Action (perceive → plan → act → verify) ---
-  scene_plan_action:
-    display_name: "Scene + Plan + Action (pi0.5)"
-    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies"
+  vla_pi05_no_dynamics:
+    display_name: "VLA Eval — pi0.5 (No Dynamics)"
+    description: "pi0.5 executes trajectory, verifier analyzes scene only — no dynamics check"
     perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
     act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
-    tags: [full, local, vla, lerobot, pi05]
-    latency_budget:
-      act: 5000
+    verify: bing-grounding-agent
+    compute_dynamics: false
+    pipeline_mode: parallel
+    verify_mode: agent_loop
+    tags: [vla, pi05, lerobot]
 
-  # --- Scene + Plan + Action without FK (perceive → plan → act → verify) ---
-  scene_plan_action_no_fk:
-    display_name: "Scene + Plan + Action (pi0.5) - No FK"
-    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes, Qwen verifies — no FK"
+  vla_smolvla:
+    display_name: "VLA Eval — SmolVLA 450M"
+    description: "SmolVLA 450M executes trajectory, verifier analyzes scene + dynamics to evaluate"
     perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
-    act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: false
-    tags: [full, local, vla, lerobot, pi05]
+    act: smolvla-450m
+    verify: bing-grounding-agent
+    compute_dynamics: true
+    pipeline_mode: parallel
+    verify_mode: agent_loop
+    tags: [vla, smolvla, lerobot, dynamics]
 
-  # --- Hybrid: Edge VLM + Foundry Agent + VLA ---
-  hybrid_foundry:
-    display_name: "Hybrid (Edge VLM + Foundry Agent + pi0.5)"
-    description: "Qwen3-VL perceives locally, Foundry agent plans via Bing grounding, pi0.5 executes, Qwen verifies"
+  vla_mock:
+    display_name: "VLA Eval — Mock VLA"
+    description: "Mock VLA for pipeline testing, Foundry agent verifier with scene + dynamics"
     perceive: qwen3-vl-8b
-    plan: bing-grounding-agent
-    act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
-    tags: [hybrid, foundry, agent, pi05]
-
-  # --- Full Pipeline (perceive → plan → act → verify) ---
-  full_local:
-    display_name: "Full Pipeline (Local)"
-    description: "Qwen3-VL 8B perceives and plans, mock VLA executes, Qwen verifies"
-    perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
     act: mock-vla
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    forward_kinematics: true
-    tags: [full, local, vla]
+    verify: bing-grounding-agent
+    compute_dynamics: true
+    pipeline_mode: parallel
+    verify_mode: agent_loop
+    tags: [vla, mock, dynamics]
 
 # =============================================================================
 # Defaults — Global settings
 # =============================================================================
 defaults:
   grounding: mock-grounding
-  sim: mock-sim
   trials: 1
   mode: full                              # full | vlm_only
   max_concurrent_combinations: 9

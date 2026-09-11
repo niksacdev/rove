@@ -8,10 +8,12 @@ from typing import Protocol, runtime_checkable
 
 from rove.models import (
     ActionPrediction,
+    RobotEmbodiment,
     SceneAnalysis,
     SimObservation,
     TaskPlan,
     VerificationResult,
+    VLACapabilities,
 )
 
 
@@ -26,8 +28,14 @@ class VLMAdapter(Protocol):
         """Perceive step: analyze workspace image and identify objects."""
         ...
 
-    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
-        """Plan step: generate a task strategy given scene analysis."""
+    async def plan_task(
+        self, image_base64: str, task: str, scene: SceneAnalysis, **kwargs
+    ) -> TaskPlan:
+        """Plan step: generate a task strategy given scene analysis.
+
+        Optional kwargs:
+            task_metadata: dict with eval_category, constraints, correction, expected_subtasks
+        """
         ...
 
     async def verify_success(
@@ -51,6 +59,7 @@ class VLAAdapter(Protocol):
 
     model_id: str
     display_name: str
+    capabilities: VLACapabilities
 
     async def predict_action(
         self,
@@ -58,6 +67,7 @@ class VLAAdapter(Protocol):
         task: str,
         proprioception: list[float] | None = None,
         plan: TaskPlan | None = None,
+        embodiment: RobotEmbodiment | None = None,
     ) -> ActionPrediction:
         """Predict action(s) given current observation and task."""
         ...

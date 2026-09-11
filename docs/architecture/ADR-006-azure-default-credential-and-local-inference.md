@@ -29,6 +29,7 @@ client = ChatCompletionsClient(
 ```
 
 **Credential scopes**:
+
 - Azure AI Foundry Serverless endpoints (`.models.ai.azure.com`): No explicit `credential_scopes` needed — the SDK infers the correct scope.
 - Azure OpenAI endpoints (`.openai.azure.com`): Requires `credential_scopes=["https://cognitiveservices.azure.com/.default"]`.
 
@@ -65,6 +66,7 @@ models:
 ```
 
 **Key properties**:
+
 - Same `image_url` base64 format as Azure OpenAI: `{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}`
 - Streaming supported via `stream=True`
 - No authentication required (dummy API key accepted)

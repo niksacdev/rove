@@ -4,6 +4,7 @@
 **Date**: 2026-02-21
 **Authors**: System Architect
 **Related Docs**:
+
 - `docs/architecture/high-level-architecture.md`
 - `docs/architecture/ADR-001-stage-graph-orchestrator-and-mcp-topology.md`
 **Trigger**: Founder strategy revision — ROVE as `lerobot_policy_rove` plugin with standalone enterprise path retained
@@ -121,7 +122,7 @@ Standalone mode is everything LeRobot cannot do:
 | Cross-combination parallel ranking | Not available (LeRobot runs one policy at a time) | Core feature — `asyncio.gather` N×M |
 | Dashboard | Not available | FastAPI + static HTML |
 | CLI | `rove evaluate` | `rove evaluate` |
-| MCP servers (Phase 4) | Not available | `rove mcp [eval|grounding|sim]` |
+| MCP servers (Phase 4) | Not available | `rove mcp [eval\|grounding\|sim]` |
 | VLM-only mode (no sim) | Not available (LeRobot needs action output) | Supported |
 | pi0 / GR00T as UnifiedAdapter | Via LeRobot's own pi0 policy | Via `UnifiedAdapter` Protocol |
 | Simulation (MuJoCo/LIBERO) | LeRobot's sim integration | ROVE `SimAdapter` |
@@ -132,20 +133,20 @@ The standalone mode is the **evaluation platform**. The LeRobot plugin mode is a
 
 ## Decision
 
-### D1: ROVE core is the standalone product. The LeRobot plugin is a thin wrapper package.
+### D1: ROVE core is the standalone product. The LeRobot plugin is a thin wrapper package
 
 ROVE's evaluation engine, adapter layer, Azure adapters, cost tracking, evaluation store, and CLI do not depend on LeRobot. LeRobot is an optional dependency gated behind the plugin package.
 
 The package structure:
 
-```
+```text
 rove-eval          (PyPI)    — ROVE core: no LeRobot dependency
 lerobot-policy-rove (PyPI)  — thin wrapper: depends on rove-eval + lerobot
 ```
 
 `lerobot-policy-rove` is a separate package, not a module inside `rove-eval`. This keeps the core installation clean for cloud/enterprise users who have no LeRobot and do not want PyTorch pulled in through a transitive dependency.
 
-### D2: `RoveCompositionPolicy` is the sole bridge class. All interface translation lives here.
+### D2: `RoveCompositionPolicy` is the sole bridge class. All interface translation lives here
 
 ```python
 # lerobot_policy_rove/policy.py
@@ -263,7 +264,7 @@ class RoveCompositionPolicy(PreTrainedPolicy):
 
 This means the plugin mode evaluates a subset of ROVE's pipeline:
 
-```
+```text
 Plugin mode:  perceive → ground → plan → [act via VLA only, no sim step loop]
 LeRobot env:  executes the returned action tensor, records reward
 Standalone:   perceive → ground → plan → execute (sim) → verify
@@ -271,11 +272,11 @@ Standalone:   perceive → ground → plan → execute (sim) → verify
 
 The `judge_calibration` metric is only available in standalone mode. This is a genuine capability difference that must be documented clearly.
 
-### D3: The VLA adapter inside `RoveCompositionPolicy` is ROVE's `VLAAdapter`, not LeRobot's policy directly.
+### D3: The VLA adapter inside `RoveCompositionPolicy` is ROVE's `VLAAdapter`, not LeRobot's policy directly
 
 This is the correct layering. The ROVE `local_lerobot.py` VLA adapter wraps a LeRobot policy internally. The LeRobot `RoveCompositionPolicy` wrapper calls ROVE's `VLAAdapter.predict_action()`, which internally calls the LeRobot policy. The nesting is:
 
-```
+```text
 LeRobot eval loop
   └── RoveCompositionPolicy.select_action()      [lerobot_policy_rove package]
         └── RoveOrchestrator.run_action_only()   [rove-eval package]
@@ -290,13 +291,13 @@ This nesting means LeRobot is called twice in the plugin path: once as the outer
 
 **Risk**: If LeRobot's `SmolVLA` policy has internal state that is reset by `policy.reset()` between episodes, ROVE's VLA adapter must also call reset. The `VLAAdapter` Protocol should have an optional `reset()` method for stateful adapters.
 
-### D4: Azure integration lives in ROVE core, not in the plugin.
+### D4: Azure integration lives in ROVE core, not in the plugin
 
 The Azure adapters (`azure_openai.py`, `azure_hf.py`), cost tracking in `ActionPrediction.cost_usd`, and Foundry JSONL export are all in `rove-eval`. The `lerobot-policy-rove` plugin uses them by importing from `rove`. No Azure code lives in the plugin package.
 
 This means: an enterprise user who wants Azure cost tracking while running LeRobot evaluations can pass a `rove_store` to `RoveCompositionPolicy` and get full cost and latency records, even though LeRobot's own eval harness does not surface this data.
 
-### D5: Parallel N×M combination evaluation is standalone-only.
+### D5: Parallel N×M combination evaluation is standalone-only
 
 LeRobot runs one policy at a time. ROVE's `asyncio.gather(N×M orchestrators)` pattern is a standalone feature. The plugin exposes one composition as one policy. If a researcher wants to compare `gpt-4o+smolvla` vs `qwen+smolvla`, they run LeRobot twice (once per policy) or use ROVE standalone.
 
@@ -306,7 +307,7 @@ This is acceptable. The target user for the plugin is someone who already has a 
 
 ## Architecture
 
-```
+```text
 +=====================================================================+
 |                        rove-eval  (PyPI)                           |
 |                   Core: no LeRobot dependency                      |
@@ -474,7 +475,7 @@ The thread-based approach is the correct production solution. `nest_asyncio` is 
 
 **Mitigation**: Until the plugin reaches Phase 2 stability, the plugin is distributed as an extras install of `rove-eval`:
 
-```
+```bash
 pip install rove-eval[lerobot]
 ```
 
@@ -490,21 +491,21 @@ This installs LeRobot as a dependency and makes `RoveCompositionPolicy` availabl
 
 ## Alternatives Considered
 
-### Alternative 1: ROVE standalone only. No LeRobot plugin.
+### Alternative 1: ROVE standalone only. No LeRobot plugin
 
 **Rejected**: The LeRobot ecosystem is where most VLA researchers work today. SmolVLA, pi0, OpenVLA-OFT are all distributed with LeRobot support. A tool that cannot integrate with LeRobot is asking researchers to rewrite their evaluation setup. The plugin lowers the adoption barrier from "rewrite everything" to "swap one policy class."
 
-### Alternative 2: Replace ROVE's VLA adapter layer with LeRobot directly.
+### Alternative 2: Replace ROVE's VLA adapter layer with LeRobot directly
 
 **Rejected**: ROVE's `VLAAdapter` Protocol is the abstraction that makes the standalone path work with cloud VLAs (CogACT on Azure GPU HTTP), non-LeRobot VLAs (future models), and mock adapters. Collapsing this layer to "just use LeRobot" would eliminate the standalone mode's ability to evaluate any VLA that is not in LeRobot's policy registry. The `local_lerobot.py` adapter wraps LeRobot; it does not replace ROVE's abstraction.
 
-### Alternative 3: ROVE as a LeRobot environment (`lerobot_env_rove`).
+### Alternative 3: ROVE as a LeRobot environment (`lerobot_env_rove`)
 
 **Considered but rejected**: LeRobot environments are gym-compatible wrappers around physical or simulated environments. ROVE is not an environment — it is an evaluation pipeline that contains a sim. The "environment" equivalent in ROVE is the `SimAdapter` (MuJoCo+LIBERO). An `lerobot_env_rove` package would expose ROVE's MuJoCo integration as a gym environment, but this only covers the sim, not the VLM composition. This is a narrower integration that does not achieve the composition evaluation goal.
 
 **However**: It may be worth building `lerobot_env_rove` alongside `lerobot_policy_rove` in Phase 2+ to expose ROVE's LIBERO tasks as LeRobot-compatible environments. This would allow pure VLA policies (SmolVLA, pi0) to be evaluated in ROVE's sim without going through the full ROVE pipeline. Not in scope for this ADR.
 
-### Alternative 4: Share the same package. LeRobot is a conditional import.
+### Alternative 4: Share the same package. LeRobot is a conditional import
 
 **Partially accepted**: For distribution, `rove-eval[lerobot]` extras is the short-term approach (Risk 4 mitigation). For the long term, a separate `lerobot-policy-rove` package is cleaner. The plugin package is thin enough (one class, one file) that the maintenance overhead of a separate package is low.
 

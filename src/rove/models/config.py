@@ -69,8 +69,10 @@ class StrategyConfig(BaseModel):
     plan: str | None = None
     act: str | None = None
     verify: str
-    sim: str
-    forward_kinematics: bool = False
+    sim: str | None = None
+    compute_dynamics: bool = False
+    pipeline_mode: str = "sequential"  # "sequential" | "parallel"
+    verify_mode: str = "auto"  # "auto" | "agent_loop" | "precompute"
     tags: list[str] = []
     latency_budget: dict[str, int] = {}  # per-stage overrides (ms), empty = use defaults
 
@@ -231,7 +233,9 @@ def get_strategies() -> dict[str, Strategy]:
             act=entry.act,
             verify=entry.verify,
             sim=entry.sim,
-            forward_kinematics=entry.forward_kinematics,
+            compute_dynamics=entry.compute_dynamics,
+            pipeline_mode=entry.pipeline_mode,
+            verify_mode=entry.verify_mode,
             tags=list(entry.tags),
         )
     return strategies

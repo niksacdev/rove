@@ -4,6 +4,7 @@
 **Date**: 2026-02-22
 **Authors**: System Architect, Principal Data Scientist, Product Manager
 **Related Docs**:
+
 - `docs/architecture/ADR-002-lerobot-plugin-architecture.md`
 - `docs/architecture/high-level-architecture.md`
 **Trigger**: Evaluation of LeRobot and NVIDIA Isaac Lab Arena as potential dependencies for ROVE's simulation and VLA inference layers.
@@ -20,6 +21,7 @@ Two external frameworks were evaluated for potential integration:
 2. **NVIDIA Isaac Lab Arena** (v0.1.1) — GPU-accelerated photorealistic simulation for VLA policy evaluation, built on Isaac Sim and Omniverse.
 
 The evaluation was scoped to ROVE's inference-only needs:
+
 - Load a VLA checkpoint and call `predict_action()`
 - Reset a sim environment, step actions, capture observations
 - Serve scene images to VLMs for perception and verification
@@ -57,11 +59,13 @@ LeRobot was evaluated for unified VLA inference across ROVE's target models:
 LeRobot natively supports **1 of 6 target VLAs**. It does not provide a unified inference API across ROVE's model roster. Each VLA requires a separate adapter regardless of LeRobot adoption.
 
 **What LeRobot provides for SmolVLA:**
+
 - `PreTrainedPolicy.from_pretrained(hub_id)` — model loading from HuggingFace Hub
 - `policy.select_action(obs_dict)` — inference with built-in preprocessing
 - Per-model image normalization and action denormalization from checkpoint stats
 
 **What LeRobot provides that ROVE does NOT need:**
+
 - Training loops, RL environments, data collection utilities
 - `wandb` integration, `rerun-sdk` visualization
 - `pynput` / `pyserial` hardware I/O libraries
@@ -131,11 +135,13 @@ This keeps `rove-eval` installable with zero ML dependencies for cloud-only user
 | Relevant for training | Not primary use | Designed for it (not our use case) |
 
 **Isaac Lab Arena's value proposition for ROVE:**
+
 - Photorealistic rendering gives VLMs better scene images — closer to real robot camera input
 - Lower sim-to-real gap for perception evaluation
 - GR00T N model benchmarking requires Arena
 
 **Isaac Lab Arena's blockers for ROVE (now):**
+
 - Pre-alpha maturity (v0.1.1) — risk of breakage under demo deadline
 - RTX GPU requirement excludes macOS development and standard cloud GPU instances (A100/H100 not supported)
 - Multi-GB install with known dependency conflicts (LeRobot `packaging>=24.2` vs isaacsim-core `packaging==23.0`)
@@ -146,6 +152,7 @@ This keeps `rove-eval` installable with zero ML dependencies for cloud-only user
 **MuJoCo + LIBERO remains the primary `SimAdapter` for Phase 1-3.**
 
 Isaac Lab Arena is added as a **second optional `SimAdapter`** in Phase 4, when:
+
 - Arena reaches stable release (post-v0.1)
 - ROVE has a CUDA-equipped CI environment
 - Photorealistic perception evaluation becomes a priority
@@ -186,11 +193,13 @@ LIBERO tasks overlap between both sims, enabling cross-validation of results.
 ### Status: Accepted
 
 ROVE's core package (`pip install rove-eval`) must remain installable and functional on:
+
 - macOS (Apple Silicon / MPS)
 - Linux (CPU-only, CUDA optional)
 - Cloud VMs (no GPU, Azure VLMs only)
 
 CUDA is required only for specific optional adapters:
+
 - `cogact-7b` (diffusion inference, CUDA-only)
 - `isaac-arena-libero` (Isaac Sim, RTX GPU)
 - Any future adapter that genuinely requires it
@@ -202,17 +211,20 @@ This is enforced by the existing pattern: adapters declare `device: cuda` in `ro
 ## Consequences
 
 ### Positive
+
 - Cloud-only users can run full pipeline evaluations with zero ML dependencies (Azure VLMs + mock sim)
 - Researchers on MacBooks can evaluate with MuJoCo without GPU
 - Each VLA gets purpose-built adapter code instead of forcing everything through one framework's abstractions
 - Isaac Lab Arena is a clean upgrade path — one YAML entry + one adapter file, no architecture changes
 
 ### Negative
+
 - Five separate VLA adapter implementations means more maintenance (mitigated: each is ~100-200 lines)
 - SmolVLA users must install LeRobot's full dependency tree including unused packages (wandb, pynput)
 - No photorealistic perception evaluation until Phase 4
 
 ### Risks
+
 - LeRobot API may change (mitigated: `PreTrainedPolicy.from_pretrained()` and `select_action()` are stable core API)
 - Isaac Lab Arena may not reach stable release on expected timeline (mitigated: MuJoCo works indefinitely)
 - `openpi` (JAX) on Apple Silicon may have compatibility issues (mitigated: `jax[metal]` is officially supported)

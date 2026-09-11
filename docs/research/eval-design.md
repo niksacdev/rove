@@ -1,4 +1,5 @@
 # ROVE Evaluation Design
+
 ## What Does "Eval" Mean for Robotics?
 
 **Author**: Principal ML Scientist
@@ -42,7 +43,7 @@ This is fundamentally different from supervised ML evaluation, where you evaluat
 
 Every trial starts with the same fixed inputs so results are comparable across model combinations:
 
-```
+```text
 Task specification (string)
   "Pick the red bracket and place it in bin A"
 
@@ -85,7 +86,7 @@ This is the hardest conceptual question. There are four distinct types of ground
 
 The MuJoCo simulator knows the precise position and orientation of every object. At the end of an episode, LIBERO evaluates success using PDDL goal predicates — deterministic geometric checks:
 
-```
+```text
 LIBERO success check for "place object in bin":
   object.position ∈ bin.bounding_box
   object.velocity < ε   (object at rest, not still moving)
@@ -101,11 +102,13 @@ This is **objective**, **free** (no human needed), and **reliable** (physics is 
 The VLM verify step compares the initial scene image to the post-execution scene image and outputs `success: bool, confidence: float, reasoning: str`. This is a probabilistic judgment, not a geometric check.
 
 VLM judge ground truth is valuable because:
+
 - It works when there is no simulator (VLM-only mode, or future real-robot evaluation)
 - It captures semantic success ("object is in the right area") not just metric success
 - It provides human-interpretable reasoning
 
 VLM judge ground truth is unreliable because:
+
 - It is calibrated against the sim physics check only if we measure that calibration
 - VLMs disagree with themselves across temperatures
 - Small visual differences (lighting, angle) can flip the judgment
@@ -118,14 +121,17 @@ VLM judge ground truth is unreliable because:
 Does the scene description correctly identify all objects? Is the grasp plan physically reasonable? These are harder questions because there is no automatic checker.
 
 For perceive:
+
 - We can partially automate this: compare VLM-reported object list to LIBERO's known object list for the scene
 - We cannot fully automate spatial relationship accuracy (VLM says "bracket is left of bin A" — is that correct? Only if we annotate ground truth spatial relationships)
 
 For plan:
+
 - Grasp plan quality (approach direction, strategy) has no automatic ground truth
 - We can heuristically check: does the planned approach direction avoid obvious collisions? Is confidence reported accurately?
 
 For ground (GroundingDINO bbox):
+
 - Sim gives us exact object positions projected into image coordinates
 - We can compute IoU between predicted bbox and true object bbox
 - This IS automatable with the simulator
@@ -140,7 +146,7 @@ A human annotator reviews trial recordings and labels: was the task completed? W
 
 ### 2.2 The Hierarchy
 
-```
+```text
 Sim physics GT (most reliable, automatic)
     ↓ disagreement measured as "judge_calibration"
 VLM judge GT (secondary, automatic)
@@ -157,6 +163,7 @@ For calibration: run human annotation monthly on a 5% sample.
 LIBERO-PRO (2025) showed a brutal result: models that achieve 90%+ on standard LIBERO collapse to 0% when object positions shift by 0.2 sim units. This is the sim-to-real gap in miniature — even within simulation, small distribution shifts destroy performance.
 
 Implications for ROVE:
+
 - A high success rate on fixed-seed trials is optimistic
 - ROVE must evaluate over multiple initial condition seeds, not just one
 - The variation study workflow (`bracket_variations` in `rove.yaml`) is not optional — it is what separates deployable models from demo models
@@ -286,7 +293,7 @@ These are first-class ranking signals after success rate.
 
 **Example from README leaderboard, annotated**:
 
-```
+```text
 gpt-4o + cogact-7b:
   success_rate: 0.92    # 46/50 trials
   p50_latency_ms: 1842
@@ -333,6 +340,7 @@ A monolithic VLA like pi0 or pi0.5 does perceive + plan + act in a single forwar
 **Design rule**: Treat NULL intermediate outputs as a valid state, not an error.
 
 For a monolithic VLA trial:
+
 - `perceive_output`: NULL (not produced)
 - `plan_output`: NULL (not produced)
 - `execute_output`: ActionPrediction (produced)
@@ -340,12 +348,14 @@ For a monolithic VLA trial:
 - `sim_success`: bool (produced by sim)
 
 The following metrics are NOT computed for monolithic VLAs:
+
 - `object_recall` (no separate perceive stage)
 - `grounding_iou` (no separate ground stage)
 - `plan_confidence` (no separate plan stage)
 - Stage-specific latencies for perceive/plan (latency is monolithic)
 
 The following metrics ARE computed:
+
 - `total_latency_ms` (the full execution time, attributed to execute stage)
 - `action_smoothness` (from the action chunk)
 - `judge_agreement` (verify still runs separately)
@@ -379,7 +389,7 @@ Default of `trials: 5` in rove.yaml is correct for Phase 1 (mock adapters, fast)
 
 **Report confidence intervals, not just point estimates.** The leaderboard should show:
 
-```
+```text
 gpt-4o + pi0:  88% success [95% CI: 80%-94%]  (50 trials)
 gpt-4o + smolvla:  78% success [95% CI: 64%-88%]  (25 trials)
 ```
@@ -649,6 +659,7 @@ The `query`, `response`, `context`, `ground_truth` field structure is the Foundr
 The architectural comparison between a full chain (VLM + grounding + VLA) and a monolithic VLA (pi0 doing everything) is the most important comparison ROVE enables. Do this correctly.
 
 **What you can compare directly** (same unit, same measurement):
+
 - `success_rate` — binary outcome, comparable
 - `total_latency_ms` — wall clock, comparable
 - `cost_per_run_usd` — USD, comparable
@@ -657,6 +668,7 @@ The architectural comparison between a full chain (VLM + grounding + VLA) and a 
 - `judge_calibration` — dimensionless, comparable
 
 **What you cannot compare directly**:
+
 - `perceive_latency_ms` for a monolithic VLA vs. a chained VLM (monolithic does not have this)
 - `plan_confidence` for monolithic vs. chained (monolithic does not expose this)
 - `object_recall` for monolithic vs. chained (same reason)
@@ -665,7 +677,7 @@ The architectural comparison between a full chain (VLM + grounding + VLA) and a 
 
 **Concrete example** from a real evaluation:
 
-```
+```text
 Task: "Pick the red bracket, place in bin A" — 50 trials each
 
 Full chain (gpt-4o + pi0):
@@ -762,6 +774,7 @@ Do NOT implement: `action_smoothness` (needs real actions), `object_recall` (nee
 The mock adapters are the primary testing tool for Phase 1. They must produce data shaped like real adapters would.
 
 **Mock VLM** must return:
+
 ```python
 SceneAnalysis(
     objects=["red_bracket", "bin_A", "bin_B", "workbench"],
@@ -785,6 +798,7 @@ VerificationResult(
 ```
 
 **Mock VLA** must return action chunks shaped like real VLAs:
+
 ```python
 ActionPrediction(
     actions=[
@@ -798,6 +812,7 @@ ActionPrediction(
 ```
 
 **Mock Sim** must return:
+
 ```python
 SimResult(
     success=True,                         # drawn from mock_success_rate AND VLA quality
@@ -818,6 +833,7 @@ Every design decision above can be adjusted. But one thing must be right from th
 The VLM verify output goes into `vlm_success` and is used to compute `judge_calibration`. It is never treated as the authoritative outcome signal when the simulator is running. The LIBERO-PRO findings make clear that even state-of-the-art VLMs miscalibrate under distribution shift. ROVE's credibility depends on the physics engine verdict being primary.
 
 This means:
+
 - `primary_success = sim_success` when `sim_success is not None`
 - `primary_success = vlm_success` only in `vlm_only` mode
 - The leaderboard ranks by `primary_success`, not `vlm_success`

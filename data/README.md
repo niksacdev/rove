@@ -79,16 +79,10 @@ All images sourced from publicly available robotics research datasets.
 - **Images used**: 20 samples from the test split, classified by scene type
 - **Original data sources**: DROID, Fractal, Stanford KUKA, VIOLA datasets
 
-If you use these images in publications or derived works, please cite:
-
-```bibtex
-@article{robo2vlm2025,
-  title={Robo2VLM: Visual Question Answering from Large-Scale In-the-Wild Robot Manipulation Datasets},
-  author={Cite, Kepler and others},
-  journal={arXiv preprint arXiv:2505.15517},
-  year={2025}
-}
-```
+For dataset citations, use the authors' [paper](https://arxiv.org/abs/2505.15517).
+See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for the LIBERO samples,
+Panda robot assets, licenses and local modifications. Demo task rewrites and
+selected frames are not a calibrated task-success benchmark.
 
 ## Adding More Images
 

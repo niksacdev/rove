@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "detect-secrets SHA fingerprints are not credentials"
+condition = "AND"
+paths = ['''^\.secrets\.baseline$''']
+regexTarget = "line"
+regexes = ['''^\s*"hashed_secret": "[a-f0-9]{40}",?\s*$''']
