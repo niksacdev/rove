@@ -13,14 +13,16 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
-from rove.models import ExampleData, PipelineStage, StageStatus
+from rove.api.local_only import LocalOnlyMiddleware
+from rove.models import EvaluationProvenance, ExampleData, PipelineStage, StageStatus
 from rove.models.config import get_strategies, load_config
+from rove.orchestrator.failure_attribution import attribute_failure
+from rove.orchestrator.insights import compute_run_insights
 from rove.orchestrator.pipeline import EvaluationPipeline
 from rove.orchestrator.run_manager import RunManager
 
@@ -28,12 +30,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ROVE", version="0.1.0", description="Robot Observation & Vision Evaluation")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(LocalOnlyMiddleware)
 
 # Global state (no database for demo)
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"
@@ -57,6 +54,10 @@ def _persist_evaluation(eval_data: dict[str, Any]) -> None:
             "strategy_ids": eval_data.get("strategy_ids", []),
             "results": eval_data.get("results", {}),
         }
+        if "provenance" in eval_data:
+            record["provenance"] = eval_data["provenance"]
+        if "insights" in eval_data:
+            record["insights"] = eval_data["insights"]
         with open(_history_path, "a") as f:
             f.write(json.dumps(record) + "\n")
     except Exception:
@@ -97,6 +98,16 @@ def _load_example_data(example_filename: str) -> ExampleData | None:
                     "robot",
                     "action_dim",
                     "state_dim",
+                    "control_space",
+                    "action_space_desc",
+                    "initial_joint_positions",
+                    "eval_category",
+                    "expected_subtasks",
+                    "constraints",
+                    "correction",
+                    "turns",
+                    "acceptable_interpretations",
+                    "difficulty",
                 ):
                     if k in entry:
                         extras[k] = entry[k]
@@ -116,6 +127,7 @@ async def _run_multi_strategy(
     strategy_ids: list[str],
     example: ExampleData | None = None,
     urdf_path: str | None = None,
+    seed: int | None = None,
 ):
     """Background task that runs multiple strategies concurrently via RunManager."""
     queue = _eval_queues[eval_id]
@@ -145,12 +157,22 @@ async def _run_multi_strategy(
             example=example,
         )
 
+        provenance = EvaluationProvenance.build(
+            image_base64=image_base64,
+            strategy_ids=strategy_ids,
+            seed=seed,
+        )
+
+        insights = compute_run_insights(results)
+
         complete_data = {
             "eval_id": eval_id,
             "status": "completed",
             "task": task,
             "results": results,
             "strategy_ids": strategy_ids,
+            "provenance": provenance.model_dump(),
+            "insights": insights,
         }
         _evaluations[eval_id] = complete_data
         _persist_evaluation(complete_data)
@@ -175,6 +197,7 @@ async def _run_evaluation(
     verify_model_id: str,
     sim_id: str,
     example: ExampleData | None = None,
+    seed: int | None = None,
 ):
     """Background task that runs a single pipeline and pushes events to the SSE queue."""
     queue = _eval_queues[eval_id]
@@ -183,7 +206,7 @@ async def _run_evaluation(
         plan = registry.get_adapter_for_stage(PipelineStage.PLAN, plan_model_id)
         act = registry.get_adapter_for_stage(PipelineStage.ACT, act_model_id)
         verify = registry.get_adapter_for_stage(PipelineStage.VERIFY, verify_model_id)
-        sim = registry.get_sim(sim_id)
+        sim = registry.get_sim(sim_id) if sim_id else None
 
         pipeline = EvaluationPipeline(
             perceive_adapter=perceive,
@@ -212,11 +235,30 @@ async def _run_evaluation(
             if verify_stage and verify_stage.get("output")
             else False
         )
+        failure_stage, failure_category = attribute_failure(stages, success)
 
-        result = {
-            "eval_id": eval_id,
-            "status": "completed",
-            "task": task,
+        provenance = EvaluationProvenance.build(
+            image_base64=image_base64,
+            strategy_ids=[],
+            resolved_models={
+                "perceive": perceive_model_id,
+                "plan": plan_model_id,
+                "act": act_model_id,
+                "verify": verify_model_id,
+                "sim": sim_id,
+            },
+            seed=seed,
+        )
+
+        # Wrap as single-strategy result for insights computation
+        single_result = {
+            "strategy_id": eval_id,
+            "display_name": "single",
+            "success": success,
+            "total_latency_ms": round(total_latency, 1),
+            "failure_stage": failure_stage,
+            "failure_category": failure_category,
+            "stages": stages,
             "models": {
                 "perceive": perceive_model_id,
                 "plan": plan_model_id,
@@ -224,9 +266,21 @@ async def _run_evaluation(
                 "verify": verify_model_id,
                 "sim": sim_id,
             },
+        }
+        insights = compute_run_insights([single_result])
+
+        result = {
+            "eval_id": eval_id,
+            "status": "completed",
+            "task": task,
+            "models": single_result["models"],
             "stages": stages,
             "success": success,
+            "failure_stage": failure_stage,
+            "failure_category": failure_category,
             "total_latency_ms": round(total_latency, 1),
+            "provenance": provenance.model_dump(),
+            "insights": insights,
         }
         _evaluations[eval_id] = result
         _persist_evaluation(result)
@@ -260,6 +314,7 @@ async def create_evaluation(
     sim_id: str = Form(default="mock-sim"),
     example_filename: str = Form(default=""),
     urdf: UploadFile | None = File(default=None),
+    seed: int | None = Form(default=None),
 ):
     eval_id = str(uuid.uuid4())
     image_bytes = await image.read()
@@ -288,7 +343,13 @@ async def create_evaluation(
         ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
         bg = asyncio.create_task(
             _run_multi_strategy(
-                eval_id, task, image_base64, ids, example=example, urdf_path=urdf_path
+                eval_id,
+                task,
+                image_base64,
+                ids,
+                example=example,
+                urdf_path=urdf_path,
+                seed=seed,
             )
         )
         _background_tasks.add(bg)
@@ -307,6 +368,7 @@ async def create_evaluation(
             verify_model_id,
             sim_id,
             example=example,
+            seed=seed,
         )
     )
     _background_tasks.add(bg)
@@ -355,12 +417,30 @@ async def list_models():
 
 
 @app.get("/api/examples")
-async def list_examples():
-    """Return example tasks from data/manifest.json."""
+async def list_examples(eval_category: str | None = None):
+    """Return example tasks from data/manifest.json.
+
+    Optional query param ``eval_category`` filters to a single category
+    (atomic, multi_stage, situated_correction, constrained, open_ended, negative).
+    Response includes a ``categories`` summary for sidebar filtering.
+    """
     manifest = _data_dir / "manifest.json"
     if not manifest.exists():
-        return {"examples": []}
-    return json.loads(manifest.read_text())
+        return {"examples": [], "categories": []}
+    examples = json.loads(manifest.read_text())
+
+    # Build category summary counts
+    cat_counts: dict[str, int] = {}
+    for ex in examples:
+        cat = ex.get("eval_category", "uncategorized")
+        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    categories = [{"name": k, "count": v} for k, v in sorted(cat_counts.items())]
+
+    # Filter if requested
+    if eval_category:
+        examples = [ex for ex in examples if ex.get("eval_category") == eval_category]
+
+    return {"examples": examples, "categories": categories}
 
 
 @app.get("/api/mock-models")

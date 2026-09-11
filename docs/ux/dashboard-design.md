@@ -24,7 +24,8 @@ Replace the three bottom-bar dropdowns with a **collapsible configuration panel*
 #### Panel States
 
 **Collapsed (default):** A single summary line shows the active assignments.
-```
+
+```text
 CONFIG  [Preset: All Mock]  Perceive: Mock VLM  |  Act: Mock VLA  |  Sim: Mock  [Edit] [v]
 ```
 
@@ -33,6 +34,7 @@ CONFIG  [Preset: All Mock]  Perceive: Mock VLM  |  Act: Mock VLA  |  Sim: Mock  
 #### Stage Card Structure
 
 Each card displays:
+
 - Stage number and name (matches the left sidebar pipeline icons)
 - Model type selector where applicable (only Plan stage: VLM or LLM)
 - Primary model dropdown
@@ -49,6 +51,7 @@ Each card displays:
 #### Supporting Infrastructure Row
 
 Below the four stage cards, a separate "Supporting Infrastructure" row holds:
+
 - Grounding model dropdown (hint: "Object localization")
 - Sim environment dropdown (hint: "Robot physics environment")
 
@@ -114,18 +117,21 @@ This replaces the flat `vlm` / `vla` / `sim` fields in the current request body.
 Before any layout decisions, we establish the three personas and their dashboard goals.
 
 ### Persona A: Robotics Researcher
+
 - CLI-first. Opens the dashboard when they need visual comparison of results.
 - Primary need: Load a named evaluation from rove.yaml and see the ranked results table.
 - Secondary need: Compare two runs side-by-side across model configs.
 - Context: Focused, desktop, likely running alongside a terminal.
 
 ### Persona B: ML Engineer on a Manipulation Team
+
 - Dashboard-first for exploration, CLI for automation.
 - Primary need: Configure a quick ad hoc run (select models, upload image, type task), see live progress.
 - Secondary need: Export comparison data for a report.
 - Context: Desktop, may run multiple evaluations in a session.
 
 ### Persona C: Platform Admin
+
 - Rarely runs evaluations. Wants to see which models are available and healthy.
 - Primary need: The models panel. Which adapters are registered? Which are healthy?
 - Secondary need: Leaderboard aggregate across runs.
@@ -140,6 +146,7 @@ The central question is whether this is a single scrolling page or a tabbed layo
 ### Decision: Three-Panel Single Page With a Persistent Sidebar
 
 Rationale:
+
 - Tabs force context switching and hide state (e.g., you cannot see history while configuring).
 - A three-column layout keeps configure/run/results visible simultaneously on a 1440px desktop.
 - On narrower screens (1024px laptop), the history sidebar collapses to an icon rail.
@@ -147,7 +154,7 @@ Rationale:
 
 ### Full Flow
 
-```
+```text
 User arrives
     |
     +-- Has a named evaluation in rove.yaml?
@@ -187,7 +194,7 @@ Run saved to history sidebar (auto)
 
 ### 3A. Main Layout (1440px Desktop, Configure + Run State)
 
-```
+```text
 +------------------------------------------------------------------+-------+
 | ROVE  v0.1                          [Models] [Leaderboard] [Docs]| HIST  |
 +------------------------------------------------------------------+ SIDE  |
@@ -232,7 +239,7 @@ Run saved to history sidebar (auto)
 
 ### 3B. Main Layout (Running State -- Live SSE Progress)
 
-```
+```text
 +------------------------------------------------------------------+-------+
 | ROVE  v0.1                                                        | HIST  |
 +------------------------------------------------------------------+ (run  |
@@ -266,7 +273,7 @@ Run saved to history sidebar (auto)
 
 ### 3C. History Sidebar (Expanded)
 
-```
+```text
 +----------+
 | HISTORY  |
 |          |
@@ -299,7 +306,7 @@ Sidebar items are selectable with checkboxes. When 2 or more are checked, the "C
 
 ### 3D. Results Panel (Complete State, Single Run)
 
-```
+```text
 +------------------------------------------------------------------+
 |  RESULTS: pick_bracket  |  2026-02-21 10:42  |  [Export JSONL]  |
 |                                                                  |
@@ -359,7 +366,7 @@ Sidebar items are selectable with checkboxes. When 2 or more are checked, the "C
 
 ### 3E. Comparison View (2 Runs Side-by-Side)
 
-```
+```text
 +------------------------------------------------------------------+
 |  COMPARE  |  [X] Close comparison                                |
 |                                                                  |
@@ -390,7 +397,7 @@ Note on comparison summary wording: the summary avoids declaring a definitive "w
 
 ### 3F. Models Panel (Platform Admin View)
 
-```
+```text
 +------------------------------------------------------------------+
 |  ROVE  v0.1          [Dashboard] [Models] [Leaderboard] [Docs]  |
 +------------------------------------------------------------------+
@@ -435,7 +442,7 @@ Note on comparison summary wording: the summary avoids declaring a definitive "w
 
 ### File Structure
 
-```
+```text
 rove/dashboard/
     index.html      Single HTML file. All sections present, toggled with CSS class.
     app.js          All event handling, API calls, SSE, DOM updates.

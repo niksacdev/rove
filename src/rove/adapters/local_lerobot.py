@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from rove.models import ActionPrediction, TaskPlan
+from rove.models import ActionPrediction, ActionSpace, RobotEmbodiment, TaskPlan, VLACapabilities
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,6 @@ try:
 except ImportError:
     HAS_LEROBOT = False
 
-# Ungated tokenizer compatible with PaliGemma (same Gemma 256k vocab)
-_FALLBACK_TOKENIZER = "unsloth/gemma-2b"
-_PALIGEMMA_TOKENIZER = "google/paligemma-3b-pt-224"
 
 
 class LeRobotVLAAdapter:
@@ -51,8 +48,25 @@ class LeRobotVLAAdapter:
         self._device = cfg.get("device", "mps")
         self._chunk_size = cfg.get("chunk_size", 10)
         self._requires_proprio = cfg.get("requires_proprio", True)
+        self._trained_robot = cfg.get("trained_robot")  # e.g., "so100", "panda"
         self._policy: PreTrainedPolicy | None = None
         self._tokenizer = None
+        self._tokenizer_config = cfg.get("tokenizer", {})
+
+        # Build capabilities from YAML config; fall back to sensible defaults
+        caps_data = cfg.get("vla_capabilities", {})
+        self._capabilities = (
+            VLACapabilities(**caps_data) if caps_data else VLACapabilities(native_action_dim=7)
+        )
+
+    @property
+    def capabilities(self) -> VLACapabilities:
+        """Return VLA capabilities.
+
+        Pre-load: returns config-driven values from rove.yaml.
+        Post-load: refined from the actual checkpoint config.
+        """
+        return self._capabilities
 
     def _load_model(self) -> PreTrainedPolicy:
         """Load and cache the pretrained policy (called in executor)."""
@@ -71,18 +85,39 @@ class LeRobotVLAAdapter:
 
         try:
             policy = policy_cls.from_pretrained(self._hf_repo, config=config)
+            # MPS doesn't fully support BFloat16 matmul — cast to Float32
+            if self._device == "mps":
+                policy = policy.to(dtype=torch.float32)
             policy = policy.to(self._device)
         except (RuntimeError, AssertionError):
             logger.warning("Device %s failed, falling back to cpu", self._device)
             policy = policy_cls.from_pretrained(self._hf_repo, config=config)
-            policy = policy.to("cpu")
+            policy = policy.to(dtype=torch.float32).to("cpu")
 
         policy.train(False)
         self._policy = policy
+
+        # Refine capabilities from the actual checkpoint config
+        self._refine_capabilities(policy.config)
+
         return policy
 
+    def _refine_capabilities(self, config) -> None:
+        """Refine capabilities from actual checkpoint config after model load."""
+        action_feature = config.output_features.get("action")
+        native_dim = (
+            action_feature.shape[0] if action_feature else self._capabilities.native_action_dim
+        )
+        is_pi05 = self._is_pi05(config)
+        self._capabilities = VLACapabilities(
+            native_action_dim=native_dim,
+            native_action_space=self._capabilities.native_action_space,
+            max_action_dim=32 if is_pi05 else self._capabilities.max_action_dim,
+            supported_robot_types=None if is_pi05 else self._capabilities.supported_robot_types,
+        )
+
     def _get_tokenizer(self, policy: PreTrainedPolicy):
-        """Get tokenizer — try policy's own, then PaliGemma, then ungated fallback."""
+        """Get the native tokenizer or an explicitly pinned compatible fallback."""
         if self._tokenizer is not None:
             return self._tokenizer
 
@@ -104,16 +139,21 @@ class LeRobotVLAAdapter:
             except AttributeError:
                 continue
 
-        # Try loading PaliGemma tokenizer (gated — requires HF license acceptance)
-        for name in [_PALIGEMMA_TOKENIZER, _FALLBACK_TOKENIZER]:
-            try:
-                self._tokenizer = AutoTokenizer.from_pretrained(name)
-                logger.info("Loaded tokenizer from %s", name)
-                return self._tokenizer
-            except Exception:
-                logger.debug("Could not load tokenizer %s", name)
+        # An unrelated tokenizer can silently change policy behavior. Only use
+        # an explicitly selected, immutable fallback reviewed for this checkpoint.
+        import re
 
-        raise RuntimeError("No compatible tokenizer found for policy")
+        name = self._tokenizer_config.get("model_id", "")
+        revision = self._tokenizer_config.get("revision", "")
+        if not name or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise RuntimeError(
+                "Policy has no native tokenizer. Configure a compatible tokenizer "
+                "with model_id and an immutable 40-character revision."
+            )
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            name, revision=revision, trust_remote_code=False
+        )
+        return self._tokenizer
 
     def _is_pi05(self, config) -> bool:
         return getattr(config, "type", "") == "pi05"
@@ -250,14 +290,18 @@ class LeRobotVLAAdapter:
         image_base64: str,
         task: str,
         proprioception: list[float] | None,
+        embodiment: RobotEmbodiment | None,
     ) -> ActionPrediction:
         """Synchronous inference — runs in executor thread."""
+        from rove.adapters.normalizer import slice_to_target_dim
+
         policy = self._load_model()
         image = self._decode_image(image_base64)
 
         batch = self._prepare_batch(policy, image, task, proprioception)
 
         n_steps = getattr(policy.config, "n_action_steps", self._chunk_size)
+        is_pi05 = self._is_pi05(policy.config)
 
         all_actions: list[list[float]] = []
         with torch.inference_mode():
@@ -267,12 +311,24 @@ class LeRobotVLAAdapter:
                     raw_action = raw_action.squeeze(0)
                 all_actions.append(raw_action.cpu().tolist())
 
+        raw_dim = len(all_actions[0]) if all_actions else 0
+
+        # Slice pi0.5's padded 32-dim output to target robot's action dim
+        target_dim = raw_dim
+        if is_pi05 and embodiment is not None:
+            target_dim = embodiment.action_dim
+            all_actions = slice_to_target_dim(all_actions, target_dim)
+
         return ActionPrediction(
             actions=all_actions,
             action_type="trajectory",
             num_steps=len(all_actions),
             confidence=0.8,
             raw_response=f"LeRobot policy {self._hf_repo} on {self._device}",
+            declared_action_dim=target_dim,
+            raw_action_dim=raw_dim,
+            action_space=embodiment.action_space if embodiment else ActionSpace.EEF_DELTA,
+            gripper_index=embodiment.gripper_index if embodiment else None,
         )
 
     async def predict_action(
@@ -281,12 +337,13 @@ class LeRobotVLAAdapter:
         task: str,
         proprioception: list[float] | None = None,
         plan: TaskPlan | None = None,
+        embodiment: RobotEmbodiment | None = None,
     ) -> ActionPrediction:
         """Predict action trajectory from current observation."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            partial(self._run_inference, image_base64, task, proprioception),
+            partial(self._run_inference, image_base64, task, proprioception, embodiment),
         )
 
     async def health_check(self) -> bool:

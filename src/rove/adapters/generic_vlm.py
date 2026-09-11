@@ -63,7 +63,9 @@ class GenericVLMAdapter:
         system = self._prompts.load("system")
         return await self._call(prompt, SceneAnalysis, [image_base64], instructions=system)
 
-    async def plan_task(self, image_base64: str, task: str, scene: SceneAnalysis) -> TaskPlan:
+    async def plan_task(
+        self, image_base64: str, task: str, scene: SceneAnalysis, **kwargs
+    ) -> TaskPlan:
         prompt = self._prompts.render("plan_user", task=task, scene_summary=_format_scene(scene))
         system = self._prompts.load("system")
         return await self._call(prompt, TaskPlan, [image_base64], instructions=system)

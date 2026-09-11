@@ -5,6 +5,7 @@
 **Authors**: System Architect, Principal Data Scientist, Product Manager
 **Supersedes**: Earlier draft of ADR-011 (simulation-only framing)
 **Related Docs**:
+
 - `docs/architecture/ADR-003-simulation-and-external-dependency-strategy.md`
 - `docs/architecture/ADR-010-pipeline-generalization-agent-adapter.md`
 - `src/rove/adapters/protocols.py`
@@ -37,7 +38,7 @@ Several building blocks for layered verification are already implemented:
 
 The VLA outputs a trajectory of 7-DOF end-effector deltas:
 
-```
+```text
 [[0.02, -0.01, 0.05, 0.0, 0.1, -0.02, 0.8],
  [0.03, -0.02, 0.04, 0.0, 0.1, -0.01, 0.9], ...]
 ```
@@ -63,6 +64,7 @@ ROVE's manifest (`data/manifest.json`) contains two categories:
 **Robo2VLM images (001-020):** Static photos from real robots (Google Robot, Franka Panda via DROID, KUKA). No proprioception, no ground truth actions. Used for perceive and plan evaluation only.
 
 **LIBERO images (000-009):** Rendered frames from LIBERO benchmark tasks. Include:
+
 - `robot: "panda"` — identifies the robot
 - `proprioception: [...]` — current 8-DOF joint state
 - `ground_truth_action: [...]` — expert human's action at this frame
@@ -136,12 +138,14 @@ The deterministic checks would run in microseconds and provide hard pass/fail si
 FK converts the VLA's joint-space actions into Cartesian end-effector positions. This gives the VLM verifier spatial context:
 
 Instead of:
-```
+
+```text
 actions: [[0.02, -0.01, 0.05, 0.0, 0.1, -0.02, 0.8], ...]
 ```
 
 The VLM verifier sees:
-```
+
+```text
 FK Analysis:
 - Trajectory endpoint: [0.34, 0.21, 0.46] (1cm from target bin B)
 - Grasp point: matches perceived object location within 2cm
@@ -155,7 +159,7 @@ FK Analysis:
 
 **FK also enables quantitative VLA comparison** when ground truth actions are available (LIBERO data):
 
-```
+```text
 SmolVLA endpoint:    [0.42, 0.15, 0.38]  →  1.7cm from ground truth  ← good
 OpenVLA endpoint:    [0.50, 0.22, 0.41]  →  12.8cm from ground truth ← bad
 ```
@@ -256,6 +260,7 @@ Each layer adds verification depth but asks more from the customer. Layers 0-2 r
 ### Phase 1 — MockSim + LLM-as-Judge (current) — **IMPLEMENTED**
 
 Works today. The verify stage is an LLM-as-judge (commit `83714e5`) that:
+
 - Produces per-stage `StageCheck` assessments for each completed stage
 - Evaluates ground truth QA via `GroundTruthCheck` when `ExampleData.ground_truth` is available
 - Assesses `ActionPlausibility` (bounds, smoothness, gripper consistency, plan alignment) when the act stage completes
@@ -272,6 +277,7 @@ The VLM verifier acknowledges in its prompt that true success assessment require
 The primary Phase 2 deliverable. Customers provide their robot URDF. ROVE computes FK on VLA-predicted actions using MuJoCo's kinematics engine and provides the VLM verifier with spatial analysis.
 
 Install (optional dependency — same package used for LIBERO sim):
+
 ```toml
 [project.optional-dependencies]
 kinematics = ["mujoco>=3.1"]
@@ -282,11 +288,13 @@ One dependency serves both FK verification and LIBERO sim. A customer who only w
 **LIBERO Benchmark (internal tooling):**
 
 LIBERO is not a customer feature. It doesn't match customer environments. Its value is:
+
 1. Validating ROVE's pipeline works end-to-end with a real sim
 2. Reproducing published VLA benchmark numbers for ROVE's credibility
 3. Providing ground truth actions for FK comparison (manifest entries `libero_000` through `libero_009`)
 
 Install:
+
 ```toml
 [project.optional-dependencies]
 libero = ["mujoco>=3.1", "robosuite>=1.5", "libero>=0.1"]
@@ -324,7 +332,7 @@ Isaac Sim requires RT Cores for RTX rendering. A100 and H100 are compute GPUs wi
 
 **Architecture — ROVE orchestrates, Isaac Lab executes:**
 
-```
+```text
 ROVE (orchestrator)                     Isaac Lab (GPU subprocess on Azure A10)
 ───────────────────                     ──────────────────────────────────────
 
@@ -389,7 +397,7 @@ ROVE translates this YAML into Isaac Lab API calls. Simple primitives cover most
 
 **Cloud-based verification of edge execution:**
 
-```
+```text
 ┌─── Edge (Robot) ──────────────────────┐
 │  VLM (Qwen3-VL) → perceive           │
 │  LLM (Phi-4 Mini) → plan             │
@@ -414,6 +422,7 @@ ROVE translates this YAML into Isaac Lab API calls. Simple primitives cover most
 The Foundry agent adds value here because it's not just checking pass/fail — it's reasoning across multiple sim steps, diagnosing failure modes, and providing actionable feedback.
 
 **Foundry agent constraints:**
+
 - Tool outputs are text/JSON only — the agent cannot see images returned by tools. Post-action images must be sent as new message content blocks.
 - Per-step latency: ~5-15 seconds (network round-trip + GPT-4o inference). A 10-step trajectory takes 50-150 seconds.
 - Runs expire after 10 minutes.
@@ -424,7 +433,7 @@ The Foundry agent adds value here because it's not just checking pass/fail — i
 
 A Foundry agent with sim tools is one more strategy ROVE compares:
 
-```
+```text
 Strategy A: Qwen3-VL → Qwen3-VL → SmolVLA → Qwen3-VL      (local pipeline, ~8s)
 Strategy B: Foundry GPT-4o Agent with sim tools               (cloud agent, ~60s)
 
@@ -444,11 +453,13 @@ The answer is probably "no for simple pick-and-place, maybe for long-horizon ass
 Video prediction models (Cosmos-Predict2.5, UniSim) and world models (V-JEPA2) are **not appropriate as the primary verification mechanism**.
 
 **Why not:**
+
 - Generative models produce *plausible-looking* futures, not *physically accurate* ones
 - A VLA that predicts a collision trajectory may get a "successful grasp" video because that's statistically likely in the training distribution
 - ROVE needs ground truth correctness signals — generative models provide plausibility, not truth
 
 **Where world models fit (Phase 4+):**
+
 - Synthetic data generation for testing edge cases
 - Cosmos Transfer can enhance Isaac Lab renders to improve photorealism
 - A separate "world model quality" evaluation metric
@@ -571,7 +582,7 @@ class PipelineContext(BaseModel):
 
 The bottom input bar replaces the single camera button with a "+" button that opens a popover with two upload options:
 
-```
+```text
 [+] [task input...........................] [send]
      ┌─────────────────┐
      │ 📷 Upload Image │
@@ -588,7 +599,7 @@ The bottom input bar replaces the single camera button with a "+" button that op
 
 When a URDF is attached, a compact preview chip appears:
 
-```
+```text
 [📦 panda.urdf  ×]
 ```
 
@@ -613,7 +624,7 @@ strategies:
 
 FK analysis appears as a styled sub-card within the act stage output:
 
-```
+```text
 [FK Analysis] MuJoCo Forward Kinematics
   Endpoint        [0.340, 0.210, 0.460]m
   Displacement    0.340m
@@ -625,7 +636,7 @@ FK analysis appears as a styled sub-card within the act stage output:
 
 ### Pipeline Flow
 
-```
+```text
 perceive → plan → act ──┬──→ verify
                          │
                     FK compute
@@ -634,6 +645,7 @@ perceive → plan → act ──┬──→ verify
 ```
 
 FK computation runs inline within the act stage, after sim stepping but before the act result is yielded. The FK analysis is:
+
 1. Included in the act stage SSE output for dashboard rendering
 2. Stored in `PipelineContext.fk_analysis` for the verifier
 3. Injected into the verify prompt via `render_verify()` in `prompt_loader.py`
@@ -642,7 +654,7 @@ FK computation runs inline within the act stage, after sim stepping but before t
 
 `POST /api/evaluate` accepts an optional `urdf` file field:
 
-```
+```text
 Content-Type: multipart/form-data
 
 image: <scene image>
@@ -656,6 +668,7 @@ urdf: <robot.urdf>              # NEW, optional
 ## Consequences
 
 ### Positive
+
 - Four verification layers make ROVE useful at every level — from "I have photos" to "I have cloud sim"
 - FK verification (Layer 2) is the highest-value, lowest-cost improvement — no sim, no GPU, runs in <10ms
 - MuJoCo serves double duty: FK in Phase 2, LIBERO sim in Phase 2 internal — one dependency, not two
@@ -666,6 +679,7 @@ urdf: <robot.urdf>              # NEW, optional
 - Customer never touches Isaac Lab, Gazebo, or ROS2 — ROVE abstracts all sim complexity
 
 ### Negative
+
 - FK without scene knowledge cannot detect object collisions or environmental constraints
 - Isaac Lab requires A10 GPU (not A100/H100), limiting Azure VM options
 - Isaac Sim subprocess architecture adds engineering complexity (warm process, socket communication)
@@ -673,6 +687,7 @@ urdf: <robot.urdf>              # NEW, optional
 - LIBERO doesn't serve customers directly — it's internal-only value
 
 ### Risks
+
 - MuJoCo URDF loading has quirks with some non-standard URDFs (mitigated: URDF validation step, MuJoCo's error messages are descriptive)
 - Isaac Lab-Arena is pre-alpha (v0.1) — API instability (mitigated: pin version, test against specific releases)
 - Customer URDF quality varies — broken inertia tensors, duplicate link names (mitigated: URDF validation step before loading)
@@ -706,6 +721,7 @@ Steps 0a-0c are **already in the codebase**. Steps 1-4 are the Phase 2 priority 
 ## References
 
 ### Simulation
+
 - [MuJoCo Python API](https://mujoco.readthedocs.io/en/stable/python.html) — physics engine, pip-installable, CPU/MPS/CUDA
 - [LIBERO](https://lifelong-robot-learning.github.io/LIBERO/) — 130 manipulation tasks, ICLR 2023
 - [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) — GPU-accelerated sim framework
@@ -715,22 +731,26 @@ Steps 0a-0c are **already in the codebase**. Steps 1-4 are the Phase 2 priority 
 - [Isaac Sim vs Gazebo Vision Comparison](https://dl.acm.org/doi/10.1007/978-3-031-85859-8_29) — RoboCup 2024
 
 ### Forward Kinematics
+
 - [MuJoCo Python API](https://mujoco.readthedocs.io/en/stable/python.html) — FK via `mj_forward()`, same library used for sim (~5MB, native arm64)
 - [MuJoCo URDF loading](https://mujoco.readthedocs.io/en/stable/modeling.html#curdf) — loads any standard URDF
 - [Franka Panda URDF](https://github.com/moveit/moveit_resources/tree/ros2/panda_description) — MoveIt resources (Apache 2.0)
 - [Pinocchio](https://github.com/stack-of-tasks/pinocchio) — alternative FK/dynamics library if MuJoCo is insufficient (~4,500 stars)
 
 ### Sim Alternatives (evaluated, not selected for Phase 2-3)
+
 - [SimplerEnv](https://github.com/simpler-env/SimplerEnv) — Real2Sim VLA evaluation, ICLR 2025 (Phase 3+ cloud option)
 - [Genesis](https://github.com/Genesis-Embodied-AI/Genesis) — GPU-accelerated sim, v0.3 (MPS broken, monitoring only)
 - [Cosmos World Foundation Models](https://developer.nvidia.com/cosmos) — video prediction (not suitable for verification)
 
 ### Foundry Agents
+
 - [Azure AI Agents SDK](https://learn.microsoft.com/en-us/python/api/overview/azure/ai-agents-readme) — multimodal agents with tool calling
 - [MCP in Foundry Agents](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/how-to/tools-classic/model-context-protocol) — remote MCP tool integration
 - [Foundry Agent Model Support](https://learn.microsoft.com/en-us/azure/ai-foundry/agents/concepts/model-region-support) — GPT-4o vision + function calling
 
 ### ROVE Source Files (Layer 0-1 Implementation)
+
 - `src/rove/models/core.py` — `ActionPlausibility`, `VerificationResult`, `ExampleData`, `GroundTruthCheck`, `StageCheck`, `PipelineContext.to_dict()`, `_extract_gripper_events()`
 - `src/rove/orchestrator/pipeline.py` — `EvaluationPipeline.run_trial()` with `ExampleData` integration, proprioception seeding, sim step loop
 - `src/rove/prompts/verify_user.txt` — LLM-as-judge prompt with action plausibility assessment

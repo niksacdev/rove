@@ -129,6 +129,34 @@ class AzureFoundryProvider:
         data["raw_response"] = raw
         return data
 
+    async def get_response_with_tools(
+        self,
+        input_items: list,
+        tools: list[dict],
+        instructions: str | None = None,
+    ) -> object:
+        """Send multi-turn input with tool definitions via Responses API.
+
+        Returns the raw response object so the caller can inspect
+        function_call items in response.output.
+        """
+        client = self._ensure_client()
+        kwargs: dict = {
+            "model": self._model_name,
+            "input": input_items,
+            "max_output_tokens": self._max_tokens,
+            "temperature": self._temperature,
+        }
+        if instructions:
+            kwargs["instructions"] = instructions
+        if tools:
+            kwargs["tools"] = tools
+
+        response = client.responses.create(**kwargs)
+        if response.usage:
+            self._total_tokens += response.usage.total_tokens
+        return response
+
     async def health_check(self) -> bool:
         try:
             self._ensure_client()

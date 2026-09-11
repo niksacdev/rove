@@ -4,20 +4,35 @@ from __future__ import annotations
 
 import asyncio
 import random
+from types import SimpleNamespace
+
+from rove.models import VLACapabilities
 
 
 class MockAgentAdapter:
     """Mock implementation of AgentAdapter — returns stage-appropriate dicts."""
 
-    def __init__(self, model_id: str = "mock-agent", config: dict | None = None):
+    def __init__(self, model_id: str = "mock-agent", config: dict | None = None, **_kwargs):
         self.model_id = model_id
         cfg = config or {}
         self.display_name = cfg.get("display_name", "Mock Agent")
         self._latency_range = cfg.get("mock_latency_ms", [300, 800])
+        seed = cfg.get("seed")
+        self._rng = random.Random(seed) if seed is not None else random.Random()
+
+        # Build capabilities from YAML config; fall back to sensible defaults
+        caps_data = cfg.get("vla_capabilities", {})
+        self._capabilities = (
+            VLACapabilities(**caps_data) if caps_data else VLACapabilities(native_action_dim=7)
+        )
+
+    @property
+    def capabilities(self) -> VLACapabilities:
+        return self._capabilities
 
     async def _simulate_latency(self) -> None:
         lo, hi = self._latency_range
-        await asyncio.sleep(random.uniform(lo, hi) / 1000.0)
+        await asyncio.sleep(self._rng.uniform(lo, hi) / 1000.0)
 
     async def run_stage(
         self,
@@ -82,6 +97,15 @@ class MockAgentAdapter:
             ],
             "target_object": target,
             "confidence": 0.85,
+            "subtask_reasoning": (
+                f"First subtask is to locate {target} because we need visual confirmation "
+                "before planning approach. Approach must precede manipulation."
+            ),
+            "action_reasoning": (
+                f"The {target} is on the workspace surface. Agent will use move_to tool "
+                "to position end-effector above the target before grasping."
+            ),
+            "constraints_acknowledged": [],
             "raw_response": '{"mock_agent": true}',
         }
 
@@ -103,6 +127,7 @@ class MockAgentAdapter:
             "num_steps": 4,
             "confidence": 0.82,
             "raw_response": '{"mock_agent": true}',
+            "action_space": "eef_delta",
         }
 
     def _mock_verify(self, task: str, context: dict | None) -> dict:
@@ -122,14 +147,16 @@ class MockAgentAdapter:
         stage_checks: list[dict] = []
         all_passed = True
         for stage in completed_stages:
-            passed = random.random() < quality
+            passed = self._rng.random() < quality
             if not passed:
                 all_passed = False
             stage_checks.append(
                 {
                     "stage": stage,
                     "passed": passed,
-                    "confidence": random.uniform(0.7, 0.95) if passed else random.uniform(0.3, 0.6),
+                    "confidence": self._rng.uniform(0.7, 0.95)
+                    if passed
+                    else self._rng.uniform(0.3, 0.6),
                     "reasoning": f"{stage} stage output is {'consistent with' if passed else 'inconsistent with'} task requirements.",
                 }
             )
@@ -139,7 +166,7 @@ class MockAgentAdapter:
         if ground_truth_data:
             correct_answer = ground_truth_data.get("correct_answer_text", "")
             choices = ground_truth_data.get("choices", [])
-            is_correct = random.random() < quality
+            is_correct = self._rng.random() < quality
             pipeline_answer = (
                 correct_answer
                 if is_correct
@@ -159,14 +186,16 @@ class MockAgentAdapter:
                 "correct_answer": correct_answer,
                 "pipeline_answer": pipeline_answer,
                 "correct": is_correct,
-                "confidence": random.uniform(0.7, 0.95) if is_correct else random.uniform(0.3, 0.6),
+                "confidence": self._rng.uniform(0.7, 0.95)
+                if is_correct
+                else self._rng.uniform(0.3, 0.6),
             }
 
-        success = all_passed if (stage_checks or gt_check) else random.random() < quality
+        success = all_passed if (stage_checks or gt_check) else self._rng.random() < quality
 
         result: dict = {
             "success": success,
-            "confidence": random.uniform(0.7, 0.95) if success else random.uniform(0.3, 0.6),
+            "confidence": self._rng.uniform(0.7, 0.95) if success else self._rng.uniform(0.3, 0.6),
             "reasoning": (
                 f"Task completed successfully — {target} moved to destination."
                 if success
@@ -179,6 +208,150 @@ class MockAgentAdapter:
         if gt_check is not None:
             result["ground_truth"] = gt_check
         return result
+
+    async def verify_with_tools(
+        self,
+        input_items: list,
+        tools: list[dict],
+        instructions: str | None = None,
+    ) -> object:
+        """Multi-turn mock verify for agent_loop mode."""
+        await self._simulate_latency()
+
+        has_tool_results = any(
+            (isinstance(item, dict) and item.get("type") == "function_call_output")
+            for item in input_items
+        )
+
+        if not has_tool_results and tools:
+            output_items = []
+            for tool in tools:
+                tool_name = tool.get("name", "unknown")
+                output_items.append(
+                    SimpleNamespace(
+                        type="function_call",
+                        name=tool_name,
+                        call_id=f"mock_call_{tool_name}",
+                        arguments="{}",
+                    )
+                )
+            return SimpleNamespace(output=output_items)
+
+        has_dynamics = any(t.get("name") == "compute_dynamics" for t in tools) if tools else False
+
+        quality = 0.85
+        success = self._rng.random() < quality
+        if has_dynamics:
+            confidence = self._rng.uniform(0.7, 0.95) if success else self._rng.uniform(0.3, 0.6)
+        else:
+            confidence = self._rng.uniform(0.35, 0.55) if success else self._rng.uniform(0.2, 0.4)
+
+        # Build reasoning — fundamentally different with and without dynamics
+        if has_dynamics:
+            if success:
+                reasoning = (
+                    f"Verdict: The VLA action trajectory is plausible and well-aligned with the task. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 tool calls (move_to, grasp, move_to, release) "
+                    "with consistent trajectory and appropriate gripper timing.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found in expected positions.\n\n"
+                    "Evidence — Planned Approach: Approach target, grasp, transport to destination, release.\n\n"
+                    "Evidence — Dynamics Verification: All joints within limits, no collisions, smooth motion."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: The VLA trajectory has issues — dynamics flagged violations. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: Trajectory shows potential misalignment at transport phase.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found.\n\n"
+                    "Evidence — Planned Approach: Approach, grasp, transport, release.\n\n"
+                    "Evidence — Dynamics Verification: Joint limit warnings at step 3, smoothness below threshold."
+                )
+        else:
+            if success:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA trajectory "
+                    f"appears task-aligned. Physical plausibility cannot be verified. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: The VLA produced 4 tool calls (move_to, grasp, move_to, release). "
+                    "The pattern appears consistent with pick-and-place.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found in expected positions.\n\n"
+                    "Evidence — Planned Approach: Approach target, grasp, transport to destination, release. "
+                    "Without dynamics data, trajectory alignment cannot be verified."
+                )
+            else:
+                reasoning = (
+                    f"Verdict: Based on limited evidence (no dynamics data), the VLA trajectory "
+                    f"shows task alignment concerns. Physical plausibility cannot be verified. "
+                    f"Confidence: {round(confidence, 2)}.\n\n"
+                    "VLA Output Analysis: Trajectory shows potential issues at transport phase.\n\n"
+                    "Evidence — Scene Analysis: Target object and destination found.\n\n"
+                    "Evidence — Planned Approach: Approach, grasp, transport, release. "
+                    "Without dynamics data, alignment cannot be verified."
+                )
+
+        evidence_quality = "hard" if has_dynamics else "perception_only"
+
+        result_data = {
+            "success": success,
+            "confidence": round(confidence, 2),
+            "reasoning": reasoning,
+            "resolution_path": (
+                (
+                    "No critical issues found — action trajectory is well-aligned with task requirements."
+                    if success
+                    else "Consider adjusting VLA training data distribution. "
+                    "Increase action chunk size for transport phase."
+                )
+                if has_dynamics
+                else "Run simulation or enable MuJoCo dynamics and ensure the VLA produces "
+                "actions matching the target robot's full joint specification (including "
+                "gripper). Only with dynamics can physical plausibility and task "
+                "completion be reliably assessed."
+            ),
+            "completed_stages": ["perceive", "act"],
+            "stage_checks": [
+                {
+                    "stage": "perceive",
+                    "passed": True,
+                    "confidence": 0.9,
+                    "reasoning": "Scene analysis consistent with task.",
+                },
+                {
+                    "stage": "act",
+                    "passed": success,
+                    "confidence": round(confidence, 2),
+                    "reasoning": (
+                        "Action plausibility from dynamics evidence."
+                        if has_dynamics
+                        else "Action plausibility from scene and task alignment only."
+                    ),
+                },
+            ],
+            "action_plausibility": {
+                "bounds_check": (1.0 if success else 0.2) if has_dynamics else None,
+                "smoothness": round(self._rng.uniform(0.5, 0.9), 2),
+                "gripper_consistency": round(self._rng.uniform(0.5, 0.9), 2),
+                "plan_alignment": round(self._rng.uniform(0.5, 0.9), 2),
+                "workspace_reachability": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "dynamics_consistency": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "task_completion_plausibility": round(self._rng.uniform(0.4, 0.8), 2),
+                "safety_assessment": round(self._rng.uniform(0.7, 1.0), 2)
+                if has_dynamics
+                else None,
+                "evidence_quality": evidence_quality,
+                "reasoning": f"Assessment based on {evidence_quality} evidence.",
+            },
+        }
+
+        return SimpleNamespace(
+            output=[SimpleNamespace(type="message", text="")],
+            data=result_data,
+        )
 
     async def health_check(self) -> bool:
         return True

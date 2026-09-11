@@ -24,6 +24,122 @@ let historyFilterStrategy = "";
 let latencyBudgetMs = null; // loaded from /api/config
 let stageBudgets = {}; // per-stage budgets { perceive: 3000, plan: 3000, act: 3000, verify: 1000 }
 
+function renderNarrativeSection(sec) {
+  var secDiv = document.createElement("div");
+  secDiv.className = "border-l-2 pl-3 py-1 " + sec.borderClass;
+  var secLabel = document.createElement("span");
+  secLabel.className = "text-[10px] font-semibold block mb-0.5 " + sec.labelClass;
+  secLabel.textContent = sec.label;
+  secDiv.appendChild(secLabel);
+  var secText = document.createElement("p");
+  secText.className = "text-xs text-gray-400";
+  secText.textContent = sec.text;
+  secDiv.appendChild(secText);
+  return secDiv;
+}
+
+function parseVerifyNarrative(text) {
+  // All known section headers the LLM may produce (old and new prompt formats)
+  var allHeaders = [
+    { key: "Verdict", group: "top", borderClass: "border-emerald-500/40", labelClass: "text-emerald-400" },
+    { key: "VLA Output Analysis", group: "top", borderClass: "border-violet-500/40", labelClass: "text-violet-400" },
+    { key: "VLA Action Output", group: "top", borderClass: "border-violet-500/40", labelClass: "text-violet-400", displayAs: "VLA Output Analysis" },
+    { key: "Evidence — Scene Analysis", group: "evidence", borderClass: "border-blue-500/40", labelClass: "text-blue-400", displayAs: "Scene Analysis" },
+    { key: "Scene Analysis", group: "evidence", borderClass: "border-blue-500/40", labelClass: "text-blue-400" },
+    { key: "Evidence — Planned Approach", group: "evidence", borderClass: "border-cyan-500/40", labelClass: "text-cyan-400", displayAs: "Planned Approach" },
+    { key: "Planned Approach", group: "evidence", borderClass: "border-cyan-500/40", labelClass: "text-cyan-400" },
+    { key: "Evidence — Dynamics Verification", group: "evidence", borderClass: "border-orange-500/40", labelClass: "text-orange-400", displayAs: "Dynamics Verification" },
+    { key: "Dynamics Verification", group: "evidence", borderClass: "border-orange-500/40", labelClass: "text-orange-400" },
+  ];
+
+  // Build regex to find all section boundaries
+  var headerPatterns = allHeaders.map(function(h) {
+    return { def: h, re: new RegExp("\\*{0,2}" + h.key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\*{0,2}\\s*:?\\s*", "i") };
+  });
+
+  // Find all section start positions
+  var found = [];
+  headerPatterns.forEach(function(hp) {
+    var m = text.match(hp.re);
+    if (m) {
+      found.push({ def: hp.def, idx: text.indexOf(m[0]), matchLen: m[0].length });
+    }
+  });
+  // Sort by position, deduplicate by display name
+  found.sort(function(a, b) { return a.idx - b.idx; });
+  var seen = {};
+  found = found.filter(function(f) {
+    var name = f.def.displayAs || f.def.key;
+    if (seen[name]) return false;
+    seen[name] = true;
+    return true;
+  });
+
+  if (found.length < 2) {
+    // Fallback: try paragraph-based detection
+    return parseVerifyNarrativeFallback(text);
+  }
+
+  // Extract section texts
+  var topSections = [];
+  var evidenceSections = [];
+  for (var i = 0; i < found.length; i++) {
+    var start = found[i].idx + found[i].matchLen;
+    var end = (i + 1 < found.length) ? found[i + 1].idx : text.length;
+    var sectionText = text.substring(start, end).trim();
+    if (!sectionText) continue;
+    var entry = {
+      label: found[i].def.displayAs || found[i].def.key,
+      text: sectionText,
+      borderClass: found[i].def.borderClass,
+      labelClass: found[i].def.labelClass,
+      group: found[i].def.group,
+    };
+    if (entry.group === "evidence") {
+      evidenceSections.push(entry);
+    } else {
+      topSections.push(entry);
+    }
+  }
+
+  return { top: topSections, evidence: evidenceSections };
+}
+
+function parseVerifyNarrativeFallback(text) {
+  var altPatterns = [
+    { pattern: /(?:Based on|verdict|evaluation.*trajectory)/i, label: "Verdict", group: "top", borderClass: "border-emerald-500/40", labelClass: "text-emerald-400" },
+    { pattern: /(?:VLA produced|VLA output|action.*steps|trajectory.*steps)/i, label: "VLA Output Analysis", group: "top", borderClass: "border-violet-500/40", labelClass: "text-violet-400" },
+    { pattern: /(?:Our analysis|scene.*found|detected.*objects)/i, label: "Scene Analysis", group: "evidence", borderClass: "border-blue-500/40", labelClass: "text-blue-400" },
+    { pattern: /(?:expected.*sequence|planned|For.*task.*should)/i, label: "Planned Approach", group: "evidence", borderClass: "border-cyan-500/40", labelClass: "text-cyan-400" },
+    { pattern: /(?:MuJoCo dynamics|dynamics.*shows|dynamics.*analysis|joint limit)/i, label: "Dynamics Verification", group: "evidence", borderClass: "border-orange-500/40", labelClass: "text-orange-400" },
+  ];
+  var paragraphs = text.split(/\n\n+/).filter(function(p) { return p.trim().length > 0; });
+  if (paragraphs.length < 2) return null;
+  var topSections = [];
+  var evidenceSections = [];
+  for (var pi = 0; pi < paragraphs.length; pi++) {
+    var matched = false;
+    for (var ai = 0; ai < altPatterns.length; ai++) {
+      var ap = altPatterns[ai];
+      var alreadyUsed = (ap.group === "top" ? topSections : evidenceSections).some(function(s) { return s.label === ap.label; });
+      if (!alreadyUsed && ap.pattern.test(paragraphs[pi])) {
+        var entry = { label: ap.label, text: paragraphs[pi].trim(), borderClass: ap.borderClass, labelClass: ap.labelClass, group: ap.group };
+        if (ap.group === "evidence") evidenceSections.push(entry);
+        else topSections.push(entry);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      // Append to last section
+      var lastArr = evidenceSections.length > 0 ? evidenceSections : topSections;
+      if (lastArr.length > 0) lastArr[lastArr.length - 1].text += "\n\n" + paragraphs[pi].trim();
+    }
+  }
+  if (topSections.length + evidenceSections.length < 2) return null;
+  return { top: topSections, evidence: evidenceSections };
+}
+
 function formatLatency(ms) {
   if (ms == null) return "\u2014";
   return Math.round(ms) + "ms";
@@ -90,13 +206,15 @@ const STAGES = {
   perceive: { label: "Scene Analysis",     icon: "eye"          },
   plan:     { label: "Task Planning",       icon: "brain"        },
   act:      { label: "Action Execution",    icon: "bot"          },
+  dynamics: { label: "Dynamics Analysis",   icon: "activity"     },
   verify:   { label: "Action Plausibility",  icon: "shield-check" },
 };
 
 const STAGE_COLORS = {
   perceive: { bg: "bg-purple-500/15", text: "text-purple-300" },
   plan:     { bg: "bg-purple-500/15", text: "text-purple-300" },
-  act:      { bg: "bg-emerald-500/15", text: "text-emerald-300" },
+  act:      { bg: "bg-sky-500/15",     text: "text-sky-300"     },
+  dynamics: { bg: "bg-blue-500/15",   text: "text-blue-300"    },
   verify:   { bg: "bg-amber-500/15", text: "text-amber-300" },
 };
 
@@ -112,6 +230,287 @@ const STRATEGY_COLORS = [
   "#84cc16", // lime
 ];
 var strategyColorMap = {}; // strategy_id → color hex
+
+// Failure category labels and colors
+var FAILURE_LABELS = {
+  "perceive_error": "Perception Error",
+  "perceive_miss": "Perception Miss",
+  "plan_error": "Planning Error",
+  "plan_low_confidence": "Low Confidence",
+  "act_error": "Action Error",
+  "dynamics_error": "Dynamics Error",
+  "action_dynamics_violation": "Dynamics Violation",
+  "action_torque_violation": "Torque Violation",
+  "action_singularity": "Near Singularity",
+  "action_infeasible": "Infeasible Action",
+  "verify_error": "Verify Error",
+  "verification_mismatch": "Verify Mismatch",
+};
+
+function getFailureLabel(cat) {
+  return FAILURE_LABELS[cat] || cat;
+}
+
+function getFailureBadgeClass(cat) {
+  if (cat && cat.indexOf("error") !== -1) return "bg-red-500/15 text-red-400";
+  if (cat === "perceive_miss" || cat === "plan_low_confidence") return "bg-amber-500/15 text-amber-400";
+  if (cat && cat.indexOf("action") !== -1) return "bg-orange-500/15 text-orange-400";
+  if (cat && cat.indexOf("verification") !== -1) return "bg-yellow-500/15 text-yellow-400";
+  return "bg-gray-500/15 text-gray-400";
+}
+
+// ---- Provenance Card ----
+function renderProvenanceCard(prov, parentEl) {
+  var wrap = document.createElement("div");
+  wrap.className = "bg-f-surface border border-f-border rounded-xl overflow-hidden mt-3";
+
+  var header = document.createElement("button");
+  header.className = "w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-400 hover:text-gray-300 transition-colors cursor-pointer";
+  var headerLabel = document.createElement("span");
+  headerLabel.className = "font-semibold uppercase tracking-wider text-[10px]";
+  headerLabel.textContent = "Run Info";
+  var headerToggle = document.createElement("span");
+  headerToggle.className = "text-[10px]";
+  headerToggle.textContent = "click to expand";
+  header.appendChild(headerLabel);
+  header.appendChild(headerToggle);
+
+  var body = document.createElement("div");
+  body.className = "px-4 pb-3 border-t border-f-border/50";
+  body.style.display = "none";
+
+  header.addEventListener("click", function() {
+    var shown = body.style.display !== "none";
+    body.style.display = shown ? "none" : "";
+    headerToggle.textContent = shown ? "click to expand" : "click to collapse";
+  });
+
+  var grid = document.createElement("div");
+  grid.className = "grid grid-cols-2 gap-x-6 gap-y-1.5 pt-2.5 text-[11px]";
+
+  var fields = [
+    ["Timestamp", prov.timestamp ? new Date(prov.timestamp).toLocaleString() : "\u2014"],
+    ["Hostname", prov.hostname || "\u2014"],
+    ["ROVE Version", prov.rove_version || "\u2014"],
+    ["Python", prov.python_version || "\u2014"],
+    ["Image Hash", prov.image_sha256 ? prov.image_sha256.substring(0, 12) + "\u2026" : "\u2014"],
+    ["Config Hash", prov.config_hash ? prov.config_hash.substring(0, 12) + "\u2026" : "\u2014"],
+    ["Seed", prov.seed != null ? String(prov.seed) : "none"],
+    ["Strategies", (prov.strategy_ids || []).join(", ") || "\u2014"],
+  ];
+
+  fields.forEach(function(pair) {
+    var label = document.createElement("span");
+    label.className = "text-gray-500";
+    label.textContent = pair[0];
+    var value = document.createElement("span");
+    value.className = "text-gray-300 font-mono truncate";
+    value.textContent = pair[1];
+    grid.appendChild(label);
+    grid.appendChild(value);
+  });
+
+  body.appendChild(grid);
+  wrap.appendChild(header);
+  wrap.appendChild(body);
+  parentEl.appendChild(wrap);
+}
+
+// ---- Insights Card ----
+function renderInsightsCard(insights, parentEl) {
+  if (!insights) return;
+
+  var card = document.createElement("div");
+  card.className = "bg-f-surface border border-f-border rounded-xl p-4 mt-3 space-y-4";
+
+  // Section header
+  var headerSpan = document.createElement("span");
+  headerSpan.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+  headerSpan.textContent = "Run Insights";
+  card.appendChild(headerSpan);
+
+  // Top Finding banner
+  if (insights.top_finding) {
+    var banner = document.createElement("div");
+    banner.className = "px-3 py-2 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20";
+    banner.textContent = insights.top_finding;
+    card.appendChild(banner);
+  }
+
+  // Confidence Scores — per-strategy confidence bars
+  if (insights.confidence_scores && insights.confidence_scores.length > 0) {
+    var csSection = document.createElement("div");
+    csSection.className = "space-y-1.5";
+    var csTitle = document.createElement("span");
+    csTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    csTitle.textContent = "Confidence Scores";
+    csSection.appendChild(csTitle);
+
+    insights.confidence_scores.forEach(function(entry) {
+      var score = entry.confidence || 0;
+      var pct = (score * 100).toFixed(1);
+      var color = score >= 0.7 ? "green" : (score >= 0.4 ? "yellow" : "red");
+
+      var barWrap = document.createElement("div");
+      barWrap.className = "flex items-center gap-2";
+
+      var label = document.createElement("span");
+      label.className = "text-[11px] text-gray-400 w-40 shrink-0 truncate";
+      label.textContent = entry.display_name || entry.strategy_id;
+
+      var barBg = document.createElement("div");
+      barBg.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden";
+      var bar = document.createElement("div");
+      bar.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
+      bar.style.width = Math.max(parseFloat(pct), 2) + "%";
+      barBg.appendChild(bar);
+
+      var pctLabel = document.createElement("span");
+      pctLabel.className = "text-[11px] font-mono w-12 text-right text-" + color + "-400";
+      pctLabel.textContent = pct + "%";
+
+      barWrap.appendChild(label);
+      barWrap.appendChild(barBg);
+      barWrap.appendChild(pctLabel);
+      csSection.appendChild(barWrap);
+    });
+    card.appendChild(csSection);
+  }
+
+  // Reasoning Trail — collapsible per-strategy with rich stage rendering
+  if (insights.reasoning_trail && Object.keys(insights.reasoning_trail).length > 0) {
+    var rtSection = document.createElement("div");
+    rtSection.className = "space-y-1.5";
+    var rtTitle = document.createElement("span");
+    rtTitle.className = "text-[10px] font-semibold text-gray-500 uppercase tracking-wider";
+    rtTitle.textContent = "Reasoning Trail";
+    rtSection.appendChild(rtTitle);
+
+    Object.keys(insights.reasoning_trail).forEach(function(sid) {
+      var trail = insights.reasoning_trail[sid];
+      var strat = strategies.find(function(s) { return s.id === sid; });
+      var displayName = strat ? strat.display_name : sid;
+
+      var details = document.createElement("details");
+      details.className = "border border-f-border/50 rounded-lg overflow-hidden";
+      var summary = document.createElement("summary");
+      summary.className = "px-3 py-2 text-[11px] text-gray-400 cursor-pointer hover:text-gray-300 transition-colors";
+      summary.textContent = displayName;
+      details.appendChild(summary);
+
+      var body = document.createElement("div");
+      body.className = "px-3 pb-3 space-y-3";
+
+      var outputs = trail.stage_outputs || {};
+
+      // Perceive — rich rendering via renderPerceive
+      if (outputs.perceive) {
+        var percSection = document.createElement("div");
+        percSection.className = "space-y-1";
+        var percLabel = document.createElement("span");
+        percLabel.className = "text-[10px] font-semibold text-blue-400 uppercase";
+        percLabel.textContent = "Perceive";
+        percSection.appendChild(percLabel);
+        var percBody = document.createElement("div");
+        renderPerceive(percBody, outputs.perceive);
+        percSection.appendChild(percBody);
+        body.appendChild(percSection);
+      }
+
+      // Plan — rich rendering via renderPlan
+      if (outputs.plan) {
+        var planSection = document.createElement("div");
+        planSection.className = "space-y-1";
+        var planLabel = document.createElement("span");
+        planLabel.className = "text-[10px] font-semibold text-purple-400 uppercase";
+        planLabel.textContent = "Plan";
+        planSection.appendChild(planLabel);
+        var planBody = document.createElement("div");
+        renderPlan(planBody, outputs.plan);
+        planSection.appendChild(planBody);
+        body.appendChild(planSection);
+      }
+
+      // Act — rich rendering via renderAct
+      if (outputs.act) {
+        var actSection = document.createElement("div");
+        actSection.className = "space-y-1";
+        var actLabel = document.createElement("span");
+        actLabel.className = "text-[10px] font-semibold text-emerald-400 uppercase";
+        actLabel.textContent = "Act";
+        actSection.appendChild(actLabel);
+        var actBody = document.createElement("div");
+        renderAct(actBody, outputs.act);
+        actSection.appendChild(actBody);
+        body.appendChild(actSection);
+      }
+
+      // Dynamics — rich rendering via renderDynamics (if not embedded in act)
+      if (outputs.dynamics && !outputs.dynamics.skipped) {
+        var dynSection = document.createElement("div");
+        dynSection.className = "space-y-1";
+        var dynLabel = document.createElement("span");
+        dynLabel.className = "text-[10px] font-semibold text-blue-400 uppercase";
+        dynLabel.textContent = "Dynamics";
+        dynSection.appendChild(dynLabel);
+        var dynBody = document.createElement("div");
+        renderDynamics(dynBody, outputs.dynamics);
+        dynSection.appendChild(dynBody);
+        body.appendChild(dynSection);
+      }
+
+      // Verify — rich rendering via renderVerify
+      if (outputs.verify) {
+        var verifySection = document.createElement("div");
+        verifySection.className = "space-y-1";
+        var verifyLabel = document.createElement("span");
+        verifyLabel.className = "text-[10px] font-semibold text-amber-400 uppercase";
+        verifyLabel.textContent = "Verify";
+        verifySection.appendChild(verifyLabel);
+        var verifyBody = document.createElement("div");
+        renderVerify(verifyBody, outputs.verify);
+        verifySection.appendChild(verifyBody);
+        body.appendChild(verifySection);
+      }
+
+      // Raw JSON toggle per stage
+      if (outputs && Object.keys(outputs).length > 0) {
+        var rawToggleBtn = document.createElement("button");
+        rawToggleBtn.className = "flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors mt-1";
+        rawToggleBtn.type = "button";
+        var rawChevron = document.createElement("span");
+        rawChevron.className = "text-[10px]";
+        rawChevron.textContent = "\u25B6";
+        rawToggleBtn.appendChild(rawChevron);
+        var rawToggleText = document.createElement("span");
+        rawToggleText.textContent = "Raw output";
+        rawToggleBtn.appendChild(rawToggleText);
+        body.appendChild(rawToggleBtn);
+
+        var rawPanel = document.createElement("div");
+        rawPanel.className = "json-expand";
+        var rawPre = document.createElement("pre");
+        rawPre.className = "text-[11px] text-gray-500 bg-black/30 rounded-lg p-3 overflow-x-auto";
+        rawPre.textContent = JSON.stringify(outputs, null, 2);
+        rawPanel.appendChild(rawPre);
+        body.appendChild(rawPanel);
+
+        (function(panel, chevron) {
+          rawToggleBtn.addEventListener("click", function() {
+            panel.classList.toggle("open");
+            chevron.textContent = panel.classList.contains("open") ? "\u25BC" : "\u25B6";
+          });
+        })(rawPanel, rawChevron);
+      }
+
+      details.appendChild(body);
+      rtSection.appendChild(details);
+    });
+    card.appendChild(rtSection);
+  }
+
+  parentEl.appendChild(card);
+}
 
 // ---- Theme ----
 function initTheme() {
@@ -151,6 +550,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   initConfigPanel();
   initSidebarNav();
   initTopNav();
+  initGettingStarted();
   restoreHistory();
 });
 
@@ -310,6 +710,24 @@ function switchView(view) {
       // Handled by showHistoryEntry or restoreEvaluation
       break;
   }
+}
+
+function initGettingStarted() {
+  var toggle = document.getElementById("gettingStartedToggle");
+  var content = document.getElementById("gettingStartedContent");
+  var arrow = document.getElementById("gettingStartedArrow");
+  if (!toggle || !content || !arrow) return;
+  toggle.addEventListener("click", function() {
+    var expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    if (expanded) {
+      content.classList.add("hidden");
+      arrow.style.transform = "rotate(0deg)";
+    } else {
+      content.classList.remove("hidden");
+      arrow.style.transform = "rotate(90deg)";
+    }
+  });
 }
 
 function initSidebarNav() {
@@ -570,21 +988,27 @@ async function renderExamplesView() {
     return;
   }
 
-  // Group by category, then by scene_type
-  var categories = {};
-  examples.forEach(function(ex) {
-    var cat = ex.category || "perceive-plan";
-    if (!categories[cat]) categories[cat] = {};
-    var key = ex.scene_type || "other";
-    if (!categories[cat][key]) categories[cat][key] = [];
-    categories[cat][key].push(ex);
-  });
-
-  var catMeta = {
-    "perceive-plan": { label: "Perceive & Plan", desc: "Robo2VLM-1 \u2014 scene understanding and planning tasks (no VLA)", icon: "eye" },
-    "action": { label: "Action (VLA)", desc: "LIBERO-10 \u2014 manipulation tasks with proprioception and ground truth actions", icon: "move-3d" }
+  // Eval category metadata — primary grouping
+  var evalCatMeta = {
+    "scene_analysis":       { label: "Scene Analysis", icon: "eye",         color: "text-cyan-400",   badgeCls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",    desc: "VLM-only evaluation — no robot or action execution required. Tests scene understanding, object detection, spatial reasoning, and plan quality using diverse real-world images from multiple robot platforms." },
+    "atomic":               { label: "Atomic",       icon: "target",      color: "text-emerald-400", badgeCls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20", desc: "Single-instruction tasks that a VLA should accomplish in one motion sequence. Simple pick-place, push, turn, or open actions on the Panda robot. Good baseline for VLA confidence calibration." },
+    "multi_stage":          { label: "Multi-Stage",  icon: "layers",      color: "text-blue-400",   badgeCls: "bg-blue-500/10 text-blue-300 border-blue-500/20",    desc: "Sequential tasks requiring ordered subtask decomposition. Tests whether the pipeline breaks complex instructions into correctly ordered steps." },
+    "situated_correction":  { label: "Correction",   icon: "message-circle", color: "text-amber-400", badgeCls: "bg-amber-500/10 text-amber-300 border-amber-500/20", desc: "Mid-task human feedback that changes the plan. Tests whether the pipeline adapts to corrections like \"not that one\" or \"use the other hand.\"" },
+    "constrained":          { label: "Constrained",  icon: "shield-alert", color: "text-red-400",    badgeCls: "bg-red-500/10 text-red-300 border-red-500/20",      desc: "Tasks with safety or preference constraints. Tests whether the pipeline acknowledges and respects rules like \"keep it flat\" or \"don't close the door.\"" },
+    "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
+    "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" }
   };
-  var catKeys = ["perceive-plan", "action"];
+  var evalCatOrder = ["atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative", "scene_analysis"];
+
+  // Group examples by eval_category, then by scene_type
+  var catGroups = {};
+  examples.forEach(function(ex) {
+    var ec = ex.eval_category || "atomic";
+    if (!catGroups[ec]) catGroups[ec] = {};
+    var scene = ex.scene_type || "other";
+    if (!catGroups[ec][scene]) catGroups[ec][scene] = [];
+    catGroups[ec][scene].push(ex);
+  });
 
   // Layout: left menu + right content
   var layout = document.createElement("div");
@@ -592,7 +1016,7 @@ async function renderExamplesView() {
 
   // Left menu
   var menu = document.createElement("nav");
-  menu.className = "shrink-0 w-48 pt-1";
+  menu.className = "shrink-0 w-52 pt-1";
 
   var menuTitle = document.createElement("h2");
   menuTitle.className = "text-lg font-semibold text-gray-100 mb-1";
@@ -601,7 +1025,7 @@ async function renderExamplesView() {
 
   var menuSubtitle = document.createElement("p");
   menuSubtitle.className = "text-[10px] text-gray-500 mb-4";
-  menuSubtitle.textContent = "Click to auto-fill evaluation";
+  menuSubtitle.textContent = "Select a category, then click an example to auto-fill evaluation";
   menu.appendChild(menuSubtitle);
 
   // Right content area
@@ -610,48 +1034,62 @@ async function renderExamplesView() {
 
   var panels = {};
   var menuButtons = {};
+  var activeCatKeys = [];
 
-  catKeys.forEach(function(cat) {
-    var groups = categories[cat];
+  evalCatOrder.forEach(function(ec) {
+    var groups = catGroups[ec];
     if (!groups) return;
-    var cm = catMeta[cat] || { label: cat, desc: "", icon: "box" };
+    activeCatKeys.push(ec);
+    var meta = evalCatMeta[ec];
     var totalCount = Object.values(groups).reduce(function(s, arr) { return s + arr.length; }, 0);
 
-    // Menu button (safe DOM construction)
+    // Menu button
     var btn = document.createElement("button");
-    btn.className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1";
+    btn.className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 text-gray-400 hover:text-gray-200 hover:bg-f-surface/50";
     var btnIcon = document.createElement("i");
-    btnIcon.setAttribute("data-lucide", cm.icon);
-    btnIcon.className = "w-4 h-4 shrink-0";
+    btnIcon.setAttribute("data-lucide", meta.icon);
+    btnIcon.className = "w-4 h-4 shrink-0 " + meta.color;
     btn.appendChild(btnIcon);
     var btnLabel = document.createElement("span");
     btnLabel.className = "flex-1 truncate";
-    btnLabel.textContent = cm.label;
+    btnLabel.textContent = meta.label;
     btn.appendChild(btnLabel);
     var btnCount = document.createElement("span");
     btnCount.className = "text-[10px] text-gray-500";
     btnCount.textContent = String(totalCount);
     btn.appendChild(btnCount);
-    menuButtons[cat] = btn;
+    menuButtons[ec] = btn;
     menu.appendChild(btn);
 
     // Content panel (hidden by default)
     var panel = document.createElement("div");
     panel.style.display = "none";
 
+    // Panel header with description
     var panelHeader = document.createElement("div");
-    panelHeader.className = "mb-4";
+    panelHeader.className = "mb-5";
+    var panelTitleRow = document.createElement("div");
+    panelTitleRow.className = "flex items-center gap-2 mb-1.5";
+    var panelIcon = document.createElement("i");
+    panelIcon.setAttribute("data-lucide", meta.icon);
+    panelIcon.className = "w-5 h-5 " + meta.color;
+    panelTitleRow.appendChild(panelIcon);
     var panelTitle = document.createElement("h3");
     panelTitle.className = "text-sm font-semibold text-gray-200";
-    panelTitle.textContent = cm.label;
+    panelTitle.textContent = meta.label;
+    panelTitleRow.appendChild(panelTitle);
+    var panelCount = document.createElement("span");
+    panelCount.className = "text-[10px] text-gray-500 ml-auto";
+    panelCount.textContent = totalCount + " example" + (totalCount !== 1 ? "s" : "");
+    panelTitleRow.appendChild(panelCount);
+    panelHeader.appendChild(panelTitleRow);
     var panelDesc = document.createElement("p");
-    panelDesc.className = "text-[10px] text-gray-500 mt-0.5";
-    panelDesc.textContent = cm.desc;
-    panelHeader.appendChild(panelTitle);
+    panelDesc.className = "text-xs text-gray-400 leading-relaxed";
+    panelDesc.textContent = meta.desc;
     panelHeader.appendChild(panelDesc);
     panel.appendChild(panelHeader);
 
-    // Scene type groups
+    // Scene type groups within this eval category
     Object.keys(groups).sort().forEach(function(sceneType) {
       var section = document.createElement("div");
       section.className = "mb-4";
@@ -699,15 +1137,29 @@ async function renderExamplesView() {
         taskText.className = "text-xs text-gray-200 group-hover:text-white line-clamp-2";
         taskText.textContent = ex.task;
 
+        // Meta row: source + pipeline scope badge
+        var metaRow = document.createElement("div");
+        metaRow.className = "flex items-center gap-1.5 mt-0.5";
+
+        // Pipeline scope badge (VLA vs perceive-plan)
+        if (ex.category === "action") {
+          var vlaBadge = document.createElement("span");
+          vlaBadge.className = "text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-300 border-indigo-500/20";
+          vlaBadge.textContent = "VLA";
+          metaRow.appendChild(vlaBadge);
+        }
+
         var metaParts = [ex.source ? ex.source.dataset : ""];
         if (ex.robot) metaParts.push(ex.robot.toUpperCase());
         if (ex.proprioception) metaParts.push(ex.state_dim + "-DOF state");
-        var meta = document.createElement("p");
-        meta.className = "text-[10px] text-gray-500 mt-0.5";
-        meta.textContent = metaParts.filter(Boolean).join(" \u00b7 ");
+        if (ex.difficulty) metaParts.push(ex.difficulty);
+        var metaSpan = document.createElement("span");
+        metaSpan.className = "text-[10px] text-gray-500";
+        metaSpan.textContent = metaParts.filter(Boolean).join(" \u00b7 ");
+        metaRow.appendChild(metaSpan);
 
         info.appendChild(taskText);
-        info.appendChild(meta);
+        info.appendChild(metaRow);
         card.appendChild(thumb);
         card.appendChild(info);
 
@@ -723,13 +1175,13 @@ async function renderExamplesView() {
       panel.appendChild(section);
     });
 
-    panels[cat] = panel;
+    panels[ec] = panel;
     content.appendChild(panel);
   });
 
   // Activate a category — show its panel, highlight its menu button
   function activateCategory(cat) {
-    catKeys.forEach(function(k) {
+    activeCatKeys.forEach(function(k) {
       if (panels[k]) panels[k].style.display = k === cat ? "" : "none";
       if (menuButtons[k]) {
         menuButtons[k].className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 "
@@ -740,7 +1192,7 @@ async function renderExamplesView() {
     });
   }
 
-  catKeys.forEach(function(cat) {
+  activeCatKeys.forEach(function(cat) {
     if (menuButtons[cat]) {
       menuButtons[cat].addEventListener("click", function() {
         activateCategory(cat);
@@ -748,7 +1200,8 @@ async function renderExamplesView() {
     }
   });
 
-  activateCategory("perceive-plan");
+  // Default to first available category
+  if (activeCatKeys.length > 0) activateCategory(activeCatKeys[0]);
 
   layout.appendChild(menu);
   layout.appendChild(content);
@@ -763,6 +1216,7 @@ async function loadExample(ex) {
     var blob = await resp.blob();
     var name = ex.filename.split("/").pop();
     selectedFile = new File([blob], name, { type: blob.type });
+    window._selectedExampleFilename = ex.filename;
 
     previewImg.src = URL.createObjectURL(blob);
     imagePreview.classList.remove("hidden");
@@ -774,6 +1228,10 @@ async function loadExample(ex) {
     window._selectedProprioception = ex.proprioception || null;
     window._selectedGroundTruth = ex.ground_truth_action || null;
     window._selectedCategory = ex.category || "perceive-plan";
+    window._selectedEvalCategory = ex.eval_category || null;
+    window._selectedExpectedSubtasks = ex.expected_subtasks || null;
+    window._selectedCorrection = ex.correction || null;
+    window._selectedConstraints = ex.constraints || null;
 
     switchView("home");
   } catch (e) {
@@ -964,6 +1422,13 @@ function renderSettingsView() {
 var HISTORY_MAX = 50;
 var HISTORY_KEY = "rove-history";
 
+function isMockEval(strategyIds) {
+  // An evaluation is mock-only if every strategy ID contains "mock"
+  return strategyIds.length > 0 && strategyIds.every(function(sid) {
+    return sid.toLowerCase().indexOf("mock") !== -1;
+  });
+}
+
 function addToHistory(evalId, task, strategyIds) {
   var entry = {
     id: evalId,
@@ -971,6 +1436,7 @@ function addToHistory(evalId, task, strategyIds) {
     strategyIds: strategyIds,
     timestamp: new Date().toISOString(),
     status: "running",
+    mock: isMockEval(strategyIds), // flag for filtering
     results: {},        // per-strategy result data
     summaryResults: {}, // snapshot of summaryResults for this eval
   };
@@ -998,6 +1464,8 @@ function updateHistoryStatus(evalId, status) {
 
 function getFilteredHistory() {
   return runHistory.filter(function(entry) {
+    // Hide mock-only evaluations from history sidebar
+    if (entry.mock) return false;
     if (historyFilterText) {
       var q = historyFilterText.toLowerCase();
       if (entry.task.toLowerCase().indexOf(q) === -1) return false;
@@ -1294,6 +1762,16 @@ function showHistoryEntry(idx) {
     summaryEl.setAttribute("tabindex", "0");
     updateSummaryTable(ids);
 
+    // Provenance card (collapsible)
+    if (entry.provenance) {
+      renderProvenanceCard(entry.provenance, summaryEl);
+    }
+
+    // Insights card
+    if (entry.insights) {
+      renderInsightsCard(entry.insights, summaryEl);
+    }
+
     // Build per-strategy tab content from stored results
     tabData = {};
     ids.forEach(function(sid) {
@@ -1302,8 +1780,15 @@ function showHistoryEntry(idx) {
 
       var stratResults = entry.results && entry.results[sid];
       if (stratResults && stratResults.stages) {
+        // Detect parallel mode from phase labels on stages
+        var hasPhases = stratResults.stages.some(function(stg) { return stg.phase; });
         stratResults.stages.forEach(function(stg, stageIndex) {
-          addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex, sid);
+          var cardTarget = container;
+          if (hasPhases && stg.phase) {
+            addPhaseHeader(stg.phase, stg.stage, container, sid);
+            cardTarget = getPhaseContent(stg.phase, container, sid) || container;
+          }
+          addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, cardTarget, stageIndex, sid);
         });
       }
     });
@@ -1322,8 +1807,14 @@ function showHistoryEntry(idx) {
 
     var stratResults = entry.results && entry.results[showSid];
     if (stratResults && stratResults.stages) {
+      var hasPhases = stratResults.stages.some(function(stg) { return stg.phase; });
       stratResults.stages.forEach(function(stg, stageIndex) {
-        addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, container, stageIndex, showSid);
+        var cardTarget = container;
+        if (hasPhases && stg.phase) {
+          addPhaseHeader(stg.phase, stg.stage, container, showSid);
+          cardTarget = getPhaseContent(stg.phase, container, showSid) || container;
+        }
+        addStageCard(stg.stage, stg.status, stg.latencyMs, stg.output, stg.error, stg.modelId, cardTarget, stageIndex, showSid);
       });
     }
 
@@ -1341,8 +1832,10 @@ function saveHistory() {
       runHistory.shift();
       if (activeHistoryIndex > 0) activeHistoryIndex--;
     }
+    // Filter out mock-only evaluations — don't persist test runs
+    var nonMock = runHistory.filter(function(e) { return !e.mock; });
     // Truncate raw_response fields to save space
-    var toSave = JSON.parse(JSON.stringify(runHistory));
+    var toSave = JSON.parse(JSON.stringify(nonMock));
     toSave.forEach(function(entry) {
       if (entry.results) {
         Object.values(entry.results).forEach(function(r) {
@@ -1369,7 +1862,12 @@ function restoreHistory() {
     if (stored) {
       var parsed = JSON.parse(stored);
       if (Array.isArray(parsed)) {
-        runHistory = parsed;
+        // Filter out any legacy mock entries and tag existing ones
+        runHistory = parsed.filter(function(e) {
+          if (e.mock) return false;
+          if (isMockEval(e.strategyIds || [])) return false;
+          return true;
+        });
       }
     }
   } catch (e) {
@@ -1397,8 +1895,12 @@ function restoreHistory() {
           };
           // Convert server results to client format
           if (se.results) {
-            Object.keys(se.results).forEach(function(sid) {
-              var sr = se.results[sid];
+            // Handle both list and dict formats
+            var resultItems = Array.isArray(se.results)
+              ? se.results
+              : Object.values(se.results);
+            resultItems.forEach(function(sr) {
+              var sid = sr.strategy_id || sr.display_name || "default";
               entry.results[sid] = {
                 stages: (sr.stages || []).map(function(stg) {
                   return {
@@ -1412,6 +1914,8 @@ function restoreHistory() {
                 }),
                 success: sr.success,
                 totalLatencyMs: sr.total_latency_ms,
+                failureStage: sr.failure_stage || null,
+                failureCategory: sr.failure_category || null,
               };
               entry.summaryResults[sid] = {
                 status: sr.success != null ? "completed" : "error",
@@ -1419,9 +1923,17 @@ function restoreHistory() {
                 latency_ms: sr.total_latency_ms,
                 currentStage: null,
                 stageStatuses: {},
+                failureCategory: sr.failure_category || null,
               };
+              // Ensure strategy_ids includes this sid
+              if (entry.strategyIds.indexOf(sid) === -1) {
+                entry.strategyIds.push(sid);
+              }
             });
           }
+          // Pass through provenance and insights
+          if (se.provenance) entry.provenance = se.provenance;
+          if (se.insights) entry.insights = se.insights;
           runHistory.push(entry);
           added = true;
         }
@@ -1437,15 +1949,29 @@ function restoreHistory() {
 }
 
 // ---- Config panel toggle ----
+var _configCollapsed = true;
 function initConfigPanel() {
-  var collapsed = true;
+  _configCollapsed = true;
   configChevron.style.transform = "rotate(180deg)";
   configToggle.addEventListener("click", function() {
-    collapsed = !collapsed;
-    configContent.style.display = collapsed ? "none" : "";
-    configChevron.style.transform = collapsed ? "rotate(180deg)" : "";
-    configToggle.setAttribute("aria-expanded", String(!collapsed));
+    setConfigCollapsed(!_configCollapsed);
   });
+}
+
+function setConfigCollapsed(collapsed) {
+  _configCollapsed = collapsed;
+  configContent.style.display = collapsed ? "none" : "";
+  configChevron.style.transform = collapsed ? "rotate(180deg)" : "";
+  configToggle.setAttribute("aria-expanded", String(!collapsed));
+  // Also toggle image and URDF previews
+  if (collapsed) {
+    imagePreview.classList.add("hidden");
+    urdfPreview.classList.add("hidden");
+  } else {
+    // Only show if files are actually selected
+    if (selectedFile) imagePreview.classList.remove("hidden");
+    if (selectedUrdfFile) urdfPreview.classList.remove("hidden");
+  }
 }
 
 // ---- Live announcer helper (M3) ----
@@ -1629,6 +2155,7 @@ imageInput.addEventListener("change", function(e) {
   var file = e.target.files[0];
   if (!file) return;
   selectedFile = file;
+  window._selectedExampleFilename = null;
   var reader = new FileReader();
   reader.onload = function(ev) {
     previewImg.src = ev.target.result;
@@ -1640,6 +2167,7 @@ imageInput.addEventListener("change", function(e) {
 
 removeImageBtn.addEventListener("click", function() {
   selectedFile = null;
+  window._selectedExampleFilename = null;
   imageInput.value = "";
   imagePreview.classList.add("hidden");
 });
@@ -1704,9 +2232,7 @@ evalBtn.addEventListener("click", async function() {
 
   // Prompt user to select a strategy if none selected
   if (selectedStrategyIds.size === 0) {
-    configContent.style.display = "";
-    configChevron.style.transform = "";
-    configToggle.setAttribute("aria-expanded", "true");
+    setConfigCollapsed(false);
     announce("Please select at least one strategy before evaluating");
     strategyGrid.style.outline = "2px solid #7c3aed";
     setTimeout(function() { strategyGrid.style.outline = ""; }, 1500);
@@ -1738,6 +2264,7 @@ evalBtn.addEventListener("click", async function() {
   form.append("image", selectedFile);
   form.append("task", task);
   form.append("strategy_ids", ids.join(","));
+  if (window._selectedExampleFilename) form.append("example_filename", window._selectedExampleFilename);
   if (selectedUrdfFile) {
     form.append("urdf", selectedUrdfFile);
   }
@@ -1777,15 +2304,20 @@ function setupTabs(strategyIds) {
   strategyIds.forEach(function(sid) {
     var strat = strategies.find(function(s) { return s.id === sid; });
     var stageStatuses = { verify: "pending" };
-    ["perceive", "plan", "act"].forEach(function(stage) {
-      stageStatuses[stage] = (strat && strat[stage]) ? "pending" : "skipped";
+    ["perceive", "plan", "act", "dynamics"].forEach(function(stage) {
+      if (stage === "dynamics") {
+        stageStatuses[stage] = (strat && strat.compute_dynamics) ? "pending" : "skipped";
+      } else {
+        stageStatuses[stage] = (strat && strat[stage]) ? "pending" : "skipped";
+      }
     });
     summaryResults[sid] = {
       status: "running",
       success: null,
       latency_ms: null,
       currentStage: null,
-      stageStatuses: stageStatuses
+      stageStatuses: stageStatuses,
+      pipelineMode: (strat && strat.pipeline_mode) || "sequential"
     };
   });
 
@@ -1802,7 +2334,8 @@ function setupTabs(strategyIds) {
     var sid = strategyIds[0];
     var container = createTabContainer(sid);
     chatArea.appendChild(container);
-    tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
+    var strat1 = strategies.find(function(s) { return s.id === sid; });
+    tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running", pipelineMode: (strat1 && strat1.pipeline_mode) || "sequential" };
     activeTabId = sid;
     return;
   }
@@ -1873,7 +2406,8 @@ function setupTabs(strategyIds) {
     tabBar.appendChild(tab);
 
     var container = createTabContainer(sid);
-    tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running" };
+    var strat2 = strategies.find(function(s) { return s.id === sid; });
+    tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running", pipelineMode: (strat2 && strat2.pipeline_mode) || "sequential" };
   });
 
   // Show summary tab by default
@@ -1973,9 +2507,9 @@ function updateSummaryTable(strategyIds) {
 
   // Table header
   var headerRow = document.createElement("div");
-  headerRow.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
+  headerRow.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2 border-b border-f-border text-[10px] text-gray-500 font-semibold uppercase tracking-wider";
   var latencyHeader = "Latency" + (latencyBudgetMs ? " (/" + formatLatency(latencyBudgetMs) + ")" : "");
-  ["Strategy", "Status", "Result", latencyHeader, "Stages"].forEach(function(h) {
+  ["Strategy", "Status", "Result", "Failure", latencyHeader, "Stages"].forEach(function(h) {
     var cell = document.createElement("span");
     cell.textContent = h;
     headerRow.appendChild(cell);
@@ -1991,7 +2525,7 @@ function updateSummaryTable(strategyIds) {
 
     var row = document.createElement("div");
     var rowColor = strategyColorMap[sid] || "#7c3aed";
-    row.className = "grid grid-cols-[1fr_80px_70px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
+    row.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
     row.style.borderLeft = "3px solid " + rowColor;
     row.addEventListener("click", function() { switchTab(sid); });
 
@@ -2043,6 +2577,18 @@ function updateSummaryTable(strategyIds) {
       resultCell.textContent = "\u2014";
     }
     row.appendChild(resultCell);
+
+    // Failure category badge
+    var failCell = document.createElement("span");
+    var failCat = sr.failureCategory || null;
+    if (failCat) {
+      failCell.className = "text-[10px] px-1.5 py-0.5 rounded font-medium " + getFailureBadgeClass(failCat);
+      failCell.textContent = getFailureLabel(failCat);
+    } else {
+      failCell.className = "text-[10px] text-gray-600";
+      failCell.textContent = "\u2014";
+    }
+    row.appendChild(failCell);
 
     // Latency
     var latCell = document.createElement("span");
@@ -2610,6 +3156,9 @@ function cmpRenderPlan(col, output, otherOutput) {
   cmpStringDiff(col, "Strategy", o.strategy, oo.strategy);
   cmpStringDiff(col, "Target Object", o.target_object, oo.target_object);
   cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
+  cmpStringDiff(col, "Subtask Reasoning", o.subtask_reasoning, oo.subtask_reasoning);
+  cmpStringDiff(col, "Action Reasoning", o.action_reasoning, oo.action_reasoning);
+  cmpStringListDiff(col, "Constraints Acknowledged", o.constraints_acknowledged, oo.constraints_acknowledged);
   cmpOrderedListDiff(col, "Steps", o.steps, oo.steps);
   cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
   cmpStringListDiff(col, "Task Repertoire", o.task_repertoire, oo.task_repertoire);
@@ -2666,10 +3215,11 @@ function cmpRenderVerify(col, output, otherOutput) {
   cmpConfidenceBar(col, "Confidence", o.confidence, oo.confidence);
   cmpStringDiff(col, "Reasoning", o.reasoning, oo.reasoning);
 
-  // Stage checks
+  // Stage checks — skip for agent_loop mode (same logic as renderVerify)
+  var isAgentLoop = (o.verify_turns && o.verify_turns > 1) || o.resolution_path;
   var myChecks = o.stage_checks || [];
   var otherChecks = oo.stage_checks || [];
-  if (myChecks.length > 0 || otherChecks.length > 0) {
+  if (!isAgentLoop && (myChecks.length > 0 || otherChecks.length > 0)) {
     var otherMap = {};
     otherChecks.forEach(function(c) { otherMap[c.stage || c.name || ""] = c; });
     var wrap = document.createElement("div");
@@ -2746,10 +3296,10 @@ function cmpRenderVerify(col, output, otherOutput) {
     apWrap.className = "mb-3";
     cmpLabel(apWrap, "Action Plausibility");
     if (ap) {
-      cmpBoolDiff(apWrap, "Bounds Check", ap.bounds_check, oap ? oap.bounds_check : undefined);
-      cmpBoolDiff(apWrap, "Smoothness", ap.smoothness, oap ? oap.smoothness : undefined);
-      cmpBoolDiff(apWrap, "Gripper Consistency", ap.gripper_consistency, oap ? oap.gripper_consistency : undefined);
-      cmpConfidenceBar(apWrap, "Plan Alignment", ap.plan_alignment, oap ? oap.plan_alignment : undefined);
+      if (ap.bounds_check != null) cmpBoolDiff(apWrap, "Bounds Check", ap.bounds_check, oap ? oap.bounds_check : undefined);
+      if (ap.smoothness != null) cmpBoolDiff(apWrap, "Smoothness", ap.smoothness, oap ? oap.smoothness : undefined);
+      if (ap.gripper_consistency != null) cmpBoolDiff(apWrap, "Gripper Consistency", ap.gripper_consistency, oap ? oap.gripper_consistency : undefined);
+      if (ap.plan_alignment != null) cmpConfidenceBar(apWrap, "Plan Alignment", ap.plan_alignment, oap ? oap.plan_alignment : undefined);
       if (ap.reasoning) {
         cmpStringDiff(apWrap, "Plausibility Reasoning", ap.reasoning, oap ? oap.reasoning : undefined);
       }
@@ -2767,6 +3317,7 @@ var COMPARE_RENDERERS = {
   perceive: cmpRenderPerceive,
   plan: cmpRenderPlan,
   act: cmpRenderAct,
+  dynamics: null,
   verify: cmpRenderVerify,
 };
 
@@ -2780,11 +3331,23 @@ function connectSSE(evalId) {
   // Find the active history entry for this eval
   var historyEntry = runHistory.find(function(e) { return e.id === evalId; });
 
+  es.addEventListener("strategy_started", function(e) {
+    var data = JSON.parse(e.data);
+    var sid = data.strategy_id;
+    if (sid && data.pipeline_mode && summaryResults[sid]) {
+      summaryResults[sid].pipelineMode = data.pipeline_mode;
+    }
+    if (sid && data.pipeline_mode && tabData[sid]) {
+      tabData[sid].pipelineMode = data.pipeline_mode;
+    }
+  });
+
   es.addEventListener("stage", function(e) {
     var data = JSON.parse(e.data);
     var sid = data.strategy_id || activeTabId;
     var stage = data.stage;
     var status = data.status;
+    var phase = data.phase || "";
 
     if (!tabData[sid]) return;
 
@@ -2800,23 +3363,100 @@ function connectSSE(evalId) {
     }
 
     if (status === "running") {
-      if (tabData[sid].typingEl) {
-        tabData[sid].typingEl.classList.add("animate-fade-out");
-        var oldTyping = tabData[sid].typingEl;
-        setTimeout(function() { oldTyping.remove(); }, 150);
+      var output = data.output;
+      // Handle verify sub-steps (agent loop mode)
+      if (stage === "verify" && output && output.substep) {
+        var mode3 = (tabData[sid] && tabData[sid].pipelineMode) || "sequential";
+        var subContainer = tabData[sid].el;
+        if (mode3 === "parallel" && phase) {
+          subContainer = getPhaseContent(phase, subContainer, sid) || subContainer;
+        }
+        // Find or create verify sub-steps container
+        var subStepsId = "verify-substeps-" + sid;
+        var subStepsEl = document.getElementById(subStepsId);
+        if (!subStepsEl) {
+          subStepsEl = document.createElement("div");
+          subStepsEl.id = subStepsId;
+          subStepsEl.className = "ml-6 mt-1 space-y-1 text-xs text-gray-400";
+          subContainer.appendChild(subStepsEl);
+        }
+        var subItem = document.createElement("div");
+        subItem.className = "flex items-center gap-2 animate-fade-in";
+        if (output.substep === "turn") {
+          var turnLabel = document.createElement("span");
+          turnLabel.className = "text-gray-500";
+          turnLabel.textContent = "Turn " + output.turn;
+          subItem.appendChild(turnLabel);
+          (output.tools_requested || []).forEach(function(t) {
+            var badge = document.createElement("span");
+            badge.className = "px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px]";
+            badge.textContent = t;
+            subItem.appendChild(badge);
+          });
+        } else if (output.substep === "tool") {
+          var arrow = document.createElement("span");
+          arrow.className = "text-green-400";
+          arrow.textContent = "\u2192";
+          subItem.appendChild(arrow);
+          var toolName = document.createElement("span");
+          toolName.className = "text-gray-300";
+          toolName.textContent = output.tool;
+          subItem.appendChild(toolName);
+          if (output.latency_ms != null) {
+            var toolLat = document.createElement("span");
+            toolLat.className = "text-gray-500";
+            toolLat.textContent = " (" + Math.round(output.latency_ms) + "ms)";
+            subItem.appendChild(toolLat);
+          }
+        }
+        subStepsEl.appendChild(subItem);
+        return; // Don't create a new typing indicator for sub-steps
       }
-      tabData[sid].typingEl = addTypingIndicator(stage, tabData[sid].el, sid);
+
+      // Add phase header before first stage of each phase (parallel mode)
+      var mode = (tabData[sid] && tabData[sid].pipelineMode) || (summaryResults[sid] && summaryResults[sid].pipelineMode) || "sequential";
+      var stageContainer = tabData[sid].el;
+      if (mode === "parallel" && phase) {
+        addPhaseHeader(phase, stage, tabData[sid].el, sid);
+        stageContainer = getPhaseContent(phase, tabData[sid].el, sid) || tabData[sid].el;
+      } else if (mode !== "parallel") {
+        // Sequential mode: remove previous typing indicator (only one stage active)
+        if (tabData[sid].typingEl) {
+          tabData[sid].typingEl.classList.add("animate-fade-out");
+          var oldTyping = tabData[sid].typingEl;
+          setTimeout(function() { oldTyping.remove(); }, 150);
+        }
+      }
+      // In parallel mode, each stage gets its own typing indicator
+      var newTyping = addTypingIndicator(stage, stageContainer, sid);
+      tabData[sid].typingEl = newTyping;
+      if (!tabData[sid].typingEls) tabData[sid].typingEls = {};
+      tabData[sid].typingEls[stage] = newTyping;
     }
 
     if (status === "completed" || status === "error") {
-      if (tabData[sid].typingEl) {
+      // Remove typing indicator for this specific stage
+      if (tabData[sid].typingEls && tabData[sid].typingEls[stage]) {
+        tabData[sid].typingEls[stage].classList.add("animate-fade-out");
+        var oldStageEl = tabData[sid].typingEls[stage];
+        setTimeout(function() { oldStageEl.remove(); }, 150);
+        delete tabData[sid].typingEls[stage];
+      } else if (tabData[sid].typingEl) {
         tabData[sid].typingEl.classList.add("animate-fade-out");
         var oldEl = tabData[sid].typingEl;
         setTimeout(function() { oldEl.remove(); }, 150);
-        tabData[sid].typingEl = null;
       }
-      var stageIndex = ["perceive", "plan", "act", "verify"].indexOf(stage);
-      addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, tabData[sid].el, stageIndex, sid);
+      tabData[sid].typingEl = null;
+      // In parallel mode, add stage card to the phase content area
+      var mode2 = (tabData[sid] && tabData[sid].pipelineMode) || (summaryResults[sid] && summaryResults[sid].pipelineMode) || "sequential";
+      var cardContainer = tabData[sid].el;
+      if (mode2 === "parallel" && phase) {
+        // Ensure phase header exists (may not have been created if RUNNING event was missed)
+        addPhaseHeader(phase, stage, tabData[sid].el, sid);
+        cardContainer = getPhaseContent(phase, tabData[sid].el, sid) || tabData[sid].el;
+      }
+      var stageIndex = ["perceive", "plan", "act", "dynamics", "verify"].indexOf(stage);
+      addStageCard(stage, status, data.latency_ms, data.output, data.error, data.model_id, cardContainer, stageIndex, sid);
       var stageLabel = STAGES[stage] ? STAGES[stage].label : stage;
       announce(stageLabel + " " + status);
 
@@ -2829,6 +3469,7 @@ function connectSSE(evalId) {
           output: data.output,
           error: data.error,
           modelId: data.model_id,
+          phase: phase,
         });
       }
     }
@@ -2837,9 +3478,18 @@ function connectSSE(evalId) {
   es.addEventListener("strategy_complete", function(e) {
     var data = JSON.parse(e.data);
     var sid = data.strategy_id;
-    if (tabData[sid] && tabData[sid].typingEl) {
-      tabData[sid].typingEl.remove();
-      tabData[sid].typingEl = null;
+    if (tabData[sid]) {
+      // Remove all remaining typing indicators
+      if (tabData[sid].typingEls) {
+        Object.keys(tabData[sid].typingEls).forEach(function(s) {
+          if (tabData[sid].typingEls[s]) tabData[sid].typingEls[s].remove();
+        });
+        tabData[sid].typingEls = {};
+      }
+      if (tabData[sid].typingEl) {
+        tabData[sid].typingEl.remove();
+        tabData[sid].typingEl = null;
+      }
     }
     updateTabStatus(sid, "completed", data.total_latency_ms);
 
@@ -2849,6 +3499,7 @@ function connectSSE(evalId) {
       summaryResults[sid].latency_ms = data.total_latency_ms;
       summaryResults[sid].success = data.success != null ? data.success : null;
       summaryResults[sid].currentStage = null;
+      summaryResults[sid].failureCategory = data.failure_category || null;
       updateSummaryTable();
     }
 
@@ -2856,15 +3507,25 @@ function connectSSE(evalId) {
     if (historyEntry && historyEntry.results[sid]) {
       historyEntry.results[sid].success = data.success;
       historyEntry.results[sid].totalLatencyMs = data.total_latency_ms;
+      historyEntry.results[sid].failureStage = data.failure_stage || null;
+      historyEntry.results[sid].failureCategory = data.failure_category || null;
     }
   });
 
   es.addEventListener("strategy_error", function(e) {
     var data = JSON.parse(e.data);
     var sid = data.strategy_id;
-    if (tabData[sid] && tabData[sid].typingEl) {
-      tabData[sid].typingEl.remove();
-      tabData[sid].typingEl = null;
+    if (tabData[sid]) {
+      if (tabData[sid].typingEls) {
+        Object.keys(tabData[sid].typingEls).forEach(function(s) {
+          if (tabData[sid].typingEls[s]) tabData[sid].typingEls[s].remove();
+        });
+        tabData[sid].typingEls = {};
+      }
+      if (tabData[sid].typingEl) {
+        tabData[sid].typingEl.remove();
+        tabData[sid].typingEl = null;
+      }
     }
     updateTabStatus(sid, "error");
     addErrorCard(data.error || "Strategy failed", tabData[sid] ? tabData[sid].el : chatArea);
@@ -2877,15 +3538,44 @@ function connectSSE(evalId) {
     }
   });
 
-  es.addEventListener("complete", function() {
+  es.addEventListener("complete", function(e) {
     es.close();
     currentEventSource = null;
     setRunning(false);
+    // Store provenance and insights from complete event, then render
+    if (e.data) {
+      try {
+        var completeData = JSON.parse(e.data);
+        if (historyEntry) {
+          if (completeData.provenance) historyEntry.provenance = completeData.provenance;
+          if (completeData.insights) historyEntry.insights = completeData.insights;
+        }
+        // Render provenance + insights into summary tab or active container
+        var insightsTarget = summaryEl;
+        if (!insightsTarget && activeTabId && tabData[activeTabId]) {
+          insightsTarget = tabData[activeTabId].el;
+        }
+        if (insightsTarget) {
+          if (completeData.provenance) {
+            renderProvenanceCard(completeData.provenance, insightsTarget);
+          }
+          if (completeData.insights) {
+            renderInsightsCard(completeData.insights, insightsTarget);
+          }
+        }
+      } catch (_) {}
+    }
     updateHistoryStatus(evalId, "completed");
   });
 
   es.addEventListener("error", function(e) {
     Object.values(tabData).forEach(function(td) {
+      if (td.typingEls) {
+        Object.keys(td.typingEls).forEach(function(s) {
+          if (td.typingEls[s]) td.typingEls[s].remove();
+        });
+        td.typingEls = {};
+      }
       if (td.typingEl) { td.typingEl.remove(); td.typingEl = null; }
     });
     if (es.readyState === EventSource.CLOSED) {
@@ -2913,8 +3603,7 @@ function setRunning(val) {
   evalBtn.disabled = val;
   if (val) {
     evalBtn.classList.add("opacity-50");
-    configContent.style.display = "none";
-    configChevron.style.transform = "rotate(180deg)";
+    setConfigCollapsed(true);
   } else {
     evalBtn.classList.remove("opacity-50");
   }
@@ -3021,6 +3710,97 @@ function addTypingIndicator(stage, container, sid) {
   lucide.createIcons({ nodes: [card] });
   scrollToBottom();
   return card;
+}
+
+function addPhaseHeader(phase, stage, container, strategyId) {
+  // Only add the header once per phase — use container.querySelector (works even if not in DOM)
+  var headerId = "phase-header-" + (strategyId || "") + "-" + phase;
+  if (container.querySelector("#" + CSS.escape(headerId))) return;
+
+  // Colors: execution = sky (object under test), evaluation = purple
+  var colorText = phase === "execution" ? "text-sky-400" : "text-purple-400";
+  var colorBorder = phase === "execution" ? "border-sky-500/30" : "border-purple-500/30";
+
+  // Collapsible wrapper — contains header + content area
+  var wrapper = document.createElement("div");
+  wrapper.id = headerId;
+  wrapper.className = "animate-slide-in mt-4";
+
+  // Clickable header row
+  var header = document.createElement("button");
+  header.className = "flex items-center gap-2 mb-2 w-full group cursor-pointer";
+  header.setAttribute("aria-expanded", "true");
+  var chevron = document.createElement("i");
+  chevron.setAttribute("data-lucide", "chevron-down");
+  chevron.className = "w-3.5 h-3.5 " + colorText + " transition-transform duration-200 phase-chevron";
+  header.appendChild(chevron);
+  var icon = document.createElement("i");
+  icon.setAttribute("data-lucide", phase === "execution" ? "play" : "clipboard-check");
+  icon.className = "w-4 h-4 " + colorText;
+  header.appendChild(icon);
+  var label = document.createElement("span");
+  label.className = "text-xs font-bold uppercase tracking-widest " + colorText;
+  label.textContent = phase === "execution" ? "Execution" : "Evaluation";
+  header.appendChild(label);
+  var line = document.createElement("div");
+  line.className = "flex-1 border-t " + colorBorder;
+  header.appendChild(line);
+  wrapper.appendChild(header);
+
+  // Content area for stage cards
+  var contentId = "phase-content-" + (strategyId || "") + "-" + phase;
+  var content = document.createElement("div");
+  content.id = contentId;
+  content.className = "space-y-3 pl-1 border-l-2 " + colorBorder + " ml-1.5 transition-all duration-200";
+  wrapper.appendChild(content);
+
+  // Toggle collapse/expand
+  header.addEventListener("click", function() {
+    var isExpanded = header.getAttribute("aria-expanded") === "true";
+    header.setAttribute("aria-expanded", String(!isExpanded));
+    if (isExpanded) {
+      content.style.maxHeight = content.scrollHeight + "px";
+      // Force reflow then collapse
+      content.offsetHeight;
+      content.style.maxHeight = "0px";
+      content.style.overflow = "hidden";
+      content.style.opacity = "0.4";
+      chevron.style.transform = "rotate(-90deg)";
+    } else {
+      content.style.maxHeight = content.scrollHeight + "px";
+      content.style.overflow = "";
+      content.style.opacity = "1";
+      chevron.style.transform = "";
+      // After transition, remove maxHeight constraint
+      setTimeout(function() {
+        if (header.getAttribute("aria-expanded") === "true") {
+          content.style.maxHeight = "";
+        }
+      }, 200);
+    }
+  });
+
+  // Ensure execution phase is always before evaluation phase in DOM
+  var otherPhase = phase === "execution" ? "evaluation" : "execution";
+  var otherHeaderId = "phase-header-" + (strategyId || "") + "-" + otherPhase;
+  var otherWrapper = container.querySelector("#" + CSS.escape(otherHeaderId));
+  if (phase === "execution" && otherWrapper) {
+    // Execution goes before evaluation
+    container.insertBefore(wrapper, otherWrapper);
+  } else if (phase === "evaluation" && otherWrapper && otherWrapper.nextSibling) {
+    // Evaluation goes after execution
+    container.insertBefore(wrapper, otherWrapper.nextSibling);
+  } else {
+    container.appendChild(wrapper);
+  }
+
+  lucide.createIcons({ nodes: [wrapper] });
+}
+
+function getPhaseContent(phase, container, strategyId) {
+  // Get the content area for a phase section — use container.querySelector (works even if not in DOM)
+  var contentId = "phase-content-" + (strategyId || "") + "-" + phase;
+  return container.querySelector("#" + CSS.escape(contentId));
 }
 
 function addStageCard(stage, status, latencyMs, output, error, modelId, container, stageIndex, strategyId) {
@@ -3174,6 +3954,7 @@ function renderStageOutput(container, stage, output) {
     case "perceive": renderPerceive(container, output); break;
     case "plan":     renderPlan(container, output);     break;
     case "act":      renderAct(container, output);      break;
+    case "dynamics": renderDynamics(container, output);  break;
     case "verify":   renderVerify(container, output);   break;
     default:
       var pre = document.createElement("pre");
@@ -3181,6 +3962,58 @@ function renderStageOutput(container, stage, output) {
       pre.textContent = JSON.stringify(output, null, 2);
       container.appendChild(pre);
   }
+}
+
+function renderDynamics(container, o) {
+  if (o.skipped) {
+    var skipP = document.createElement("p");
+    skipP.className = "text-xs text-gray-500 italic";
+    skipP.textContent = "Skipped: " + o.skipped;
+    container.appendChild(skipP);
+    return;
+  }
+  if (o.evidence) {
+    o.evidence.forEach(function(e) {
+      var line = document.createElement("p");
+      line.className = "text-xs text-gray-400 mb-1";
+      var value = e.value == null ? "Unknown / not computed" :
+        (e.field === "endpoint_trajectory" ? e.value.length + " points" : String(e.value));
+      line.textContent = e.field.replace(/_/g, " ") + ": " + value +
+        " [" + e.confidence + "]" + (e.detail ? " — " + e.detail : "");
+      container.appendChild(line);
+    });
+    var assumptions = document.createElement("p");
+    assumptions.className = "text-xs text-gray-500 mt-2";
+    assumptions.textContent = "Model diagnostics only. " + JSON.stringify(o.assumptions || {});
+    container.appendChild(assumptions);
+    return;
+  }
+  var items = [
+    ["Joint Limits", o.joint_limits_ok != null ? (o.joint_limits_ok ? "OK" : "Exceeded") : "\u2014"],
+    ["Self Collision", o.self_collision != null ? (o.self_collision ? "Detected" : "None") : "\u2014"],
+    ["Torque Feasible", o.torque_feasible != null ? (o.torque_feasible ? "Yes" : "No") : "\u2014"],
+    ["Near Singularity", o.near_singularity != null ? (o.near_singularity ? "Yes" : "No") : "\u2014"],
+    ["Steps Analyzed", o.steps_analyzed || "\u2014"],
+  ];
+  if (o.total_displacement_m != null) {
+    items.push(["Displacement", o.total_displacement_m.toFixed(3) + "m"]);
+  }
+  if (o.smoothness_score != null) {
+    items.push(["Smoothness", (o.smoothness_score * 100).toFixed(0) + "%"]);
+  }
+  var grid = document.createElement("div");
+  grid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
+  items.forEach(function(pair) {
+    var label = document.createElement("span");
+    label.className = "text-gray-500";
+    label.textContent = pair[0];
+    grid.appendChild(label);
+    var val = document.createElement("span");
+    val.className = "text-gray-300 font-mono";
+    val.textContent = String(pair[1]);
+    grid.appendChild(val);
+  });
+  container.appendChild(grid);
 }
 
 function renderPerceive(container, o) {
@@ -3307,6 +4140,59 @@ function renderPlan(container, o) {
     container.appendChild(reason);
   }
 
+  // Structured Reasoning: Subtask Reasoning
+  if (o.subtask_reasoning) {
+    rendered = true;
+    var srBlock = document.createElement("div");
+    srBlock.className = "mt-2 space-y-0.5";
+    var srLabel = document.createElement("p");
+    srLabel.className = "text-[11px] text-cyan-400 font-medium";
+    srLabel.textContent = "Subtask Reasoning";
+    srBlock.appendChild(srLabel);
+    var srText = document.createElement("p");
+    srText.className = "text-xs text-gray-400 italic border-l-2 border-cyan-500/30 pl-3";
+    srText.textContent = o.subtask_reasoning;
+    srBlock.appendChild(srText);
+    container.appendChild(srBlock);
+  }
+
+  // Structured Reasoning: Action Reasoning
+  if (o.action_reasoning) {
+    rendered = true;
+    var arBlock = document.createElement("div");
+    arBlock.className = "mt-2 space-y-0.5";
+    var arLabel = document.createElement("p");
+    arLabel.className = "text-[11px] text-violet-400 font-medium";
+    arLabel.textContent = "Action Reasoning";
+    arBlock.appendChild(arLabel);
+    var arText = document.createElement("p");
+    arText.className = "text-xs text-gray-400 italic border-l-2 border-violet-500/30 pl-3";
+    arText.textContent = o.action_reasoning;
+    arBlock.appendChild(arText);
+    container.appendChild(arBlock);
+  }
+
+  // Constraints Acknowledged
+  if (o.constraints_acknowledged && Array.isArray(o.constraints_acknowledged) && o.constraints_acknowledged.length > 0) {
+    rendered = true;
+    var caSection = document.createElement("div");
+    caSection.className = "mt-2 space-y-1";
+    var caHeading = document.createElement("p");
+    caHeading.className = "text-[11px] text-red-400 font-medium";
+    caHeading.textContent = "Constraints Acknowledged";
+    caSection.appendChild(caHeading);
+    var caWrap = document.createElement("div");
+    caWrap.className = "flex flex-wrap gap-1.5";
+    o.constraints_acknowledged.forEach(function(c) {
+      var tag = document.createElement("span");
+      tag.className = "text-xs bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-0.5 rounded";
+      tag.textContent = c;
+      caWrap.appendChild(tag);
+    });
+    caSection.appendChild(caWrap);
+    container.appendChild(caSection);
+  }
+
   if (o.steps && Array.isArray(o.steps) && o.steps.length > 0) {
     rendered = true;
     var stepsSection = document.createElement("div");
@@ -3331,6 +4217,83 @@ function renderPlan(container, o) {
       stepsSection.appendChild(stepRow);
     });
     container.appendChild(stepsSection);
+  }
+
+  // Expected subtasks checklist (multi_stage tasks)
+  if (window._selectedExpectedSubtasks && Array.isArray(window._selectedExpectedSubtasks) && window._selectedExpectedSubtasks.length > 0 && o.steps && o.steps.length > 0) {
+    rendered = true;
+    var esSection = document.createElement("div");
+    esSection.className = "mt-2 space-y-1";
+    var esHeading = document.createElement("p");
+    esHeading.className = "text-[11px] text-blue-400 font-medium";
+    esHeading.textContent = "Expected Subtasks";
+    esSection.appendChild(esHeading);
+    var stepsLower = o.steps.map(function(s) { return (typeof s === "string" ? s : JSON.stringify(s)).toLowerCase(); }).join(" ");
+    window._selectedExpectedSubtasks.forEach(function(expected) {
+      var found = stepsLower.indexOf(expected.toLowerCase()) >= 0;
+      var esRow = document.createElement("div");
+      esRow.className = "flex items-center gap-2 ml-1";
+      var esIcon = document.createElement("span");
+      esIcon.className = found ? "text-[11px] text-green-400" : "text-[11px] text-red-400";
+      esIcon.textContent = found ? "\u2713" : "\u2717";
+      esRow.appendChild(esIcon);
+      var esText = document.createElement("span");
+      esText.className = "text-xs " + (found ? "text-gray-300" : "text-gray-500 line-through");
+      esText.textContent = expected;
+      esRow.appendChild(esText);
+      esSection.appendChild(esRow);
+    });
+    container.appendChild(esSection);
+  }
+
+  // Correction indicator (situated_correction tasks)
+  if (window._selectedCorrection) {
+    rendered = true;
+    var corrSection = document.createElement("div");
+    corrSection.className = "mt-2 p-2 rounded border border-amber-500/20 bg-amber-500/5";
+    var corrHeading = document.createElement("p");
+    corrHeading.className = "text-[11px] text-amber-400 font-medium mb-1";
+    corrHeading.textContent = "Situated Correction";
+    corrSection.appendChild(corrHeading);
+    var corrFeedback = document.createElement("p");
+    corrFeedback.className = "text-xs text-amber-200 italic";
+    corrFeedback.textContent = "\u201c" + (window._selectedCorrection.feedback || "") + "\u201d";
+    corrSection.appendChild(corrFeedback);
+    if (window._selectedCorrection.timing) {
+      var corrTiming = document.createElement("p");
+      corrTiming.className = "text-[10px] text-gray-500 mt-0.5";
+      corrTiming.textContent = "Timing: " + window._selectedCorrection.timing;
+      corrSection.appendChild(corrTiming);
+    }
+    container.appendChild(corrSection);
+  }
+
+  // Active constraints (constrained tasks)
+  if (window._selectedConstraints && Array.isArray(window._selectedConstraints) && window._selectedConstraints.length > 0) {
+    // Check which constraints were acknowledged
+    var acked = (o.constraints_acknowledged || []).map(function(c) { return c.toLowerCase(); }).join(" ");
+    var csSection = document.createElement("div");
+    csSection.className = "mt-2 space-y-1";
+    var csHeading = document.createElement("p");
+    csHeading.className = "text-[11px] text-red-400 font-medium";
+    csHeading.textContent = "Task Constraints";
+    csSection.appendChild(csHeading);
+    window._selectedConstraints.forEach(function(constraint) {
+      var matched = acked.indexOf(constraint.toLowerCase().substring(0, 15)) >= 0;
+      var csRow = document.createElement("div");
+      csRow.className = "flex items-center gap-2 ml-1";
+      var csIcon = document.createElement("span");
+      csIcon.className = matched ? "text-[11px] text-green-400" : "text-[11px] text-yellow-400";
+      csIcon.textContent = matched ? "\u2713" : "\u26a0";
+      csRow.appendChild(csIcon);
+      var csText = document.createElement("span");
+      csText.className = "text-xs " + (matched ? "text-gray-300" : "text-yellow-300");
+      csText.textContent = constraint;
+      csRow.appendChild(csText);
+      csSection.appendChild(csRow);
+    });
+    container.appendChild(csSection);
+    rendered = true;
   }
 
   if (o.task_repertoire && Array.isArray(o.task_repertoire) && o.task_repertoire.length > 0) {
@@ -3532,92 +4495,105 @@ function renderAct(container, o) {
     container.appendChild(traj);
   }
 
-  // FK analysis card
-  if (o.fk_analysis) {
+  // Dynamics analysis card
+  if (o.dynamics_analysis) {
     rendered = true;
-    var fk = o.fk_analysis;
-    var fkCard = document.createElement("div");
-    fkCard.className = "mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2";
+    var dyn = o.dynamics_analysis.summary || o.dynamics_analysis;
+    var dynCard = document.createElement("div");
+    dynCard.className = "mt-3 bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 space-y-2";
 
-    var fkTitle = document.createElement("div");
-    fkTitle.className = "flex items-center gap-2 mb-2";
-    var fkBadge = document.createElement("span");
-    fkBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
-    fkBadge.textContent = "FK Analysis";
-    fkTitle.appendChild(fkBadge);
-    var fkSubtitle = document.createElement("span");
-    fkSubtitle.className = "text-[10px] text-gray-500";
-    fkSubtitle.textContent = "MuJoCo Forward Kinematics";
-    fkTitle.appendChild(fkSubtitle);
-    fkCard.appendChild(fkTitle);
+    var dynTitle = document.createElement("div");
+    dynTitle.className = "flex items-center gap-2 mb-2";
+    var dynBadge = document.createElement("span");
+    dynBadge.className = "text-[10px] bg-blue-500/15 text-blue-300 px-2 py-0.5 rounded";
+    dynBadge.textContent = "Dynamics";
+    dynTitle.appendChild(dynBadge);
+    var dynSubtitle = document.createElement("span");
+    dynSubtitle.className = "text-[10px] text-gray-500";
+    dynSubtitle.textContent = "MuJoCo model diagnostics — assumptions and missing checks below";
+    dynTitle.appendChild(dynSubtitle);
+    dynCard.appendChild(dynTitle);
 
-    var fkGrid = document.createElement("div");
-    fkGrid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
+    var dynGrid = document.createElement("div");
+    dynGrid.className = "grid grid-cols-2 gap-x-4 gap-y-1 text-xs";
 
-    var ep = fk.final_endpoint || [0, 0, 0];
-    var fkItems = [
+    var ep = dyn.final_endpoint || [0, 0, 0];
+    var dynItems = [
       ["Endpoint", "[" + ep.map(function(v) { return v.toFixed(3); }).join(", ") + "]m"],
-      ["Displacement", (fk.total_displacement_m || 0).toFixed(3) + "m"],
-      ["Joint limits", fk.joint_limits_ok ? "within bounds" : "EXCEEDED"],
-      ["Self-collision", fk.self_collision ? "DETECTED" : "none"],
-      ["Smoothness", (fk.smoothness_score || 0).toFixed(2)],
-      ["Max velocity", (fk.max_velocity_rad_s || 0).toFixed(2) + " rad/s"],
+      ["Displacement", (dyn.total_displacement_m || 0).toFixed(3) + "m"],
+      ["Joint limits", dyn.joint_limits_ok == null ? "Unknown" : (dyn.joint_limits_ok ? "within bounds" : "EXCEEDED")],
+      ["Self-collision", dyn.self_collision == null ? "Unknown" : (dyn.self_collision ? "DETECTED" : "not detected")],
+      ["Smoothness", (dyn.smoothness_score || 0).toFixed(2)],
+      ["Max joint delta / step", dyn.max_joint_delta_per_step == null ? "Unknown" : dyn.max_joint_delta_per_step.toFixed(3)],
+      ["Torque feasible", dyn.torque_feasible == null ? "Not computed" : (dyn.torque_feasible ? "yes" : "VIOLATED")],
+      ["Gravity hold", dyn.gravity_feasible == null ? "Not computed" : (dyn.gravity_feasible ? "feasible" : "INFEASIBLE")],
+      ["Manipulability", (dyn.manipulability || 0).toFixed(4) + (dyn.near_singularity ? " (SINGULARITY)" : "")],
     ];
-    fkItems.forEach(function(item) {
+    dynItems.forEach(function(item) {
       var label = document.createElement("span");
       label.className = "text-gray-500";
       label.textContent = item[0];
-      fkGrid.appendChild(label);
+      dynGrid.appendChild(label);
       var value = document.createElement("span");
-      var isWarning = (item[0] === "Joint limits" && !fk.joint_limits_ok) ||
-                      (item[0] === "Self-collision" && fk.self_collision);
+      var isWarning = (item[0] === "Joint limits" && dyn.joint_limits_ok === false) ||
+                      (item[0] === "Self-collision" && dyn.self_collision) ||
+                      (item[0] === "Torque feasible" && dyn.torque_feasible === false) ||
+                      (item[0] === "Gravity hold" && dyn.gravity_feasible === false) ||
+                      (item[0] === "Manipulability" && dyn.near_singularity);
       value.className = isWarning ? "text-red-400 font-medium" : "text-gray-300";
       value.textContent = item[1];
-      fkGrid.appendChild(value);
+      dynGrid.appendChild(value);
     });
-    fkCard.appendChild(fkGrid);
+    dynCard.appendChild(dynGrid);
+    (o.dynamics_analysis.evidence || []).forEach(function(e) {
+      var line = document.createElement("p");
+      line.className = "text-xs text-gray-400";
+      line.textContent = e.field + ": " + e.confidence + (e.detail ? " — " + e.detail : "");
+      dynCard.appendChild(line);
+    });
+
 
     // Trajectory sample
-    var fkTraj = fk.endpoint_trajectory || [];
-    if (fkTraj.length > 0) {
+    var dynTraj = dyn.endpoint_trajectory || [];
+    if (dynTraj.length > 0) {
       var trajDiv = document.createElement("div");
       trajDiv.className = "mt-2 font-mono text-[10px] text-gray-400";
       var trajTitle2 = document.createElement("p");
       trajTitle2.className = "text-gray-500 mb-0.5";
-      trajTitle2.textContent = "End-effector trajectory (" + fkTraj.length + " points):";
+      trajTitle2.textContent = "End-effector trajectory (" + dynTraj.length + " points):";
       trajDiv.appendChild(trajTitle2);
-      var showCount = Math.min(fkTraj.length, 5);
+      var showCount = Math.min(dynTraj.length, 5);
       for (var ti = 0; ti < showCount; ti++) {
-        var pt = fkTraj[ti];
+        var pt = dynTraj[ti];
         var ptEl = document.createElement("p");
         ptEl.textContent = "  " + (ti + 1) + ": [" + pt.map(function(v) { return v.toFixed(3); }).join(", ") + "]m";
         trajDiv.appendChild(ptEl);
       }
-      if (fkTraj.length > 5) {
+      if (dynTraj.length > 5) {
         var more = document.createElement("p");
         more.className = "text-gray-600";
-        more.textContent = "  ... (" + fkTraj.length + " total)";
+        more.textContent = "  ... (" + dynTraj.length + " total)";
         trajDiv.appendChild(more);
       }
-      fkCard.appendChild(trajDiv);
+      dynCard.appendChild(trajDiv);
     }
 
-    container.appendChild(fkCard);
+    container.appendChild(dynCard);
   }
 
-  // FK skipped warning
-  if (o.fk_skipped) {
+  // Dynamics skipped warning
+  if (o.dynamics_skipped) {
     rendered = true;
-    var fkWarn = document.createElement("div");
-    fkWarn.className = "mt-2 flex items-center gap-2 text-[10px] text-yellow-400/80";
+    var dynWarn = document.createElement("div");
+    dynWarn.className = "mt-2 flex items-center gap-2 text-[10px] text-yellow-400/80";
     var warnIcon = document.createElement("i");
     warnIcon.setAttribute("data-lucide", "alert-triangle");
     warnIcon.className = "w-3 h-3";
-    fkWarn.appendChild(warnIcon);
+    dynWarn.appendChild(warnIcon);
     var warnText = document.createElement("span");
-    warnText.textContent = "FK skipped: " + o.fk_skipped;
-    fkWarn.appendChild(warnText);
-    container.appendChild(fkWarn);
+    warnText.textContent = "Dynamics skipped: " + o.dynamics_skipped;
+    dynWarn.appendChild(warnText);
+    container.appendChild(dynWarn);
   }
 
   if (!rendered) {
@@ -3629,6 +4605,17 @@ function renderAct(container, o) {
 }
 
 function renderVerify(container, o) {
+  if (o.dynamics_analysis) {
+    var evidencePanel = document.createElement("details");
+    evidencePanel.className = "my-3 p-3 border border-blue-500/20 rounded-lg";
+    var evidenceHeading = document.createElement("summary");
+    evidenceHeading.className = "text-xs text-blue-300 cursor-pointer";
+    evidenceHeading.textContent = "Computed evidence and missing checks";
+    evidencePanel.appendChild(evidenceHeading);
+    renderDynamics(evidencePanel, o.dynamics_analysis);
+    container.appendChild(evidencePanel);
+  }
+
   var rendered = false;
 
   if (o.confidence != null) {
@@ -3660,13 +4647,98 @@ function renderVerify(container, o) {
 
   if (o.reasoning || o.explanation) {
     rendered = true;
-    var reason = document.createElement("p");
-    reason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-2";
-    reason.textContent = o.reasoning || o.explanation;
-    container.appendChild(reason);
+    var rawReasoning = o.reasoning || o.explanation;
+    // Try to parse narrative sections from agent loop reasoning
+    var parsed = parseVerifyNarrative(rawReasoning);
+    if (parsed) {
+      var narWrap = document.createElement("div");
+      narWrap.className = "mt-2 space-y-2";
+
+      // Top-level sections (Verdict, VLA Output Analysis) — full width
+      (parsed.top || []).forEach(function(sec) {
+        narWrap.appendChild(renderNarrativeSection(sec));
+      });
+
+      // Evidence sections — nested under a collapsible "Evidence" group
+      if (parsed.evidence && parsed.evidence.length > 0) {
+        var evidenceWrap = document.createElement("div");
+        evidenceWrap.className = "mt-1";
+        var evidenceToggle = document.createElement("button");
+        evidenceToggle.type = "button";
+        evidenceToggle.className = "flex items-center gap-1.5 group cursor-pointer bg-transparent border-0 p-0 mb-0";
+        var evidenceArrow = document.createElement("span");
+        evidenceArrow.className = "text-purple-400 text-[11px] transition-transform duration-200";
+        evidenceArrow.style.transform = "rotate(90deg)";
+        evidenceArrow.textContent = "\u203a";
+        evidenceToggle.appendChild(evidenceArrow);
+        var evidenceLabel = document.createElement("span");
+        evidenceLabel.className = "text-[10px] font-semibold text-purple-400 group-hover:text-purple-300 transition-colors uppercase tracking-wider";
+        evidenceLabel.textContent = "Reasoning Trajectory";
+        evidenceToggle.appendChild(evidenceLabel);
+        var evidenceCount = document.createElement("span");
+        evidenceCount.className = "text-[9px] text-gray-600";
+        evidenceCount.textContent = parsed.evidence.length + " sources";
+        evidenceToggle.appendChild(evidenceCount);
+        evidenceWrap.appendChild(evidenceToggle);
+
+        var evidenceContent = document.createElement("div");
+        evidenceContent.className = "mt-1.5 ml-3 space-y-1.5";
+        parsed.evidence.forEach(function(sec) {
+          evidenceContent.appendChild(renderNarrativeSection(sec));
+        });
+        evidenceWrap.appendChild(evidenceContent);
+
+        evidenceToggle.addEventListener("click", function() {
+          var open = !evidenceContent.classList.contains("hidden");
+          if (open) {
+            evidenceContent.classList.add("hidden");
+            evidenceArrow.style.transform = "rotate(0deg)";
+          } else {
+            evidenceContent.classList.remove("hidden");
+            evidenceArrow.style.transform = "rotate(90deg)";
+          }
+        });
+
+        narWrap.appendChild(evidenceWrap);
+      }
+
+      container.appendChild(narWrap);
+    } else {
+      var reason = document.createElement("p");
+      reason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-2";
+      reason.textContent = rawReasoning;
+      container.appendChild(reason);
+    }
   }
 
-  if (o.stage_checks && Array.isArray(o.stage_checks) && o.stage_checks.length > 0) {
+  // Resolution path (agent loop mode)
+  if (o.resolution_path) {
+    rendered = true;
+    var resPath = document.createElement("div");
+    resPath.className = "mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2";
+    var resLabel = document.createElement("span");
+    resLabel.className = "text-[10px] font-semibold text-amber-400";
+    resLabel.textContent = "Resolution Path";
+    resPath.appendChild(resLabel);
+    var resText = document.createElement("p");
+    resText.className = "text-xs text-amber-300/80 mt-1";
+    resText.textContent = o.resolution_path;
+    resPath.appendChild(resText);
+    container.appendChild(resPath);
+  }
+
+  // Verify turns indicator (agent loop mode)
+  if (o.verify_turns && o.verify_turns > 1) {
+    var turnsBadge = document.createElement("span");
+    turnsBadge.className = "text-[10px] bg-purple-500/15 text-purple-300 px-1.5 py-0.5 rounded mt-1 inline-block";
+    turnsBadge.textContent = o.verify_turns + " verify turns";
+    container.appendChild(turnsBadge);
+  }
+
+  // Stage checks — only show for precompute mode (not agent_loop where they're meaningless)
+  // Detect agent_loop: verify_turns > 1 or resolution_path present means agent loop was used
+  var isAgentLoop = (o.verify_turns && o.verify_turns > 1) || o.resolution_path;
+  if (!isAgentLoop && o.stage_checks && Array.isArray(o.stage_checks) && o.stage_checks.length > 0) {
     rendered = true;
     var checksSection = document.createElement("div");
     checksSection.className = "mt-3 space-y-2";
@@ -3691,7 +4763,7 @@ function renderVerify(container, o) {
       stageName.className = "text-xs text-gray-200 font-medium";
       stageName.textContent = sc.stage;
       header.appendChild(stageName);
-      if (sc.confidence != null) {
+      if (sc.confidence != null && sc.confidence > 0) {
         var confSpan = document.createElement("span");
         confSpan.className = "text-[10px] text-gray-500 ml-auto";
         confSpan.textContent = (sc.confidence * 100).toFixed(0) + "% confidence";
@@ -3766,80 +4838,94 @@ function renderVerify(container, o) {
     apTitle.className = "text-[11px] text-gray-500 font-medium";
     apTitle.textContent = "Action Plausibility";
     apHeading.appendChild(apTitle);
-    var apInfo = document.createElement("span");
-    apInfo.className = "text-[10px] text-gray-600";
-    apInfo.title = "Structured plausibility checks derived from VLA output without simulation";
-    apInfo.textContent = "\u24d8";
-    apHeading.appendChild(apInfo);
+    // Show evidence quality badge
+    var evidenceQuality = ap.evidence_quality || "";
+    var hasDynamics = evidenceQuality === "hard" || evidenceQuality === "estimated"
+      || ap.bounds_check != null || ap.dynamics_consistency != null
+      || ap.safety_assessment != null || ap.workspace_reachability != null;
+    var apProvider = document.createElement("span");
+    if (evidenceQuality === "hard") {
+      apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Hard Evidence";
+    } else if (evidenceQuality === "estimated") {
+      apProvider.className = "text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Estimated";
+    } else if (hasDynamics) {
+      apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "MuJoCo Dynamics";
+    } else {
+      apProvider.className = "text-[9px] bg-gray-500/15 text-gray-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Perception Only";
+    }
+    apHeading.appendChild(apProvider);
     apSection.appendChild(apHeading);
+
+    // Warning banner when dynamics is not available
+    if (!hasDynamics) {
+      var noPhysWarn = document.createElement("div");
+      noPhysWarn.className = "mt-1 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md";
+      var noPhysText = document.createElement("p");
+      noPhysText.className = "text-[11px] text-red-400/90";
+      noPhysText.textContent = "\u26A0 No dynamics data — scores are perception-only estimates. Physics-dependent fields show as 'Not assessed'. Enable MuJoCo dynamics for physics-grounded assessment.";
+      noPhysWarn.appendChild(noPhysText);
+      apSection.appendChild(noPhysWarn);
+    }
 
     var apCard = document.createElement("div");
     apCard.className = "bg-black/20 rounded-md px-3 py-2 space-y-2";
 
-    // Boolean sub-checks
-    var boolChecks = [
-      { key: "bounds_check", label: "Bounds Check", desc: "Action deltas within plausible ranges" },
-      { key: "smoothness", label: "Smoothness", desc: "No sudden jumps between steps" },
-      { key: "gripper_consistency", label: "Gripper Consistency", desc: "Open/close pattern matches task" },
+    // All scores rendered as bars (0-1 float scores)
+    var scoreChecks = [
+      { key: "bounds_check", label: "Bounds Check", tooltip: "Are all joint angles within mechanical limits? Does MuJoCo dynamics report any joint limit violations or self-collisions?" },
+      { key: "smoothness", label: "Smoothness", tooltip: "Is the trajectory continuous without sudden jumps? Measures jerk and acceleration consistency between consecutive action steps." },
+      { key: "gripper_consistency", label: "Gripper Consistency", tooltip: "Does the gripper open/close pattern match the task type? E.g., pick tasks should have close→open, place tasks open→close." },
+      { key: "plan_alignment", label: "Plan Alignment", tooltip: "How well does the VLA trajectory follow the expected manipulation plan? Compares actual motion against the ideal step sequence." },
+      { key: "workspace_reachability", label: "Workspace Reachability", tooltip: "Does the trajectory stay within the robot's reachable workspace? Based on manipulability index and singular value analysis." },
+      { key: "dynamics_consistency", label: "Dynamics Consistency", tooltip: "Does the LLM's assessment agree with MuJoCo physics data? Lower score means the verifier and physics engine disagree." },
+      { key: "task_completion_plausibility", label: "Task Completion", tooltip: "Does the endpoint displacement match the task intent? E.g., a pick-and-place should show object moved from source to target." },
+      { key: "safety_assessment", label: "Safety", tooltip: "Composite safety score from torque feasibility, collision avoidance, singularity distance, and gravity compensation." },
     ];
-    boolChecks.forEach(function(bc) {
+    scoreChecks.forEach(function(sc) {
+      var val = ap[sc.key];
       var row = document.createElement("div");
       row.className = "flex items-center gap-2";
-      var badge = document.createElement("span");
-      badge.className = ap[bc.key]
-        ? "text-[10px] bg-emerald-500/15 text-emerald-300 px-1.5 py-0.5 rounded"
-        : "text-[10px] bg-red-500/15 text-red-300 px-1.5 py-0.5 rounded";
-      badge.textContent = ap[bc.key] ? "PASS" : "FAIL";
-      row.appendChild(badge);
       var lbl = document.createElement("span");
-      lbl.className = "text-xs text-gray-200 font-medium";
-      lbl.textContent = bc.label;
+      lbl.className = "text-[10px] text-gray-400 w-[130px] shrink-0";
+      lbl.textContent = sc.label;
       row.appendChild(lbl);
-      var desc = document.createElement("span");
-      desc.className = "text-[10px] text-gray-600 ml-auto";
-      desc.textContent = bc.desc;
-      row.appendChild(desc);
+
+      if (val == null) {
+        // Null field — show "Not assessed"
+        var naSpan = document.createElement("span");
+        naSpan.className = "text-[10px] text-gray-600 italic";
+        naSpan.textContent = "Not assessed";
+        row.appendChild(naSpan);
+      } else {
+        // Coerce booleans to float for backward compat
+        if (val === true) val = 1.0;
+        if (val === false) val = 0.0;
+        var pct = (val * 100).toFixed(0);
+        var color = val >= 0.7 ? "emerald" : (val >= 0.4 ? "yellow" : "red");
+
+        var barOuter = document.createElement("div");
+        barOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[140px]";
+        var barInner = document.createElement("div");
+        barInner.className = "h-full bg-" + color + "-500 rounded-full transition-all duration-500";
+        barInner.style.width = pct + "%";
+        barOuter.appendChild(barInner);
+        row.appendChild(barOuter);
+        var pctSpan = document.createElement("span");
+        pctSpan.className = "text-[10px] font-mono text-" + color + "-400 w-[36px] text-right";
+        pctSpan.textContent = pct + "%";
+        row.appendChild(pctSpan);
+      }
       apCard.appendChild(row);
     });
-
-    // Plan alignment bar
-    if (ap.plan_alignment != null) {
-      var paRow = document.createElement("div");
-      paRow.className = "mt-1";
-      var paLabel = document.createElement("div");
-      paLabel.className = "flex items-center gap-2 mb-1";
-      var paLbl = document.createElement("span");
-      paLbl.className = "text-[11px] text-gray-500";
-      paLbl.textContent = "Plan Alignment";
-      paLabel.appendChild(paLbl);
-      var paDesc = document.createElement("span");
-      paDesc.className = "text-[10px] text-gray-600";
-      paDesc.textContent = "how rigorously the VLA follows the plan";
-      paLabel.appendChild(paDesc);
-      paRow.appendChild(paLabel);
-      var paPct = (ap.plan_alignment * 100).toFixed(1);
-      var paColor = ap.plan_alignment >= 0.7 ? "green" : (ap.plan_alignment >= 0.4 ? "yellow" : "red");
-      var paBarRow = document.createElement("div");
-      paBarRow.className = "flex items-center gap-3";
-      var paOuter = document.createElement("div");
-      paOuter.className = "flex-1 h-1.5 bg-f-elevated rounded-full overflow-hidden max-w-[200px]";
-      var paInner = document.createElement("div");
-      paInner.className = "h-full bg-" + paColor + "-500 rounded-full transition-all duration-500";
-      paInner.style.width = paPct + "%";
-      paOuter.appendChild(paInner);
-      paBarRow.appendChild(paOuter);
-      var paPctSpan = document.createElement("span");
-      paPctSpan.className = "text-xs font-mono text-" + paColor + "-400";
-      paPctSpan.textContent = paPct + "%";
-      paBarRow.appendChild(paPctSpan);
-      paRow.appendChild(paBarRow);
-      apCard.appendChild(paRow);
-    }
 
     // Plausibility reasoning
     if (ap.reasoning) {
       var apReason = document.createElement("p");
-      apReason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-1";
+      apReason.className = "text-xs text-gray-400 italic border-l-2 border-f-border-strong pl-3 mt-2";
       apReason.textContent = ap.reasoning;
       apCard.appendChild(apReason);
     }
@@ -3851,9 +4937,55 @@ function renderVerify(container, o) {
     disclaimer.className = "mt-2 px-3 py-2 bg-amber-500/10 border border-amber-500/20 rounded-md";
     var disclaimerText = document.createElement("p");
     disclaimerText.className = "text-[11px] text-amber-400/80";
-    disclaimerText.textContent = "\u26A0 Action plausibility only \u2014 true success assessment requires a simulator or post-execution observation.";
+    disclaimerText.textContent = "\u26A0 Action plausibility only \u2014 true success requires a simulator or post-execution observation.";
     disclaimer.appendChild(disclaimerText);
     apSection.appendChild(disclaimer);
+
+    // Collapsed glossary
+    var glossaryWrap = document.createElement("div");
+    glossaryWrap.className = "mt-2";
+    var glossaryToggle = document.createElement("button");
+    glossaryToggle.type = "button";
+    glossaryToggle.className = "flex items-center gap-1.5 group cursor-pointer bg-transparent border-0 p-0";
+    var glossaryArrow = document.createElement("span");
+    glossaryArrow.className = "text-gray-500 text-[11px] transition-transform duration-200";
+    glossaryArrow.textContent = "\u203a";
+    glossaryToggle.appendChild(glossaryArrow);
+    var glossaryLabel = document.createElement("span");
+    glossaryLabel.className = "text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors";
+    glossaryLabel.textContent = "Metric Glossary";
+    glossaryToggle.appendChild(glossaryLabel);
+    glossaryWrap.appendChild(glossaryToggle);
+
+    var glossaryContent = document.createElement("div");
+    glossaryContent.className = "hidden mt-1.5 ml-3 space-y-1";
+    scoreChecks.forEach(function(sc) {
+      if (ap[sc.key] == null) return;
+      var gRow = document.createElement("div");
+      var gLabel = document.createElement("span");
+      gLabel.className = "text-[10px] text-gray-400 font-medium";
+      gLabel.textContent = sc.label + ": ";
+      gRow.appendChild(gLabel);
+      var gDesc = document.createElement("span");
+      gDesc.className = "text-[10px] text-gray-500";
+      gDesc.textContent = sc.tooltip;
+      gRow.appendChild(gDesc);
+      glossaryContent.appendChild(gRow);
+    });
+    glossaryWrap.appendChild(glossaryContent);
+
+    glossaryToggle.addEventListener("click", function() {
+      var open = !glossaryContent.classList.contains("hidden");
+      if (open) {
+        glossaryContent.classList.add("hidden");
+        glossaryArrow.style.transform = "rotate(0deg)";
+      } else {
+        glossaryContent.classList.remove("hidden");
+        glossaryArrow.style.transform = "rotate(90deg)";
+      }
+    });
+
+    apSection.appendChild(glossaryWrap);
 
     container.appendChild(apSection);
   }

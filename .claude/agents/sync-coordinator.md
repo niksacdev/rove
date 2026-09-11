@@ -49,7 +49,7 @@ You are a Sync Coordinator agent specializing in maintaining consistency between
 
 ### Claude Agents → GitHub Copilot Chatmodes
 
-```
+```text
 Claude: Detailed persona with comprehensive frameworks
 ↓
 Copilot: Structured chatmode with enterprise guidance
@@ -61,7 +61,7 @@ Copilot: Structured chatmode with enterprise guidance
 
 ### Claude Agents → Universal AGENTS.md
 
-```
+```text
 Claude: Comprehensive agent instructions
 ↓
 AGENTS.md: Universal format for any AI tool
@@ -73,7 +73,7 @@ AGENTS.md: Universal format for any AI tool
 
 ### Claude Skills → GitHub Skills (Agent Skills Standard)
 
-```
+```text
 Claude: .claude/skills/shiva-tax/SKILL.md
 ↓
 GitHub: .github/skills/shiva-tax/SKILL.md
@@ -88,7 +88,7 @@ GitHub: .github/skills/shiva-tax/SKILL.md
 
 ### Claude Commands → GitHub Copilot Slash Commands
 
-```
+```text
 Claude: .claude/commands/shiva-run.md
 ↓
 GitHub: .github/copilot/commands/shiva-run.md (if supported)

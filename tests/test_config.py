@@ -78,13 +78,13 @@ class TestGetStrategies:
         assert "mock" in strategies
         assert "scene_detect" in strategies
         assert "scene_plan" in strategies
-        assert "full_local" in strategies
+        assert "vla_mock" in strategies
 
     def test_mock_strategy_models(self):
         strategies = get_strategies()
         mock = strategies["mock"]
         assert mock.perceive == "mock-vlm"
-        assert mock.plan == "mock-vlm"
+        assert mock.plan is None
         assert mock.act == "mock-vla"
         assert mock.verify == "mock-vlm"
         assert mock.sim == "mock-sim"
@@ -94,7 +94,7 @@ class TestGetStrategies:
         assert "test" in strategies["mock"].tags
         assert "scene" in strategies["scene_detect"].tags
         assert "plan" in strategies["scene_plan"].tags
-        assert "full" in strategies["full_local"].tags
+        assert "vla" in strategies["vla_mock"].tags
 
     def test_scene_detect_is_partial(self):
         """scene_detect has only perceive + verify (plan/act omitted)."""
@@ -103,16 +103,17 @@ class TestGetStrategies:
         assert sd.perceive == "qwen3-vl-8b"
         assert sd.plan is None
         assert sd.act is None
-        assert sd.verify == "qwen3-vl-8b"
+        assert sd.verify == "bing-grounding-agent"
 
-    def test_full_local_strategy(self):
-        """full_local has all four stages."""
+    def test_vla_mock_strategy(self):
+        """vla_mock has perceive + act + verify (plan is internal to verifier)."""
         strategies = get_strategies()
-        fl = strategies["full_local"]
-        assert fl.perceive == "qwen3-vl-8b"
-        assert fl.plan == "qwen3-vl-8b"
-        assert fl.act == "mock-vla"
-        assert fl.verify == "qwen3-vl-8b"
+        vm = strategies["vla_mock"]
+        assert vm.perceive == "qwen3-vl-8b"
+        assert vm.plan is None
+        assert vm.act == "mock-vla"
+        assert vm.verify == "bing-grounding-agent"
+        assert vm.verify_mode == "agent_loop"
 
 
 class TestOptionalStageValidation:

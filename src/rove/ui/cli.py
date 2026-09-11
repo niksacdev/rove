@@ -1,31 +1,20 @@
-"""Minimal CLI for ROVE demo."""
-
+"""Run the local ROVE dashboard from a source checkout."""
 from __future__ import annotations
 
-import sys
+import argparse
 
 
 def main():
-    args = sys.argv[1:]
+    parser = argparse.ArgumentParser(description="ROVE local robotics evaluation workbench")
+    parser.add_argument("command", nargs="?", choices=["serve"], default="serve")
+    parser.add_argument("--port", type=int, default=5001)
+    args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error("port must be between 1 and 65535")
+    import uvicorn
 
-    if not args or args[0] == "serve":
-        port = 8000
-        if "--port" in args:
-            idx = args.index("--port")
-            port = int(args[idx + 1])
-
-        import uvicorn
-
-        print("\n  ROVE — Robot Observation & Vision Evaluation")
-        print(f"  Dashboard: http://localhost:{port}\n")
-        uvicorn.run("rove.api.app:app", host="0.0.0.0", port=port, reload=True)  # nosec B104
-    elif args[0] == "--help":
-        print("Usage: python -m rove [serve] [--port PORT]")
-        print("  serve    Start the ROVE dashboard (default)")
-        print("  --port   Port number (default: 8000)")
-    else:
-        print(f"Unknown command: {args[0]}")
-        sys.exit(1)
+    print(f"ROVE dashboard: http://127.0.0.1:{args.port}")
+    uvicorn.run("rove.api.app:app", host="127.0.0.1", port=args.port)
 
 
 if __name__ == "__main__":

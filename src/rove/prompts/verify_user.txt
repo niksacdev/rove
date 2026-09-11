@@ -24,6 +24,10 @@ Return a JSON object with:
     - "gripper_consistency": boolean (does gripper open/close pattern match the task, e.g. close-then-open for pick-and-place?)
     - "plan_alignment": float 0-1 (how rigorously does the VLA trajectory follow the planned steps? Cross-reference the plan's steps/strategy with the trajectory phases — approach, grasp, transport, place — and score alignment)
     - "reasoning": string explaining the plausibility assessment, including which plan steps the trajectory appears to follow and where it diverges
+    - "workspace_reachability": float 0-1 (does the trajectory stay within the robot's reachable workspace? 1.0 = fully reachable, 0.0 = far outside workspace)
+    - "task_completion_plausibility": float 0-1 (does the endpoint displacement magnitude and direction make sense for this task? e.g. pick-and-place should show approach→lift→transport→place phases)
+    - "dynamics_consistency": float 0-1 (if dynamics data is provided, does your assessment agree with the physics data? 1.0 = fully consistent, lower = disagreements found)
+    - "safety_assessment": float 0-1 (composite safety score: torque feasibility, collision avoidance, singularity avoidance, gravity compensation. 1.0 = fully safe)
 {ground_truth_output_spec}
 
 IMPORTANT: You cannot determine whether the robot successfully completed the task without a simulator or post-execution image. Assess action PLAUSIBILITY, not action SUCCESS. Specifically evaluate how faithfully the VLA output follows the plan. State the sim/after-image limitation in your reasoning.

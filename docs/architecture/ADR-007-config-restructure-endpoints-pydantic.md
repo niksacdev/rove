@@ -50,12 +50,14 @@ endpoints:
 ### 3. Backward-compatible wrappers
 
 Existing public API preserved via wrappers that delegate to the Pydantic model:
+
 - `get_model_config(type, id)` → validates type matches, returns dict
 - `find_model_config(id)` → returns `(type, dict)`
 - `get_all_models()` → regroups flat endpoints into `{type: {id: dict}}`
 - `get_strategies()` → unchanged return type
 
 New API:
+
 - `load_config()` → returns `RoveConfig` (was raw dict)
 - `get_endpoint_config(id)` → returns `EndpointConfig`
 

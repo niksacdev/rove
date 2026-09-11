@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 
 from rove.adapters.registry import AdapterRegistry
 from rove.models import ExampleData, StageStatus, Strategy
+from rove.orchestrator.failure_attribution import attribute_failure
 from rove.orchestrator.pipeline import EvaluationPipeline
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ class RunManager:
                 {
                     "strategy_id": strategy.id,
                     "display_name": strategy.display_name,
+                    "pipeline_mode": strategy.pipeline_mode,
                 },
             )
             try:
@@ -93,12 +95,22 @@ class RunManager:
                     if verify_stage and verify_stage.get("output")
                     else False
                 )
+                confidence = (
+                    verify_stage["output"].get("confidence", 0.0)
+                    if verify_stage and verify_stage.get("output")
+                    else 0.0
+                )
+
+                failure_stage, failure_category = attribute_failure(stages, success)
 
                 result = {
                     "strategy_id": strategy.id,
                     "display_name": strategy.display_name,
                     "success": success,
+                    "confidence": confidence,
                     "total_latency_ms": round(total_latency, 1),
+                    "failure_stage": failure_stage,
+                    "failure_category": failure_category,
                     "stages": stages,
                     "models": {
                         k: v
@@ -147,7 +159,7 @@ class RunManager:
             else None
         )
         verify = self.registry.get_adapter_for_stage(PipelineStage.VERIFY, strategy.verify)
-        sim = self.registry.create_sim(strategy.sim) if strategy.act else None
+        sim = self.registry.create_sim(strategy.sim) if strategy.act and strategy.sim else None
 
         return EvaluationPipeline(
             perceive_adapter=perceive,
@@ -156,6 +168,8 @@ class RunManager:
             verify_adapter=verify,
             sim=sim,
             registry=self.registry,
-            forward_kinematics=strategy.forward_kinematics,
+            compute_dynamics=strategy.compute_dynamics,
             urdf_path=self._urdf_path,
+            pipeline_mode=strategy.pipeline_mode,
+            verify_mode=strategy.verify_mode,
         )

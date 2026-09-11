@@ -76,6 +76,7 @@ ROVE uses a single YAML file (`rove.yaml`) that defines:
 - **Defaults**: Global settings for concurrency, timeouts, retries.
 
 This pattern means:
+
 - Adding a model = one YAML entry + one adapter class
 - Creating a strategy = one YAML block mapping models to pipeline stages
 - Running an evaluation = `rove evaluate --strategy mock`
@@ -134,7 +135,7 @@ VLAs use gripper values in [0, 1] (0=open, 1=closed). LIBERO expects [-1, 1] (-1
 
 ### The Execute Step in Detail
 
-```
+```text
 VLA.predict_action(sim_image, task, proprio) → ActionPrediction (e.g., 10 steps)
     ↓
 for each action_step in ActionPrediction.actions:
@@ -149,6 +150,7 @@ sim_success = info['success']               # physics ground truth
 ### VLM-Only Mode (No Simulator)
 
 When no sim is configured, ROVE evaluates stages 1-2 only (perceive and plan). This produces:
+
 - VLM scene understanding quality (object detection, spatial reasoning)
 - Planning quality (strategy, reasoning, confidence)
 - Latency and cost comparisons
@@ -172,7 +174,7 @@ VLM-only mode is valid for: comparing VLM perception across models, evaluating o
 
 MCP servers expose ROVE's adapters as callable tools for AI agents. An agent built in Claude, Copilot, or Foundry calls `analyze_scene` and receives structured scene analysis without being coupled to any specific model.
 
-```
+```text
 Agent:     "analyze this scene for pick-and-place"
   → MCP:   analyze_scene(image, task, model_id="gpt-4o")
   → ROVE:  AdapterRegistry.get_vlm("gpt-4o").analyze_scene(image, task)
@@ -274,6 +276,7 @@ Runs a single strategy against multiple task descriptions. Reports which tasks t
 ## 9. Phased Delivery
 
 ### Phase 1: Mock-First Foundation
+
 - Mock adapters for VLM, VLA, Agent, Sim
 - Full 4-stage pipeline (perceive, plan, act, verify)
 - CLI: `rove evaluate`, `rove models`, `rove export`, `rove serve`
@@ -285,6 +288,7 @@ Runs a single strategy against multiple task descriptions. Reports which tasks t
 **Success criteria**: `rove evaluate --strategy mock` completes in <5s. CLI, library, and dashboard produce identical results.
 
 ### Phase 2: Local Models
+
 - pi0.5 and SmolVLA via LeRobot adapter (MPS) — **implemented**
 - LIBERO dataset examples with proprioception — **implemented**
 - OpenVLA-OFT (MLX), GroundingDINO, SAM2 (CoreML)
@@ -294,12 +298,14 @@ Runs a single strategy against multiple task descriptions. Reports which tasks t
 **Success criteria**: Full 4-stage evaluation with real models on Apple Silicon. Sim-based success rate operational.
 
 ### Phase 3: Cloud Models
+
 - GPT-4o (Azure OpenAI), Qwen2.5-VL (Azure HF), CogACT (Azure GPU)
 - Per-call cost tracking
 
 **Success criteria**: Cloud vs local comparison produces meaningful cost/latency tradeoffs.
 
 ### Phase 4: MCP + Foundry
+
 - Three MCP servers (FastMCP v2)
 - Foundry JSONL export validation
 - Foundry evaluator registration docs

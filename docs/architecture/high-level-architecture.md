@@ -19,7 +19,7 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 
 ## 2. High-Level Architecture Diagram
 
-```
+```text
 +-----------------------------------------------------------------------+
 |                        ROVE Python Monorepo                           |
 |                                                                       |
@@ -133,7 +133,7 @@ The system is a Python monorepo. There is no frontend build step. The dashboard 
 
 The evaluation API is fully non-blocking. This is essential because an evaluation with multiple strategies can take 10-120 seconds depending on model latency.
 
-```
+```text
 Client                      FastAPI                     BackgroundJobRunner
   |                            |                                |
   | POST /api/evaluations      |                                |
@@ -183,14 +183,14 @@ Client                      FastAPI                     BackgroundJobRunner
 
 **State machine for an evaluation:**
 
-```
+```text
 queued --> running --> complete
                   \--> failed
 ```
 
 Each strategy within an evaluation has its own state:
 
-```
+```text
 pending --> running --> success
                    \--> failed (stage_name, error_message)
 ```
@@ -201,7 +201,7 @@ Partial failure is non-fatal: if strategy 2 of 3 fails, the other 2 complete and
 
 ## 4. The 4-Stage Pipeline in Detail
 
-```
+```text
 INPUT: task_description (str), scene_image (bytes), strategy config (perceive_model_id, plan_model_id, act_model_id, verify_model_id, sim_id)
 
 +-------------+                +-------------+
@@ -277,7 +277,7 @@ OUTPUT: ranked list of StrategyResult across all strategies
 
 When no PolicyAdapter is specified OR when `--mode vlm-only` is passed, the pipeline runs stages 1-2 only (perceive, plan). This is valid for evaluating perception and planning quality without action execution. Stage 3 (act) is skipped; stage 4 runs a "counterfactual" verify using only the initial image and the plan.
 
-```
+```text
 perceive --> plan --> [skip act] --> verify(plan quality)
 ```
 
@@ -290,7 +290,8 @@ perceive --> plan --> [skip act] --> verify(plan quality)
 VLMs return natural language with embedded structured data. Different VLMs structure it differently. The adapter normalizes to `SceneAnalysis`.
 
 **Raw VLM output** (example, GPT-4o):
-```
+
+```text
 The scene shows a manufacturing workbench. I can identify:
 - A red bracket (approx. center-left, metallic, rectangular)
 - Bin A (right side, blue container, 200mm × 150mm)
@@ -299,6 +300,7 @@ The target object for the task "pick red bracket" is the red bracket.
 ```
 
 **Adapter normalization to SceneAnalysis:**
+
 ```python
 @dataclass
 class DetectedObject:
@@ -377,9 +379,11 @@ class TaskPlan:
 This is the most heterogeneous part of the system. VLA architectures differ fundamentally in their output structure. The adapter must normalize everything to `ActionPrediction` while preserving raw output.
 
 **Action space convention**: ROVE uses end-effector delta format as the canonical action space:
-```
+
+```text
 [dx, dy, dz, droll, dpitch, dyaw, gripper_command]
 ```
+
 - `dx, dy, dz`: end-effector position delta in meters, robot base frame, right-hand coordinate system
 - `droll, dpitch, dyaw`: end-effector orientation delta in radians
 - `gripper_command`: continuous [0.0=open, 1.0=closed]
@@ -462,7 +466,7 @@ class SimStepResult:
 
 ## 6. Data Flow Diagram
 
-```
+```text
                           USER INPUT
                     task: "Pick red bracket, place in bin A"
                     image: scene.jpg (bytes)
@@ -582,6 +586,7 @@ class SimStepResult:
 **Decision**: Dashboard is `frontend/index.html` + `frontend/app.js` served by FastAPI's `StaticFiles` mount. No npm, no Vite, no TypeScript, no React.
 
 **Alternatives considered**:
+
 - React + Vite + TypeScript (as in original CLAUDE.md): Richer component model, type safety, better ecosystem for complex UIs.
 - HTMX: Simpler than React but still adds a JS framework dependency.
 - Server-side Jinja2 templates: No JS at all, but can't do live SSE updates without JS.
@@ -595,6 +600,7 @@ class SimStepResult:
 **Decision**: Live evaluation progress uses Server-Sent Events (`GET /api/evaluations/{id}/stream`) not WebSocket.
 
 **Alternatives considered**:
+
 - WebSocket: Bidirectional, supports push from server AND messages from client. More complex server-side state management.
 - Long polling: Simpler but wastes connections and adds latency between completions.
 - WebSocket: Higher protocol complexity, requires specific ASGI handling, more complex reconnect logic.
@@ -608,6 +614,7 @@ class SimStepResult:
 **Decision**: The FastAPI backend imports and calls adapter instances directly from Python. MCP servers are separate processes that also import the same adapters. MCP is NOT a transport layer for the evaluation backend.
 
 **Alternatives considered**:
+
 - FastAPI calls MCP servers over HTTP: Adds network hop, adds latency, creates availability dependency.
 - MCP servers run the evaluations: MCP tool calls have token/response limits that make streaming evaluation results awkward.
 - Single process with MCP embedded: Mixing request/response semantics of MCP with the streaming job model of evaluations.
@@ -621,6 +628,7 @@ class SimStepResult:
 **Decision**: If no `SimAdapter` is configured or `--mode vlm-only` is passed, ROVE evaluates stages 1-2 (perceive, plan) and runs a planning-quality verification in stage 4. Stage 3 (act) is skipped entirely. The system does not fail; it produces a valid (but scoped) evaluation.
 
 **Alternatives considered**:
+
 - Always require sim: Forces users to install MuJoCo/LIBERO even for pure VLM evaluation tasks.
 - Fake sim results when sim unavailable: Produces misleading success metrics.
 
@@ -631,6 +639,7 @@ class SimStepResult:
 **Decision**: The `ActionPrediction.actions` list always contains `ActionStep` values in end-effector delta format in robot base frame. Adapters that produce joint positions or absolute poses do the conversion internally.
 
 **Alternatives considered**:
+
 - Pass-through raw action format: Each consumer of `ActionPrediction` handles normalization. Creates coupling between the sim and VLA specifics.
 - Multiple canonical formats with type tag: ActionPrediction.action_space selects the format. Sim adapter must handle all formats.
 
@@ -641,6 +650,7 @@ class SimStepResult:
 **Decision**: `StrategyResult` includes `judge_calibration: bool` indicating whether the VLM verification result matched the sim ground truth. This is tracked and surfaced in the leaderboard.
 
 **Alternatives considered**:
+
 - Use only sim success: Ignores VLM verification quality, which is part of the pipeline evaluation.
 - Use only VLM success: Ignores physics ground truth, making evaluation gameable by a VLM that always says "success."
 
@@ -651,6 +661,7 @@ class SimStepResult:
 **Decision**: Model and strategy registration stays in `rove.yaml` through Phase 3. Phase 4 adds `AdapterRegistry.from_foundry(project_client)` that can supplement or replace YAML with `project_client.deployments.list()`. Both sources can coexist.
 
 **Alternatives considered**:
+
 - Start with Foundry API directly: Requires Azure credentials from day 1, blocks local/offline development.
 - Never support Foundry: Abandons the cloud deployment path.
 
@@ -660,7 +671,7 @@ class SimStepResult:
 
 ## 8. Monorepo Directory Structure
 
-```
+```text
 rove/                                  # git root
 ├── pyproject.toml                     # package: rove-eval, entry points
 ├── rove.yaml                          # single source of truth: all model + strategy configs
@@ -1094,6 +1105,7 @@ class SimAdapter(Protocol):
 ### POST /api/evaluations
 
 Request:
+
 ```json
 {
   "task": "Pick the red bracket and place it in bin A",
@@ -1104,6 +1116,7 @@ Request:
 ```
 
 Response (202 Accepted):
+
 ```json
 {
   "evaluation_id": "eval_abc123",
@@ -1118,6 +1131,7 @@ Response (202 Accepted):
 ### GET /api/evaluations/{id}
 
 Response (200 OK, running):
+
 ```json
 {
   "evaluation_id": "eval_abc123",
@@ -1145,6 +1159,7 @@ Response (200 OK, complete) adds `"ranked_results": [...]` sorted by success > l
 ### GET /api/strategies
 
 Response (200 OK):
+
 ```json
 {
   "strategies": [
@@ -1167,7 +1182,8 @@ Response (200 OK):
 Content-Type: `text/event-stream`
 
 Event types:
-```
+
+```text
 event: stage_complete
 data: {"strategy_id": "mock", "stage": "perceive", "latency_ms": 412}
 

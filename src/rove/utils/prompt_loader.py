@@ -171,77 +171,94 @@ class PromptManager:
                 if action.get("actions_truncated"):
                     stage_lines.append(f"  (first 5 + last 5 of {total_steps})")
 
-                # FK analysis provides spatial context when available
-                fk = context.get("fk_analysis")
-                if fk:
+                # Dynamics analysis provides structured evidence when available
+                dyn = context.get("dynamics_analysis")
+                if dyn:
                     stage_lines.append("")
-                    stage_lines.append("--- FORWARD KINEMATICS ANALYSIS (MuJoCo) ---")
-                    ep = fk.get("final_endpoint", [0, 0, 0])
-                    stage_lines.append(
-                        f"Final end-effector position: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}] meters"
-                    )
-                    stage_lines.append(
-                        f"Total displacement: {fk.get('total_displacement_m', 0):.3f}m"
-                    )
-                    stage_lines.append(
-                        "Joint limits: "
-                        + ("all within bounds" if fk.get("joint_limits_ok") else "EXCEEDED")
-                    )
-                    stage_lines.append(
-                        "Self-collision: "
-                        + ("DETECTED" if fk.get("self_collision") else "none detected")
-                    )
-                    stage_lines.append(f"Smoothness score: {fk.get('smoothness_score', 0):.2f}")
-                    stage_lines.append(
-                        f"Max angular velocity: {fk.get('max_velocity_rad_s', 0):.2f} rad/s"
-                    )
-                    stage_lines.append(f"Steps analyzed: {fk.get('steps_analyzed', 0)}")
+                    stage_lines.append("--- PHYSICS EVIDENCE (MuJoCo Dynamics) ---")
+                    mode = dyn.get("analysis_mode", "unknown")
+                    stage_lines.append(f"Analysis mode: {mode}")
+                    stage_lines.append("")
 
-                    traj = fk.get("endpoint_trajectory", [])
-                    if traj:
-                        stage_lines.append("")
-                        stage_lines.append("End-effector trajectory (sample):")
-                        for i, pt in enumerate(traj[:5]):
+                    # Evidence items
+                    for item in dyn.get("evidence", []):
+                        field = item.get("field", "")
+                        value = item.get("value")
+                        conf = item.get("confidence", "")
+                        source = item.get("source", "")
+                        detail = item.get("detail", "")
+
+                        if field == "endpoint_trajectory":
+                            traj = value or []
+                            if traj:
+                                stage_lines.append(
+                                    f"EE trajectory: {traj[0]} → {traj[-1]} "
+                                    f"({len(traj)} points) [confidence: {conf}, source: {source}]"
+                                )
+                                for i, pt in enumerate(traj[:5]):
+                                    stage_lines.append(
+                                        f"  step {i + 1}: [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}]m"
+                                    )
+                                if len(traj) > 5:
+                                    stage_lines.append(f"  ... ({len(traj)} total)")
+                        else:
+                            label = field.replace("_", " ").title()
+                            detail_str = f" — {detail}" if detail else ""
                             stage_lines.append(
-                                f"  step {i + 1}: [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}]m"
+                                f"{label}: {'UNKNOWN / NOT COMPUTED' if value is None else value}{detail_str} "
+                                f"[confidence: {conf}, source: {source}]"
                             )
-                        if len(traj) > 5:
-                            stage_lines.append(f"  ... ({len(traj)} total steps)")
+
+                    # Summary stats
+                    summary = dyn.get("summary", {})
+                    if summary:
+                        stage_lines.append("")
+                        ep = summary.get("final_endpoint", [0, 0, 0])
+                        stage_lines.append(
+                            f"Final endpoint: [{ep[0]:.3f}, {ep[1]:.3f}, {ep[2]:.3f}]m"
+                        )
+                        stage_lines.append(
+                            f"Displacement: {summary.get('total_displacement_m', 0):.3f}m, "
+                            f"smoothness: {summary.get('smoothness_score', 0):.2f}, "
+                            f"steps: {summary.get('steps_analyzed', 0)}"
+                        )
+
+                    # Gripper events
+                    gevts = dyn.get("gripper_events", [])
+                    if gevts:
+                        stage_lines.append(
+                            "Gripper: "
+                            + ", ".join(f"{e['type']} at step {e['step']}" for e in gevts)
+                        )
+
+                    # Not computed
+                    for nc in dyn.get("not_computed", []):
+                        stage_lines.append(
+                            f"NOT COMPUTED: {nc.get('field', '?')} — {nc.get('reason', '')}"
+                        )
 
                     stage_lines.append("")
                     stage_lines.append(
-                        "IMPORTANT: FK analysis provides SPATIAL CONTEXT for the VLA trajectory."
-                        " You can now reason about WHERE the robot arm moves, not just the raw deltas."
-                        " Use the end-effector positions to assess:\n"
-                        "- Does the trajectory reach the target object's perceived position?\n"
-                        "- Does the lift height clear obstacles?\n"
-                        "- Is the placement position near the goal?\n"
-                        "- Do joint limit violations or self-collisions indicate an unsafe plan?\n"
-                        "Cross-reference FK positions with the PERCEIVE stage's object positions."
+                        "Use evidence confidence levels to calibrate your assessment. "
+                        "'hard' means computed for the supplied model and state, not real-world ground truth. Unknown is neither pass nor fail. "
+                        "Cross-reference dynamics positions with PERCEIVE object positions."
                     )
                 else:
                     stage_lines.append("")
                     stage_lines.append(
-                        "IMPORTANT: Without before/after images from a simulator,"
-                        " you CANNOT determine whether the trajectory reached the"
-                        " correct object or destination. Assess action PLAUSIBILITY,"
-                        " not action SUCCESS. Evaluate what IS observable:\n"
-                        "- Does the gripper open/close pattern match the task"
-                        " (e.g., pick-and-place needs close->open)?\n"
-                        "- Is the number of steps reasonable?\n"
-                        "- Are the delta magnitudes physically plausible?\n"
-                        "- Does the trajectory show distinct phases (approach,"
-                        " grasp, transport, place)?\n"
-                        "- How faithfully does the VLA trajectory follow the planned steps?\n"
-                        "Do NOT fail the act stage solely because you cannot verify"
-                        " the exact target position from delta values alone."
+                        "No dynamics data available. Assess action PLAUSIBILITY "
+                        "from observable trajectory features only. "
+                        "Set physics-dependent fields (bounds_check, dynamics_consistency, "
+                        "workspace_reachability, safety_assessment) to null."
                     )
 
                 stage_lines.append("")
                 stage_lines.append(
-                    "Return an 'action_plausibility' object with: bounds_check (bool),"
-                    " smoothness (bool), gripper_consistency (bool),"
-                    " plan_alignment (float 0-1), reasoning (string)."
+                    "Return an 'action_plausibility' object with float 0-1 or null: "
+                    "bounds_check, smoothness, gripper_consistency, plan_alignment, "
+                    "workspace_reachability, task_completion_plausibility, "
+                    "dynamics_consistency, safety_assessment, evidence_quality, reasoning. "
+                    "Set fields to null when you lack evidence to assess them."
                 )
             else:
                 stage_lines.append(
@@ -287,6 +304,68 @@ class PromptManager:
             ground_truth_section="\n".join(gt_lines),
             ground_truth_output_spec=_GT_OUTPUT_SPEC if ground_truth else "",
         )
+
+    def render_verify_loop_system(self, **_kwargs) -> str:
+        """System prompt for the agentic verify loop.
+
+        Single unified prompt handles all evidence levels (full dynamics,
+        partial, none). The LLM reasons about evidence quality directly.
+        """
+        return self.load("verify_agent_loop_system")
+
+    def render_verify_loop_user(self, task: str, action_summary: str, robot_spec: str = "") -> str:
+        """User prompt for the agentic verify loop with action data and robot spec."""
+        return self.render(
+            "verify_agent_loop_user",
+            task=task,
+            action_summary=action_summary,
+            robot_spec=robot_spec,
+        )
+
+    @staticmethod
+    def format_action_summary(action: dict) -> str:
+        """Format a compact VLA output description for the verify loop user prompt."""
+        action_type = action.get("action_type", "unknown")
+        num_steps = action.get("num_steps", 0)
+        confidence = action.get("confidence", 0.0)
+
+        lines = [
+            f"Action type: {action_type}",
+            f"Steps: {num_steps}",
+            f"VLA confidence: {confidence:.2f}",
+        ]
+
+        actions = action.get("actions", [])
+        if actions and isinstance(actions[0], list):
+            dof = len(actions[0])
+            lines.append(f"DOF: {dof}")
+
+            # Gripper events
+            gripper_events = action.get("gripper_events", [])
+            if gripper_events:
+                n_close = sum(1 for e in gripper_events if e.get("action") == "close")
+                n_open = sum(1 for e in gripper_events if e.get("action") == "open")
+                lines.append(f"Gripper events: {n_close} grasp(es), {n_open} release(s)")
+                for evt in gripper_events[:5]:
+                    lines.append(
+                        f"  Step {evt['step']}/{num_steps}: "
+                        f"gripper {evt['action']} (value={evt.get('grip_value', 0):.3f})"
+                    )
+
+            # Sample first/last step
+            if len(actions) >= 2:
+                first = ", ".join(f"{v:+.4f}" for v in actions[0])
+                last = ", ".join(f"{v:+.4f}" for v in actions[-1])
+                lines.append(f"First step: [{first}]")
+                lines.append(f"Last step:  [{last}]")
+
+        elif action_type == "tool_calls":
+            tool_calls = action.get("tool_calls", [])
+            lines.append(f"Tool calls: {len(tool_calls)}")
+            for tc in tool_calls[:5]:
+                lines.append(f"  - {tc.get('tool', '?')}({tc.get('args', {})})")
+
+        return "\n".join(lines)
 
 
 class _SafeDict(dict):
