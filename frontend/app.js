@@ -3984,7 +3984,13 @@ function renderDynamics(container, o) {
     });
     var assumptions = document.createElement("p");
     assumptions.className = "text-xs text-gray-500 mt-2";
-    assumptions.textContent = "Model diagnostics only. " + JSON.stringify(o.assumptions || {});
+    var modelAssumptions = o.assumptions || {};
+    assumptions.textContent = "Model diagnostics only. Initial joint state: " +
+      (modelAssumptions.initial_state === "provided" ? "provided" : "model default") +
+      ". Action timing: " + (modelAssumptions.action_timing || "unknown") +
+      ". End effector: last model body. " +
+      (modelAssumptions.model_simplified ? "Geometry was simplified. " : "") +
+      "This is not observed robot execution.";
     container.appendChild(assumptions);
     return;
   }
@@ -4850,6 +4856,9 @@ function renderVerify(container, o) {
     } else if (evidenceQuality === "estimated") {
       apProvider.className = "text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded";
       apProvider.textContent = "Estimated";
+    } else if (evidenceQuality === "mock" || evidenceQuality === "partial") {
+      apProvider.className = "text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = evidenceQuality === "mock" ? "Synthetic mock scores" : "Partial model evidence";
     } else if (hasDynamics) {
       apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
       apProvider.textContent = "MuJoCo Dynamics";

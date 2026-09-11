@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### OSS evidence workbench and safer local defaults
 
-Integrates the newer evaluation branch with provenance, stage comparisons and action-space metadata. Missing physics evidence now stays unknown throughout reports, prompts and the dashboard; torque/payload feasibility is explicitly unavailable pending a validated physical contract. Local access restrictions, refreshed dependencies, CI and asset notices prepare the code for an OSS release. Historical repository publication remains a separate cleanup step.
+Integrates the newer evaluation branch with provenance, stage comparisons and action-space metadata. Missing physics evidence now stays unknown throughout reports, prompts and the dashboard; torque/payload feasibility is explicitly unavailable pending a validated physical contract. Local access restrictions, refreshed dependencies, CI and asset notices prepare the code for an OSS release. Historical repository publication remains a separate cleanup step. *(PR #12)*
 
 ## 2026-03-03 (development branch notes)
 
