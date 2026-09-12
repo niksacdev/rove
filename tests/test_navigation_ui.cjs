@@ -59,7 +59,9 @@ test("root journey routes configuration and quick runs without losing an in-prog
     assert.equal(el("quickWelcome").hidden,true);
     assert.equal(el("tab-content-mock"),output);
     assert.match(output.textContent,/Streamed result/);
-    w.testRoot.setRunning(false);w.testRoot.switchView("home");w.testRoot.setupTabs(["next"]);w.testRoot.restoreEvaluation();
+    w.testRoot.setRunning(false);el("chatArea").scrollTop=900;w.testRoot.switchView("home");
+    assert.equal(el("chatArea").scrollTop,0);
+    w.testRoot.setupTabs(["next"]);w.testRoot.restoreEvaluation();
     assert.ok(el("quickWelcome"));assert.ok(el("tab-content-next"));
     assert.equal(calls.some(c=>c.method!=="GET"),false);
   } finally {w.close();}

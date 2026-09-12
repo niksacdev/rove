@@ -695,6 +695,8 @@ function switchView(view, push = true) {
       // Handled by showHistoryEntry or restoreEvaluation
       break;
   }
+  // Each destination starts at its heading; trial restoration keeps its own scroll behavior.
+  chatArea.scrollTop = 0;
 }
 
 function initGettingStarted() {
