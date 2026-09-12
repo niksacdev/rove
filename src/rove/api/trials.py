@@ -95,6 +95,7 @@ def create_trial_router(store: Callable[[], TrialStore]) -> APIRouter:
     async def export_exchange():
         import asyncio
         import tempfile
+        import threading
         from pathlib import Path
 
         from starlette.background import BackgroundTask
@@ -103,11 +104,40 @@ def create_trial_router(store: Callable[[], TrialStore]) -> APIRouter:
 
         directory = tempfile.TemporaryDirectory(prefix="rove-exchange-")
         path = Path(directory.name) / "rove-exchange.zip"
+        ownership_lock = threading.Lock()
+        ownership = {"finished": False, "abandoned": False, "cleaned": False}
+
+        def release_if_abandoned(**changes):
+            # Cancelling to_thread does not stop its executor thread. Keep the
+            # directory alive in that thread and hand cleanup off exactly once,
+            # regardless of which side observes completion/cancellation first.
+            with ownership_lock:
+                ownership.update(changes)
+                cleanup = (
+                    ownership["finished"] and ownership["abandoned"] and not ownership["cleaned"]
+                )
+                if cleanup:
+                    ownership["cleaned"] = True
+            if cleanup:
+                directory.cleanup()
+
+        def build_export(root):
+            try:
+                return export_bundle(root, path)
+            finally:
+                release_if_abandoned(finished=True)
+
         try:
-            await asyncio.to_thread(export_bundle, store().root, path)
+            await asyncio.to_thread(build_export, store().root)
+        except asyncio.CancelledError:
+            release_if_abandoned(abandoned=True)
+            raise
         except (ValueError, OSError) as error:
             directory.cleanup()
             raise HTTPException(409, str(error)) from error
+        except Exception:
+            directory.cleanup()
+            raise
         return FileResponse(
             path,
             media_type="application/zip",

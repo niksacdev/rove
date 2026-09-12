@@ -19,6 +19,7 @@ from rove.trials.store import SCHEMA_VERSION, TrialStore
 
 FORMAT_VERSION = 1
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_MANIFEST_BYTES = 8 * 1024 * 1024
 TABLES = {
     "trials": (
         "trials",
@@ -122,12 +123,17 @@ def export_bundle(root: Path, output: Path) -> dict:
         "assets": assets,
         "note": "Private evaluation data. JSON columns retain their original payloads; no grades, timestamps or lineage are regenerated.",
     }
+    manifest_bytes = canonical_json(manifest).encode()
+    if len(manifest_bytes) > MAX_MANIFEST_BYTES:
+        raise ValueError("Exchange manifest exceeds limit")
+    if total + len(manifest_bytes) > MAX_ARCHIVE_BYTES:
+        raise ValueError("Exchange exceeds 512 MiB; partition the dataset before export")
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(prefix=".rove-export-", dir=output.parent)
     os.close(fd)
     try:
         with zipfile.ZipFile(temp, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("manifest.json", canonical_json(manifest))
+            archive.writestr("manifest.json", manifest_bytes)
             for path, data in files.items():
                 archive.writestr(path, data)
         # Link provides no-clobber publication, including concurrent exporters.
@@ -198,7 +204,7 @@ def import_bundle(archive_path: Path, destination: Path) -> dict:
                 raise ValueError("Duplicate archive entries or missing manifest")
             if sum(info.file_size for info in archive.infolist()) > MAX_ARCHIVE_BYTES:
                 raise ValueError("Exchange expands beyond 512 MiB")
-            if archive.getinfo("manifest.json").file_size > 8 * 1024 * 1024:
+            if archive.getinfo("manifest.json").file_size > MAX_MANIFEST_BYTES:
                 raise ValueError("Exchange manifest exceeds limit")
             manifest = json.loads(archive.read("manifest.json"))
             if (
