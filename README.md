@@ -40,10 +40,16 @@ Mock outputs demonstrate the workflow; they do not measure a robot's ability.
 
 Open **Cases** to evaluate your own PNG/JPEG images and task instructions:
 
-1. Import a case or load the [synthetic customer examples](examples/customer-cases/README.md).
+1. Choose from the 49 bundled **Sample cases**, import your own case, or load the [synthetic customer cases](examples/customer-cases/README.md).
 2. Define success criteria, choose strategies and preview the planned trials and measures.
 3. Run a baseline, inspect its trace, and rate individual outputs when SME judgment is required.
 4. Freeze exact cases/reviews, then compare a candidate configuration under the same conditions.
+
+The existing gallery is imported into versioned Cases automatically. Sample case links
+open the exact imported revision; source/license metadata, robot state and reference
+annotations are retained. Re-importing preserves user edits and creates no extra trials.
+Reference annotations are unreviewed source material, kept separate from candidate
+inputs and observed episode evidence. Historical runs remain in History.
 
 Missing or disputed assessments stay unknown. An accepted plan is not observed
 robot completion. **Trial history** can promote a finished quick run into a reusable

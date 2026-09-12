@@ -57,6 +57,16 @@ async def lifespan(_app):
                         "Legacy history import failed; original file remains unchanged"
                     )
         try:
+            from rove.datasets.library import sync_library
+
+            result = await asyncio.to_thread(sync_library, _trial_root, _data_dir)
+            if result["summary"]["unavailable"]:
+                logger.warning(
+                    "Some sample cases could not be imported; inspect the sample library"
+                )
+        except (ValueError, OSError):
+            logger.exception("Sample library import failed; original files remain unchanged")
+        try:
             yield
         finally:
             tasks = list(_background_tasks)
@@ -614,12 +624,20 @@ async def list_examples(eval_category: str | None = None):
     manifest = _data_dir / "manifest.json"
     if not manifest.exists():
         return {"examples": [], "categories": []}
-    examples = json.loads(manifest.read_text())
+    from rove.datasets.library import sync_library
+
+    try:
+        library = await asyncio.to_thread(sync_library, _trial_root, _data_dir)
+    except (ValueError, OSError) as error:
+        raise HTTPException(422, "Sample library could not be loaded") from error
+    examples = library["examples"]
 
     # Build category summary counts
     cat_counts: dict[str, int] = {}
     for ex in examples:
         cat = ex.get("eval_category", "uncategorized")
+        if not isinstance(cat, str) or not cat.strip():
+            cat = "uncategorized"
         cat_counts[cat] = cat_counts.get(cat, 0) + 1
     categories = [{"name": k, "count": v} for k, v in sorted(cat_counts.items())]
 
@@ -627,7 +645,7 @@ async def list_examples(eval_category: str | None = None):
     if eval_category:
         examples = [ex for ex in examples if ex.get("eval_category") == eval_category]
 
-    return {"examples": examples, "categories": categories}
+    return {"examples": examples, "categories": categories, "summary": library["summary"]}
 
 
 @app.get("/api/mock-models")

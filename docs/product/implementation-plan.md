@@ -1,6 +1,6 @@
 # ROVE Delivery Plan: From Trial Evidence to Customer Evaluation Workflows
 
-**Status:** Local customer workflow implemented: case intake, success preview, SME review, dataset freezing and baseline comparison. Remaining validation and integrations are listed below.
+**Status:** Local customer workflow implemented; the full accepted plan is not complete. Task-by-task acceptance audit below separates delivered behavior, unfinished local work and deferred integrations.
 **Updated:** 2026-09-12
 **Design:** [Architecture diagram](../architecture/target-architecture.md), [system diagram](../architecture/system-diagram.md), [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md)
 
@@ -41,25 +41,83 @@ checks. The user has authorized implementation PR merges after required checks p
 | 11 / T11 | Optional Azure Monitor and Grafana export profiles | T04; after local milestone | Same trial correlation in external trace views; bounded export and content policies; local use unaffected by exporter failure |
 | 12 / T12 | Versioned analytical exports for Fabric/Delta consumers | T07, T08; customer demand | Export/import preserves revisions, schemas and asset manifests; measured data volumes justify format and connector choices |
 
-### Progress after the customer workflow slice
+### Acceptance audit, 12 September 2026
 
-| Task | Delivered | Remaining before full acceptance |
-| --- | --- | --- |
-| T01 | Pinned SDK `1.0.13` / CLI `1.0.81-9`; real CLI with controlled image/tool/usage/trace responses; offline lifecycle tests | Explicit live provider; Azure identity and deployment validation |
-| T02 | Shared quick/campaign IDs, frozen task/strategy/configuration hashes, SQLite journal, initial observation assets, ownership-aware recovery and idempotent legacy quick import | Archived auxiliary artifacts; complete migration away from compatibility journals |
-| T03 | Optional perceive/plan/verify adapter with fresh candidate/grader scope, bounded lifecycle and direct paths retained | Assistant service tools; explicit robot action/reset contracts; any declared cross-stage memory mode |
-| T04 | Existing exposed stage/tool events plus SDK events and usage persist; source deduplication; optional ROVE trial spans; real SDK/CLI OTLP HTTP 503 collector test preserves the journal and bounds cleanup; Python exporter failures preserve local events | Full application/native/export correlation; blackholed collector or blocked custom exporter behavior; external trace navigation; robot clock/range contracts |
-| T05 | Paginated history, saved snapshots, verdict/measurement inspection, stage-filtered activity, trace details and on-demand observations | Remote recording-range resolution, parallel trace graph and aligned comparison views |
-| T06 | Managed PNG/JPEG intake, immutable cases, success contracts, expected-metric preview and robotics samples | General recordings/video; action-dependent rollout; aggregate campaign targets |
-| T07 | Revision-checked review drafts, immutable corrections, explicit annotations and atomic dataset freezing | Automatic annotation mapping to graders; team authentication and adjudication |
-| T08 | Baseline references, component/case comparison and exploratory quick promotion | Aligned trace graphs; justified statistics for campaign deltas; richer history navigation |
-| T09 | Optional Copilot assistant reads evidence, previews campaigns and requests a host-confirmed launch; this is the accepted local assistant boundary | Live-provider validation; broader import/review/freeze tools only if later justified |
-| T10–T12 | Pending, with the authorization/demand gates below | Live Azure profile, external monitoring profiles and justified analytical export |
+“Complete” means the original task's stated local acceptance is covered. “Partial”
+means useful functionality exists but at least one original acceptance criterion
+remains. “Pending” means the integration deliverable has not been implemented and
+validated. This is a source/test audit, not a claim that every test or live provider
+was rerun during the audit. Original milestone requirements below remain unchanged.
 
-The local workflow now connects customer inputs to inspectable comparisons. Hardware
-execution and remaining runtime/telemetry validation are not implied. [Current implementation](../architecture/current-implementation.md),
+| Task | Status | Delivered evidence | Remaining before full acceptance |
+| --- | --- | --- | --- |
+| T01 | Partial | Pinned SDK `1.0.13` / CLI `1.0.81-9`; real CLI controlled image/tool/usage/trace probe; lifecycle tests | One explicitly configured live provider and measured startup overhead; Azure-specific validation belongs to T10 |
+| T02 | Complete for shared local recording | Pre-execution quick/campaign IDs, frozen task/strategy/configuration hashes, schema migrations, SQLite events, initial managed assets, ownership-aware recovery, idempotent legacy import and backup/restore tests | Auxiliary output/recording bytes are not comprehensively archived; asset-range coverage remains T04/T06 work. Compatibility journals and two databases remain documented implementation choices, not an unimplemented shared identity |
+| T03 | Partial | Hosted perceive/plan/verify, fresh candidate/grader/assistant scopes, typed host tools, bounded cleanup, direct adapters retained | General stage memory/reset and telemetry-coverage contracts; action/reset integration beyond fresh process/session isolation |
+| T04 | Partial | Existing exposed events and SDK usage persist with deduplication; optional trial spans; real SDK/CLI HTTP 503 OTLP collector and Python exporter failure tests preserve journal/cleanup | Full application → native SDK → tool → collector correlation; blackholed collector/blocked exporter behavior; source-clock identity and recording ranges |
+| T05 | Partial | Paginated history, snapshots, measurements, stage-filtered activity, trace IDs and on-demand observations | Parallel activity lanes and complete measurement/criterion-to-recording-range navigation; aligned comparison traces |
+| T06 | Partial | Managed PNG/JPEG intake, immutable cases, contracts and expected-measure preview; synthetic image examples | General episode/trajectory assets with unit/frame/availability validation; action-dependent synthetic execution; aggregate campaign targets. The 49 existing gallery samples now import as immutable Cases |
+| T07 | Complete for review/freezing | Revision-checked drafts, immutable corrections, separate validity/annotation/output reviews, disagreement detection and atomic exact-membership freezes | Stored annotations are not yet consumed through a configured grader mapping. Private reference annotations are exposed separately in the case editor. Team authentication/adjudication is deferred platform scope |
+| T08 | Partial | Immutable baseline references, matching-case/component comparisons, bounded pass estimates, paired regressions, report exports/trends and identity-preserving exploratory promotion | Dedicated named/pinned baseline management, aligned traces and fuller history/report UX; outcome cards, coverage, reliability bounds and expandable evidence are delivered. Selective subset comparisons are not supported; formal delta statistics require justified assumptions before addition |
+| T09 | Partial against original scope | Optional assistant reads evidence, previews campaigns and requests host-confirmed idempotent launch | Full import-to-comparison assistant journey and live-provider validation. Uploads/SME/freeze remain explicit UI actions by current design; this deliberate boundary does not make the original broader acceptance complete |
+| T10 | Pending, external validation gate | Existing Azure adapters are separate from the proposed SDK deployment profile | Authorized Azure/Foundry identity, endpoint, usage, rate-limit and overhead validation |
+| T11 | Pending, external integration | Local optional spans and controlled exporter failure tests provide foundations | Packaged Monitor/Grafana profiles, externally navigable correlation, permissions, redaction and queue/drop/shutdown validation |
+| T12 | Pending, demand-gated | SQLite revision/lineage records and HTML/JSON/CSV reports exist | Versioned analytical manifest with asset lineage, round-trip fidelity and justified Parquet/Delta/Fabric integration |
+
+The core import → baseline → review → freeze → candidate → comparison journey is
+implemented; that does not close every original trace, robotics-evidence, assistant
+or integration requirement. Hardware drivers are deliberately excluded, but the
+missing **action-dependent synthetic rollout** is local accepted work, not a
+hardware-access gate. Unknown or unsupported metrics remain unavailable.
+
+### Regression evidence for delivered behavior
+
+- **T01/T03/T04:** [runtime tests](../../tests/test_copilot_runtime.py) cover fresh
+  role scopes, missing usage, tool context, cancellation and recorder failure.
+  [Telemetry resilience tests](../../tests/test_telemetry_resilience.py), including
+  `test_real_sdk_cli_failed_otlp_collector_keeps_trial_and_usage`, exercise the
+  installed CLI with a controlled HTTP 503 collector. This is not a deployed
+  Azure/Grafana or complete application trace-tree validation.
+- **T02/T05:** [integration tests](../../tests/test_trial_integration.py), including
+  `test_quick_trial_is_recorded_before_execution_and_reopens`, cover durable
+  dispatch, cancellation and campaign recovery. [Store tests](../../tests/test_trial_store.py)
+  cover deduplication, terminal immutability, redaction and legacy rollback;
+  [history UI tests](../../tests/test_history_ui.cjs) cover the implemented inspector.
+- **T06/T07:** [dataset tests](../../tests/test_datasets.py) cover immutable inputs,
+  asset integrity, review conflicts, exact freezes and rollback, including
+  `test_v1_backup_restores_assets_and_migrates_without_losing_history` and
+  `test_review_finalization_serializes_after_atomic_freeze`.
+- **T08:** `test_customer_baseline_review_freeze_ablation_journey` in the
+  [customer workflow tests](../../tests/test_customer_workflow.py) covers the API
+  journey. [Comparison tests](../../tests/test_comparison.py) distinguish intentional
+  model changes from invalid assessment drift. [Review/report tests](../../tests/test_workflow_review.py)
+  cover disagreement beyond one page and matching report/history assessments;
+  [promotion tests](../../tests/test_promotion.py) verify unchanged trial counts.
+- **T09:** [assistant tests](../../tests/test_assistant.py) cover the implemented
+  read/preview tool boundary, host confirmation, stale inputs and duplicate launches.
+  They do not establish the broader assistant journey or live-provider quality.
+
+### Remaining work in recommended order
+
+1. The sample library, private-annotation form and report redesign are validated
+   locally: 49 imported Cases, unchanged historical trial count, and regression
+   coverage for source revisions, unknown outcomes and offline reports.
+2. Complete local evidence coverage: managed auxiliary assets/ranges, explicit
+   source clocks and stage memory/reset/coverage contracts, then parallel and
+   aligned trace navigation with end-to-end native/application correlation.
+3. Deliver action-dependent synthetic rollout fixtures and explicit reusable-label
+   grader bindings. Neither archived episode outcomes nor accepted baseline
+   outputs may silently become a new candidate's physical success.
+4. Complete baseline pin/history/report acceptance. Add statistical comparisons
+   only when repeat structure and independence assumptions support them.
+5. Validate one configured live SDK provider and explicitly decide whether to
+   extend the deliberately bounded assistant toward the original full journey.
+6. Pursue T10/T11 only in an authorized target environment and T12 when a concrete
+   analytical consumer justifies its format and fidelity contract.
+
+See [current implementation](../architecture/current-implementation.md),
 [setup](../TRIAL_HISTORY.md) and [compatibility evidence](../architecture/copilot-compatibility.md)
-describe what can be used and tested now.
+for usable interfaces and exact runtime limits.
 
 ```mermaid
 flowchart LR
@@ -163,11 +221,13 @@ Read/preview tools and host-generated operation/confirmation identities enforce
 this separation. Confirming revalidates the exact inputs and configuration.
 
 This scoped assistant completes the local prepare → launch → inspect interaction.
-The broader original scope below is retained as a future option, not an outstanding
-requirement to automate SME decisions. Add further mutations only when their user
-value and approval semantics are clear. Live-provider validation remains open.
+The broader original scope below remains undelivered, so T09 is partial against
+the accepted plan. This does not require automating SME judgment: any extension
+must preserve explicit human decisions and exact-revision confirmation. The current
+boundary is an intentional implementation decision, not evidence that the original
+full journey was completed. Live-provider validation remains open.
 
-**Original broader scope and future options:**
+**Original broader scope, retained for acceptance tracking:**
 
 Expose the tested application services as Copilot tools for import, validation,
 campaign creation, inspection and comparison. The UI and assistant use the same
@@ -175,7 +235,7 @@ validation and operation IDs. Draft suggestions become frozen configuration when
 the user launches the evaluation; the assistant cannot silently change that
 configuration during execution. Proposed changes create a new candidate revision.
 
-**Acceptance for any future broader scope:** complete the same customer journey through the assistant, with
+**Original acceptance (not yet complete):** complete the same customer journey through the assistant, with
 traceable tool actions and evidence-linked explanations. Duplicate requests do not
 duplicate campaigns. Review/freeze actions operate on exact revisions. Candidate
 agents cannot access private labels through assistant or grader sessions.

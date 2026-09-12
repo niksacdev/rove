@@ -8,6 +8,20 @@ function parseObject(text, label) {
   return value;
 }
 
+function buildCaseMetadata(input) {
+  return {name: input.name.trim(), task: input.task.trim(), candidate_context: parseObject(input.context || "", "Candidate context"), conditions: parseObject(input.conditions || "", "Conditions"), recorded_evidence: parseObject(input.episode || "", "Recorded evidence"), reference_data: parseObject(input.references || "", "Reference annotations")};
+}
+
+function caseSourceLabels(item) {
+  const conditions = item.conditions || {};
+  const labels = [];
+  if (conditions.library === "bundled-gallery") labels.push("Bundled sample");
+  const source = typeof conditions.source === "string" ? conditions.source : conditions.source?.dataset;
+  if (typeof source === "string" && source.trim()) labels.push(source);
+  if (typeof conditions.eval_category === "string") labels.push(conditions.eval_category.replace(/_/g, " "));
+  return labels;
+}
+
 function buildContract(input) {
   if (input.json?.trim()) return parseObject(input.json, "Success contract");
   const criterion = {id: "task_acceptance", description: input.criteria.trim(), assessment: input.assessment, required: true};
@@ -71,7 +85,7 @@ function evidenceHref(value) {
   return value;
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = {parseObject, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref};
+if (typeof module !== "undefined" && module.exports) module.exports = {parseObject, buildCaseMetadata, caseSourceLabels, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref};
 
 if (typeof document !== "undefined") (() => {
   const $ = id => document.getElementById(id);
@@ -169,6 +183,9 @@ if (typeof document !== "undefined") (() => {
         checkbox.addEventListener("change", () => { if (checkbox.checked) state.selected.set(caseId(item), item); else state.selected.delete(caseId(item)); selectionChanged(); });
         const anchor = link("", `/static/datasets.html?case=${encodeURIComponent(caseId(item))}`); anchor.className = "case-link"; anchor.dataset.caseId = caseId(item);
         anchor.append(node("strong", item.name), node("span", item.task, "muted"), node("span", `Revision ${item.revision || "unknown"} · ${item.readiness?.assessment || "Unreviewed"}`, "badge"));
+        const sources = node("span", null, "case-source-labels");
+        for (const source of caseSourceLabels(item)) sources.append(node("span", source, "badge"));
+        if (sources.childNodes.length) anchor.append(sources);
         anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); openCase(caseId(item), true); });
         row.append(checkbox, anchor); $("caseList").append(row);
       }
@@ -211,12 +228,21 @@ if (typeof document !== "undefined") (() => {
     const container = $("caseInspector"); container.replaceChildren();
     const title = node("h2", item.name); title.id = "caseDetailHeading"; title.tabIndex = -1;
     container.append(title, node("p", item.task, "detail-instruction"), node("p", `Revision ${item.revision || "unknown"} · ${date(item.created_at)}`, "muted"));
+    const sources = node("div", null, "case-source-labels");
+    for (const source of caseSourceLabels(item)) sources.append(node("span", source, "badge"));
+    if (sources.childNodes.length) container.append(sources);
     if (item.image_asset && /^[a-f0-9]{64}$/.test(item.image_asset.sha256 || "")) {
       const load = button("Load observation", () => { load.disabled = true; const image = node("img"); image.className = "observation-image"; image.alt = `Observation for ${item.name}`; image.addEventListener("load", () => load.remove()); image.addEventListener("error", () => { image.remove(); load.disabled = false; load.textContent = "Image unavailable — retry"; }); image.src = `/api/trial-assets/${item.image_asset.sha256}`; load.after(image); }); container.append(load);
     }
-    container.append(objectDetails("Inputs, evidence and provenance", item));
+    if (Object.keys(item.reference_data || {}).length) {
+      const references = objectDetails("Reference annotations (unreviewed)", item.reference_data);
+      references.insertBefore(node("p", "Imported reference material has not been approved by an expert. It is kept separate from candidate inputs and recorded episode evidence. Review the case before creating reusable labels.", "muted"), references.lastChild);
+      container.append(references);
+    }
+    const {reference_data, ...provenance} = item;
+    container.append(objectDetails("Inputs, evidence and provenance", provenance));
     container.append(button("Create case revision", () => {
-      state.caseEdit = item; $("caseName").value = item.name; $("caseTask").value = item.task; $("candidateContext").value = JSON.stringify(item.candidate_context || {}, null, 2); $("caseConditions").value = JSON.stringify(item.conditions || {}, null, 2); $("episodeEvidence").value = JSON.stringify(item.recorded_evidence || {}, null, 2); $("caseImage").value = ""; $("caseImage").required = false;
+      state.caseEdit = item; $("caseName").value = item.name; $("caseTask").value = item.task; $("candidateContext").value = JSON.stringify(item.candidate_context || {}, null, 2); $("caseConditions").value = JSON.stringify(item.conditions || {}, null, 2); $("episodeEvidence").value = JSON.stringify(item.recorded_evidence || {}, null, 2); $("referenceData").value = JSON.stringify(item.reference_data || {}, null, 2); $("caseImage").value = ""; $("caseImage").required = false;
       $("caseEditStatus").textContent = `Creating a new revision from ${caseId(item)}. Existing trials and frozen datasets keep their original inputs. A replacement image is optional.`;
       $("saveCase").textContent = "Save new revision"; $("cancelCaseRevision").hidden = false; $("importPanel").open = true; $("caseName").focus();
     }));
@@ -435,7 +461,7 @@ if (typeof document !== "undefined") (() => {
     event.preventDefault(); $("saveCase").disabled = true;
     try {
       const image = $("caseImage").files[0]; if (!image && !state.caseEdit) throw new Error("Select an observation image."); if (image?.size > 16 * 1024 * 1024) throw new Error("Choose an image no larger than 16 MiB.");
-      const metadata = {name: $("caseName").value.trim(), task: $("caseTask").value.trim(), candidate_context: parseObject($("candidateContext").value, "Candidate context"), conditions: parseObject($("caseConditions").value, "Conditions"), recorded_evidence: parseObject($("episodeEvidence").value, "Recorded evidence")};
+      const metadata = buildCaseMetadata({name: $("caseName").value, task: $("caseTask").value, context: $("candidateContext").value, conditions: $("caseConditions").value, episode: $("episodeEvidence").value, references: $("referenceData").value});
       if (state.caseEdit) metadata.expected_head_revision_id = state.caseEdit.head_revision_id;
       const data = new FormData(); if (image) data.append("image", image); data.append("metadata", JSON.stringify(metadata)); const saved = await request(state.caseEdit ? `/api/cases/${encodeURIComponent(state.caseEdit.case_id)}/revisions` : "/api/cases", {method: "POST", body: data});
       for (const [id, item] of state.selected) if (item.case_id === saved.case_id) state.selected.delete(id);

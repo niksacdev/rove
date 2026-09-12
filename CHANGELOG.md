@@ -8,6 +8,18 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Sample cases and clearer campaign reports
+
+All 49 bundled gallery samples now become versioned Cases with original source metadata and private reference annotations preserved. Campaign reports use ROVE themes, outcome and coverage cards, reliability bounds and expandable evidence; the implementation plan now distinguishes delivered local capabilities from unfinished acceptance criteria.
+
+### Customer evaluation workflow
+
+Import customer cases, define success contracts, review outputs, freeze dataset revisions and compare a candidate with its baseline. The optional assistant previews campaigns and requests confirmed launches. *(PR #18)*
+
+### Durable trials and hosted runtime
+
+Quick evaluations and campaigns retain trial identities, frozen configuration and available trace evidence in durable history. Optional Copilot stages run through the shared runtime while existing customer adapters remain directly evaluable. *(PR #17)*
+
 ### Copilot runtime and evaluation-system architecture
 
 Define Copilot SDK as the shared runtime for ROVE-owned agents while preserving direct evaluation of customer systems. New architecture, system and delivery diagrams connect durable trial evidence to optional Azure Monitor, Grafana and future Fabric integrations; all runtime work remains explicitly pending. *(PR #16)*

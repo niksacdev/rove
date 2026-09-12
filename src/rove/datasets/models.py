@@ -17,6 +17,7 @@ class CaseInput(StrictModel):
     candidate_context: dict = Field(default_factory=dict)
     conditions: dict = Field(default_factory=dict)
     recorded_evidence: dict = Field(default_factory=dict)
+    reference_data: dict = Field(default_factory=dict)
 
 
 class Criterion(StrictModel):

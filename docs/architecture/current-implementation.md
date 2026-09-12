@@ -1,7 +1,8 @@
 # Current Implementation
 
-**Checked:** 12 September 2026, against the customer evaluation workflow
-slice. This document describes the source delivered with this change; the
+**Checked:** 12 September 2026, against the customer evaluation workflow and
+original T01–T12 acceptance. The 49 bundled samples now import as versioned Cases; private reference
+annotations and the report redesign have regression coverage. The
 [delivery plan](../product/implementation-plan.md) records remaining work.
 
 ROVE runs configurable robotics evaluation pipelines from a local dashboard and a
@@ -230,8 +231,9 @@ minutes or server restart. Operation IDs prevent duplicate campaign creation.
 The assistant uses the same evaluation services; it does not decide trial scores.
 
 The read/preview boundary is deliberate for the local milestone: media selection,
-case changes and expert review remain explicit user actions. Further mutation tools
-are optional future extensions, not permission for an assistant to invent SME judgments.
+case changes and expert review remain explicit user actions. The original T09
+import-to-comparison assistant acceptance is therefore only partially implemented. Further tools require explicit user-directed operations;
+that original scope never authorizes inventing SME judgments.
 
 The pinned SDK/runtime and provider configuration remain required. The assistant
 status check verifies configuration/runtime availability, not deployed model
@@ -251,9 +253,13 @@ regression coverage; a live Azure/provider workflow remains a validation gate.
 Required recording failures fail execution visibly rather than silently discard
 evidence. Size/count limits are bounded; missing source telemetry cannot be
 reconstructed. The authoritative journal does not require an external monitoring
-account. Controlled fixtures exercise exporter separation, but a complete real
-collector-outage and shutdown test is pending. Native SDK tracing must be configured
-when distributed runtime/tool correlation is required.
+account. The actual pinned SDK/CLI has a controlled HTTP 503 OTLP collector test, with
+bounded cleanup and retained events/usage after reopening the journal; Python
+exporter exceptions and failure results are covered too. These concrete outage
+tests do not establish blackholed connections, blocked custom exporters, or a
+complete application → native SDK → tool → external collector trace tree. Native
+SDK tracing must be configured when distributed runtime/tool correlation is required.
+See [telemetry resilience tests](../../tests/test_telemetry_resilience.py).
 
 Predicted trajectories, requested calls, acknowledgements and observed outcomes are
 different evidence. Process cancellation does not establish physical robot stopping.
@@ -272,7 +278,8 @@ unknowns prevent point estimates. The
 [evidence summary](../../src/rove/benchmarks/evidence.py) groups check results and
 measurements with their units and quality.
 
-[Reports](../../src/rove/benchmarks/report.py) provide offline HTML charts, JSON
+[Reports](../../src/rove/benchmarks/report.py) provide themed outcome and coverage
+cards, strategy comparisons, reliability bounds and expandable evidence, plus JSON
 evidence and a CSV row per attempt. Historical curves require the same strategy ID
 and matching comparison fingerprints. Customer campaigns additionally use an
 explicit baseline/strategy reference and
@@ -281,6 +288,12 @@ case revisions, success contract, verification and repetition conditions. Rename
 strategies can compare when their assessment conditions match. Changed graders,
 conditions or unattributed runtime changes are exposed as incompatibilities;
 the broad source fingerprint remains conservative about intentional code changes.
+
+A candidate points to an existing baseline campaign/strategy; this is usable baseline
+lineage, not a separate named/pinned baseline registry. Comparisons require the full
+matching case cohort; selecting arbitrary overlapping subsets is not implemented.
+Paired improvement/regression counts are descriptive, not a causal or statistical
+significance claim. Parallel/aligned trace navigation remains pending.
 
 The [workflow service](../../src/rove/benchmarks/workflow.py) previews expected
 measures and projects per-output SME assessments onto retained attempts while

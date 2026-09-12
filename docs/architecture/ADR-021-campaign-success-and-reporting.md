@@ -143,3 +143,12 @@ case/strategy denominators, and re-grading with missing evidence. Verify report
 details remain accessible and preserve evidence distinctions in exports. These
 are full acceptance criteria; aggregate targets and richer evidence aggregation
 remain beyond the implemented local setup and comparison UI.
+
+## Report presentation
+
+The offline HTML report now leads with outcome and verdict-coverage cards, strategy
+comparisons and reliability bounds. Expandable sections retain exact estimates,
+check measurements and trial evidence; dark/light themes match the workspace.
+The presentation consumes existing report data and does not change scoring, treat
+unknown as zero, or reinterpret uncertainty bounds as confidence intervals.
+See [presentation tests](../../tests/test_report_presentation.py).

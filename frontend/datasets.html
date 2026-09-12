@@ -20,7 +20,7 @@
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/><circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/></svg>
       <strong>ROVE</strong><span>/</span><span>Cases and datasets</span>
     </a>
-    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/datasets.html" aria-current="page">Cases</a><a href="/static/benchmarks.html">Benchmarks</a><a href="/static/history.html">History</a></nav>
+    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/datasets.html" aria-current="page">Cases</a><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html">History</a></nav>
     <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
   </header>
   <main id="main">
@@ -49,6 +49,10 @@
           <label>Evaluation conditions (JSON)<textarea id="caseConditions" rows="2" spellcheck="false" placeholder="Optional environment and test conditions"></textarea></label>
           <label>Candidate-visible context (JSON)<textarea id="candidateContext" rows="2" spellcheck="false" placeholder="Optional constraints and observations; do not include private labels"></textarea></label>
         </details>
+        <details><summary>Reference annotations (unreviewed)</summary>
+          <p class="muted">Keep source labels and expected answers separate from observations and episode measurements. Saving these references does not approve them or score an output.</p>
+          <label>Private reference material (JSON)<textarea id="referenceData" rows="4" spellcheck="false" placeholder="Optional source annotations; never included in candidate inputs"></textarea></label>
+        </details>
         <div class="form-actions"><button id="saveCase" type="submit">Save case</button><button id="cancelCaseRevision" type="button" class="secondary" hidden>Cancel revision</button><button id="loadExamples" type="button" class="secondary">Try robotics sample cases</button></div>
       </form>
     </details>
@@ -56,6 +60,7 @@
       <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">
         <div class="panel-heading"><h2 id="casesHeading">Cases</h2><button id="refreshCases" type="button" class="secondary">Refresh</button></div>
         <p class="muted">Select cases for a baseline or frozen dataset. Open a case to inspect and review it.</p>
+        <p class="muted"><a href="/?view=examples">Browse sample cases by category →</a> Bundled inputs retain their source and immutable revision; campaigns are created separately.</p>
         <div class="selection-bar"><label><input id="selectPage" type="checkbox"> Select this page</label><span id="selectionCount" class="muted">0 selected</span></div>
         <p id="caseListStatus" class="muted" role="status" aria-live="polite">Loading cases…</p>
         <ul id="caseList" class="case-list"></ul>
