@@ -388,9 +388,10 @@ class EvaluationPipeline:
             # Set evidence_quality if not already set
             if not ap.evidence_quality or ap.evidence_quality == "hard":
                 ap.evidence_quality = (
-                    "hard" if evidence_map and all(
-                        e.get("confidence") == "hard" for e in evidence_map.values()
-                    ) else "partial"
+                    "hard"
+                    if evidence_map
+                    and all(e.get("confidence") == "hard" for e in evidence_map.values())
+                    else "partial"
                 )
 
             # Log miscalibration warning (don't override)
@@ -789,6 +790,7 @@ class EvaluationPipeline:
                 success=False,
                 confidence=0.0,
                 reasoning="Empty response from verify model",
+                verdict_valid=False,
                 verify_turns=turn,
             )
 
@@ -815,6 +817,7 @@ class EvaluationPipeline:
             success=False,
             confidence=0.0,
             reasoning=f"Could not parse verify response: {response_text[:500]}",
+            verdict_valid=False,
             raw_response=response_text,
             verify_turns=turn,
         )
@@ -1551,7 +1554,6 @@ class EvaluationPipeline:
             control_space = "joint_space"
         else:
             return f"Dynamics does not support {action_pred.action_space} trajectories yet"
-
 
         try:
             from rove.adapters.dynamics_mujoco import compute_dynamics

@@ -19,6 +19,7 @@ from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
 from rove.api.local_only import LocalOnlyMiddleware
+from rove.benchmarks.api import create_router
 from rove.models import EvaluationProvenance, ExampleData, PipelineStage, StageStatus
 from rove.models.config import get_strategies, load_config
 from rove.orchestrator.failure_attribution import attribute_failure
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="ROVE", version="0.1.0", description="Robot Observation & Vision Evaluation")
 
 app.add_middleware(LocalOnlyMiddleware)
+app.include_router(create_router(Path(__file__).resolve().parents[3] / ".rove" / "benchmarks"))
 
 # Global state (no database for demo)
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"

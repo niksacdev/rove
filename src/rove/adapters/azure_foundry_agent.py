@@ -58,6 +58,7 @@ _STAGE_FALLBACKS: dict[str, dict] = {
     "act": {"action_type": "tool_calls", "tool_calls": [], "num_steps": 0, "confidence": 0.0},
     "verify": {
         "success": False,
+        "verdict_valid": False,
         "confidence": 0.0,
         "reasoning": "Could not parse agent response",
         "action_plausibility": {

@@ -1,0 +1,35 @@
+{
+  "name": "Synthetic benchmark demonstration",
+  "suite_version": "mock-v1",
+  "revision": "baseline",
+  "strategies": [
+    "mock-consistent",
+    "mock-variable"
+  ],
+  "seeds": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "ks": [
+    1,
+    3,
+    5,
+    10
+  ],
+  "timeout_s": 30,
+  "tasks": [
+    {
+      "id": "pick",
+      "task": "Pick up the bracket",
+      "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8BQDwAEgAF/pooBPQAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "place",
+      "task": "Place the bracket in the bin",
+      "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8BQDwAEgAF/pooBPQAAAABJRU5ErkJggg=="
+    }
+  ]
+}

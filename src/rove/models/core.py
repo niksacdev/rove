@@ -301,6 +301,7 @@ class ActionPlausibility(BaseModel, extra="allow"):
 
 class VerificationResult(BaseModel):
     success: bool
+    verdict_valid: bool = True  # False for parser fallbacks; not an observed task failure.
     confidence: float  # 0.0 - 1.0
     reasoning: str
     raw_response: str = ""
