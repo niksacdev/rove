@@ -84,6 +84,8 @@ class DatasetService:
             "ground_truth",
             "annotations",
             "reference_output",
+            "reference_data",
+            "ground_truth_action",
             "recorded_evidence",
             "episode",
             "expected_subtasks",
@@ -130,8 +132,10 @@ class DatasetService:
         expected_head_revision_id: str,
         image_sha256: str | None = None,
     ) -> dict:
-        payload = self._case_payload(payload)
         previous = self.get_case(case_id)
+        payload = self._case_payload(
+            {"reference_data": previous.get("reference_data", {}), **payload}
+        )
         digest = image_sha256 or previous["image_asset"]["sha256"]
         self._image(digest)
         revision_id = uuid.uuid4().hex
@@ -146,7 +150,10 @@ class DatasetService:
                 (
                     revision_id,
                     case_id,
-                    previous["revision"] + 1,
+                    db.execute(
+                        "SELECT coalesce(max(revision),0)+1 FROM case_revisions WHERE case_id=?",
+                        (case_id,),
+                    ).fetchone()[0],
                     previous["id"],
                     digest,
                     content_hash({**payload, "image_sha256": digest}),

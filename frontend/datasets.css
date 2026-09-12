@@ -22,6 +22,7 @@ input[type="checkbox"] { accent-color: #7c3aed; }
 .case-link[aria-current] { background: rgba(124,58,237,.15); outline: 1px solid #9466ef; }
 .case-link strong { display: block; line-height: 1.5; font-size: 13px; overflow-wrap: anywhere; }
 .case-link .muted { display: block; margin: 5px 0; }
+.case-source-labels { display: flex; gap: 5px; flex-wrap: wrap; margin: 7px 0; }
 .detail-instruction { white-space: pre-wrap; overflow-wrap: anywhere; }
 .metric-preview { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 14px 0; }
 .metric-card { padding: 12px; background: var(--f-bg); border: 1px solid var(--f-border); border-radius: 6px; min-width: 0; }

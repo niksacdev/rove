@@ -98,3 +98,23 @@ continue to guide extensions beyond the implemented local workflow.
 - Candidate outputs are assessed independently, and different valid answers can pass.
 - Plan-only review keeps physical completion unknown; regrading never increases trial counts.
 - Complete import-to-candidate without manual database edits; show review coverage and unknowns.
+
+## Existing sample library
+
+The original gallery is imported idempotently into the same immutable Case store.
+A source content change creates a revision; source refreshes preserve a manually
+edited case head. Original source/license metadata stays attached, and reference
+answers stay in private `reference_data`, separate from candidate input and recorded
+episode evidence. Import creates neither trial results nor SME approvals.
+
+```mermaid
+flowchart LR
+    M[Gallery manifest and images] --> I[Validated source import]
+    I --> C[Immutable Case revision]
+    C --> Q[Quick run or campaign]
+    I --> R[Private unreviewed references]
+    R --> S[Explicit SME review]
+```
+
+See [library import](../../src/rove/datasets/library.py) and
+[regression tests](../../tests/test_sample_library.py).

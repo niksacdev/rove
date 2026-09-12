@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {parseObject, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref} = require("../frontend/datasets.js");
+const {parseObject, buildCaseMetadata, caseSourceLabels, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref} = require("../frontend/datasets.js");
+const {sampleCaseHref, createSampleCaseCard} = require("../frontend/sample-cases.js");
 
 const review = overrides => ({target: "case_validity", caseId: "case-r1", trialId: "ignored-output", contractId: "contract", reviewer: "Reviewer", status: "final", decision: "accepted", rationale: "The instruction and observation are sufficient.", ...overrides});
 const campaign = overrides => ({name: "Baseline", caseIds: ["case-r1"], contractId: "contract", strategyId: "agent", repeats: 3, timeout: 120, ...overrides});
@@ -97,4 +98,57 @@ test("paired evidence links match case, repeat and selected strategy", () => {
 test("assistant evidence links cannot become remote or executable URLs", () => {
   for (const input of ["javascript:alert(1)", "https://example.com", "//example.com", "/\\example.com", "/\n/example.com", null]) assert.equal(evidenceHref(input), null);
   assert.equal(evidenceHref("/static/history.html?trial=recorded-id"), "/static/history.html?trial=recorded-id");
+});
+
+test("case revisions preserve private references separately from candidate input and episode evidence", () => {
+  const references = {expected_subtasks: ["Pick red part", "Place in bin"], ground_truth_action: [0.2, 0.4], nested: {answer: "red"}};
+  const metadata = buildCaseMetadata({name: " Revised sample ", task: " Pick the red part ", context: '{"constraints":["Keep it flat"]}', episode: '{}', references: JSON.stringify(references)});
+  assert.equal(metadata.name, "Revised sample");
+  assert.deepEqual(metadata.reference_data, references);
+  assert.deepEqual(metadata.candidate_context, {constraints: ["Keep it flat"]});
+  assert.deepEqual(metadata.recorded_evidence, {});
+  assert.equal(metadata.expected_subtasks, undefined);
+  assert.deepEqual(buildCaseMetadata({name: "New", task: "Task"}).reference_data, {});
+  assert.throws(() => buildCaseMetadata({name: "New", task: "Task", references: "[]"}), /Reference annotations/);
+});
+
+test("source badges distinguish bundled inputs from user cases without asserting review or robot success", () => {
+  assert.deepEqual(caseSourceLabels({conditions: {library: "bundled-gallery", source: {dataset: "RoboVQA"}, eval_category: "scene_analysis"}}), ["Bundled sample", "RoboVQA", "scene analysis"]);
+  assert.deepEqual(caseSourceLabels({conditions: {source: "Customer pilot"}}), ["Customer pilot"]);
+  assert.deepEqual(caseSourceLabels({}), []);
+});
+
+class TestElement {
+  constructor(tag) { this.tag = tag; this.children = []; this.attributes = {}; this.listeners = {}; }
+  appendChild(child) { this.children.push(child); return child; }
+  setAttribute(key, value) { this.attributes[key] = value; }
+  addEventListener(name, listener) { this.listeners[name] = listener; }
+}
+const testDocument = {createElement: tag => new TestElement(tag)};
+const descendants = element => [element, ...element.children.flatMap(descendants)];
+
+test("sample cards keep quick run and versioned case navigation as independent sibling controls", () => {
+  const example = {task: "Pick the part", filename: "sample.png", case_id: "case", case_revision_id: "revision-1", import_status: "imported", source: {dataset: "Sample source"}};
+  let selected;
+  const card = createSampleCaseCard(example, value => { selected = value; }, "http://local", testDocument);
+  assert.equal(card.tag, "article");
+  const controls = descendants(card).filter(element => ["button", "a"].includes(element.tag));
+  assert.equal(controls.length, 2);
+  const quick = controls.find(element => element.tag === "button"), open = controls.find(element => element.tag === "a");
+  assert.equal(descendants(quick).filter(element => element.tag === "a").length, 0);
+  assert.equal(quick.type, "button");
+  quick.listeners.click();
+  assert.equal(selected, example);
+  assert.equal(open.href, "/static/datasets.html?case=revision-1");
+  assert.match(open.attributes["aria-label"], /versioned case/);
+});
+
+test("unavailable or malformed case identities never create a misleading Open case link", () => {
+  for (const record of [{case_revision_id: "good"}, {case_revision_id: "good", import_status: "unavailable"}, {case_revision_id: "../../other", import_status: "imported"}, {case_revision_id: "javascript:alert(1)", import_status: "imported"}]) assert.equal(sampleCaseHref(record), null);
+  const record = {task: "<script>unsafe</script>", filename: "a.png", import_status: "unavailable", import_error: "<img src=x onerror=alert(1)>"};
+  const card = createSampleCaseCard(record, () => {}, "", testDocument);
+  assert.equal(descendants(card).filter(element => element.tag === "a").length, 0);
+  assert.equal(descendants(card).find(element => element.tag === "p").textContent, record.task);
+  assert.ok(descendants(card).some(element => element.textContent === record.import_error));
+  assert.ok(descendants(card).some(element => element.tag === "button"));
 });

@@ -552,6 +552,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   initTopNav();
   initGettingStarted();
   restoreHistory();
+  if (new URLSearchParams(window.location.search).get("view") === "examples") switchView("examples");
 });
 
 // ---- Load config from API ----
@@ -969,11 +970,12 @@ async function renderExamplesView() {
   if (!_examplesCache) {
     try {
       var resp = await fetch(API_BASE + "/api/examples");
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
       _examplesCache = await resp.json();
     } catch (e) {
       var errP = document.createElement("p");
       errP.className = "text-gray-400 text-sm p-4";
-      errP.textContent = "Failed to load examples.";
+      errP.textContent = "Failed to load sample cases. Refresh to try again.";
       examplesView.appendChild(errP);
       return;
     }
@@ -983,27 +985,28 @@ async function renderExamplesView() {
   if (!examples.length) {
     var emptyP = document.createElement("p");
     emptyP.className = "text-gray-400 text-sm p-4";
-    emptyP.textContent = "No examples available.";
+    emptyP.textContent = "No sample cases available.";
     examplesView.appendChild(emptyP);
     return;
   }
 
   // Eval category metadata — primary grouping
   var evalCatMeta = {
-    "scene_analysis":       { label: "Scene Analysis", icon: "eye",         color: "text-cyan-400",   badgeCls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",    desc: "VLM-only evaluation — no robot or action execution required. Tests scene understanding, object detection, spatial reasoning, and plan quality using diverse real-world images from multiple robot platforms." },
-    "atomic":               { label: "Atomic",       icon: "target",      color: "text-emerald-400", badgeCls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20", desc: "Single-instruction tasks that a VLA should accomplish in one motion sequence. Simple pick-place, push, turn, or open actions on the Panda robot. Good baseline for VLA confidence calibration." },
+    "scene_analysis":       { label: "Scene Analysis", icon: "eye",         color: "text-cyan-400",   badgeCls: "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",    desc: "Images from multiple robot platforms for assessing scene understanding, object detection, spatial reasoning, and plan quality. No robot execution is required for an output assessment." },
+    "atomic":               { label: "Atomic",       icon: "target",      color: "text-emerald-400", badgeCls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20", desc: "Single-instruction pick, place, push, turn, and open tasks. Compare proposed actions or plans on these inputs; physical completion requires separate episode evidence." },
     "multi_stage":          { label: "Multi-Stage",  icon: "layers",      color: "text-blue-400",   badgeCls: "bg-blue-500/10 text-blue-300 border-blue-500/20",    desc: "Sequential tasks requiring ordered subtask decomposition. Tests whether the pipeline breaks complex instructions into correctly ordered steps." },
     "situated_correction":  { label: "Correction",   icon: "message-circle", color: "text-amber-400", badgeCls: "bg-amber-500/10 text-amber-300 border-amber-500/20", desc: "Mid-task human feedback that changes the plan. Tests whether the pipeline adapts to corrections like \"not that one\" or \"use the other hand.\"" },
     "constrained":          { label: "Constrained",  icon: "shield-alert", color: "text-red-400",    badgeCls: "bg-red-500/10 text-red-300 border-red-500/20",      desc: "Tasks with safety or preference constraints. Tests whether the pipeline acknowledges and respects rules like \"keep it flat\" or \"don't close the door.\"" },
     "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
-    "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" }
+    "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" },
+    "uncategorized":        { label: "Other cases",  icon: "folder",      color: "text-gray-400", desc: "Additional sample inputs and cases with unavailable imports. Open import details when a versioned case is unavailable." }
   };
-  var evalCatOrder = ["atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative", "scene_analysis"];
+  var evalCatOrder = ["atomic", "multi_stage", "situated_correction", "constrained", "open_ended", "negative", "scene_analysis", "uncategorized"];
 
   // Group examples by eval_category, then by scene_type
   var catGroups = {};
   examples.forEach(function(ex) {
-    var ec = ex.eval_category || "atomic";
+    var ec = typeof ex.eval_category === "string" && Object.hasOwn(evalCatMeta, ex.eval_category) ? ex.eval_category : "uncategorized";
     if (!catGroups[ec]) catGroups[ec] = {};
     var scene = ex.scene_type || "other";
     if (!catGroups[ec][scene]) catGroups[ec][scene] = [];
@@ -1020,13 +1023,22 @@ async function renderExamplesView() {
 
   var menuTitle = document.createElement("h2");
   menuTitle.className = "text-lg font-semibold text-gray-100 mb-1";
-  menuTitle.textContent = "Examples";
+  menuTitle.textContent = "Sample cases";
   menu.appendChild(menuTitle);
 
   var menuSubtitle = document.createElement("p");
   menuSubtitle.className = "text-[10px] text-gray-500 mb-4";
-  menuSubtitle.textContent = "Select a category, then click an example to auto-fill evaluation";
+  menuSubtitle.textContent = "Try a quick run, or open a versioned case to define success and run a campaign.";
   menu.appendChild(menuSubtitle);
+  var workspaceLink = document.createElement("a");
+  workspaceLink.href = "/static/datasets.html";
+  workspaceLink.className = "block text-xs text-f-purple mb-4";
+  workspaceLink.textContent = "Open Cases workspace →";
+  menu.appendChild(workspaceLink);
+  var scopeNote = document.createElement("p");
+  scopeNote.className = "text-[10px] text-gray-500 mb-4";
+  scopeNote.textContent = "These are task inputs. A campaign records repeated trials against a success contract. Sample annotations are unreviewed references, not observed robot outcomes.";
+  menu.appendChild(scopeNote);
 
   // Right content area
   var content = document.createElement("div");
@@ -1080,7 +1092,7 @@ async function renderExamplesView() {
     panelTitleRow.appendChild(panelTitle);
     var panelCount = document.createElement("span");
     panelCount.className = "text-[10px] text-gray-500 ml-auto";
-    panelCount.textContent = totalCount + " example" + (totalCount !== 1 ? "s" : "");
+    panelCount.textContent = totalCount + " case" + (totalCount !== 1 ? "s" : "");
     panelTitleRow.appendChild(panelCount);
     panelHeader.appendChild(panelTitleRow);
     var panelDesc = document.createElement("p");
@@ -1121,53 +1133,7 @@ async function renderExamplesView() {
       });
 
       groups[sceneType].forEach(function(ex) {
-        var card = document.createElement("button");
-        card.className = "flex items-center gap-3 p-2 rounded-lg border border-f-border bg-f-surface hover:border-f-purple hover:bg-f-surface/80 transition-colors text-left group";
-
-        var thumb = document.createElement("img");
-        thumb.src = API_BASE + "/data/" + ex.filename;
-        thumb.alt = ex.task;
-        thumb.className = "w-14 h-14 rounded-md object-cover border border-f-border shrink-0";
-        thumb.loading = "lazy";
-
-        var info = document.createElement("div");
-        info.className = "flex-1 min-w-0";
-
-        var taskText = document.createElement("p");
-        taskText.className = "text-xs text-gray-200 group-hover:text-white line-clamp-2";
-        taskText.textContent = ex.task;
-
-        // Meta row: source + pipeline scope badge
-        var metaRow = document.createElement("div");
-        metaRow.className = "flex items-center gap-1.5 mt-0.5";
-
-        // Pipeline scope badge (VLA vs perceive-plan)
-        if (ex.category === "action") {
-          var vlaBadge = document.createElement("span");
-          vlaBadge.className = "text-[9px] px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-300 border-indigo-500/20";
-          vlaBadge.textContent = "VLA";
-          metaRow.appendChild(vlaBadge);
-        }
-
-        var metaParts = [ex.source ? ex.source.dataset : ""];
-        if (ex.robot) metaParts.push(ex.robot.toUpperCase());
-        if (ex.proprioception) metaParts.push(ex.state_dim + "-DOF state");
-        if (ex.difficulty) metaParts.push(ex.difficulty);
-        var metaSpan = document.createElement("span");
-        metaSpan.className = "text-[10px] text-gray-500";
-        metaSpan.textContent = metaParts.filter(Boolean).join(" \u00b7 ");
-        metaRow.appendChild(metaSpan);
-
-        info.appendChild(taskText);
-        info.appendChild(metaRow);
-        card.appendChild(thumb);
-        card.appendChild(info);
-
-        card.addEventListener("click", function() {
-          loadExample(ex);
-        });
-
-        grid.appendChild(card);
+        grid.appendChild(createSampleCaseCard(ex, loadExample, API_BASE));
       });
 
       section.appendChild(header);
