@@ -5,8 +5,8 @@ dashboard and a repeated-trial campaign runner. Both use the same stage
 orchestrator, but they have different recording paths. This matters: campaign
 recovery and snapshots are stronger than quick-run history today.
 
-This description was checked against commit `776b39316ad80a012837b44904e38fcd5617942a`
-on 12 September 2026, after configured verification was merged. It describes
+This description was checked against commit `3bfd485803b2bf6984e83faa820f11259eeff001`
+on 12 September 2026, after the product documentation update was merged. It describes
 implemented behavior. The linked [product concepts](../product/concepts.md),
 [workflows](../product/evaluation-workflows.md) and
 [success/metrics specification](../product/metrics-and-success.md) and

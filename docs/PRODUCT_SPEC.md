@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.4
+**Version:** 0.5
 **Updated:** 2026-09-12
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -157,27 +157,33 @@ Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet 
 
 ### Evaluation harness and agent runtime
 
-ROVE already has the core of an evaluation harness: configured trials, execution orchestration, grading, evidence and reporting. The system under test may have its own execution harness that manages model calls, tools, memory and recovery. These are separate responsibilities; choosing an agent runtime must not determine the customer's success criteria or replace evidence from the robot.
+ROVE already has the core evaluation services: configured trials, execution orchestration, grading, evidence and reporting. Copilot SDK is the accepted shared runtime for agent behavior ROVE hosts: the evaluation assistant, configured strategy agents and agent graders where they add value. ROVE still validates and freezes cases, strategies, repetitions and success contracts; records trial lifecycle and evidence; and calculates reports from authoritative records.
 
-ROVE develops and owns its evaluation and execution harness, building on the existing optional pipeline and stage adapters. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. ROVE should evaluate that configured system without inventing internal stages or substituting its own agent behavior. Extend ROVE's recording and execution contracts for the required robotics evidence, with Azure and Microsoft Fabric integration as future product directions. See [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md) and the [dated model assessment](product/model-landscape-2026-09.md).
+ROVE owns these evaluation contracts and execution services while reusing Copilot's agent loop, tool and telemetry capabilities. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. Direct customer agents, VLMs and VLAs remain evaluable through supported adapters. Adding Copilot planning or recovery around one creates a different combined strategy and must be compared explicitly. See the [target architecture](architecture/target-architecture.md), [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md), [ADR-024](architecture/ADR-024-copilot-runtime-and-observability.md) and the [dated model assessment](product/model-landscape-2026-09.md).
+
+SDK session events feed ROVE's durable trial timeline; native OpenTelemetry and
+ROVE spans support optional operational monitoring. Session persistence and sampled
+monitoring data do not replace trial records or robotics evidence. Azure Monitor,
+Application Insights, Log Analytics and Grafana are future optional destinations.
+Versioned Fabric/Delta export remains a separate analytical integration.
 
 ## 9. Capability and delivery status
 
-| Capability | Status at source commit 776b393 |
+| Capability | Status at source commit 3bfd485 |
 | --- | --- |
 | Configured optional stages, supported models/agents and local dashboard | Implemented; adapter availability depends on installed dependencies and endpoints |
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
 | Durable shared quick-trial recording and asset references | Proposed |
 | Durable tool/event timeline, measurement drill-down and aligned trace comparison | Proposed; final stage outputs and check measurements exist today |
-| ROVE-owned evaluation and execution harness | Accepted direction; existing pipeline retained, durable recording and lifecycle extensions pending |
+| ROVE evaluation services and Copilot shared agent runtime | Accepted direction in ADRs 023–024; existing pipeline retained, SDK integration and lifecycle extensions pending |
 | Guided customer-data onboarding and expected-metric preview | Proposed |
 | SME review, reusable annotations and frozen datasets | Proposed |
 | Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
 | PostgreSQL backend or Delta Lake integration | Future, demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-Deliver shared recording and inspectable trial evidence first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. Develop these capabilities within ROVE's own harness. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
+First validate the SDK/runtime contract, then deliver shared recording and inspectable trial evidence, sample-case contracts and SME review/dataset freezing, baseline comparisons and the guided assistant. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) defines the task gates.
 
 ## 10. Related specifications and decisions
 
@@ -187,7 +193,9 @@ Deliver shared recording and inspectable trial evidence first, then sample-case 
 - [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
 - [Model and harness assessment](product/model-landscape-2026-09.md): dated research informing architecture, not a ROVE benchmark.
 - [Current implementation](architecture/current-implementation.md): actual code paths, APIs, storage and tests.
-- [Architecture decisions](architecture/README.md): ADRs 017–023 with diagrams and implementation status.
+- [Target architecture](architecture/target-architecture.md) and [system diagram](architecture/system-diagram.md): logical responsibilities, processes, data and optional integrations.
+- [Implementation plan](product/implementation-plan.md): sequenced tasks, dependencies and milestone acceptance.
+- [Architecture decisions](architecture/README.md): ADRs 017–024 with diagrams and implementation status.
 - [Campaign usage](BENCHMARKS.md) and [configured verification](VERIFICATION.md): supported configuration today.
 
 Earlier versions of this file remain in Git history. The core vision and personas are retained; historical claims about unimplemented commands, full simulation, universal reproducibility or future integrations are not release guarantees.

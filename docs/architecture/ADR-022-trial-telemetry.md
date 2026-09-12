@@ -3,6 +3,7 @@
 **Status:** Proposed
 **Implementation status:** Durable event recording and linked trial inspection are pending
 **Date:** 2026-09-12
+**Amended by:** [ADR-024](ADR-024-copilot-runtime-and-observability.md), which adds Copilot SDK events and OpenTelemetry as sources
 **Related:** [Trace and measurement specification](../product/traces-and-measurements.md),
 [ADR-018](ADR-018-trial-lineage-and-snapshots.md),
 [ADR-019](ADR-019-relational-storage-and-assets.md),
@@ -56,6 +57,20 @@ the evaluation contract explicitly defines a fresh trial. Retain events already
 recorded when a trial is interrupted, and identify gaps or unsupported telemetry.
 Stable event identity makes repeated delivery safe without duplicating history.
 
+For a Copilot-hosted role, ingest the SDK's session events into the same recording
+boundary. Preserve the SDK event ID, session/agent/tool-call identity, ephemeral
+flag and available timestamps, then assign ROVE trial/stage/call and actor-role
+links. Essential ephemeral events such as per-call usage must be captured live;
+session resume cannot reconstruct them. The SDK event `parentId` is a previous-event
+link, not an OpenTelemetry parent span.
+
+Use the SDK's native OpenTelemetry export for runtime traces and propagate W3C
+trace context into ROVE tool handlers. Store trace/span correlation on the trial
+record, while keeping durable event identity separate. Avoid duplicating model or
+tool spans when SDK-native instrumentation already represents the operation.
+Exact span coverage and schema compatibility need validation against the pinned
+SDK/runtime pair before they become a supported contract.
+
 Measurements and assessments reference the producing evaluator/version, criterion,
 case and system identities, relevant event IDs and available evidence assets or
 ranges. Preserve original grades when another grader assesses the same evidence.
@@ -85,6 +100,12 @@ The first slice uses the existing stage, verification and adapter boundaries.
 Adapters may expose only a final response; that limited coverage is valid when
 labeled. Complete instrumentation of remote agent internals, robot drivers or a
 general monitoring platform is outside this decision.
+
+External OpenTelemetry export is optional and operational. Sampling, exporter
+failure or backend retention must not change the authoritative local trial record
+or the population used for evaluation metrics. Start with message-content capture
+disabled and apply explicit content/redaction policy before exporting prompts,
+tool arguments, images or outputs.
 
 ## Alternatives and Tradeoffs
 
@@ -125,3 +146,6 @@ are implementation starting points, not evidence that the proposed recorder exis
   telemetry and regraded recordings cannot inflate performance or trial counts.
 - Keep history/summary queries independent of recording size; load large asset
   ranges only when requested and retain equivalent evidence links in exports.
+- For an SDK-hosted trial, retain per-call usage received live, correlate a ROVE
+  trial span through a custom tool span, tolerate collector outage and expose a
+  recorder failure or telemetry gap instead of silently completing the trace.

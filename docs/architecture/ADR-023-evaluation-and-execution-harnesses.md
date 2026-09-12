@@ -1,9 +1,10 @@
-# ADR-023: Develop ROVE's Own Evaluation and Execution Harness
+# ADR-023: Own ROVE's Evaluation Semantics and Execution Services
 
 **Status:** Accepted direction
 **Implementation status:** Existing pipeline retained; shared recording and lifecycle extensions pending
 **Date:** 2026-09-12
-**Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [current implementation](current-implementation.md)
+**Amended by:** [ADR-024](ADR-024-copilot-runtime-and-observability.md), which selects Copilot SDK for ROVE-owned agent workflows
+**Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [target architecture](target-architecture.md), [current implementation](current-implementation.md)
 
 ## Context
 
@@ -18,18 +19,27 @@ to solve the case would change what is being evaluated.
 
 ## Decision
 
-Develop ROVE's own evaluation and execution harness from its existing pipeline and
-adapter contracts. Keep responsibility for trial scheduling, recording, grading and
-reporting within ROVE. Extend the current stage configuration as needed rather than
-introduce another hooks framework or replace the orchestrator.
+Develop ROVE's evaluation semantics and execution services from its existing
+pipeline and adapter contracts. Keep responsibility for trial scheduling, durable
+recording, grading contracts, metric calculations and reporting within ROVE.
+Extend the current stage configuration as needed instead of introducing another
+user-facing hooks framework.
+
+[ADR-024](ADR-024-copilot-runtime-and-observability.md) selects Copilot SDK as the
+shared agent infrastructure for ROVE-owned assistants, hosted strategy agents and
+agent graders. This refines the earlier phrase "ROVE's own harness": ROVE owns the
+product contracts and robotics evaluation behavior, while it reuses the SDK for
+agent loops, tools, session events and trace propagation. Direct customer agents,
+VLMs and VLAs remain evaluable without adding Copilot decisions to their strategy.
 
 Separate responsibilities within this architecture:
 
 | Responsibility | Owner |
 | --- | --- |
 | Case selection, repetitions, frozen conditions and trial identity | ROVE evaluation layer |
-| Stage dispatch, deadlines, progress and terminal state | ROVE execution layer |
-| Model behavior, agent tools, memory and recovery choices | Customer's configured system under test |
+| Stage/trial dispatch, deadlines, progress and terminal state | ROVE execution services |
+| ROVE-owned agent loop, tool invocation and exposed runtime events | Copilot SDK integration |
+| Customer model behavior, tools, memory and recovery choices | Configured system under test; Copilot only when the strategy declares it |
 | Actual observations, action execution, reset and hardware fault handling | Configured robot/environment integration, when supplied |
 | Grading, evidence inspection, reviews and baseline comparison | ROVE evaluation and product layers |
 
@@ -37,9 +47,11 @@ Separate responsibilities within this architecture:
 flowchart TD
     C[Case and frozen system configuration] --> R[ROVE trial scheduling]
     R --> P[ROVE optional-stage pipeline]
-    P --> A[Configured model and agent adapters]
-    A --> S[Customer system under test]
-    S --> E[Outputs and available episode evidence]
+    P --> A[Configured execution path]
+    A --> CS[Copilot-hosted strategy agent]
+    A --> S[Direct customer agent, VLM or VLA adapter]
+    CS --> E[Outputs and available episode evidence]
+    S --> E
     E --> G[Configured grading and required checks]
     E -.-> T[Shared durable trial recorder: proposed]
     G -.-> T
@@ -51,7 +63,9 @@ The diagram shows existing execution foundations and proposed shared recording a
 inspection. It does not imply that a closed-loop robot driver or the new UI exists.
 A customer's agent may manage its own internal tool loop; those decisions and
 settings belong to the system under test, not ROVE's grader. Record the activity
-that its adapter exposes and mark unavailable internals explicitly.
+that its adapter exposes and mark unavailable internals explicitly. Adding a
+Copilot planner or recovery loop creates a different strategy revision whose
+combined performance is compared explicitly.
 
 ## Existing Foundations and Gaps
 
@@ -76,17 +90,18 @@ that its adapter exposes and mark unavailable internals explicitly.
 
 - **Build one fixed model pipeline:** simpler initially, but would exclude useful
   image-to-plan agents and other valid stage combinations. Preserve optional stages.
-- **Require one agent runtime for every strategy:** would couple evaluation to a
-  particular execution system. Evaluate the customer's actual configuration through
-  supported adapters while ROVE owns the evaluation workflow.
+- **Require one agent runtime for every strategy:** would change direct customer
+  systems and add inference where it provides no evaluation value. Use Copilot for
+  ROVE-owned agent behavior while evaluating other systems through supported adapters.
 - **Create separate engines for quick runs and campaigns:** could optimize each
   entry point, but would duplicate recording and grading behavior. Share the same
   trial and evidence contracts.
 
-Owning the harness gives ROVE control over its product behavior and integration
-contracts. It also makes ROVE responsible for lifecycle handling, trace durability,
-versioning and failure semantics. Deliver those capabilities incrementally and
-retain explicit implementation boundaries in the documentation.
+Owning the evaluation services gives ROVE control over product behavior and
+integration contracts. It also makes ROVE responsible for lifecycle handling,
+trace durability, versioning and failure semantics. Copilot session persistence
+does not replace these records or restore a physical environment. Deliver the
+capabilities incrementally and retain explicit implementation boundaries.
 
 Azure model and agent integration and Microsoft Fabric data integration are future
 product directions. Keep identity, evidence and export contracts independent of
@@ -107,6 +122,10 @@ or a Fabric connector are implemented.
    timing, interruption and reset support before claiming fresh robot outcomes.
 6. Make each outcome or measurement inspectable back to its grading rule and source
    evidence. Preserve these identities for baseline comparisons and future exports.
+7. Validate the selected Copilot SDK/runtime before depending on its event, usage,
+   isolation or OpenTelemetry behavior. Preserve a direct strategy fixture that
+   introduces no Copilot model call.
 
-These are implementation acceptance criteria. This ADR records the architecture
-direction; it does not implement the proposed lifecycle, inspection or integrations.
+These are implementation acceptance criteria. This ADR and ADR-024 record the
+architecture direction; they do not implement the runtime, lifecycle, inspection
+or integrations.

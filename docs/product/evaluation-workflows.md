@@ -71,7 +71,7 @@ The UI should make task, strategy and expected outcome the primary controls. Kee
 | Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k and portable reports | Explicit baseline/version relationships and component diffs |
 | Quick evaluation history | JSONL records after completion, partial provenance | Record every trial before dispatch, recover interruption, promote by reference |
 | Trace inspection | Final stage results, check measurements and some live substeps | Durable event timelines, evidence drill-down and aligned baseline inspection |
-| Execution runtime | Built-in optional stages and agent-backed stage adapters | Extend ROVE's own harness with durable events and explicit trial lifecycle contracts |
+| Execution runtime | Built-in optional stages and agent-backed stage adapters | Add Copilot SDK for ROVE-owned agents; preserve direct customer/model paths and add explicit lifecycle contracts |
 | Case references | Gallery files and inline campaign images | Immutable case versions and shared asset references |
 | Human labels | Existing reference-label inputs | Review queue, rubric versions and output-specific assessments |
 | Evaluation datasets | Campaign task lists | Frozen reviewed dataset membership and reusable annotations |
@@ -152,8 +152,9 @@ This inspection is part of the main workflow, not a separate monitoring product.
 A developer should be able to identify an actionable failure without reconstructing
 logs manually. The [trace specification](traces-and-measurements.md) defines durable
 recording, units, timing, clock alignment and evidence coverage. The
-[harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
-explains how ROVE's own harness records evidence from configured models and agents.
+[evaluation boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
+and [Copilot runtime decision](../architecture/ADR-024-copilot-runtime-and-observability.md)
+explain how ROVE records evidence from hosted and direct customer systems.
 
 ## Robotics example
 
@@ -177,9 +178,15 @@ Reviews record the reviewer, timestamp, target output/case version, rubric versi
 | Review and freeze datasets | [020: SME datasets](../architecture/ADR-020-sme-reviewed-datasets.md) |
 | Declare success and report meaningful measures | [021: Campaign reporting](../architecture/ADR-021-campaign-success-and-reporting.md) |
 | Retain inspectable trial telemetry | [022: Trial telemetry](../architecture/ADR-022-trial-telemetry.md) |
-| Develop ROVE's own evaluation and execution harness | [023: Harness boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
+| Own evaluation semantics and execution services | [023: Evaluation boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
+| Use Copilot SDK for ROVE-owned agents and telemetry | [024: Runtime and observability](../architecture/ADR-024-copilot-runtime-and-observability.md) |
 
 ## Acceptance and delivery order
+
+The [implementation plan](implementation-plan.md) sequences these requirements
+into SDK validation, trial foundations, customer workflow and optional integration
+milestones. Its dependencies supersede treating this numbered acceptance list as
+an implementation sequence.
 
 1. Shared recording preserves pending, completed, errored and interrupted trials. Legacy JSONL imports once without inventing missing provenance; old IDs and source history remain intact.
 2. Trial history preserves recorded stage/call events and links each grade or measurement to its exact source evidence. Refresh, interruption and restart preserve captured events without replaying actions; missing telemetry remains explicit.
