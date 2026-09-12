@@ -1,17 +1,16 @@
 "use strict";
 const $ = id => document.getElementById(id);
-function updateThemeLabel() {
-  $("themeToggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode";
-}
-$("themeToggle").addEventListener("click", () => {
-  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem("rove-theme", next); } catch { /* Keep the in-page theme usable. */ }
-  updateThemeLabel();
-});
-updateThemeLabel();
 let taskData = [];
 let loadedSpec = null;
+let advancedLoaded = false;
+let advancedLoading = null;
+let historyLoading = null;
+let hasActiveCampaigns = false;
+let pollTimer = null;
+let focusedRequestedCampaign = false;
+const campaignCards = new Map();
+const parameters = new URLSearchParams(window.location.search);
+const requestedCampaign = parameters.get("campaign");
 async function request(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) throw new Error(await response.text());
@@ -36,6 +35,7 @@ async function fileBase64(blob) {
   });
 }
 async function configuration() {
+  if (!advancedLoaded) throw new Error("Wait for the advanced configuration to finish loading.");
   const ids = selected("tasks"), strategies = selected("strategies");
   if (!ids.length || !strategies.length) throw new Error("Select at least one task and configuration.");
   const n = Number($("repeats").value);
@@ -54,40 +54,116 @@ async function configuration() {
     ks: loadedSpec ? loadedSpec.ks : [...new Set([1,3,5,n])].sort((a,b)=>a-b),
     timeout_s: Number($("timeout").value), strategies, tasks};
 }
-async function history() {
-  const campaigns = await request("/api/campaigns");
-  $("history").replaceChildren();
-  if (!campaigns.length) $("history").textContent = "Your first campaign will appear here.";
-  for (const c of campaigns) {
-    const card = document.createElement("div"); card.className = "campaign";
-    const title = document.createElement("h3"); title.textContent = c.name;
-    const detail = document.createElement("small"); detail.textContent = `${c.revision} · ${c.status} · ${new Date(c.created_at).toLocaleString()}`;
-    card.append(title, detail);
-    const {summary} = await request(`/api/campaigns/${c.id}`);
+function campaignLink(href, label, className) {
+  const link = document.createElement("a");
+  link.href = href; link.textContent = label; link.className = className || "";
+  return link;
+}
+function campaignCard(campaign) {
+  const id = String(campaign.id), encoded = encodeURIComponent(id);
+  let entry = campaignCards.get(id);
+  if (!entry) {
+    const card = document.createElement("article");
+    card.className = "campaign"; card.dataset.campaignId = id; card.tabIndex = -1;
+    const title = document.createElement("h3"), detail = document.createElement("small");
     const progress = document.createElement("p"); progress.className = "progress";
-    progress.textContent = `${summary.completed_trials} / ${summary.planned_trials} attempts recorded`;
-    card.append(progress);
-    for (const [format,label] of [["html","Open report"],["json","JSON"],["csv","CSV"]]) {
-      const link = document.createElement("a"); link.href = `/api/campaigns/${c.id}/report?format=${format}`;
-      link.textContent = label; if (format === "html") { link.target = "_blank"; link.rel = "noopener"; }
-      card.append(link);
-    }
-    if (c.status !== "completed") {
-      const button = document.createElement("button"); button.className = "secondary";
-      const action = ["running","pending"].includes(c.status) ? "cancel" : "resume";
-      button.textContent = action === "cancel" ? "Cancel" : "Resume remaining trials";
-      button.onclick = async () => { try { await request(`/api/campaigns/${c.id}/${action}`, {method:"POST"}); await history(); } catch (e) {message(e);} };
-      card.append(document.createElement("br"), button);
-    }
+    progress.textContent = "Loading trial counts…";
+    const actions = document.createElement("div"); actions.className = "campaign-actions";
+    const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "Review results", "primary-link");
+    const report = campaignLink(`/api/campaigns/${encoded}/report?format=html`, "Open report", "report-link");
+    report.target = "_blank"; report.rel = "noopener";
+    actions.append(review, report);
+    const exports = document.createElement("div"); exports.className = "campaign-exports";
+    const exportLabel = document.createElement("span"); exportLabel.textContent = "Export:";
+    exports.append(exportLabel);
+    for (const format of ["json", "csv"]) exports.append(campaignLink(`/api/campaigns/${encoded}/report?format=${format}`, format.toUpperCase()));
+    const control = document.createElement("button"); control.className = "secondary"; control.type = "button";
+    actions.append(control);
+    card.append(title, detail, progress, actions, exports);
+    entry = {card, title, detail, progress, control, summaryLoaded: false};
+    campaignCards.set(id, entry);
     $("history").append(card);
   }
+  entry.title.textContent = campaign.name || "Untitled campaign";
+  const created = new Date(campaign.created_at);
+  entry.detail.textContent = `${campaign.revision || "Revision unavailable"} · ${campaign.status} · ${Number.isNaN(created.getTime()) ? "Date unavailable" : created.toLocaleString()}`;
+  entry.control.hidden = campaign.status === "completed";
+  const action = ["running", "pending"].includes(campaign.status) ? "cancel" : "resume";
+  entry.control.textContent = action === "cancel" ? "Cancel campaign" : "Resume remaining trials";
+  entry.control.onclick = async () => {
+    entry.control.disabled = true;
+    try {
+      await request(`/api/campaigns/${encoded}/${action}`, {method: "POST"});
+      await history(true);
+    } catch (error) { message(error); }
+    finally { entry.control.disabled = false; }
+  };
+  return entry;
+}
+function schedulePoll() {
+  clearTimeout(pollTimer); pollTimer = null;
+  if (!document.hidden && hasActiveCampaigns) {
+    pollTimer = setTimeout(() => { history(); }, 15000);
+  }
+}
+async function history(refreshAll = false) {
+  if (historyLoading) return refreshAll ? historyLoading.then(() => history(true)) : historyLoading;
+  $("refreshHistory").disabled = true;
+  historyLoading = (async () => {
+    try {
+      const campaigns = await request("/api/campaigns");
+      if (!Array.isArray(campaigns)) throw new Error("Unexpected campaign response.");
+      const ids = new Set(campaigns.map(c => String(c.id)));
+      for (const [id, entry] of campaignCards) if (!ids.has(id)) {
+        entry.card.remove(); campaignCards.delete(id);
+      }
+      $("historyEmpty")?.remove();
+      if (!campaigns.length) {
+        const empty = document.createElement("p"); empty.id = "historyEmpty"; empty.className = "empty-state";
+        empty.textContent = "No campaigns yet. Start a new evaluation to build a baseline and compare results here.";
+        $("history").append(empty);
+      }
+      hasActiveCampaigns = campaigns.some(c => ["running", "pending"].includes(c.status));
+      const summaries = campaigns.map(async c => {
+        const entry = campaignCard(c);
+        if (entry.summaryLoaded && entry.summaryStatus === c.status && c.status === "completed" && !refreshAll) return;
+        try {
+          const {summary} = await request(`/api/campaigns/${encodeURIComponent(c.id)}`);
+          if (!summary || !Number.isFinite(summary.completed_trials) || !Number.isFinite(summary.planned_trials)) throw new Error("Trial counts unavailable");
+          entry.progress.textContent = `${summary.completed_trials} / ${summary.planned_trials} trials recorded`;
+          entry.summaryLoaded = true; entry.summaryStatus = c.status;
+        } catch {
+          entry.progress.textContent = "Trial counts unavailable. You can still review the saved results or retry with Refresh results.";
+          entry.summaryLoaded = false;
+        }
+      });
+      if (requestedCampaign) {
+        const entry = campaignCards.get(requestedCampaign);
+        $("requestedCampaignMessage").hidden = Boolean(entry);
+        if (!entry) $("requestedCampaignMessage").textContent = `The requested campaign “${requestedCampaign}” was not found in saved results.`;
+        if (entry && !focusedRequestedCampaign) {
+          entry.card.classList.add("requested-campaign");
+          entry.card.focus({preventScroll: true}); entry.card.scrollIntoView?.({block: "center"});
+          focusedRequestedCampaign = true;
+        }
+      }
+      $("historyStatus").textContent = `${campaigns.length} saved campaign${campaigns.length === 1 ? "" : "s"}${hasActiveCampaigns ? " · Active campaigns update while this tab is visible." : "."}`;
+      await Promise.all(summaries);
+    } catch (error) {
+      $("historyStatus").textContent = `Could not load saved campaigns. Use Refresh results to retry. ${error.message || error}`;
+    } finally {
+      $("refreshHistory").disabled = false;
+      historyLoading = null; schedulePoll();
+    }
+  })();
+  return historyLoading;
 }
 $("campaignForm").addEventListener("submit", async event => {
   event.preventDefault(); $("run").disabled = true;
   try {
     const spec = await configuration();
     const result = await request("/api/campaigns", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(spec)});
-    message(`Campaign started: ${result.planned_trials} planned attempts.`); await history();
+    message(`Campaign started: ${result.planned_trials} planned attempts.`); await history(true);
   } catch (error) { message(error); } finally { $("run").disabled = false; }
 });
 $("save").onclick = async () => {
@@ -122,14 +198,45 @@ $("addTask").onclick = async () => {
   } catch (error) { message(error); }
 };
 for (const id of ["name","suite","revision","repeats","timeout"]) $(id).addEventListener("input",budget);
+async function initializeAdvanced() {
+  if (advancedLoaded) return;
+  if (advancedLoading) return advancedLoading;
+  $("advancedFields").disabled = true; $("retryAdvanced").hidden = true;
+  $("advancedStatus").textContent = "Loading task suites and configurations…";
+  advancedLoading = (async () => {
+    try {
+      const [strategies, gallery] = await Promise.all([request("/api/strategies"), request("/api/examples")]);
+      if (!Array.isArray(strategies.strategies) || !Array.isArray(gallery.examples)) throw new Error("Unexpected configuration response.");
+      $("strategies").replaceChildren(); $("tasks").replaceChildren();
+      for (const s of strategies.strategies) choice("strategies",s.id,s.display_name || s.id,s.id === "mock");
+      taskData = gallery.examples.map((e,i)=>({id:`task-${i+1}`,task:e.task,filename:e.filename,
+        example:{ground_truth:e.eval_qa || null,extras:Object.fromEntries(Object.entries(e).filter(([k])=>!["filename","source","eval_qa","task"].includes(k)))}}));
+      taskData.forEach((t,i)=>choice("tasks",t.id,t.task,i===0));
+      advancedLoaded = true; $("advancedFields").disabled = false;
+      $("advancedStatus").textContent = "Configuration ready. Nothing runs until you select Run campaign.";
+      budget();
+    } catch (error) {
+      $("advancedStatus").textContent = `Could not load advanced configuration. ${error.message || error}`;
+      $("retryAdvanced").hidden = false;
+    } finally { advancedLoading = null; }
+  })();
+  return advancedLoading;
+}
+$("advancedConfiguration").addEventListener("toggle", () => {
+  if ($("advancedConfiguration").open) initializeAdvanced();
+});
+$("retryAdvanced").onclick = initializeAdvanced;
+$("refreshHistory").onclick = () => history(true);
+document.addEventListener("visibilitychange", () => {
+  clearTimeout(pollTimer); pollTimer = null;
+  if (!document.hidden && hasActiveCampaigns) history();
+});
+window.addEventListener("pagehide", () => { clearTimeout(pollTimer); pollTimer = null; });
 async function initialize() {
-  const [strategies, gallery] = await Promise.all([request("/api/strategies"), request("/api/examples")]);
-  for (const s of strategies.strategies) choice("strategies",s.id,s.display_name || s.id,s.id === "mock");
-  taskData = gallery.examples.map((e,i)=>({id:`task-${i+1}`,task:e.task,filename:e.filename,
-    example:{ground_truth:e.eval_qa || null,extras:Object.fromEntries(Object.entries(e).filter(([k])=>!["filename","source","eval_qa","task"].includes(k)))}}));
-  taskData.forEach((t,i)=>choice("tasks",t.id,t.task,i===0));
-  budget(); await history();
-  async function poll() { try { await history(); } catch(e) {message(e);} setTimeout(poll,4000); }
-  setTimeout(poll,4000);
+  await history();
+  if (parameters.get("configure") === "advanced") {
+    $("advancedConfiguration").open = true;
+    await initializeAdvanced();
+  }
 }
 initialize().catch(message);

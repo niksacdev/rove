@@ -14,6 +14,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/navigation.css">
+  <link rel="stylesheet" href="/static/start.css">
+  <script src="/static/navigation.js" defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -43,52 +46,17 @@
   <!-- Live announcer for screen readers (M3) -->
   <div id="liveAnnouncer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
-  <!-- ============ TOP NAV BAR (Foundry-style) ============ -->
-  <header class="flex items-center h-12 px-4 border-b border-f-border bg-f-bg shrink-0 z-20">
-    <!-- Left: Logo + breadcrumb -->
-    <div class="flex items-center gap-2 shrink-0">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
-        <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
-        <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
-      </svg>
-      <span class="text-sm font-semibold tracking-tight">ROVE</span>
-      <span class="text-gray-600 mx-1" aria-hidden="true">/</span>
-      <span class="text-xs text-gray-500">Evaluation</span>
-    </div>
-
-    <!-- Center: Nav links -->
-    <nav class="hidden md:flex items-center gap-1 ml-8">
-      <a href="#" class="nav-link active text-[13px] text-gray-400 hover:text-white px-3 py-3">Evaluate</a>
-      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Strategies</a>
-      <a href="#" class="nav-link text-[13px] text-gray-400 hover:text-white px-3 py-3">Endpoints</a>
-    </nav>
-
-    <!-- Right: Theme toggle + Status -->
-    <div class="ml-auto flex items-center gap-3">
-      <a href="/static/datasets.html" class="text-xs text-gray-400 hover:text-white">Cases</a>
-      <a href="/static/history.html" class="text-xs text-gray-400 hover:text-white">Trial history</a>
-      <a href="/static/benchmarks.html" class="text-xs text-gray-400 hover:text-white">Campaigns</a>
-      <button id="themeToggle" class="theme-toggle w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-f-surface" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
-        <i data-lucide="sun" id="themeIconSun" class="w-4 h-4" aria-hidden="true"></i>
-        <i data-lucide="moon" id="themeIconMoon" class="w-4 h-4 hidden" aria-hidden="true"></i>
-      </button>
-      <div class="flex items-center gap-1.5 text-xs text-gray-500" role="status" aria-live="polite">
-        <span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span>
-        <span id="connectionLabel">Disconnected</span>
-      </div>
-    </div>
-  </header>
+  <header id="roveNav"></header>
 
   <!-- ============ MAIN LAYOUT ============ -->
   <div class="flex flex-1 min-h-0">
 
     <!-- ---- Left Sidebar: History + Navigation ---- -->
-    <aside class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg" aria-label="Evaluation history and navigation">
+    <aside id="quickSidebar" hidden class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg" aria-label="Recent quick runs">
 
       <!-- History section -->
       <div class="flex-1 overflow-y-auto pt-4">
-        <span class="text-[11px] text-gray-500 font-semibold px-4 mb-2 block">History</span>
+        <span class="text-[11px] text-gray-500 font-semibold px-4 mb-2 block">Recent quick runs</span>
         <div id="historyList" class="flex flex-col px-2 gap-0.5">
           <div class="px-3 py-2 text-[11px] text-gray-600 italic">No evaluations yet</div>
         </div>
@@ -97,21 +65,13 @@
       <!-- Divider -->
       <div class="border-t border-f-border mx-4 my-1"></div>
 
-      <!-- Navigation links -->
-      <div class="flex flex-col px-2 gap-0.5 pb-4">
-        <a href="#" data-view="examples" class="sidebar-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-[13px] text-gray-400 hover:text-white hover:bg-f-surface">
-          <i data-lucide="book-open" class="w-4 h-4"></i>
-          <span>Sample cases</span>
-        </a>
-        <a href="#" data-view="settings" class="sidebar-nav-link flex items-center gap-3 px-4 py-2 rounded-md text-[13px] text-gray-400 hover:text-white hover:bg-f-surface">
-          <i data-lucide="settings" class="w-4 h-4"></i>
-          <span>Settings</span>
-        </a>
-      </div>
+      <div class="quick-links"><a href="/static/history.html?source=quick">All saved trials →</a><a href="/?view=examples" data-root-view="examples">Sample cases</a></div>
     </aside>
 
     <!-- ---- Content Main Area ---- -->
-    <main class="flex-1 flex flex-col min-h-0">
+    <main class="flex-1 flex flex-col min-h-0 min-w-0">
+      <div id="configureHeading" class="root-page-heading" hidden><h1>Configure</h1><p>Define the systems your evaluations will compare.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a><a href="/?view=settings" data-root-view="settings">Settings</a></nav></div>
+      <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>Quick trial</h1><p>Try one observation and task. Every attempt is saved in Results.</p></div><a href="/static/datasets.html" class="journey-link">Create a campaign →</a></div></div>
 
       <!-- Sub-tab bar (hidden until evaluation runs) -->
       <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist"></div>
@@ -119,141 +79,21 @@
       <!-- Content scroll area -->
       <div id="chatArea" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
 
-        <!-- Welcome screen -->
-        <div id="welcomeMsg" class="flex flex-col items-center justify-center h-full text-center px-4">
-          <!-- Logo + title -->
-          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-f-purple/20 to-purple-600/10 border border-f-purple/20 flex items-center justify-center mb-5">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4"/><path d="M20 12h-4"/>
-              <path d="M12 16v4"/><circle cx="12" cy="2" r="1" fill="#7c3aed"/><circle cx="4" cy="12" r="1" fill="#7c3aed"/>
-              <circle cx="20" cy="12" r="1" fill="#7c3aed"/><circle cx="12" cy="22" r="1" fill="#7c3aed"/>
-            </svg>
-          </div>
-          <h2 class="text-2xl font-semibold mb-1">ROVE</h2>
-          <p class="text-[11px] text-gray-500 mb-3">Robot Observation &amp; Vision Evaluation</p>
-          <p class="text-gray-300 text-[13px] max-w-lg mb-8">Compare robotics policy configurations, trace failure hypotheses to evidence, and spot missing checks. An open-source evaluation workbench; mock runs demonstrate the workflow, not robot performance.</p>
-
-          <!-- How ROVE Evaluates -->
-          <p class="text-[11px] text-gray-400 font-semibold mb-4 uppercase tracking-wider">How ROVE Evaluates VLAs</p>
-          <div class="max-w-2xl w-full mb-8">
-            <div class="bg-f-surface border border-f-border rounded-xl p-5">
-              <div class="flex items-center gap-2 mb-2">
-                <i data-lucide="git-branch" class="w-4 h-4 text-sky-400"></i>
-                <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Multi-VLA Comparison</span>
-              </div>
-              <p class="text-[10px] text-gray-500 mb-4">Run multiple VLAs on the same input (image, URDF) and task, then evaluate each with an agentic verifier that calls tools to gather evidence.</p>
-
-              <!-- Execution phase: multiple VLAs in parallel -->
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-[9px] font-bold text-sky-400 uppercase tracking-widest">Execution</span>
-                <div class="flex-1 border-t border-sky-500/30"></div>
-              </div>
-              <div class="flex justify-center gap-3 mb-4">
-                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
-                  <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">VLA A</span>
-                  <p class="text-[8px] text-gray-500">e.g. pi0-FAST</p>
-                </div>
-                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
-                  <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">VLA B</span>
-                  <p class="text-[8px] text-gray-500">e.g. SmolVLA</p>
-                </div>
-                <div class="pipeline-stage gradient-card border border-sky-500/20 rounded-lg p-2 text-center w-28">
-                  <i data-lucide="bot" class="w-4 h-4 text-sky-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">VLA C</span>
-                  <p class="text-[8px] text-gray-500">e.g. OpenVLA</p>
-                </div>
-              </div>
-
-              <!-- Down arrow -->
-              <div class="flex justify-center mb-3">
-                <span class="text-gray-600 text-lg">&darr;</span>
-              </div>
-
-              <!-- Evaluation phase: agentic verifier with tool calls -->
-              <div class="flex items-center gap-2 mb-2">
-                <span class="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Agentic Verify</span>
-                <span class="text-[8px] text-gray-600 ml-1">(per VLA)</span>
-                <div class="flex-1 border-t border-purple-500/30"></div>
-              </div>
-              <div class="flex flex-col items-center gap-2">
-                <div class="pipeline-stage gradient-card border rounded-lg p-2 text-center w-40">
-                  <i data-lucide="shield-check" class="w-4 h-4 text-amber-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">Verifier LLM</span>
-                  <p class="text-[8px] text-gray-500">reasons &amp; calls tools</p>
-                </div>
-                <div class="flex items-center gap-4 mt-1">
-                  <div class="flex flex-col items-center">
-                    <span class="text-[8px] text-purple-400 mb-0.5">&darr; tool call</span>
-                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
-                      <i data-lucide="eye" class="w-3 h-3 text-purple-400 mx-auto mb-0.5"></i>
-                      <span class="text-[8px] font-semibold text-gray-300 block">Perceive</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-col items-center">
-                    <span class="text-[8px] text-blue-400 mb-0.5">&darr; tool call</span>
-                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
-                      <i data-lucide="activity" class="w-3 h-3 text-blue-400 mx-auto mb-0.5"></i>
-                      <span class="text-[8px] font-semibold text-gray-300 block">Dynamics</span>
-                    </div>
-                  </div>
-                  <div class="flex flex-col items-center">
-                    <span class="text-[8px] text-emerald-400 mb-0.5">&darr; tool call</span>
-                    <div class="gradient-card border rounded-md px-2.5 py-1.5 text-center">
-                      <i data-lucide="box" class="w-3 h-3 text-emerald-400 mx-auto mb-0.5"></i>
-                      <span class="text-[8px] font-semibold text-gray-300 block">Simulate (planned)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Down arrow -->
-              <div class="flex justify-center mt-3 mb-2">
-                <span class="text-gray-600 text-lg">&darr;</span>
-              </div>
-
-              <!-- Ranked comparison output -->
-              <div class="flex justify-center">
-                <div class="gradient-card border border-purple-500/20 rounded-lg px-4 py-2 text-center">
-                  <i data-lucide="bar-chart-3" class="w-4 h-4 text-purple-400 mx-auto mb-1"></i>
-                  <span class="text-[10px] font-semibold text-gray-200 block">Diagnostic Comparison</span>
-                  <p class="text-[8px] text-gray-500">confidence &middot; plausibility &middot; latency</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Get started collapsible -->
-          <div class="max-w-lg w-full">
-            <button id="gettingStartedToggle" class="flex items-center gap-2 group cursor-pointer bg-transparent border-0 p-0 mb-0 mx-auto" type="button" aria-expanded="false" aria-controls="gettingStartedContent">
-              <span id="gettingStartedArrow" class="text-purple-400 text-sm transition-transform duration-200 group-hover:text-purple-300">&rsaquo;</span>
-              <span class="text-[13px] text-purple-400 font-semibold group-hover:text-purple-300 transition-colors">Getting Started</span>
-            </button>
-            <div id="gettingStartedContent" class="hidden mt-3">
-              <div class="bg-f-surface border border-f-border rounded-xl p-4">
-                <div class="flex flex-col gap-2.5 text-left">
-                  <div class="flex items-center gap-3">
-                    <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                    <span class="text-[13px] text-gray-300">Upload a workspace image (and optional URDF) using the + button</span>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                    <span class="text-[13px] text-gray-300">Describe a manipulation task (e.g., "Pick the red bracket and place it in bin A")</span>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                    <span class="text-[13px] text-gray-300">Select strategies — pipeline mode (sequential or parallel) is auto-detected</span>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span class="w-6 h-6 rounded bg-f-purple/15 text-purple-400 text-xs font-bold flex items-center justify-center shrink-0">4</span>
-                    <span class="text-[13px] text-gray-300">Click Evaluate and compare pipeline results across strategies</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <section id="welcomeMsg" class="start-page">
+          <p class="start-eyebrow">ROBOT OBSERVATION &amp; VISION EVALUATION</p>
+          <h1>Does your robotics agent<br>work on your tasks?</h1>
+          <p class="start-intro">Bring your cases, define what success means, and compare agent pipelines with evidence you can inspect.</p>
+          <div class="start-actions"><a class="start-primary" href="/static/datasets.html">Create an evaluation <span aria-hidden="true">→</span></a><a class="start-secondary" href="/?view=quick" data-root-view="quick">Try a quick trial</a></div>
+          <p class="start-caption">Have results already? <a href="/static/benchmarks.html">Review your evaluations →</a></p>
+          <ol class="start-journey" aria-label="Your evaluation journey">
+            <li><span class="step-number">01</span><h2>Bring your tasks</h2><p>Add observations and instructions, or begin with a sample case.</p><a href="/static/datasets.html">Prepare cases →</a></li>
+            <li><span class="step-number">02</span><h2>Define and run</h2><p>Choose success criteria, a strategy and repeated trials. ROVE freezes the configuration.</p><a href="/static/datasets.html?step=run">Set up a campaign →</a></li>
+            <li><span class="step-number">03</span><h2>Understand the result</h2><p>See success and reliability. Follow a failed trial into measurements, recordings and traces.</p><a href="/static/benchmarks.html">Open results →</a></li>
+            <li><span class="step-number">04</span><h2>Make a measured improvement</h2><p>Save a baseline, change a strategy and compare under the same evaluation conditions.</p><a href="/static/datasets.html?step=review">Compare improvements →</a></li>
+          </ol>
+          <div class="start-support"><div><h2>Start with what you have</h2><p>A scene image and task can assess an agent’s output. Robot completion claims need execution evidence.</p><a href="/?view=examples" data-root-view="examples">Browse robotics samples →</a></div><div><h2>Bring your pipeline</h2><p>A strategy can use a VLM, a VLA or an agent. Configure its endpoints once, then compare it on your cases.</p><a href="/?view=strategies" data-root-view="strategies">Manage strategies →</a></div></div>
+        </section>
+        <section id="quickWelcome" class="quick-welcome" hidden><h2>One task. A first look.</h2><p>Attach an observation, describe the task and choose your strategies below.</p><p><a href="/?view=examples" data-root-view="examples">Use a sample case</a> or <a href="/static/history.html?source=quick">reopen a saved trial</a>.</p><p class="start-caption">A quick trial helps you explore. Use a campaign for repeated trials, success criteria and baseline comparisons.</p></section>
 
         <!-- Strategies view (hidden by default) -->
         <div id="strategiesView" class="hidden"></div>
@@ -269,13 +109,13 @@
       </div>
 
       <!-- ---- Bottom Input Bar ---- -->
-      <div class="shrink-0 border-t border-f-border bg-f-bg px-4 py-3">
+      <div id="quickComposer" hidden class="shrink-0 border-t border-f-border bg-f-bg px-4 py-3">
 
         <!-- Strategy selector panel (collapsible) -->
         <div id="configPanel" class="mb-3">
           <button id="configToggle" class="flex items-center gap-1.5 text-[11px] text-gray-500 font-semibold mb-2 hover:text-gray-300 transition-colors w-full" aria-expanded="false" aria-controls="configContent">
             <i data-lucide="layers" class="w-3.5 h-3.5"></i>
-            <span>Strategies</span>
+            <span>Strategies to compare</span>
             <span id="selectedCount" class="text-f-purple ml-1">(0 selected)</span>
             <i data-lucide="chevron-up" id="configChevron" class="w-3 h-3 ml-auto transition-transform duration-200"></i>
           </button>
@@ -334,6 +174,7 @@
             <i data-lucide="send" class="w-5 h-5" aria-hidden="true"></i>
           </button>
         </div>
+        <div class="quick-connection"><span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span><span id="connectionLabel">Disconnected</span></div>
         <!-- Keyboard hint -->
         <div class="text-[10px] text-gray-500 mt-1.5 ml-12">Tab to fill sample &middot; Enter to send</div>
       </div>
@@ -342,7 +183,7 @@
   </div>
 
   <script src="/static/sample-cases.js"></script>
-  <script src="/static/app.js?v=sample-cases-1"></script>
+  <script src="/static/app.js?v=journey-1"></script>
 
 </body>
 </html>

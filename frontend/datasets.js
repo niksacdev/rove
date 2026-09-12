@@ -130,8 +130,53 @@ if (typeof document !== "undefined") (() => {
   const select = (id, options, value) => { const element = node("select"); if (id) element.id = id; for (const [key, text] of options) { const option = node("option", text); option.value = key; element.append(option); } if (value != null) element.value = value; return element; };
   const label = (text, control) => { const element = node("label", text); element.append(control); return element; };
   const button = (text, action, style = "secondary") => { const element = node("button", text, style); element.type = "button"; element.addEventListener("click", action); return element; };
+  state.step = "cases";
+  const stepCopy = {cases: ["Prepare your cases", "Choose observations and instructions. Review their validity and reuse frozen datasets when ready."], run: ["Define success and run", "Check the selected input revisions, success criteria and expected measures before launching."], review: ["Review outcomes and improve", "Inspect measured outcomes, add expert reviews, and compare a controlled strategy change."]};
+  function writeRoute() {
+    const url = new URL(location.href); url.searchParams.set("step", state.step);
+    for (const [key, value] of [["campaign", state.campaignId], ["case", state.caseId]]) { if (value) url.searchParams.set(key, value); else url.searchParams.delete(key); }
+    if (url.href !== location.href) history.pushState({}, "", url);
+  }
+  function goStep(step, push = true, focus = true) {
+    state.step = Object.hasOwn(stepCopy, step) ? step : "cases";
+    $("workspaceTitle").textContent = state.step === "review" ? "Review results" : "Evaluate on your tasks";
+    document.title = state.step === "review" ? "ROVE · Results · Review" : "ROVE · Evaluate";
+    window.RoveNavigation?.setActive(state.step === "review" ? "results" : "evaluate");
+    for (const panel of document.querySelectorAll("[data-workflow-panel]")) panel.hidden = panel.dataset.workflowPanel !== state.step;
+    for (const anchor of document.querySelectorAll("[data-journey-step]")) {
+      if (anchor.dataset.journeyStep === state.step) anchor.setAttribute("aria-current", "step"); else anchor.removeAttribute("aria-current");
+      const url = new URL(location.href); url.searchParams.set("step", anchor.dataset.journeyStep); anchor.href = url.pathname + url.search;
+    }
+    const slot = $(state.step === "review" ? "reviewWorkspaceSlot" : "casesWorkspaceSlot");
+    if ($("caseWorkspace").parentElement !== slot) slot.append($("caseWorkspace"));
+    $("stepHeading").textContent = stepCopy[state.step][0]; $("stepDescription").textContent = stepCopy[state.step][1];
+    if (push) writeRoute(); if (focus) $("stepHeading").focus();
+  }
+  async function restoreRoute() {
+    const query = new URLSearchParams(location.search), campaign = query.get("campaign"), id = query.get("case");
+    goStep(query.get("step") || (campaign ? "review" : "cases"), false, false);
+    if (campaign !== state.campaignId) { $("resultCampaign").value = campaign || ""; await openCampaign(campaign, false); }
+    // A newer history transition may have occurred while campaign data loaded.
+    if (query.toString() !== new URLSearchParams(location.search).toString()) return;
+    if (id && id !== state.caseId) await openCase(id);
+    else if (!id && state.caseId) { ++state.detailVersion; state.caseId = null; state.detail = null; state.reviewEdit = null; $("caseInspector").replaceChildren(node("h2", "Inspect a case"), node("p", "Open a case to inspect its inputs, outputs and reviews.", "muted")); $("caseInspector").setAttribute("aria-busy", "false"); updateSelected(); }
+  }
+  function caseLink(text, id) {
+    const url = new URL(location.href); url.searchParams.set("case", id); url.searchParams.set("step", state.step);
+    if (state.campaignId) url.searchParams.set("campaign", state.campaignId);
+    const anchor = link(text, url.pathname + url.search);
+    anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); openCase(id, true); });
+    return anchor;
+  }
+  $("caseReuseSlot").append($("caseReusePanel"));
+  for (const anchor of document.querySelectorAll("[data-journey-step]")) anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); goStep(anchor.dataset.journeyStep); });
+  for (const control of document.querySelectorAll("[data-go-step]")) control.addEventListener("click", () => goStep(control.dataset.goStep));
+  $("reuseReviewed").addEventListener("click", () => { goStep("cases"); $("caseReusePanel").open = true; $("caseReusePanel").scrollIntoView({block: "start"}); });
+  $("defineFreezeContract").addEventListener("click", () => { goStep("run"); $("contractPanel").open = true; $("contractName").focus(); });
+  $("freezeContract").addEventListener("change", () => { $("campaignContract").value = $("freezeContract").value; $("campaignContract").dispatchEvent(new Event("change")); });
   function tell(text, error = false) { $("message").textContent = text; $("message").className = error ? "error-text" : "notice"; }
   function contractOptions() { return [["", "Choose a success contract"], ...state.contracts.map(item => [item.id, item.name])]; }
+  function reviewContractId() { return state.step === "review" && state.reviewCampaignContract ? state.reviewCampaignContract : $("campaignContract").value; }
   function activeContract() { return state.contracts.find(item => item.id === $("campaignContract").value); }
   async function request(url, options = {}) {
     const response = await fetch(url, options);
@@ -256,6 +301,11 @@ if (typeof document !== "undefined") (() => {
   function invalidateFreeze() { state.freezePreview = null; $("freezeDataset").disabled = true; }
   function updateBudget() {
     const count = state.frozenDataset ? state.frozenDataset.members.filter(item => item.disposition === "included").length : state.selected.size;
+    const context = $("runContext"); context.replaceChildren();
+    if (state.frozenDataset) context.append(node("strong", `Frozen dataset: ${state.frozenDataset.name}`), node("p", `${count} included case revisions · ${state.frozenDataset.id}`, "record-id"));
+    else if (state.selected.size) { context.append(node("strong", `${state.selected.size} selected case revisions`)); const list = node("ul"); for (const item of state.selected.values()) list.append(node("li", `${item.name} · revision ${item.revision || caseId(item)}`)); context.append(list); }
+    else context.append(node("p", "No cases selected. Return to Cases to select inputs or use a frozen dataset.", "notice"));
+    $("freezeContract").value = $("campaignContract").value;
     $("selectionCount").textContent = `${state.selected.size} selected`;
     const repeats = Number($("campaignRepeats").value);
     $("campaignBudget").textContent = `${count} cases × ${repeats || 0} repeats = ${count * (repeats || 0)} planned attempts${state.frozenDataset ? ` from frozen dataset ${state.frozenDataset.name}` : ""}. Preview the available measures before launch. Configured model calls may incur charges.`;
@@ -277,7 +327,7 @@ if (typeof document !== "undefined") (() => {
     try {
       const page = await request(`/api/cases?limit=${state.limit}&offset=${state.offset}`);
       if (version !== state.listVersion) return;
-      state.cases = page.cases; $("caseList").replaceChildren();
+      state.cases = page.cases; $("caseList").replaceChildren(); if (!state.cases.length && state.offset === 0) $("importPanel").open = true;
       for (const item of state.cases) {
         const row = node("li", null, "case-list-item"), checkbox = node("input"); checkbox.type = "checkbox"; checkbox.dataset.caseId = caseId(item); checkbox.setAttribute("aria-label", `Select ${item.name}`);
         checkbox.addEventListener("change", () => { if (checkbox.checked) state.selected.set(caseId(item), item); else state.selected.delete(caseId(item)); selectionChanged(); });
@@ -300,6 +350,7 @@ if (typeof document !== "undefined") (() => {
     const page = await request("/api/success-contracts"); state.contracts = page.contracts;
     const selected = selectedId || $("campaignContract").value;
     $("campaignContract").replaceChildren(...select(null, contractOptions(), selected).childNodes); $("campaignContract").value = selected;
+    $("freezeContract").replaceChildren(...select(null, contractOptions(), selected).childNodes); $("freezeContract").value = selected;
     if (!state.contracts.length) $("contractPanel").open = true;
     if ($("reviewContract")) { const current = $("reviewContract").value; $("reviewContract").replaceChildren(...select(null, contractOptions(), current || selected).childNodes); $("reviewContract").value = current || selected; renderReviewCriteria(); }
   }
@@ -342,23 +393,23 @@ if (typeof document !== "undefined") (() => {
     const {reference_data, ...provenance} = item;
     container.append(objectDetails("Inputs, evidence and provenance", provenance));
     container.append(button("Create case revision", () => {
-      state.caseEdit = item; $("caseName").value = item.name; $("caseTask").value = item.task; $("candidateContext").value = JSON.stringify(item.candidate_context || {}, null, 2); $("caseConditions").value = JSON.stringify(item.conditions || {}, null, 2); $("episodeEvidence").value = JSON.stringify(item.recorded_evidence || {}, null, 2); $("referenceData").value = JSON.stringify(item.reference_data || {}, null, 2); $("caseImage").value = ""; $("caseImage").required = false;
+      goStep("cases"); state.caseEdit = item; $("caseName").value = item.name; $("caseTask").value = item.task; $("candidateContext").value = JSON.stringify(item.candidate_context || {}, null, 2); $("caseConditions").value = JSON.stringify(item.conditions || {}, null, 2); $("episodeEvidence").value = JSON.stringify(item.recorded_evidence || {}, null, 2); $("referenceData").value = JSON.stringify(item.reference_data || {}, null, 2); $("caseImage").value = ""; $("caseImage").required = false;
       $("caseEditStatus").textContent = `Creating a new revision from ${caseId(item)}. Existing trials and frozen datasets keep their original inputs. A replacement image is optional.`;
       $("saveCase").textContent = "Save new revision"; $("cancelCaseRevision").hidden = false; $("importPanel").open = true; $("caseName").focus();
     }));
     const outputSection = node("section", null, "inspector-section"); outputSection.append(node("h3", "Baseline and candidate outputs"));
-    if (!state.trials.length) outputSection.append(node("p", "No recorded trial outputs for this case yet. Select it and run a baseline below.", "muted"));
+    if (!state.trials.length) outputSection.append(node("p", "No recorded trial outputs for this case yet. Select it, then continue to Run.", "muted"));
     for (const trial of state.trials) {
       const card = node("div", null, "output-card"); card.append(node("h4", trial.strategy?.name || trial.strategy?.id || "Strategy attempt"), node("p", `${trial.status} · ${date(trial.created_at)}`, "muted"), link("Inspect output and evidence", `/static/history.html?trial=${encodeURIComponent(trial.id)}`), objectDetails("Saved output", trial.result));
       if (trial.status !== "running" && trial.result != null) card.append(button("Rate this output", () => { resetReview(); $("reviewTarget").value = "trial_output"; reviewTargetChanged(); $("reviewTrial").value = trial.id; $("reviewerName").focus(); }));
       outputSection.append(card);
     }
-    if (state.trials.length === 100) outputSection.append(node("p", "Showing the first 100 recorded trials. Use Trial history for older attempts.", "muted"));
+    if (state.trials.length === 100) outputSection.append(node("p", "Showing the first 100 recorded trials. Open Results → Trials for older attempts.", "muted"));
     container.append(outputSection);
     const reviewSection = node("section", null, "inspector-section"); reviewSection.append(node("h3", "Expert review"), node("p", "Case validity, reusable annotations and ratings of particular outputs are separate records. A failed output can still be a useful case.", "muted"));
     const form = node("form"); form.id = "reviewForm";
     const target = select("reviewTarget", [["case_validity", "Case validity — is this test usable?"], ["case_annotation", "Reusable annotation — expected properties"], ["trial_output", "Trial output — rate this agent's result"]]);
-    form.append(label("Review target", target), label("Success contract", select("reviewContract", contractOptions(), $("campaignContract").value)));
+    form.append(label("Review target", target), label("Success contract", select("reviewContract", contractOptions(), reviewContractId())));
     const trialSelect = select("reviewTrial", [["", "Choose an output"], ...state.trials.filter(trial => trial.status !== "running" && trial.result != null).map(trial => [trial.id, `${trial.strategy?.name || trial.strategy?.id || "Trial"} · ${trial.id.slice(0, 12)}`])]);
     const trialLabel = label("Specific trial output", trialSelect); trialLabel.id = "reviewTrialLabel"; trialLabel.hidden = true; form.append(trialLabel);
     const reviewer = node("input"); reviewer.id = "reviewerName"; reviewer.maxLength = 160; reviewer.required = true; reviewer.placeholder = "Your name (local attribution)";
@@ -387,7 +438,7 @@ if (typeof document !== "undefined") (() => {
       $("reviewCriteria").append(label(`${criterion.description}${criterion.required ? " (required)" : ""}`, input));
     }
   }
-  function resetReview() { state.reviewEdit = null; $("reviewForm").reset(); for (const id of ["reviewTarget", "reviewContract", "reviewTrial", "reviewerName"]) $(id).disabled = false; $("reviewContract").value = $("campaignContract").value; $("reviewEditStatus").textContent = "New review. Reviewer names record attribution, not authenticated identity."; reviewTargetChanged(); }
+  function resetReview() { state.reviewEdit = null; $("reviewForm").reset(); for (const id of ["reviewTarget", "reviewContract", "reviewTrial", "reviewerName"]) $(id).disabled = false; $("reviewContract").value = reviewContractId(); $("reviewEditStatus").textContent = "New review. Reviewer names record attribution, not authenticated identity."; reviewTargetChanged(); }
   function editReview(review) {
     state.reviewEdit = review; $("reviewTarget").value = review.target_type; $("reviewContract").value = review.contract_id; $("reviewTrial").value = review.trial_id || ""; $("reviewerName").value = review.reviewer; $("reviewDecision").value = review.decision; $("reviewRationale").value = review.rationale; $("reviewAnnotations").value = Object.keys(review.annotations || {}).length ? JSON.stringify(review.annotations, null, 2) : ""; $("reviewEvidence").value = (review.evidence_refs || []).join("\n"); reviewTargetChanged(); renderReviewCriteria(review.criteria);
     for (const id of ["reviewTarget", "reviewTrial", "reviewerName"]) $(id).disabled = true;
@@ -416,7 +467,7 @@ if (typeof document !== "undefined") (() => {
   }
   async function openCase(id, push = false) {
     const version = ++state.detailVersion; state.caseId = id; state.reviewEdit = null;
-    if (push) { const url = new URL(location.href); url.searchParams.set("case", id); history.pushState({}, "", url); }
+    if (push) { if (state.step === "run") goStep("cases", false); writeRoute(); }
     updateSelected(); $("caseInspector").setAttribute("aria-busy", "true"); $("caseInspector").replaceChildren(node("p", "Loading case and review history…", "muted"));
     try {
       const [item, reviews, trials] = await Promise.all([request(`/api/cases/${encodeURIComponent(id)}`), request(`/api/reviews?case_revision_id=${encodeURIComponent(id)}`), request(`/api/trials?case_revision_id=${encodeURIComponent(id)}&limit=100`)]);
@@ -431,14 +482,14 @@ if (typeof document !== "undefined") (() => {
     const previous = $("datasetParent").value; $("datasetParent").replaceChildren(...select(null, [["", "First revision"], ...state.datasets.map(item => [item.id, `${item.name} · ${item.id.slice(0, 10)}`])], previous).childNodes); $("datasetParent").value = previous;
     if (!state.datasets.length) $("datasetList").append(node("p", "No frozen datasets yet. Each revision preserves exact case and review membership.", "muted"));
     for (const dataset of state.datasets) {
-      const card = node("div", null, "dataset-card"); card.append(node("h4", dataset.name), node("p", `${dataset.readiness || "Unknown readiness"} · ${date(dataset.created_at)}`, "muted"), node("p", dataset.sha256, "record-id"), objectDetails("Frozen membership and provenance", dataset), button("Use for next campaign", () => { state.frozenDataset = dataset; $("campaignContract").value = dataset.contract_id; invalidateCampaign(); $("baselinePanel").scrollIntoView({behavior: "auto", block: "start"}); tell(`Using frozen dataset ${dataset.name}. Preview the next campaign before launch.`); })); $("datasetList").append(card);
+      const card = node("div", null, "dataset-card"); card.append(node("h4", dataset.name), node("p", `${dataset.readiness || "Unknown readiness"} · ${date(dataset.created_at)}`, "muted"), node("p", dataset.sha256, "record-id"), objectDetails("Frozen membership and provenance", dataset), button("Use for next campaign", () => { state.frozenDataset = dataset; $("campaignContract").value = dataset.contract_id; invalidateCampaign(); goStep("run"); tell(`Using frozen dataset ${dataset.name}. Preview the next campaign before launch.`); })); $("datasetList").append(card);
     }
   }
   async function loadCampaigns(selectedId) {
     const campaigns = await request("/api/campaigns"); state.campaigns = campaigns;
     const selected = selectedId || $("resultCampaign").value;
     $("resultCampaign").replaceChildren(...select(null, [["", "Choose a campaign"], ...campaigns.map(item => [item.id, `${item.name} · ${item.status}`])], selected).childNodes); $("resultCampaign").value = selected;
-    if (selectedId) await openCampaign(selectedId);
+    if (selectedId) { await openCampaign(selectedId); goStep("review"); }
   }
   function displayMeasure(value, unit) {
     if (value == null) return "unavailable";
@@ -485,21 +536,22 @@ if (typeof document !== "undefined") (() => {
     if (comparison.baseline && comparison.candidate) { const pair = node("div", null, "form-grid"); const baseline = node("section"), candidate = node("section"); renderSummary(comparison.baseline, baseline, "Baseline"); renderSummary(comparison.candidate, candidate, "Candidate"); pair.append(baseline, candidate); container.append(pair); }
     renderDifferences(comparison, container);
     for (const item of comparison.case_comparisons || []) {
-      const card = node("div", null, "output-card"); card.append(link(`Case ${item.case_id}`, `/static/datasets.html?case=${encodeURIComponent(item.case_id)}`), node("p", `${item.status.replaceAll("_", " ")} · ${item.planned_pairs} planned pairs · ${((item.paired_coverage || 0) * 100).toFixed(1)}% assessed pairing coverage`, "muted"));
+      const card = node("div", null, "output-card"); card.append(caseLink(`Case ${item.case_id}`, item.case_id), node("p", `${item.status.replaceAll("_", " ")} · ${item.planned_pairs} planned pairs · ${((item.paired_coverage || 0) * 100).toFixed(1)}% assessed pairing coverage`, "muted"));
       const rows = node("details"); rows.append(node("summary", "Paired attempts and evidence"));
       for (const attempt of item.attempts || []) { const line = node("p", `Seed ${attempt.seed}: ${attempt.baseline} → ${attempt.candidate}. `, "muted"); const baselineId = pairedTrialId(comparison, item, attempt, "baseline"), candidateId = pairedTrialId(comparison, item, attempt, "candidate"); if (baselineId) line.append(link("Baseline trial", `/static/history.html?trial=${encodeURIComponent(baselineId)}`), document.createTextNode(" · ")); if (candidateId) line.append(link("Candidate trial", `/static/history.html?trial=${encodeURIComponent(candidateId)}`)); if (candidateId && baselineId) line.append(document.createTextNode(" · "), link("Compare trace lanes", `/static/history.html?trial=${encodeURIComponent(candidateId)}&compare=${encodeURIComponent(baselineId)}`)); rows.append(line); }
       card.append(rows); container.append(card);
     }
     container.append(objectDetails("Exact comparison and assessment revisions", comparison));
   }
-  async function openCampaign(id) {
-    const version = ++state.campaignVersion; state.campaignId = id; state.namedBaseline = null; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true;
+  async function openCampaign(id, push = true) {
+    const version = ++state.campaignVersion; state.campaignId = id; state.reviewCampaignContract = null; $("resultCampaign").value = id || ""; state.namedBaseline = null; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true;
+    if (push) { goStep("review", false); writeRoute(); }
     if (!id) { $("campaignResults").replaceChildren(node("p", "Choose a campaign to inspect its assessed outcomes.", "muted")); return; }
     $("campaignResults").replaceChildren(node("p", "Loading authoritative campaign assessments…", "muted"));
     try {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (version !== state.campaignVersion) return;
-      const campaign = detail.campaign; $("campaignResults").replaceChildren();
+      const campaign = detail.campaign; state.reviewCampaignContract = campaign.contract_id || null; $("campaignResults").replaceChildren();
       $("campaignResults").append(node("p", `${campaign.spec.name} · ${campaign.status} · ${date(campaign.created_at)}`, "muted"));
       renderSummary(result.summary, $("campaignResults"));
       $("campaignResults").append(link("Open full report", `/api/campaigns/${encodeURIComponent(id)}/report?format=html`), objectDetails("Assessment source, coverage and review revisions", result.assessments));
@@ -507,7 +559,7 @@ if (typeof document !== "undefined") (() => {
       for (const trial of result.trials || []) {
         const item = node("div", null, "compact-actions"); item.append(node("span", `${trial.task_id} · ${trial.strategy_id} · seed ${trial.seed}: ${trial.outcome}`, "muted")); if (trial.trial_id) item.append(link("Inspect trial", `/static/history.html?trial=${encodeURIComponent(trial.trial_id)}`));
         const task = campaign.spec.tasks.find(entry => entry.id === trial.task_id); const revision = campaign.case_revision_ids?.find(value => value === trial.task_id) || task?.case_revision_id;
-        if (revision) item.append(link("Review case", `/static/datasets.html?case=${encodeURIComponent(revision)}`)); $("campaignResults").append(item);
+        if (revision) item.append(caseLink("Review case", revision)); $("campaignResults").append(item);
       }
       $("baselineStrategy").replaceChildren(...select(null, (campaign.spec.strategies || []).map(value => [value, value])).childNodes);
       $("baselineStrategy").value = campaign.spec.strategies?.[0] || "";
@@ -614,7 +666,7 @@ if (typeof document !== "undefined") (() => {
   });
   function resetCaseForm() { state.recordingAsset = null; $("attachRecording").disabled = true; $("recordingSnippet").hidden = true; $("recordingUploadStatus").textContent = "Choose a file to upload it."; state.caseEdit = null; $("caseForm").reset(); $("caseImage").required = true; $("saveCase").textContent = "Save case"; $("cancelCaseRevision").hidden = true; $("caseEditStatus").textContent = "New case. Saved inputs receive an immutable revision."; }
   $("loadExamples").addEventListener("click", async () => { $("loadExamples").disabled = true; try { const result = await post("/api/cases/examples", {}); for (const item of result.cases) state.selected.set(caseId(item), item); selectionChanged(); await loadCases(); if (result.cases.length) await openCase(caseId(result.cases[0]), true); $("importPanel").open = false; tell("Synthetic robotics examples imported and selected. Their observations demonstrate evaluation behavior, not physical performance."); } catch (error) { tell(error.message, true); } finally { $("loadExamples").disabled = false; } });
-  $("showImport").addEventListener("click", () => { if (state.caseEdit) resetCaseForm(); $("importPanel").open = true; $("caseName").focus(); });
+  $("showImport").addEventListener("click", () => { goStep("cases"); if (state.caseEdit) resetCaseForm(); $("importPanel").open = true; $("caseName").focus(); });
   $("cancelCaseRevision").addEventListener("click", resetCaseForm);
   $("refreshCases").addEventListener("click", () => { loadCases(); if (state.caseId) openCase(state.caseId); });
   $("selectPage").addEventListener("change", () => { for (const item of state.cases) { if ($("selectPage").checked) state.selected.set(caseId(item), item); else state.selected.delete(caseId(item)); } selectionChanged(); });
@@ -628,9 +680,7 @@ if (typeof document !== "undefined") (() => {
   $("contractJson").addEventListener("input", () => { $("successCriteria").required = !$("contractJson").value.trim(); });
   function scopeHint() { $("scopeHint").textContent = $("evidenceMode").value === "candidate_output" ? "Output acceptance does not establish observed robot task success." : $("evidenceMode").value === "recorded_episode" ? "This assesses supplied episode evidence from its producing system. Replaying a recording cannot prove a new candidate executed successfully." : "Synthetic rollout evidence demonstrates the evaluation workflow; it is not measured robot performance."; }
   $("evidenceMode").addEventListener("change", scopeHint);
-  function themeLabel() { $("themeToggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode"; }
-  $("themeToggle").addEventListener("click", () => { const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = theme; try { localStorage.setItem("rove-theme", theme); } catch { /* Keep in-page theming available. */ } themeLabel(); });
-  window.addEventListener("popstate", () => { const id = new URLSearchParams(location.search).get("case"); if (id) openCase(id); });
-  themeLabel(); updateBudget(); loadAssistantStatus();
-  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), loadNamedBaselines(), request("/api/strategies").then(page => { const options = [["", "Choose a strategy"], ...page.strategies.map(item => [item.id, item.display_name || item.id])]; $("campaignStrategy").replaceChildren(...select(null, options).childNodes); $("candidateStrategy").replaceChildren(...select(null, options).childNodes); $("campaignStrategy").value = ""; $("candidateStrategy").value = ""; })]).then(() => { const id = new URLSearchParams(location.search).get("case"); if (id) openCase(id); }).catch(error => tell(error.message, true));
+  window.addEventListener("popstate", () => restoreRoute().catch(error => tell(error.message, true)));
+  goStep(new URLSearchParams(location.search).get("step") || (new URLSearchParams(location.search).has("campaign") ? "review" : "cases"), false, false); updateBudget(); loadAssistantStatus();
+  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), loadNamedBaselines(), request("/api/strategies").then(page => { const options = [["", "Choose a strategy"], ...page.strategies.map(item => [item.id, item.display_name || item.id])]; $("campaignStrategy").replaceChildren(...select(null, options).childNodes); $("candidateStrategy").replaceChildren(...select(null, options).childNodes); $("campaignStrategy").value = ""; $("candidateStrategy").value = ""; })]).then(restoreRoute).catch(error => tell(error.message, true));
 })();

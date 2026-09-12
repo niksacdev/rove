@@ -181,3 +181,11 @@ this README and executable tests describe the supported release behavior.
 Use [configured verification](docs/VERIFICATION.md) to provide a task evaluator,
 required constraints and optional FK diagnostics through the existing verify stage.
 Results carry measurements, evidence quality and evaluator versions into campaign reports.
+
+### Your evaluation journey
+
+The workspace uses the same navigation on every page: **Start → Evaluate → Results**,
+with strategies, endpoints and settings under **Configure**. Prepare cases, define
+success and run repeated trials, then inspect outcomes and compare a changed
+strategy with a saved baseline. Quick trials remain available from Start; saved
+attempts live under Results → Trials. See the [user journey](docs/product/user-journey.md).

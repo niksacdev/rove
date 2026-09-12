@@ -16,6 +16,22 @@ baseline comparisons extend that foundation. The linked [product concepts](../pr
 [trace specification](../product/traces-and-measurements.md) describe the fuller
 target, including capabilities not yet implemented.
 
+## Workflow navigation
+
+The shared navigation maps the existing pages to **Start, Evaluate, Results and
+Configure**. Start becomes the root overview; Evaluate is the datasets workspace
+with Cases, Run and Review & improve steps. Results is the benchmarks hub with
+Trials beneath it. Configure uses the root strategy/model/settings views;
+Quick trial and the manifest builder remain secondary paths.
+
+Local step changes retain evaluation context. A Results action returns to
+`/static/datasets.html?step=review&campaign=ID`; direct trial/evidence links retain
+their existing identifiers. This reorganizes UI ownership without changing API,
+recording or scoring contracts. Local DOM regressions and browser inspection cover
+route identity, back/forward, both themes and narrow navigation; the
+[user journey](../product/user-journey.md) and [ADR-025](ADR-025-workflow-navigation.md)
+record the implementation and its validation limits.
+
 ## Two Entry Paths, One Pipeline
 
 ```mermaid
@@ -356,8 +372,8 @@ The campaign routes are implemented in
 current HTTP schema. There is no supported `rove evaluate` batch command or
 `rove.evaluate()` convenience function.
 
-Choose **Trial history** in the dashboard to reopen a saved attempt without
-executing it. The shared store adds regression tests for
+Open the existing **Trial history** page to reopen a saved attempt without
+executing it; the navigation consolidation places it under **Results**. The shared store adds regression tests for
 [storage](../../tests/test_trial_store.py),
 [quick/campaign recording](../../tests/test_trial_integration.py),
 [runtime lifecycle](../../tests/test_copilot_runtime.py), and

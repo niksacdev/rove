@@ -16,6 +16,7 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable event and inspector foundation implemented; aligned traces and complete external export pending |
 | [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline and shared recording retained; complete robot lifecycle contracts pending |
 | [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime and controlled transport proof implemented; live provider/collector validation pending |
+| [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted direction | Shared primary destinations and staged workspace in progress; browser acceptance pending |
 
 ## How the decisions connect
 

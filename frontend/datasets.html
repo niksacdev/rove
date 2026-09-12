@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROVE · Cases and datasets</title>
+  <title>ROVE · Evaluate</title>
   <script>
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
@@ -11,30 +11,21 @@
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/history.css">
   <link rel="stylesheet" href="/static/datasets.css">
+  <link rel="stylesheet" href="/static/navigation.css">
+  <script src="/static/navigation.js" defer></script>
   <script src="/static/datasets.js" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
-  <header class="history-header">
-    <a href="/" class="brand" aria-label="ROVE evaluation">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/><circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/></svg>
-      <strong>ROVE</strong><span>/</span><span>Cases and datasets</span>
-    </a>
-    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/datasets.html" aria-current="page">Cases</a><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html">History</a></nav>
-    <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
-  </header>
+  <header id="roveNav" data-section="evaluate"></header>
   <main id="main">
-    <div class="page-heading"><div><h1>Your tasks. Your evaluation data.</h1><p class="intro">Bring observations, define success, inspect a baseline, and freeze what your team has reviewed.</p></div><button type="button" id="showImport">Add cases</button></div>
-    <ol class="journey" aria-label="Evaluation workflow"><li><span>1</span>Bring data and define success</li><li><span>2</span>Run a baseline</li><li><span>3</span>Review cases and outputs</li><li><span>4</span>Freeze a dataset</li></ol>
-    <details id="assistantPanel" class="workspace-panel assistant-panel">
-      <summary>Evaluation assistant <span class="muted">Optional Copilot guidance</span></summary>
-      <p id="assistantStatus" class="muted" role="status">Checking assistant availability…</p>
-      <label>Attach an observation for assistant-prepared case import<input id="assistantAsset" type="file" accept="image/png,image/jpeg"></label><p id="assistantAssetStatus" class="muted" role="status">Images are uploaded only when you select a file. Metadata changes require a separate confirmation.</p>
-      <form id="assistantForm"><label>Ask about your selected cases or campaign<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="What can we assess on these cases, and what evidence is missing?" required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Ask assistant</button></form>
-      <div id="assistantResponse" aria-live="polite"></div>
-    </details>
+    <div class="page-heading"><div><h1 id="workspaceTitle">Evaluate on your tasks</h1><p class="intro">Prepare cases, run a controlled evaluation, then review outcomes and compare improvements.</p></div><a href="/?view=quick" class="journey-link">Quick trial</a></div>
+    <nav class="journey" aria-label="Evaluation steps"><a href="?step=cases" data-journey-step="cases"><span>1</span>Cases</a><a href="?step=run" data-journey-step="run"><span>2</span>Run</a><a href="?step=review" data-journey-step="review"><span>3</span>Review &amp; improve</a></nav>
+    <div class="step-heading"><h2 id="stepHeading" tabindex="-1">Prepare your cases</h2><p id="stepDescription" class="muted">Choose observations and instructions for a repeatable evaluation.</p></div>
     <p id="message" role="status" aria-live="polite"></p>
-    <details id="importPanel" class="workspace-panel import-panel" open>
+    <section id="casesStep" data-workflow-panel="cases" aria-label="Prepare cases">
+    <div class="step-actions"><button type="button" id="showImport">Add cases</button><button type="button" class="secondary" data-go-step="run">Continue to run →</button></div>
+    <details id="importPanel" class="workspace-panel import-panel">
       <summary>Add a robotics case</summary>
       <p class="muted">Start with a scene image and instruction. You can assess a plan before you have robot execution evidence.</p>
       <form id="caseForm">
@@ -58,7 +49,8 @@
         <div class="form-actions"><button id="saveCase" type="submit">Save case</button><button id="cancelCaseRevision" type="button" class="secondary" hidden>Cancel revision</button><button id="loadExamples" type="button" class="secondary">Try robotics sample cases</button></div>
       </form>
     </details>
-    <div class="case-workspace">
+    <div id="casesWorkspaceSlot"></div>
+    <div id="caseWorkspace" class="case-workspace">
       <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">
         <div class="panel-heading"><h2 id="casesHeading">Cases</h2><button id="refreshCases" type="button" class="secondary">Refresh</button></div>
         <p class="muted">Select cases for a baseline or frozen dataset. Open a case to inspect and review it.</p>
@@ -70,6 +62,11 @@
       </section>
       <section id="caseInspector" class="workspace-panel" aria-labelledby="caseDetailHeading"><div class="empty-state"><h2 id="caseDetailHeading" tabindex="-1">Inspect a case</h2><p>See its success contract, available measures, baseline outputs and expert reviews.</p></div></section>
     </div>
+    <div id="caseReuseSlot"></div>
+    </section>
+    <section id="runStep" data-workflow-panel="run" aria-label="Configure and run" hidden>
+    <div class="step-actions"><button type="button" class="secondary" data-go-step="cases">← Edit cases</button><button type="button" class="secondary" data-go-step="review">Review existing outcomes →</button></div>
+    <section class="workspace-panel" aria-labelledby="runContextHeading"><h2 id="runContextHeading">Evaluation inputs</h2><div id="runContext"></div></section>
     <section id="baselinePanel" class="workspace-panel" aria-labelledby="baselineHeading">
       <h2 id="baselineHeading">Run a baseline on selected cases</h2>
       <p class="muted">Start with a small pilot. The campaign freezes selected cases and strategy settings before any attempt runs.</p>
@@ -93,6 +90,9 @@
         <p id="campaignStatus" role="status" aria-live="polite"></p>
       </form>
     </section>
+    </section>
+    <section id="reviewStep" data-workflow-panel="review" aria-label="Review and improve" hidden>
+    <div class="step-actions"><button type="button" class="secondary" data-go-step="run">← Configure another run</button><a href="/static/benchmarks.html">All results →</a></div>
     <section id="resultsPanel" class="workspace-panel" aria-labelledby="resultsHeading">
       <div class="panel-heading"><h2 id="resultsHeading">Campaign results and improvements</h2><button id="refreshCampaigns" type="button" class="secondary">Refresh results</button></div>
       <details id="namedBaselinePanel"><summary>Named baselines · pinned references and revision history</summary><p class="muted">A baseline freezes one completed campaign strategy and its current assessment projection. New SME reviews do not rewrite a saved baseline.</p><label>Named baseline<select id="namedBaseline"><option value="">Choose a saved baseline</option></select></label><div id="namedBaselineDetails"></div><form id="namedBaselineForm"><div class="form-grid"><label>Baseline name<input id="namedBaselineName" maxlength="160" placeholder="For example: Warehouse release baseline" required></label><label class="checkbox-label"><input id="namedBaselinePinned" type="checkbox" checked>Pin for future comparisons</label></div><div class="form-actions"><button type="submit" id="saveNamedBaseline">Save selected campaign as baseline</button><button type="button" id="newNamedBaseline" class="secondary">Create a different named baseline</button></div><p id="namedBaselineStatus" role="status" class="muted">Select a completed campaign and baseline strategy below before saving.</p></form></details>
@@ -105,12 +105,25 @@
       </details>
       <div id="comparisonResults"></div>
     </section>
+    <div id="reviewWorkspaceSlot"></div>
+    <div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Reuse reviewed cases as a dataset →</button></div>
+    </section>
+    <details id="caseReusePanel" class="workspace-panel"><summary>Reuse and freeze reviewed datasets</summary>
     <section id="freezePanel" class="workspace-panel" aria-labelledby="freezeHeading">
       <h2 id="freezeHeading">Freeze a reviewed dataset</h2>
       <p class="muted">Keep exact case and review revisions for future evaluations. Failed baseline outputs can still belong to a useful dataset; output ratings are not reusable ground truth.</p>
+      <label>Dataset success contract<select id="freezeContract"><option value="">Choose a success contract</option></select></label><p class="muted">The same contract is used for your next run. <button type="button" class="secondary" id="defineFreezeContract">Define a contract in Run</button></p>
       <form id="freezeForm"><div class="form-grid"><label>Dataset name<input id="datasetName" value="Customer evaluation set" required maxlength="160"></label><label>Previous revision (optional)<select id="datasetParent"><option value="">First revision</option></select></label></div><div id="freezePreview" class="notice">Select cases, review them, then preview the exact revisions to freeze.</div><div class="form-actions"><button id="previewFreeze" class="secondary" type="button">Preview selected revisions</button><button id="freezeDataset" type="submit" disabled>Freeze this revision</button></div></form>
       <div class="inspector-section"><h3>Frozen datasets</h3><div id="datasetList"><p class="muted">Loading frozen datasets…</p></div></div>
     </section>
+    </details>
+    <details id="assistantPanel" class="workspace-panel assistant-panel">
+      <summary>Evaluation assistant <span class="muted">Optional Copilot guidance</span></summary>
+      <p id="assistantStatus" class="muted" role="status">Checking assistant availability…</p>
+      <label>Attach an observation for assistant-prepared case import<input id="assistantAsset" type="file" accept="image/png,image/jpeg"></label><p id="assistantAssetStatus" class="muted" role="status">Images are uploaded only when you select a file. Metadata changes require a separate confirmation.</p>
+      <form id="assistantForm"><label>Ask about your selected cases or campaign<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="What can we assess on these cases, and what evidence is missing?" required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Ask assistant</button></form>
+      <div id="assistantResponse" aria-live="polite"></div>
+    </details>
   </main>
 </body>
 </html>

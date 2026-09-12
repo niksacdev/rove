@@ -175,6 +175,7 @@ const SAMPLE_QUESTIONS = [
 // ---- DOM refs ----
 const chatArea      = document.getElementById("chatArea");
 const welcomeMsg    = document.getElementById("welcomeMsg");
+const quickWelcome = document.getElementById("quickWelcome");
 const imageInput    = document.getElementById("imageInput");
 const imagePreview  = document.getElementById("imagePreview");
 const previewImg    = document.getElementById("previewImg");
@@ -513,46 +514,19 @@ function renderInsightsCard(insights, parentEl) {
 }
 
 // ---- Theme ----
-function initTheme() {
-  var saved = localStorage.getItem("rove-theme");
-  var theme = saved || "dark";
-  applyTheme(theme);
-
-  document.getElementById("themeToggle").addEventListener("click", function() {
-    var current = document.documentElement.getAttribute("data-theme") || "dark";
-    var next = current === "dark" ? "light" : "dark";
-    applyTheme(next);
-    localStorage.setItem("rove-theme", next);
-  });
-}
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme);
-  var sunIcon = document.getElementById("themeIconSun");
-  var moonIcon = document.getElementById("themeIconMoon");
-  if (theme === "light") {
-    sunIcon.classList.add("hidden");
-    moonIcon.classList.remove("hidden");
-  } else {
-    moonIcon.classList.add("hidden");
-    sunIcon.classList.remove("hidden");
-  }
-}
-
 // ---- Initialize ----
 document.addEventListener("DOMContentLoaded", async function() {
-  initTheme();
   lucide.createIcons();
-  await loadStrategies();
-  loadModels();
-  loadConfig();
+  initTopNav();
+  switchView(window.RoveNavigation.rootView(location.search), false);
+  await Promise.all([loadStrategies(), loadModels(), loadConfig()]);
+  if (["strategies", "models", "settings"].includes(currentView)) switchView(currentView, false);
   autoResizeTextarea();
   initConfigPanel();
   initSidebarNav();
-  initTopNav();
   initGettingStarted();
   restoreHistory();
-  if (new URLSearchParams(window.location.search).get("view") === "examples") switchView("examples");
+
 });
 
 // ---- Load config from API ----
@@ -573,33 +547,50 @@ async function loadConfig() {
 }
 
 // ---- Top nav click handlers ----
-function initTopNav() {
-  document.querySelectorAll("header .nav-link").forEach(function(link) {
-    link.addEventListener("click", function(e) {
-      e.preventDefault();
-      var text = link.textContent.trim().toLowerCase();
-      if (text === "evaluate") {
-        // If a run is active, restore the evaluation view instead of going home
-        if (isRunning || Object.keys(tabData).length > 0) {
-          restoreEvaluation();
-        } else {
-          activeHistoryIndex = -1;
-          switchView("home");
-        }
-      } else if (text === "strategies") {
-        activeHistoryIndex = -1;
-        switchView("strategies");
-      } else if (text === "endpoints") {
-        activeHistoryIndex = -1;
-        switchView("models");
-      }
-      updateTopNav(text);
-    });
+function rootRoute(view, push) {
+  var url = new URL(location.href);
+  if (view === "home") url.searchParams.delete("view");
+  else url.searchParams.set("view", view === "evaluation" ? "quick" : view);
+  if (url.href !== location.href) history[push ? "pushState" : "replaceState"]({}, "", url);
+}
+
+function setRootChrome(view) {
+  var quick = view === "quick" || view === "evaluation";
+  document.getElementById("quickComposer").hidden = !quick;
+  document.getElementById("quickSidebar").hidden = !quick;
+  document.getElementById("quickHeading").hidden = !quick;
+  document.getElementById("quickWelcome").hidden = view !== "quick";
+  document.getElementById("configureHeading").hidden = !["strategies", "models", "settings"].includes(view);
+  document.querySelectorAll("#configureHeading [data-root-view]").forEach(function(link) {
+    if (link.dataset.rootView === view) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
   });
+  window.RoveNavigation.setActive(window.RoveNavigation.sectionForView(view));
+}
+
+function initTopNav() {
+  document.addEventListener("click", function(event) {
+    var link = event.target.closest("a[data-root-view], #roveNav a");
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    var target = new URL(link.href, location.href);
+    if (target.origin !== location.origin || target.pathname !== "/") return;
+    event.preventDefault();
+    var view = window.RoveNavigation.rootView(target.search);
+    if (view === "quick" && (isRunning || Object.keys(tabData).length)) { rootRoute("quick", true); restoreEvaluation(); }
+    else switchView(view);
+  });
+  window.addEventListener("popstate", function() {
+    var view = window.RoveNavigation.rootView(location.search);
+    if (view === "quick" && (isRunning || Object.keys(tabData).length)) restoreEvaluation();
+    else switchView(view, false);
+  });
+  window.addEventListener("beforeunload", function(event) { if (isRunning) { event.preventDefault(); event.returnValue = ""; } });
 }
 
 function restoreEvaluation() {
   currentView = "evaluation";
+  rootRoute("quick", false);
+  setRootChrome("evaluation");
 
   // Hide all non-eval views
   welcomeMsg.classList.add("hidden");
@@ -640,22 +631,15 @@ function restoreEvaluation() {
   scrollToBottom();
 }
 
-function updateTopNav(activeText) {
-  document.querySelectorAll("header .nav-link").forEach(function(link) {
-    var t = link.textContent.trim().toLowerCase();
-    if (t === activeText) {
-      link.classList.add("active");
-      link.setAttribute("aria-current", "page");
-    } else {
-      link.classList.remove("active");
-      link.removeAttribute("aria-current");
-    }
-  });
+function updateTopNav() {
+  setRootChrome(currentView);
 }
 
 // ---- View switching ----
-function switchView(view) {
+function switchView(view, push = true) {
   currentView = view;
+  if (push) rootRoute(view, true);
+  setRootChrome(view);
 
   // Hide all views
   welcomeMsg.classList.add("hidden");
@@ -711,6 +695,8 @@ function switchView(view) {
       // Handled by showHistoryEntry or restoreEvaluation
       break;
   }
+  // Each destination starts at its heading; trial restoration keeps its own scroll behavior.
+  chatArea.scrollTop = 0;
 }
 
 function initGettingStarted() {
@@ -1199,7 +1185,7 @@ async function loadExample(ex) {
     window._selectedCorrection = ex.correction || null;
     window._selectedConstraints = ex.constraints || null;
 
-    switchView("home");
+    switchView("quick");
   } catch (e) {
     console.error("Failed to load example:", e);
     alert("Failed to load example image: " + e.message);
@@ -1634,6 +1620,8 @@ function showHistoryEntry(idx) {
 
   // Show evaluation content
   currentView = "evaluation";
+  rootRoute("quick", false);
+  setRootChrome("evaluation");
   welcomeMsg.classList.add("hidden");
   strategiesView.classList.add("hidden");
   modelsView.classList.add("hidden");
@@ -2213,6 +2201,8 @@ evalBtn.addEventListener("click", async function() {
 
   // Switch to evaluation view
   currentView = "evaluation";
+  rootRoute("quick", false);
+  setRootChrome("evaluation");
   welcomeMsg.classList.add("hidden");
   strategiesView.classList.add("hidden");
   modelsView.classList.add("hidden");
@@ -2290,6 +2280,7 @@ function setupTabs(strategyIds) {
   // Clear chat area but keep persistent views
   chatArea.textContent = "";
   chatArea.appendChild(welcomeMsg);
+  chatArea.appendChild(quickWelcome);
   chatArea.appendChild(strategiesView);
   chatArea.appendChild(modelsView);
   chatArea.appendChild(examplesView);

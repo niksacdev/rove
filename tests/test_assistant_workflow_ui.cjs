@@ -31,7 +31,7 @@ test("assistant writes require explicit confirmation and named baseline selects 
  };
  const pause=()=>new Promise(resolve=>setTimeout(resolve,15)),el=id=>w.document.getElementById(id),set=(id,value,type="input")=>{el(id).value=value;el(id).dispatchEvent(new w.Event(type,{bubbles:true}));},submit=id=>el(id).dispatchEvent(new w.Event("submit",{bubbles:true,cancelable:true}));
  try{
-  w.eval(fs.readFileSync(path.join(root,"frontend/datasets.js"),"utf8"));await pause();
+  w.eval(fs.readFileSync(path.join(root,"frontend/navigation.js"),"utf8"));w.eval(fs.readFileSync(path.join(root,"frontend/datasets.js"),"utf8"));await pause();
   Object.defineProperty(el("recordingFile"),"files",{value:[new w.File(['{"records":[]}'],"recording.json",{type:"application/json"})]});
   el("recordingFile").dispatchEvent(new w.Event("change",{bubbles:true}));await pause();
   assert.equal(el("episodeEvidence").value,"");assert.equal(el("attachRecording").disabled,false);

@@ -195,7 +195,10 @@ def test_export_escapes_every_user_surface_and_encodes_links(report, monkeypatch
     assert not any(key.startswith("on") for _, attrs in tags for key in attrs)
     links = [attrs["href"] for tag, attrs in tags if tag == "a"]
     assert "/static/history.html?trial=trial%22%20onclick%3D%22alert%281%29" in links
-    assert "/static/benchmarks.html?campaign=campaign%22%20onclick%3D%22alert%281%29" in links
+    assert (
+        "/static/datasets.html?step=review&campaign=campaign%22%20onclick%3D%22alert%281%29"
+        in links
+    )
     assert figures["matrix"]["data"][0]["x"][0].startswith("&lt;/script&gt;")
     assert figures["matrix"]["data"][0]["y"][0].startswith("&lt;/script&gt;")
 

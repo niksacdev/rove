@@ -1,0 +1,23 @@
+/* Shared shell is scoped so page-level nav/header rules cannot change it. */
+[hidden] { display: none !important; }
+.rove-nav { box-sizing: border-box; display: flex; align-items: center; gap: 32px; min-height: 60px; padding: 0 28px; border-bottom: 1px solid var(--f-border); background: var(--f-bg); flex-shrink: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.rove-nav .rove-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--f-text); text-decoration: none; font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
+.rove-brand svg { color: #9868ed; flex: none; }
+.rove-nav nav { display: flex; align-self: stretch; align-items: stretch; gap: 8px; margin: 0; }
+.rove-nav nav a { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; color: var(--f-text-muted); text-decoration: none; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.rove-nav nav a:hover { color: var(--f-text); background: var(--f-surface); }
+.rove-nav nav a[aria-current="page"] { color: var(--f-text); border-bottom-color: #9466ef; }
+.rove-nav .rove-theme { margin: 0 0 0 auto; padding: 8px 11px; background: var(--f-surface); border: 1px solid var(--f-border); border-radius: 7px; color: var(--f-text-secondary); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.rove-nav a:focus-visible, .rove-nav button:focus-visible, .workspace-tabs a:focus-visible, .workspace-tabs button:focus-visible { outline: 2px solid #a78bfa; outline-offset: 3px; }
+.workspace-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0 0 24px; align-self: auto; border-bottom: 1px solid var(--f-border); }
+.workspace-tabs a, .workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 15px; min-height: 44px; text-decoration: none; color: var(--f-text-muted); font: inherit; font-size: 13px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; cursor: pointer; }
+.workspace-tabs [aria-current], .workspace-tabs [aria-selected="true"] { color: var(--f-text); border-bottom-color: #9466ef; background: none; }
+.workspace-tabs a:hover, .workspace-tabs button:hover { color: var(--f-text); background: var(--f-surface); }
+.journey-link { color: #b9a2f7; text-decoration: none; }
+[data-theme="light"] .journey-link { color: #6d28d9; }
+@media (max-width: 640px) {
+  .rove-nav { padding: 10px 16px 0; gap: 10px; flex-wrap: wrap; }
+  .rove-nav nav { order: 3; flex: 0 0 100%; gap: 0; }
+  .rove-nav nav a { flex: 1; padding: 0 8px; min-height: 44px; }
+  .rove-nav .rove-theme { margin-left: auto; }
+}
