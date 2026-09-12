@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Sample cases and clearer campaign reports
 
-All 49 bundled gallery samples now become versioned Cases with original source metadata and private reference annotations preserved. Campaign reports use ROVE themes, outcome and coverage cards, reliability bounds and expandable evidence; the implementation plan now distinguishes delivered local capabilities from unfinished acceptance criteria.
+All 49 bundled gallery samples now become versioned Cases with original source metadata and private reference annotations preserved. Campaign reports use ROVE themes, outcome and coverage cards, reliability bounds and expandable evidence; the implementation plan now distinguishes delivered local capabilities from unfinished acceptance criteria. *(PR #19)*
 
 ### Customer evaluation workflow
 
