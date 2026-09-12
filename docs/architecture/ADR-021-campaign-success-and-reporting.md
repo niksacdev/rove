@@ -1,8 +1,8 @@
 # ADR-021: Campaign success definitions and report explanations
 
-**Status:** Proposed; implementation has not started.
+**Status:** Accepted; local success contracts, preflight and assessment comparison implemented. Aggregate target evaluation remains pending.
 
-## Context
+## Context at proposal
 
 ROVE already grades trials through configured verification and summarizes repeated
 attempts with pass@k/pass^k. Developers also need to declare desired campaign results
@@ -118,6 +118,20 @@ estimates and requested actions from observed execution.
 
 ## Consequences and validation
 
+The local customer workflow now freezes validated scope, evidence mode, criteria
+and metric requests. Automated criteria must bind to configured verification;
+human criteria require per-output reviews. The preview explains pending review,
+unsupported measures and k values above the repetition count. Static episode
+recordings are explicitly regraded evidence, not fresh candidate robot outcomes.
+
+The [workflow service](../../src/rove/benchmarks/workflow.py) derives assessment
+views from retained trials and referenced reviews without adding attempts or
+overwriting original execution results. The
+[comparison service](../../src/rove/benchmarks/comparison.py) checks case, rubric,
+verification, repetition and runtime compatibility and exposes component changes.
+Structured campaign targets and general episode autonomy/recovery aggregation
+remain unimplemented; requesting a metric does not create its evidence.
+
 This adds configuration and report metadata rather than a new evaluation engine.
 It avoids silently changing historical grades or overstating measured reliability.
 Developers must supply measurement sources and task criteria; ROVE cannot infer a
@@ -127,4 +141,5 @@ Validate configuration/UI equivalence, frozen-history behavior, target changes
 that leave trial grades intact, unavailable metrics and incomplete coverage,
 case/strategy denominators, and re-grading with missing evidence. Verify report
 details remain accessible and preserve evidence distinctions in exports. These
-are implementation acceptance criteria, not claims that the proposed UI exists.
+are full acceptance criteria; aggregate targets and richer evidence aggregation
+remain beyond the implemented local setup and comparison UI.

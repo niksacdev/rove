@@ -1,6 +1,6 @@
 # ROVE Delivery Plan: From Trial Evidence to Customer Evaluation Workflows
 
-**Status:** First local slice delivered: durable trials, optional Copilot stages and history inspector. Remaining validation and customer workflows are listed below.
+**Status:** Local customer workflow implemented: case intake, success preview, SME review, dataset freezing and baseline comparison. Remaining validation and integrations are listed below.
 **Updated:** 2026-09-12
 **Design:** [Architecture diagram](../architecture/target-architecture.md), [system diagram](../architecture/system-diagram.md), [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md)
 
@@ -41,20 +41,23 @@ checks. The user has authorized implementation PR merges after required checks p
 | 11 / T11 | Optional Azure Monitor and Grafana export profiles | T04; after local milestone | Same trial correlation in external trace views; bounded export and content policies; local use unaffected by exporter failure |
 | 12 / T12 | Versioned analytical exports for Fabric/Delta consumers | T07, T08; customer demand | Export/import preserves revisions, schemas and asset manifests; measured data volumes justify format and connector choices |
 
-### Progress after the first implementation slice
+### Progress after the customer workflow slice
 
 | Task | Delivered | Remaining before full acceptance |
 | --- | --- | --- |
 | T01 | Pinned SDK `1.0.13` / CLI `1.0.81-9`; real CLI with controlled image/tool/usage/trace responses; offline lifecycle tests | Explicit live provider; Azure identity and deployment validation |
-| T02 | Shared quick/campaign IDs, frozen task/strategy/configuration hashes, SQLite journal, initial observation assets, ownership-aware recovery and idempotent legacy quick import | Full case/assessment revision model; archived auxiliary artifacts; complete migration away from compatibility journals |
+| T02 | Shared quick/campaign IDs, frozen task/strategy/configuration hashes, SQLite journal, initial observation assets, ownership-aware recovery and idempotent legacy quick import | Archived auxiliary artifacts; complete migration away from compatibility journals |
 | T03 | Optional perceive/plan/verify adapter with fresh candidate/grader scope, bounded lifecycle and direct paths retained | Assistant service tools; explicit robot action/reset contracts; any declared cross-stage memory mode |
-| T04 | Existing exposed stage/tool events plus SDK events and usage persist; source deduplication; optional ROVE trial spans | Full application/native/export correlation; actual collector outage and bounded exporter shutdown; robot clock/range contracts |
+| T04 | Existing exposed stage/tool events plus SDK events and usage persist; source deduplication; optional ROVE trial spans; real SDK/CLI OTLP HTTP 503 collector test preserves the journal and bounds cleanup; Python exporter failures preserve local events | Full application/native/export correlation; blackholed collector or blocked custom exporter behavior; external trace navigation; robot clock/range contracts |
 | T05 | Paginated history, saved snapshots, verdict/measurement inspection, stage-filtered activity, trace details and on-demand observations | Remote recording-range resolution, parallel trace graph and aligned comparison views |
-| T06–T09 | Pending; existing gallery/campaign/configuration services remain the starting point | Customer import/success setup, SME review/freeze, baseline/ablation workflow and guided assistant |
+| T06 | Managed PNG/JPEG intake, immutable cases, success contracts, expected-metric preview and robotics samples | General recordings/video; action-dependent rollout; aggregate campaign targets |
+| T07 | Revision-checked review drafts, immutable corrections, explicit annotations and atomic dataset freezing | Automatic annotation mapping to graders; team authentication and adjudication |
+| T08 | Baseline references, component/case comparison and exploratory quick promotion | Aligned trace graphs; justified statistics for campaign deltas; richer history navigation |
+| T09 | Optional Copilot assistant reads evidence, previews campaigns and requests a host-confirmed launch; this is the accepted local assistant boundary | Live-provider validation; broader import/review/freeze tools only if later justified |
 | T10–T12 | Pending, with the authorization/demand gates below | Live Azure profile, external monitoring profiles and justified analytical export |
 
-The first slice is a useful durable inspection workflow, not completion of the full
-customer onboarding milestone. [Current implementation](../architecture/current-implementation.md),
+The local workflow now connects customer inputs to inspectable comparisons. Hardware
+execution and remaining runtime/telemetry validation are not implied. [Current implementation](../architecture/current-implementation.md),
 [setup](../TRIAL_HISTORY.md) and [compatibility evidence](../architecture/copilot-compatibility.md)
 describe what can be used and tested now.
 
@@ -64,10 +67,10 @@ flowchart LR
     B --> C["T03 Hosted-stage foundation delivered"]
     C --> D["T04 Durable events delivered"]
     D --> E["T05 Local inspector delivered"]
-    B --> F["T06 Cases and success setup"]
-    E --> G["T07 SME and dataset freeze"]
+    B --> F["T06 Cases and success setup delivered"]
+    E --> G["T07 SME and dataset freeze delivered"]
     F --> G
-    G --> H["T08 Baseline and ablation reports"]
+    G --> H["T08 Baseline and ablation foundation delivered"]
     H --> I["T09 Evaluation assistant"]
     C --> I
     D -.-> J["T10 Azure profile"]
@@ -81,7 +84,7 @@ integrations. T10 and T11 are independent after the local milestone; neither gat
 customer evaluation locally. The SDK proof comes first because schema coverage,
 trace behavior and runtime isolation influence the recording contract.
 
-Delivered labels in the diagram refer to the first-slice scope in the progress
+Delivered labels in the diagram refer to the local scope in the progress
 table; they do not close its remaining acceptance gates.
 
 ## Milestone A: One Trustworthy, Inspectable Trial — T01–T05
@@ -152,13 +155,27 @@ distinct from data used to tune the candidate or grader.
 
 ## Milestone C: Guided Workflow — T09
 
+**Accepted implementation boundary, 12 September 2026:** the local assistant
+inspects saved evidence, prepares a validated campaign and requests an explicit
+host-confirmed launch. Media uploads, edits and SME decisions stay in the UI so
+the agent cannot manufacture expert review or silently curate the evaluation set.
+Read/preview tools and host-generated operation/confirmation identities enforce
+this separation. Confirming revalidates the exact inputs and configuration.
+
+This scoped assistant completes the local prepare → launch → inspect interaction.
+The broader original scope below is retained as a future option, not an outstanding
+requirement to automate SME decisions. Add further mutations only when their user
+value and approval semantics are clear. Live-provider validation remains open.
+
+**Original broader scope and future options:**
+
 Expose the tested application services as Copilot tools for import, validation,
 campaign creation, inspection and comparison. The UI and assistant use the same
 validation and operation IDs. Draft suggestions become frozen configuration when
 the user launches the evaluation; the assistant cannot silently change that
 configuration during execution. Proposed changes create a new candidate revision.
 
-**Acceptance:** complete the same customer journey through the assistant, with
+**Acceptance for any future broader scope:** complete the same customer journey through the assistant, with
 traceable tool actions and evidence-linked explanations. Duplicate requests do not
 duplicate campaigns. Review/freeze actions operate on exact revisions. Candidate
 agents cannot access private labels through assistant or grader sessions.

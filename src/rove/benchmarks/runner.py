@@ -276,7 +276,19 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                             "execution": "running",
                         }
                         task_snapshot = task.model_dump(mode="json")
-                        image_bytes = base64.b64decode(task.image_base64, validate=True)
+                        if task.image_asset:
+                            from hashlib import sha256
+
+                            asset_bytes = trial_store.asset_path(task.image_asset).read_bytes()
+                            if sha256(asset_bytes).hexdigest() != task.image_asset:
+                                raise ValueError(
+                                    "Case image integrity changed; repair the asset before execution"
+                                )
+                        image_bytes = (
+                            asset_bytes
+                            if task.image_asset
+                            else base64.b64decode(task.image_base64, validate=True)
+                        )
                         media_type = (
                             "image/png"
                             if image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
@@ -308,7 +320,14 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                             config={
                                 **system_config,
                                 "runtime": campaign["runtime"],
-                                "evaluation_contract": campaign["spec"],
+                                "evaluation_contract": {
+                                    "grading": spec.grading,
+                                    "timeout_s": spec.timeout_s,
+                                    "suite_version": spec.suite_version,
+                                    "contract_id": campaign.get("contract_id"),
+                                    "contract": campaign.get("contract"),
+                                    "dataset_revision_id": campaign.get("dataset_revision_id"),
+                                },
                                 "local_evaluators": {
                                     k: v
                                     for k, v in campaign["local_evaluators"].items()
@@ -326,6 +345,13 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                             "trial_id": trial_id,
                             "trial_root": str(store.root.resolve()),
                         }
+                        # Large media stays referenced in frozen campaign records; hydrate only
+                        # the bounded, private worker request, never the public report payload.
+                        if task.image_asset:
+                            request["task"] = {
+                                **request["task"],
+                                "image_base64": base64.b64encode(image_bytes).decode(),
+                            }
                         started = time.monotonic()
                         try:
                             result = await run_attempt(request, spec.timeout_s)

@@ -1,8 +1,9 @@
 # Define success before running a campaign
 
-**Status: proposed product behavior.** Configured verification and pass@k/pass^k
-reports exist today. The shared metric configuration, setup controls, campaign
-target assessment and collapsible report details described below are not implemented.
+**Status: partially implemented.** Configured verification, pass@k/pass^k reports,
+versioned success contracts, expected-metric preview and per-output SME assessment
+are implemented locally. Aggregate campaign targets and general autonomy/recovery
+aggregation remain follow-up work.
 
 ROVE should let a robotics developer state what counts as a successful task, what
 evidence will establish it, and what results a campaign should achieve before
@@ -40,6 +41,19 @@ revision; it does not turn failed trials into successes. This is an assessment o
 the collected sample, not a deployment certification.
 
 ## Setup in configuration and the UI
+
+The implemented Cases workflow saves a contract with assessment scope, evidence
+mode, required criteria and selected metrics. Automated criteria bind to configured
+verification; human criteria require per-output ratings. Preview marks measures
+available, awaiting review or unavailable, explains k values exceeding repetitions,
+and rejects unsupported completion claims from image/model outputs alone.
+
+Static episode records support assessment of existing evidence. They do not
+establish fresh candidate execution. Pipeline latency is measured; general episode
+duration, autonomy and recovery remain unavailable through this contract until
+their evidence and aggregation requirements are implemented. Aggregate targets and
+a dedicated contract-file CLI remain follow-up work. The requirements below extend
+this implemented API/UI contract.
 
 Both interfaces should read and write the same validated, versioned contract:
 

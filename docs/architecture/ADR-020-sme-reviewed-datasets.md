@@ -1,11 +1,11 @@
 # ADR-020: Freeze reusable datasets through explicit SME review
 
-**Status:** Proposed
-**Implementation status:** Review records, review UI and dataset freezing are pending
+**Status:** Accepted
+**Implementation status:** Local attributed review drafts, immutable final reviews and previewed dataset freezing implemented
 **Date:** 2026-09-12
 **Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [ADR-019](ADR-019-relational-storage-and-assets.md)
 
-## Context
+## Context at proposal
 
 A robotics developer may start with camera images and task instructions, without approved
 labels or recorded robot outcomes. Baseline outputs help a subject-matter expert (SME)
@@ -70,8 +70,28 @@ of robot completion. Completion requires appropriate episode outcome evidence.
 
 ## Implementation boundaries and acceptance
 
+The [dataset service](../../src/rove/datasets/service.py) implements case validity,
+explicit annotations and trial-output reviews as distinct targets. Output reviews
+must match a finished retained trial, its case revision and frozen rubric. The
+server hashes the reviewed output. Draft updates require the expected revision;
+final corrections retain the target, rubric and reviewer and create a superseding
+record. Local reviewer names are attribution, not authenticated identity.
+
+Freeze previews pin case/review membership and expose active disagreement,
+including conflicting accepted annotation values. The exact preview hash is
+checked inside the freeze transaction. Existing datasets cannot change when cases
+or reviews are revised. The current fully reviewed badge requires selected accepted
+case-validity and annotation reviews; incomplete datasets remain usable with
+coverage shown. Output ratings alone do not create reusable labels.
+
+Approved annotations are stored for inspection, not automatically injected into
+future candidates or graders. Configured grading remains explicit. Automatic
+annotation mapping, team adjudication and judge training remain follow-up work.
+Regression coverage is in [test_datasets.py](../../tests/test_datasets.py).
+
 Build on [example inputs](../../src/rove/api/app.py), [ExampleData](../../src/rove/models/core.py)
-and [the relational store](../../src/rove/benchmarks/store.py). The SME workflow does not exist yet.
+and [the relational store](../../src/rove/trials/store.py). The following criteria
+continue to guide extensions beyond the implemented local workflow.
 
 - Restart restores review drafts and assessments; conflicting revisions cannot overwrite silently.
 - Freezing preserves exact membership and reviews; later edits cannot alter previous reports.

@@ -1,6 +1,6 @@
 # Current Implementation
 
-**Checked:** 12 September 2026, against the durable-trial/Copilot implementation
+**Checked:** 12 September 2026, against the customer evaluation workflow
 slice. This document describes the source delivered with this change; the
 [delivery plan](../product/implementation-plan.md) records remaining work.
 
@@ -9,7 +9,8 @@ repeated-trial campaign runner. Both now create durable trial identities and fro
 configuration records before execution, retain available intermediate events, and
 expose saved evidence through Trial history. The optional Copilot adapter hosts
 perception, planning and verification stages; customer adapters remain directly
-callable. The linked [product concepts](../product/concepts.md) and
+callable. Versioned cases, success contracts, SME review, dataset freezing and
+baseline comparisons extend that foundation. The linked [product concepts](../product/concepts.md) and
 [trace specification](../product/traces-and-measurements.md) describe the fuller
 target, including capabilities not yet implemented.
 
@@ -47,8 +48,9 @@ directly into the shared journal and return final evidence to the campaign paren
 The [API](../../src/rove/api/app.py) accepts an uploaded image and task. For a
 gallery image, `example_filename` loads additional fields from
 `data/manifest.json`, including embodiment, reference-label and optional episode
-data. The API encodes the uploaded image as base64. It does not offer the proposed
-general case/asset import or hardware episode-ingestion API.
+data. The quick API encodes the uploaded image as base64. The Cases workflow
+stores managed PNG/JPEG assets and task revisions; it hydrates bounded images only
+at execution. General video/trajectory ingestion and hardware drivers are not provided.
 
 [RunManager](../../src/rove/orchestrator/run_manager.py) builds pipelines from
 [validated strategy configuration](../../src/rove/models/config.py), bounds
@@ -131,8 +133,8 @@ is separate from an assessment verdict.
 
 Initial observations are saved by content hash outside the public data mount.
 Other inline media are reduced to references by snapshot sanitization; a reference
-alone does not guarantee that its bytes were archived. Campaign manifests still
-contain inline images for compatibility.
+alone does not guarantee that its bytes were archived. Legacy campaign manifests
+can still contain inline images; customer-case campaigns use managed asset references.
 
 The application imports legacy quick JSONL idempotently without modifying the
 source. New compatibility output goes to private `.rove/benchmarks/quick-history.jsonl`,
@@ -148,6 +150,51 @@ IDs under campaign ownership. Cancellation terminates the campaign worker proces
 group. Process/lock handling supports macOS and Linux. See
 [Trial history](../TRIAL_HISTORY.md) for storage and backup requirements.
 
+## Customer Cases, Reviews and Frozen Datasets
+
+The [dataset service](../../src/rove/datasets/service.py) and
+[customer workflow API](../../src/rove/api/datasets.py) provide image/task intake,
+immutable case revisions, success contracts, revision-checked SME drafts and final
+reviews, and dataset preview/freezing. PNG/JPEG inputs are bounded and checked
+against their full content hash and decoded format. Missing assets remain visible
+in case history but cannot launch a valid evaluation.
+
+```mermaid
+flowchart LR
+    I[Customer image and task] --> C[Immutable case revision]
+    C --> P[Success and measures preview]
+    P --> B[Baseline campaign and durable trials]
+    B --> R[Case validity, annotation and output reviews]
+    R --> F[Frozen dataset membership and selected reviews]
+    F --> A[Candidate campaign]
+    B --> D[Component and case outcome comparison]
+    A --> D
+    Q[Finished quick trial] --> L[Exploratory promotion reference]
+    L --> C
+```
+
+Schema version 2 adds case revisions, success contracts, reviews, dataset
+membership and quick-promotion links to `trials.sqlite3`. Final reviews are
+immutable; corrections keep the target, rubric and reviewer and supersede the old
+review. Dataset freezing is one transaction and requires the exact preview hash.
+New reviewer disagreement invalidates a stale preview. Case validity, reusable
+annotations and ratings of a specific output remain distinct. An accepted output
+does not become a label for another candidate.
+
+The current fully reviewed dataset badge requires selected accepted case-validity
+and annotation reviews, with no unresolved active disagreement. Incomplete datasets
+can still be frozen and used with their coverage exposed. Annotations are retained
+as explicit review material; automatic injection into model prompts or future
+graders is not implemented. Public candidate context and archived episode evidence
+are separate input fields. Static episode evidence can evaluate a grader, not a
+new candidate's physical performance. Action-dependent rollout integration is pending.
+
+[Quick promotion](../../src/rove/datasets/promotion.py) creates a case from a
+finished quick trial's retained image/task and links its original trial ID as an
+exploratory reference. Retrying an operation ID creates no duplicate case. Promotion
+does not create another trial, reuse an output as ground truth, or add the old
+attempt to a new campaign's reliability denominator.
+
 ## Optional Copilot Runtime
 
 [CopilotAgentAdapter](../../src/rove/adapters/copilot_agent.py) supports perceive,
@@ -155,7 +202,8 @@ plan and verify through `adapter: copilot_agent`. Each stage starts a fresh runt
 session and temporary workspace. Candidate and grader roles are host-selected;
 candidate context excludes the private grading record. No tools are exposed by the
 configured adapter. The shared runtime supports explicitly role-scoped host tools,
-but robot action tools and the evaluation assistant are pending.
+but robot action tools remain pending. The optional evaluation assistant uses a
+separate assistant role with read and campaign-preview tools.
 
 The optional profile pins `github-copilot-sdk==1.0.13` and Copilot CLI `1.0.81-9`.
 The CLI is installed separately and checked before use. Startup, execution, abort
@@ -171,6 +219,24 @@ validated. See [compatibility evidence](copilot-compatibility.md) and
 [ADR-024](ADR-024-copilot-runtime-and-observability.md).
 
 ## Trace and Telemetry Coverage
+
+The [evaluation assistant API](../../src/rove/api/assistant.py) is enabled by
+`ROVE_ASSISTANT_ENDPOINT`, which must name an explicitly configured `copilot_agent`
+endpoint. Cases exposes its optional assistant panel. Tools read bounded case,
+dataset, strategy and trial records and prepare a campaign preview. The model has
+no launch, import, review or freeze tool. Launch requires a host-issued confirmation
+token and a fresh validation of the exact preview; proposals expire after ten
+minutes or server restart. Operation IDs prevent duplicate campaign creation.
+The assistant uses the same evaluation services; it does not decide trial scores.
+
+The read/preview boundary is deliberate for the local milestone: media selection,
+case changes and expert review remain explicit user actions. Further mutation tools
+are optional future extensions, not permission for an assistant to invent SME judgments.
+
+The pinned SDK/runtime and provider configuration remain required. The assistant
+status check verifies configuration/runtime availability, not deployed model
+quality or robot performance. Its API and confirmation boundaries have controlled
+regression coverage; a live Azure/provider workflow remains a validation gate.
 
 | Evidence | Implemented behavior and limits |
 | --- | --- |
@@ -208,10 +274,20 @@ measurements with their units and quality.
 
 [Reports](../../src/rove/benchmarks/report.py) provide offline HTML charts, JSON
 evidence and a CSV row per attempt. Historical curves require the same strategy ID
-and matching comparison fingerprints. These include task inputs, grading settings,
-required checks, simulator and runtime identity. There is no explicit baseline
-pointer, campaign lineage or component-difference comparison yet. A broad source
-fingerprint also prevents comparisons across some intentional policy-code changes.
+and matching comparison fingerprints. Customer campaigns additionally use an
+explicit baseline/strategy reference and
+[component comparison](../../src/rove/benchmarks/comparison.py), including matching
+case revisions, success contract, verification and repetition conditions. Renamed
+strategies can compare when their assessment conditions match. Changed graders,
+conditions or unattributed runtime changes are exposed as incompatibilities;
+the broad source fingerprint remains conservative about intentional code changes.
+
+The [workflow service](../../src/rove/benchmarks/workflow.py) previews expected
+measures and projects per-output SME assessments onto retained attempts while
+keeping the original execution results. Pending/disputed reviews remain unknown.
+Pipeline latency is available; episode duration, autonomy and recovery remain
+unavailable without the required evidence and aggregation implementation. Declaring
+a desired metric does not make it observed. Aggregate campaign targets are pending.
 
 Fingerprints detect selected changes; they do not preserve remote model weights,
 resolve mutable provider aliases or recreate a physical scene. Model revisions are
@@ -245,7 +321,15 @@ constraint-failing and unresolved evidence; it is not a robot performance study.
 | `GET /api/trials/{id}` | Frozen snapshot, result and lifecycle |
 | `GET /api/trials/{id}/events` | Paginated recorded events |
 | `GET /api/trial-assets/{sha256}` | Managed observation or safe asset download |
-| `POST /api/campaigns` | Validate, save and launch a campaign |
+| `POST /api/cases` | Import a managed image and task as an immutable case revision |
+| `POST /api/success-contracts` | Save a validated outcome scope, criteria and requested measures |
+| `POST /api/reviews` | Save an attributed case or output assessment |
+| `POST /api/datasets/preview` and `/api/datasets` | Preview and freeze exact case/review membership |
+| `POST /api/trials/{id}/promote` | Preserve a quick trial as an exploratory case reference |
+| `POST /api/campaigns/preview` and `/api/campaigns/from-cases` | Preview and launch versioned customer cases |
+| `POST /api/campaigns/{id}/ablation-preview` and `/ablation` | Compare a candidate configuration before launch |
+| `GET /api/campaigns/{id}/comparison` | Read matching case outcomes and component differences |
+| `POST /api/campaigns` | Validate, save and launch a legacy campaign manifest |
 | `GET /api/campaigns/{id}` | Read campaign status and summary |
 | `POST /api/campaigns/{id}/cancel` or `/resume` | Control pending campaign work |
 | `GET /api/campaigns/{id}/report?format=html` | Render a report; also accepts `json` or `csv` |
@@ -267,13 +351,16 @@ Existing regression tests cover
 [required checks, evaluator drift and unknown verdicts](../../tests/test_configured_verification.py),
 [strategy execution](../../tests/test_run_manager.py) and
 [API behavior](../../tests/test_api.py). These tests establish software behavior;
-they do not validate real robot task performance or the proposed review/dataset
-features.
+they do not validate real robot task performance. Additional
+[dataset tests](../../tests/test_datasets.py) cover revision conflicts, review
+identity, frozen membership, disagreement, image integrity and migration rollback.
+[Promotion tests](../../tests/test_promotion.py) cover idempotency, concurrent
+requests, rollback and unchanged trial counts.
 
 The decision trail distinguishes
 [implemented configured verification](ADR-017-configured-verification.md) from
 partially implemented [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
 [relational recording and asset references](ADR-019-relational-storage-and-assets.md),
-proposed [SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
-[campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
+implemented local [SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
+partially implemented [campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
 [trial telemetry](ADR-022-trial-telemetry.md).

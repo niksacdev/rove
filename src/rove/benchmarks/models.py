@@ -24,16 +24,26 @@ class BenchmarkTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: Identifier
     task: str = Field(min_length=1, max_length=10000)
-    image_base64: str = Field(min_length=1, max_length=4_000_000)
+    image_base64: str | None = Field(default=None, min_length=1, max_length=4_000_000)
+    image_asset: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    case_revision_id: str | None = Field(default=None, min_length=1, max_length=128)
     example: ExampleData | None = None
 
     @field_validator("image_base64")
     @classmethod
-    def valid_image(cls, value: str) -> str:
+    def valid_image(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
         raw = base64.b64decode(value, validate=True)
         if not raw.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff")):
             raise ValueError("Use a base64 PNG or JPEG image")
         return value
+
+    @model_validator(mode="after")
+    def one_image_source(self):
+        if (self.image_base64 is None) == (self.image_asset is None):
+            raise ValueError("Supply exactly one inline image or managed image asset")
+        return self
 
 
 class CampaignSpec(BaseModel):

@@ -1,7 +1,7 @@
 // Run with: node --test tests/test_history_ui.cjs
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {trialPresentation, trialTitle, trialStrategy, usagePresentation} = require("../frontend/history.js");
+const {trialPresentation, trialTitle, trialStrategy, usagePresentation, promotionEligible} = require("../frontend/history.js");
 
 function trial(output, extra = {}) {
   return {status: "completed", result: {stages: [{stage: "verify", status: "completed", output}]}, ...extra};
@@ -58,4 +58,23 @@ test('a failed assessment is distinct from a tool execution error', () => {
   const {eventIsError} = require('../frontend/history.js');
   assert.equal(eventIsError({event_type: 'strategy_complete', data: {success: false, outcome: 'fail'}}), false);
   assert.equal(eventIsError({event_type: 'tool.execution_complete', data: {success: false}}), true);
+});
+
+test("promotion requires a finished quick trial with its managed input", () => {
+  const saved = {source: "quick", status: "completed", task: {instruction: "Pick part", image_asset: {sha256: "a".repeat(64)}}};
+  assert.equal(promotionEligible(saved), true);
+  assert.equal(promotionEligible({...saved, status: "error"}), true);
+  assert.equal(promotionEligible({...saved, status: "running"}), false);
+  assert.equal(promotionEligible({...saved, source: "campaign"}), false);
+  assert.equal(promotionEligible({...saved, task: {instruction: "Pick part"}}), false);
+});
+
+test("missing human reviews remain unknown even when the stored pipeline passed", () => {
+  const saved = trial({success: true}); saved.assessment = {outcome: "unknown", scope: "success_contract", review_ids: []};
+  const presented = trialPresentation(saved);
+  assert.equal(presented.verdict, "unknown");
+  assert.equal(presented.pipelineVerdict, "pass");
+  saved.assessment.outcome = "fail";
+  assert.equal(trialPresentation(saved).verdict, "fail");
+  assert.equal(saved.result.stages[0].output.success, true);
 });

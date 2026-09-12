@@ -13,9 +13,10 @@ stages relevant to the task; these capabilities can coexist in one pipeline.
 
 It connects supported model and agent adapters, optional MuJoCo diagnostics,
 and a local browser dashboard. This is an experimental OSS project for
-demonstrating and improving evaluation engineering. Expert review, frozen
-evaluation datasets and explicit baseline/ablation lineage are proposed
-follow-ups in the [product specification](docs/PRODUCT_SPEC.md).
+demonstrating and improving evaluation engineering. Import customer cases, review
+individual outputs, freeze dataset revisions and compare a changed strategy with
+an explicit baseline. See the [customer workflow](docs/product/evaluation-workflows.md)
+and [product specification](docs/PRODUCT_SPEC.md) for scope and remaining work.
 
 ![ROVE dashboard](docs/images/rove-welcome.png)
 
@@ -36,6 +37,18 @@ uv run --frozen rove serve
 Choose a gallery image, select **Mock (Test)**, and click **Evaluate**. Inspect
 stage outputs, evidence confidence, missing checks, and comparison results.
 Mock outputs demonstrate the workflow; they do not measure a robot's ability.
+
+Open **Cases** to evaluate your own PNG/JPEG images and task instructions:
+
+1. Import a case or load the [synthetic customer examples](examples/customer-cases/README.md).
+2. Define success criteria, choose strategies and preview the planned trials and measures.
+3. Run a baseline, inspect its trace, and rate individual outputs when SME judgment is required.
+4. Freeze exact cases/reviews, then compare a candidate configuration under the same conditions.
+
+Missing or disputed assessments stay unknown. An accepted plan is not observed
+robot completion. **Trial history** can promote a finished quick run into a reusable
+case while retaining the original trial as an exploratory reference; new campaigns
+plan fresh attempts. No cloud service is needed for this workflow with mock adapters.
 
 For a shareable, seeded example without opening the dashboard:
 
@@ -120,8 +133,9 @@ The [target architecture](docs/architecture/target-architecture.md),
 Copilot SDK for ROVE-owned agents while preserving direct evaluation of customer
 agents, VLMs and VLAs.
 The linked [architecture decisions](docs/architecture/README.md) include diagrams,
-trade-offs and implementation status. Proposed SME review, frozen datasets and
-baseline/ablation workflows are labeled separately from available features.
+trade-offs and implementation status. The local customer workflow is implemented;
+general video/trajectory ingestion, action-dependent rollout, cloud exporters and
+aggregate campaign targets remain future work.
 
 ## Development
 

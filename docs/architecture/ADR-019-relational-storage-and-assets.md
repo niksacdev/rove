@@ -1,11 +1,11 @@
 # ADR-019: Keep local records relational and large assets separate
 
 **Status:** Accepted direction
-**Implementation status:** Campaign SQLite exists; shared typed storage and asset migration are pending
+**Implementation status:** Shared trial/case/review SQLite schema, managed images and versioned dataset membership implemented; campaign journal remains separate
 **Date:** 2026-09-12
 **Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [ADR-018](ADR-018-trial-lineage-and-snapshots.md)
 
-## Context
+## Context at proposal
 
 ROVE is a local OSS application. Live attempts, history, baseline links and review edits
 need durable transactions and indexed queries. Campaigns currently use SQLite with JSON
@@ -62,6 +62,21 @@ missing historical provenance stays missing. Accept legacy inline images at impo
   per trial. Plain Parquet must be ingested through a Delta writer to form a Delta table.
 
 ## Implementation boundaries and acceptance
+
+Schema version 2 in [TrialStore](../../src/rove/trials/store.py) now migrates the
+shared journal transactionally to support cases, reviews, frozen memberships and
+quick-promotion references. Foreign keys and revision checks protect local records.
+Image intake verifies full SHA256, size and decoded PNG/JPEG content. New
+customer campaigns retain managed asset identities and load image bytes at dispatch;
+legacy inline campaign manifests remain supported.
+
+The existing `campaigns.sqlite3` remains a separate journal. Its case/contract
+references are validated by the workflow service rather than cross-database foreign
+keys; backups must retain both databases and managed assets. General streaming
+video/trajectory import, PostgreSQL and analytical export are not implemented.
+[Dataset tests](../../tests/test_datasets.py) exercise migration rollback and
+frozen membership; [promotion tests](../../tests/test_promotion.py) exercise atomic
+case/reference creation.
 
 Extend [CampaignStore](../../src/rove/benchmarks/store.py),
 [case inputs](../../src/rove/benchmarks/models.py),

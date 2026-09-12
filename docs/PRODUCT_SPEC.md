@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.6
+**Version:** 0.7
 **Updated:** 2026-09-12
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -26,7 +26,7 @@ Works at a robotics company, academic lab or AI lab on manipulation tasks, often
 
 **Need:** Compare complete configurations on a task suite, understand variability, and attribute a difference to a controlled change rather than changed test conditions.
 
-**ROVE journey:** Import cases, run repeated trials, inspect traces and measurements, preserve a baseline, and compare an ablation with a complete configuration diff. Existing CLI/API campaigns provide the repeated-trial foundation; explicit baseline lineage is proposed.
+**ROVE journey:** Import cases, run repeated trials, inspect traces and measurements, preserve a baseline, and compare an ablation with a complete configuration diff. Existing CLI/API campaigns provide the repeated-trial foundation; explicit baseline references and component comparisons are implemented.
 
 **Value:** Less evaluation scripting; clear case-level evidence, uncertainty, missing observations and reproducibility limits.
 
@@ -36,7 +36,7 @@ Builds a product such as bin picking, assembly or kitting, with requirements for
 
 **Need:** Assess the team's models or agents on a customer's data, including customers who have images and tasks but no labeled evaluation dataset.
 
-**ROVE journey:** Onboard the data, define success, run an initial baseline, ask a subject-matter expert (SME) to review cases and outputs, freeze the resulting dataset, and compare a candidate against the same requirements. The review/freeze workflow is proposed.
+**ROVE journey:** Onboard the data, define success, run an initial baseline, ask a subject-matter expert (SME) to review cases and outputs, freeze the resulting dataset, and compare a candidate against the same requirements. The local review/freeze workflow is implemented.
 
 **Value:** A reusable customer evaluation set and an evidence-backed explanation of which tasks improve, fail or still need assessment.
 
@@ -58,14 +58,14 @@ Use [Anthropic's evaluation terminology](https://www.anthropic.com/engineering/d
 
 | Concept | Meaning |
 | --- | --- |
-| Task / test case | A concrete test with defined inputs and success criteria. ROVE calls it a **Case** in the proposed UI; the task instruction describes the robotics goal. |
+| Task / test case | A concrete test with defined inputs and success criteria. ROVE calls it a **Case** in the UI; the task instruction describes the robotics goal. |
 | Trial | One attempt at one case using one strategy. Running three strategies creates three trials. Regrading the same output does not create a new attempt. |
 | Grader | Logic or human review that assesses a declared aspect of the result. ROVE's configured verify stage hosts task evaluators, required constraints and diagnostics. |
 | Trace | The recorded outputs, calls, observations and intermediate results available for an attempt. A predicted action trajectory is not proof that actions executed. |
 | Outcome | The resulting state or artifact being assessed. Plan quality, an agent decision and observed robot completion have different evidence requirements. |
 | Suite / dataset revision | A selected collection of case versions. A frozen reviewed dataset also pins annotations, rubrics and reference-output links. |
 | Strategy | A reusable named configuration of stages and endpoints. Its mutable name is not sufficient identity for old results. |
-| Campaign | A named evaluation of cases, strategies and repetitions. Proposed version lineage connects baseline and candidate campaigns. |
+| Campaign | A named evaluation of cases, strategies and repetitions. Explicit references connect baseline and candidate campaigns. |
 | Provenance | Configuration, input, version and evidence identity attached to records; not another navigation level. |
 
 Keep Cases, Trials, Campaigns and History as the working vocabulary. Dataset revisions are managed with cases. Do not introduce overlapping Experiment or Session entities. Existing evaluation IDs remain compatibility/grouping identifiers where needed.
@@ -83,7 +83,7 @@ flowchart TD
     P --> V[Baseline and candidate lineage]
 ```
 
-This is the target conceptual model. Independent quick and campaign trials now share durable identities, frozen configuration and history. Frozen reviewed dataset revisions and baseline lineage remain proposed extensions.
+This is the target conceptual model. Independent quick and campaign trials now share durable identities, frozen configuration and history. Frozen dataset revisions, selected reviews and baseline references are now implemented locally.
 
 ## 4. Primary customer workflow
 
@@ -98,11 +98,11 @@ flowchart TD
     D --> A[Change a component and compare]
 ```
 
-This proposed guided workflow should deliver a useful first report before requiring a large benchmark or external analytics platform. Input readiness distinguishes whether a case can run from whether its requested outcome can be graded. An image-to-plan agent should not be asked for joint state or a URDF unless its assessment needs them.
+This local workflow is designed to deliver a useful first report before requiring a large benchmark or external analytics platform. Input readiness distinguishes whether a case can run from whether its requested outcome can be graded. An image-to-plan agent should not be asked for joint state or a URDF unless its assessment needs them.
 
 The first report shows accepted/completed, failed and unknown cases; representative failures link to evidence. It shows what is unreviewed or unmeasured. A configurable pilot checks data and grading before the full campaign, with attempt count and available budget information shown before launch.
 
-Quick evaluations remain easy. Durable recording now captures their inputs and configuration before dispatch and preserves interruption. Users can reopen a saved trial without running it again. Creating a campaign from history by reference remains proposed; post-hoc selected trials must remain exploratory references, separate from planned reliability repetitions.
+Quick evaluations remain easy. Durable recording now captures their inputs and configuration before dispatch and preserves interruption. Users can reopen a saved trial without running it again. Promotion preserves an existing quick trial as an exploratory reference and creates a reusable input case; a later campaign schedules fresh repetitions separately.
 
 ## 5. Create datasets and validate cases
 
@@ -116,9 +116,16 @@ Freeze exact case membership, annotations and rubric revisions with links to ref
 
 Candidate outputs receive their own grades. Baseline evidence can be regraded under the same rubric without increasing trial counts; original grades remain available. New task inputs require new case versions. Missing evidence remains unknown. Private grading material and baseline answers are excluded from candidate inputs unless that use is explicitly part of the evaluation.
 
+The local implementation uses revision-checked drafts and immutable final reviews.
+Dataset freezing checks its exact preview and preserves exclusions and disagreement.
+The current fully reviewed badge requires accepted validity and annotation reviews;
+incomplete datasets remain usable. Explicit annotations are stored for inspection,
+not automatically injected into future candidates or graders. Reviewer names are
+local attribution rather than authenticated organizational identities.
+
 ## 6. Success definitions and meaningful measures
 
-The proposed campaign setup uses one validated success/measurement contract from configuration or UI. Before launch, show the criteria, required evidence, grading source, repetition budget and measures expected in the report. Case success criteria and campaign performance targets are separate: changing a dashboard target must not rewrite task grades.
+The Cases workflow uses one validated, frozen success/measurement contract in its API and UI. Before launch, show the criteria, required evidence, grading source, repetition budget and measures expected in the report. Case success criteria and campaign performance targets are separate: changing a dashboard target must not rewrite task grades.
 
 Prioritize measures tied to robotics and agent work:
 
@@ -131,19 +138,19 @@ Prioritize measures tied to robotics and agent work:
 
 The final report should lead with task outcomes and comparable differences. Collapsible details contain definitions, formulas, denominators, uncertainty assumptions, units, grader versions and links to underlying trials. Precision, recall and F1 are out of this iteration's scope.
 
-The existing reports already calculate pass@k/pass^k, coverage, latency and configured verification measurements. The guided metric setup and additional intervention/recovery measures are proposed, not automatically available from today's inputs. See [success and performance measures](product/metrics-and-success.md).
+The existing reports already calculate pass@k/pass^k, coverage, latency and configured verification measurements. Guided metric setup is implemented; intervention/recovery measures remain unavailable without their measurement and aggregation requirements. See [success and performance measures](product/metrics-and-success.md).
 
 ### Inspect traces and measurements
 
 Every report should support **outcome → trial → measurement or grade → stage/call → supporting evidence**. A developer must be able to inspect what the system observed, returned, requested and actually executed, including errors and incomplete recording. Measurements carry values, units, source quality and the exact evidence used; timing distinguishes stage work, pipeline wall time and robot task time.
 
-The trial inspector now combines saved configuration, verdicts, measurement details, stage outputs, stage-filtered activity and on-demand initial observations. Supplied role, usage and trace identifiers are inspectable; missing usage stays unknown. Arbitrary remote assets, image/video/trajectory ranges and parallel trace graphs remain follow-up work. Proposed baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to source records without presenting correlation as a proven cause.
+The trial inspector now combines saved configuration, verdicts, measurement details, stage outputs, stage-filtered activity and on-demand initial observations. Supplied role, usage and trace identifiers are inspectable; missing usage stays unknown. Arbitrary remote assets, image/video/trajectory ranges and parallel trace graphs remain follow-up work. Baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to source records without presenting correlation as a proven cause.
 
 Quick and campaign paths now retain the events exposed by their orchestrator and optional Copilot runtime, alongside final stage results and structured checks. Internal customer-agent calls still require adapter support; no transcript is reconstructed when the source omits it. Initial observations have managed asset references. Full evidence-range resolution, robot clock alignment and baseline trace comparison remain pending. See [Trial history](TRIAL_HISTORY.md), [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
 
 ## 7. Baselines, ablations and evidence
 
-The initial campaign can be a baseline reference even while SME review is pending. A scored comparison identifies the exact baseline strategy, cases, grades and coverage. Proposed campaign lineage preserves earlier references when the user selects a new baseline.
+The initial campaign can be a baseline reference even while SME review is pending. A scored comparison identifies the exact baseline strategy, cases, grades and coverage. Candidate campaigns retain the selected baseline campaign and strategy reference.
 
 An ablation copies cases, repetitions and grading conditions and exposes both the intended component change and incidental differences. Renaming a strategy should not sever its relationship to a baseline. A changed evaluator, dataset or environment may require regrading or new matching trials; do not silently call it model improvement.
 
@@ -151,7 +158,7 @@ Robotics episode evidence must identify the producing configuration and attempt.
 
 ## 8. Storage and integration direction
 
-Use SQLite for the local product. The implemented shared journal stores trial identities, snapshots, events and asset metadata with constraints, schema-version checks and indexed history. Initial observations are separate content-addressed files. Reviews, broader version relationships and recording ranges remain proposed. A complete backup must preserve the journal, assets and separate campaign database together. Consider PostgreSQL only if shared deployment needs justify it; large video and sensor/trajectory recordings should remain separate referenced assets.
+Use SQLite for the local product. The implemented shared journal stores trial identities, snapshots, events and asset metadata with constraints, schema-version checks and indexed history. Initial observations are separate content-addressed files. Schema version 2 also stores case revisions, reviews, frozen dataset membership and quick-promotion references. General recording ranges remain proposed. A complete backup must preserve the journal, assets and separate campaign database together. Consider PostgreSQL only if shared deployment needs justify it; large video and sensor/trajectory recordings should remain separate referenced assets.
 
 Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet or Delta export is optional when needed; neither is required to record local trials. Configuration snapshots identify accessible artifacts and declared model versions, but do not automatically archive remote weights or recreate a physical environment.
 
@@ -164,7 +171,8 @@ ROVE owns these evaluation contracts and execution services while reusing Copilo
 SDK session events feed ROVE's durable trial timeline; native OpenTelemetry and
 optional ROVE spans provide the correlation foundation. The configured Copilot
 adapter now hosts perceive, plan and verify with fresh candidate/grader scopes;
-robot action tools and the evaluation assistant remain pending. The real pinned
+robot action tools remain pending. The optional assistant reads evidence and
+prepares campaign previews with a separate host confirmation for launch. The real pinned
 SDK/CLI passed a controlled synthetic transport probe; live model/Azure and complete
 external collector validation remain open gates. No ROVE exporter is configured by
 default. Session persistence and sampled monitoring data do not replace trial
@@ -174,7 +182,7 @@ Versioned Fabric/Delta export remains a separate analytical integration.
 
 ## 9. Capability and delivery status
 
-| Capability | Status in the first durable-trial implementation slice, 2026-09-12 |
+| Capability | Status in the customer workflow implementation slice, 2026-09-12 |
 | --- | --- |
 | Configured optional stages, supported models/agents and local dashboard | Implemented; adapter availability depends on installed dependencies and endpoints |
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
@@ -183,14 +191,15 @@ Versioned Fabric/Delta export remains a separate analytical integration.
 | Durable activity, measurement drill-down and history inspector | Implemented for events exposed by the orchestrator/SDK; remote recording ranges and aligned trace comparison pending |
 | Copilot runtime for hosted perception, planning and verification | Implemented as an optional pinned dependency; fresh role scopes and controlled real-CLI proof; live-provider validation pending |
 | ROVE trial spans and optional native SDK telemetry settings | Correlation foundation implemented; no default ROVE exporter or validated Azure/Grafana deployment |
-| Guided evaluation assistant and robot action tools | Pending; existing direct customer action adapters remain supported |
-| Guided customer-data onboarding and expected-metric preview | Proposed |
-| SME review, reusable annotations and frozen datasets | Proposed |
-| Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
+| Evaluation assistant | Optional read/evidence/preview tools and host-confirmed campaign launch implemented; import/review/freeze mutation tools remain pending |
+| Robot action tools | Pending; existing direct customer action adapters remain supported |
+| Customer PNG/JPEG intake, case revisions and expected-metric preview | Implemented locally; general recording ingestion and action-dependent rollout pending |
+| SME review, reusable annotations and frozen datasets | Implemented with optimistic drafts, immutable final reviews, explicit annotation separation and atomic freezing |
+| Baseline/ablation references, component diffs and quick promotion | Implemented locally; richer campaign timeline and aligned trace comparison pending |
 | PostgreSQL backend or Delta Lake integration | Future, demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-The first slice delivers inspectable durable trials and the hosted-stage runtime foundation. Next close remaining runtime/telemetry validation gates and deliver customer case contracts, success setup, SME review/dataset freezing, baseline comparisons and the guided assistant. Full acceptance remains completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) distinguishes delivered work from remaining gates.
+The local product now connects inspectable durable trials to customer case contracts, success setup, SME review, dataset freezing and baseline comparisons. Remaining work includes runtime/telemetry validation gates, broader assistant workflow tools and richer robotics evidence integration. Full acceptance remains completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) distinguishes delivered work from remaining gates.
 
 ## 10. Related specifications and decisions
 

@@ -1,0 +1,47 @@
+[
+  {
+    "name": "Clear target",
+    "task": "Identify the red block and plan how to place it in the bin. If it is absent or the path is unsafe, explain what observation or action is needed.",
+    "image": "clear-target.png",
+    "candidate_context": {
+      "constraints": [
+        "Keep the blue block undisturbed.",
+        "Do not pass through obstacles."
+      ]
+    },
+    "conditions": {
+      "environment": "synthetic_tabletop_illustration",
+      "evidence_quality": "synthetic"
+    }
+  },
+  {
+    "name": "Missing target",
+    "task": "Identify the red block and plan how to place it in the bin. If it is absent or the path is unsafe, explain what observation or action is needed.",
+    "image": "missing-target.png",
+    "candidate_context": {
+      "constraints": [
+        "Keep the blue block undisturbed.",
+        "Do not pass through obstacles."
+      ]
+    },
+    "conditions": {
+      "environment": "synthetic_tabletop_illustration",
+      "evidence_quality": "synthetic"
+    }
+  },
+  {
+    "name": "Blocked path",
+    "task": "Identify the red block and plan how to place it in the bin. If it is absent or the path is unsafe, explain what observation or action is needed.",
+    "image": "blocked-path.png",
+    "candidate_context": {
+      "constraints": [
+        "Keep the blue block undisturbed.",
+        "Do not pass through obstacles."
+      ]
+    },
+    "conditions": {
+      "environment": "synthetic_tabletop_illustration",
+      "evidence_quality": "synthetic"
+    }
+  }
+]

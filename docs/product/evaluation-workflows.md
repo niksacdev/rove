@@ -1,6 +1,6 @@
 # Product specification: build, review and compare robotics evaluations
 
-**Status:** Proposed follow-up. No implementation of the new review, dataset-freeze, promotion or ablation UI is included in this documentation change.
+**Status:** Local case intake, success setup, SME review, dataset freezing, promotion and baseline comparison implemented. General recording ingestion and broader assistant mutation tools remain follow-up work.
 **Scope:** Local OSS workbench for robotics developers and subject-matter experts (SMEs).
 **Related:** [Concepts](concepts.md), [metrics and success](metrics-and-success.md), [current implementation](../architecture/current-implementation.md), [ADRs](../architecture/README.md).
 
@@ -68,13 +68,13 @@ The UI should make task, strategy and expected outcome the primary controls. Kee
 | Capability | Current implementation | Follow-up |
 | --- | --- | --- |
 | Configured pipeline and verification | Strategy stages, local task evaluators, required constraints and diagnostics | Surface the criteria and expected measures before launch |
-| Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k and portable reports | Explicit baseline/version relationships and component diffs |
-| Quick evaluation history | JSONL records after completion, partial provenance | Record every trial before dispatch, recover interruption, promote by reference |
+| Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k, baseline references and component diffs | Richer campaign timelines and justified delta statistics |
+| Quick evaluation history | Durable pre-dispatch recording, restart recovery and exploratory promotion | Complete retirement of compatibility projections |
 | Trace inspection | Final stage results, check measurements and some live substeps | Durable event timelines, evidence drill-down and aligned baseline inspection |
 | Execution runtime | Built-in optional stages and agent-backed stage adapters | Add Copilot SDK for ROVE-owned agents; preserve direct customer/model paths and add explicit lifecycle contracts |
-| Case references | Gallery files and inline campaign images | Immutable case versions and shared asset references |
-| Human labels | Existing reference-label inputs | Review queue, rubric versions and output-specific assessments |
-| Evaluation datasets | Campaign task lists | Frozen reviewed dataset membership and reusable annotations |
+| Case references | Immutable case revisions and managed PNG/JPEG images | General recording/video ingestion |
+| Human labels | Separate validity, annotation and output reviews with frozen rubrics | Explicit automatic grader mapping and team adjudication |
+| Evaluation datasets | Previewed immutable case/review membership and review coverage | Richer editing and selection tools |
 | Storage/integration | Local SQLite campaigns and JSONL quick history | Shared relational storage; optional PostgreSQL or Delta integration when needed |
 
 ## Core user journeys
@@ -95,7 +95,7 @@ flowchart TD
     B --> X
 ```
 
-This diagram describes the proposed workflow. The first campaign freezes the input cases and selected strategy and records all outputs. It can be named as the initial baseline immediately, with human-review coverage shown as pending. An SME then reviews the original inputs and outputs in a campaign Review tab.
+This diagram describes the implemented local workflow. The first campaign freezes the input cases and selected strategy and records all outputs. It can be named as the initial baseline immediately, with human-review coverage shown as pending. An SME then reviews the original inputs and outputs through the Cases workflow.
 
 Three review targets remain distinct:
 
@@ -128,7 +128,7 @@ sequenceDiagram
     A->>D: Reference original trial and plan fresh repetitions
 ```
 
-This is proposed behavior. One selected strategy creates one trial; several strategies create separate trials linked to the same UI launch. Restarted history retains interrupted trials. A deliberate retry creates another linked trial, rather than silently rerunning a possibly executed action.
+One selected strategy creates one trial; several strategies create separate trials linked to the same UI launch. Restarted history retains interrupted trials. A deliberate retry creates another linked trial, rather than silently rerunning a possibly executed action.
 
 Promotion references the original trial ID. A trial selected after inspecting its result stays exploratory by default and is shown separately from prospectively planned repetitions. It must not be duplicated or inflate reliability evidence.
 
@@ -162,7 +162,7 @@ For an image and “place the red block in the bin,” an SME can judge target i
 
 For observed completion, the trial needs its own associated episode evidence: producing configuration, case/reset identity, timestamps, relevant state and constraint observations. A developer-supplied hardware adapter can provide these through the existing pipeline boundaries. Regrading a recording from policy A cannot demonstrate physical improvement by policy B.
 
-The sample pack should include successful placement, outside-target placement, excessive-force placement and missing final sensing. Small separate images and timestamped pose/force records exercise the input contract. An action-dependent synthetic rollout can demonstrate baseline/ablation plumbing, explicitly labeled synthetic.
+The sample pack should include successful placement, outside-target placement, excessive-force placement and missing final sensing. Small separate images and timestamped pose/force records exercise the input contract. These supplied records are static fixtures; action-dependent rollout integration remains pending.
 
 ## Data and architecture decisions
 
@@ -180,6 +180,22 @@ Reviews record the reviewer, timestamp, target output/case version, rubric versi
 | Retain inspectable trial telemetry | [022: Trial telemetry](../architecture/ADR-022-trial-telemetry.md) |
 | Own evaluation semantics and execution services | [023: Evaluation boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
 | Use Copilot SDK for ROVE-owned agents and telemetry | [024: Runtime and observability](../architecture/ADR-024-copilot-runtime-and-observability.md) |
+
+## Current local limits
+
+The fully reviewed dataset badge currently requires selected accepted validity
+and annotation reviews with no unresolved active disagreement. Incomplete datasets
+remain usable with their coverage exposed. Output ratings alone never create labels.
+Annotations are retained for inspection; automatic mapping into future graders
+requires explicit integration. Reviewer names provide local attribution, not team
+authentication. Static episode fixtures do not become a new candidate's outcomes.
+
+PNG/JPEG intake and bounded metadata are supported. Video/trajectory ingestion,
+hardware drivers, action-dependent rollout and aggregate campaign targets remain
+outside this slice. The optional Copilot assistant supports evidence inspection and
+campaign preview with host-confirmed launch; it does not import, review or freeze data. See
+[current implementation](../architecture/current-implementation.md) for code paths
+and the [delivery plan](implementation-plan.md) for remaining gates.
 
 ## Acceptance and delivery order
 
