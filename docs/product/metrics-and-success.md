@@ -95,6 +95,11 @@ observations can evaluate a grader but cannot show improvement from a new policy
 
 A baseline comparison should lead with changes in the declared customer outcome
 and the affected cases, with component changes and traces supporting that result.
+Each aggregate should drill down to the contributing trials and each measurement
+to its exact grader/check and evidence. Show recorded time series alongside relevant
+events when their clocks can be aligned; expose missing samples and alignment
+uncertainty. Keep scalar summaries linked to their source windows and aggregation
+rules. See [traces and measurements](traces-and-measurements.md).
 
 Precision, recall and F1 are outside this feature. Revisit them only for a concrete
 labeled classification problem; task success rate is not precision.
@@ -133,6 +138,10 @@ measured** details should expose definitions/formulas, aggregation, planned and
 resolved counts, unknown reasons, evidence quality, units/time windows, contract
 and grader versions, selected label/review revisions and links to supporting
 trial records. Details must be keyboard accessible and export with the report.
+The trial inspector must preserve the difference between model-generated actions,
+dispatched calls and observed execution. Usage is available only when recorded;
+pricing-derived cost needs its rate/version and an estimated label. A timeline
+supports investigation, but does not by itself prove which component caused failure.
 
 Acceptance requires that configuration and UI produce the same frozen contract;
 missing evidence stays visible; changing an aggregate target preserves trial

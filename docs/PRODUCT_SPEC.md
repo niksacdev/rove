@@ -6,17 +6,19 @@
 
 ## 1. Core vision
 
+**ROVE: Robot Observation & Vision Evaluation.**
+
 **ROVE evaluates robotics agent pipelines on your task.**
 
 Bring your task and data, configure the models and agents in your pipeline, and assess the outcomes that matter to your application. ROVE should make it quick to establish a baseline, inspect failed or uncertain cases, and compare a change under consistent conditions.
 
-The unit being assessed is a configured robotics agent pipeline: its models, prompts, stage settings, tools and applicable action components. A strategy may use a VLM, an agent, a VLA or a combination through supported adapters. Perception or planning assessments do not require every action or simulation stage. The evaluation stays anchored to the customer's robotics task and business outcome.
+The unit being assessed is a configured robotics agent pipeline: its models, prompts, stage settings, tools and applicable action components. A strategy can combine vision-language reasoning, tool-using agents and action policies such as VLAs through supported adapters. An agent is a running system, while VLM and VLA describe model capabilities; these are not mutually exclusive choices. Perception or planning assessments do not require every action or simulation stage. The evaluation stays anchored to the customer's robotics task and business outcome.
 
 ROVE is an inference and evaluation workbench. It does not train models or choose a deployment on the customer's behalf. It records outputs, grades and evidence so a person can make that decision. Human review can assess scene understanding and plan quality; claims about physical task completion require associated episode outcome evidence.
 
 ## 2. Target users
 
-The three founding personas remain the product foundation.
+The three founding personas remain the product foundation, with the platform role broadened beyond one cloud provider.
 
 ### Persona 1: Robotics Researcher
 
@@ -38,13 +40,13 @@ Builds a product such as bin picking, assembly or kitting, with requirements for
 
 **Value:** A reusable customer evaluation set and an evidence-backed explanation of which tasks improve, fail or still need assessment.
 
-### Persona 3: Platform Team / Azure AI Foundry Administrator
+### Persona 3: Platform / AI Infrastructure Team
 
-Provides model and agent infrastructure to development teams and needs consistent configuration and usable evaluation records.
+Provides model endpoints, agent runtimes and evaluation infrastructure to development teams across local and hosted environments. Azure is one integration example, not the definition of this persona.
 
 **Need:** Connect supported endpoints, preserve model/configuration identity and make results usable across tools without coupling the evaluation to one provider.
 
-**ROVE journey:** Configure adapters and strategies, check compatibility, share versioned configuration/evidence, and integrate external analytics when required.
+**ROVE journey:** Configure adapters and strategies, check compatibility, inspect runtime/model/tool versions and traces, share versioned evidence, and integrate external analytics when required.
 
 **Value:** Reusable integration contracts and traceable results. PostgreSQL, Fabric/Databricks connectors, MCP services and hosted collaboration are not implied by this persona; see the capability table and current implementation.
 
@@ -131,6 +133,14 @@ The final report should lead with task outcomes and comparable differences. Coll
 
 The existing reports already calculate pass@k/pass^k, coverage, latency and configured verification measurements. The guided metric setup and additional intervention/recovery measures are proposed, not automatically available from today's inputs. See [success and performance measures](product/metrics-and-success.md).
 
+### Inspect traces and measurements
+
+Every report should support **outcome → trial → measurement or grade → stage/call → supporting evidence**. A developer must be able to inspect what the system observed, returned, requested and actually executed, including errors and incomplete recording. Measurements carry values, units, source quality and the exact evidence used; timing distinguishes stage work, pipeline wall time and robot task time.
+
+The proposed trial inspector combines a timeline, stage/tool inputs and outputs, measurement details and relevant image/video/trajectory ranges. Baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to their source records. It supports failure investigation without presenting correlation as a proven cause.
+
+Today, final stage results and structured check measurements are retained, but some live tool substeps disappear from durable history. Complete event capture, managed evidence links and aligned trace comparison are follow-up requirements, not shipped telemetry. See [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
+
 ## 7. Baselines, ablations and evidence
 
 The initial campaign can be a baseline reference even while SME review is pending. A scored comparison identifies the exact baseline strategy, cases, grades and coverage. Proposed campaign lineage preserves earlier references when the user selects a new baseline.
@@ -145,6 +155,12 @@ Use SQLite for the current local product, including results, reviews and version
 
 Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet or Delta export is optional when needed; neither is required to record local trials. Configuration snapshots identify accessible artifacts and declared model versions, but do not automatically archive remote weights or recreate a physical environment.
 
+### Evaluation harness and agent runtime
+
+ROVE already has the core of an evaluation harness: configured trials, execution orchestration, grading, evidence and reporting. The system under test may have its own execution harness that manages model calls, tools, memory and recovery. These are separate responsibilities; choosing an agent runtime must not determine the customer's success criteria or replace evidence from the robot.
+
+The proposed direction is to retain ROVE's evaluation contract and make execution backends replaceable, starting from existing stage adapters. A complete external agent should be evaluated as that configured system rather than reconstructed into invented internal stages. Its runtime, tools, prompts and action interface become versioned components of a strategy. An external robotics harness such as Inspect Robots is a candidate for a compatibility study, not an integration already selected or implemented. See [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md) and the [dated model assessment](product/model-landscape-2026-09.md).
+
 ## 9. Capability and delivery status
 
 | Capability | Status at source commit 776b393 |
@@ -153,21 +169,25 @@ Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet 
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
 | Durable shared quick-trial recording and asset references | Proposed |
+| Durable tool/event timeline, measurement drill-down and aligned trace comparison | Proposed; final stage outputs and check measurements exist today |
+| External execution-harness integration | Proposed compatibility study; no new backend selected |
 | Guided customer-data onboarding and expected-metric preview | Proposed |
 | SME review, reusable annotations and frozen datasets | Proposed |
 | Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
 | PostgreSQL backend or Delta Lake integration | Future, demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-Deliver shared recording first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
+Deliver shared recording and inspectable trial evidence first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. A small external-harness compatibility study should inform recording contracts before they are finalized. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
 
 ## 10. Related specifications and decisions
 
 - [Concepts](product/concepts.md): vocabulary and current/proposed mappings.
 - [Customer workflows](product/evaluation-workflows.md): persona stories, onboarding, SME review and acceptance criteria.
 - [Metrics and success](product/metrics-and-success.md): configuration/UI contract and report explanations.
+- [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
+- [Model and harness assessment](product/model-landscape-2026-09.md): dated research informing architecture, not a ROVE benchmark.
 - [Current implementation](architecture/current-implementation.md): actual code paths, APIs, storage and tests.
-- [Architecture decisions](architecture/README.md): ADRs 017–021 with diagrams and implementation status.
+- [Architecture decisions](architecture/README.md): ADRs 017–023 with diagrams and implementation status.
 - [Campaign usage](BENCHMARKS.md) and [configured verification](VERIFICATION.md): supported configuration today.
 
 Earlier versions of this file remain in Git history. The core vision and personas are retained; historical claims about unimplemented commands, full simulation, universal reproducibility or future integrations are not release guarantees.

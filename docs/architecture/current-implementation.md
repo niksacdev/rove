@@ -9,7 +9,8 @@ This description was checked against commit `776b39316ad80a012837b44904e38fcd561
 on 12 September 2026, after configured verification was merged. It describes
 implemented behavior. The linked [product concepts](../product/concepts.md),
 [workflows](../product/evaluation-workflows.md) and
-[success/metrics specification](../product/metrics-and-success.md) separately mark
+[success/metrics specification](../product/metrics-and-success.md) and
+[trace/measurement specification](../product/traces-and-measurements.md) separately mark
 the proposed follow-up. Historical architecture documents may describe interfaces
 that are not implemented.
 
@@ -23,7 +24,8 @@ flowchart TD
     RM --> PIPE["EvaluationPipeline"]
     PIPE --> EVENTS["Stage events and results"]
     EVENTS --> SSE["SSE stream to dashboard"]
-    EVENTS --> QUICK["Quick completion callback<br/>Build provenance and result"]
+    EVENTS --> RETAIN["Retain completed/error stage results"]
+    RETAIN --> QUICK["Quick completion callback<br/>Build provenance and result"]
     QUICK --> JSONL["data/output/history.jsonl"]
 
     CP["Campaign API or benchmark CLI"] --> PREP["prepare<br/>Freeze inputs, configuration and fingerprints"]
@@ -139,6 +141,39 @@ configuration for each attempt. The gallery already stores image files separatel
 Neither path is the proposed large-asset store. There is no PostgreSQL backend,
 Parquet exporter or Delta Lake integration in this revision.
 
+## Trace and Telemetry Coverage
+
+The saved evidence is a set of final stage results, not a full event transcript.
+[`PipelineStageResult`](../../src/rove/models/core.py) carries stage, status,
+duration, model, phase, output and error, but no stage timestamp or event/parent ID.
+`RunManager` streams events while retaining only completed/error results. The
+campaign worker ignores intermediate events and saves the returned final results.
+The visible verification tool loop belongs to ROVE's evaluation logic; it is not
+a transcript of an external candidate agent's internal runtime.
+
+| Evidence | Current behavior |
+| --- | --- |
+| Verification calls | Live events show turn/tool/check names and tool duration. The tool conversation and those running substeps are not retained in the final stage list. |
+| Outputs | Stage schemas retain structured output and raw response text when an adapter supplies it; this is not a complete provider request/response transcript. |
+| Actions | Results retain predicted trajectories or declared tool calls. Actual simulator step counts are separate; a declared tool call does not prove execution. |
+| Checks and measurements | Saved verification results retain evaluator versions, verdicts, measurements, units, quality and evidence-reference strings. References are not managed asset links. |
+| Images and episodes | Campaign snapshots retain initial inline images and supplied example data. Quick server history does not save input images; available final observations reach the evaluator but are not automatically persisted as assets. |
+| Timing | Stage durations are retained. Campaigns also record attempt start/finish and separate worker pipeline/attempt wall durations. Quick total latency sums stages and can exceed elapsed time when they overlap. |
+| Usage and cost | The Azure provider has an internal accumulated token counter, but no per-call/per-trial usage or cost is retained by the runner. Reports label cost unavailable. |
+
+The dashboard offers stage cards and side-by-side output comparisons. Verification
+substeps are displayed live, but are not restored as a durable timeline. Its browser
+cache truncates long `raw_response` strings to 500 characters; server stage results
+are not truncated by that browser rule. HTML campaign reports expand saved attempt
+JSON rather than provide linked event or recording inspection. See
+[dashboard handling](../../frontend/app.js) and
+[the report renderer](../../src/rove/benchmarks/report.py).
+
+There is no shared clock/event identity contract for aligning a robot sensor stream
+with model or server calls. The proposed
+[trial telemetry decision](ADR-022-trial-telemetry.md) adds durable event recording,
+evidence links and explicit timing/coverage semantics; it is not implemented here.
+
 ## Reports and Comparability
 
 The [worker](../../src/rove/benchmarks/worker.py) classifies verdicts separately from
@@ -206,5 +241,6 @@ The decision trail distinguishes
 [implemented configured verification](ADR-017-configured-verification.md) from
 proposed [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
 [relational recording and asset references](ADR-019-relational-storage-and-assets.md),
-[SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) and
-[campaign success and reporting](ADR-021-campaign-success-and-reporting.md).
+[SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
+[campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
+[trial telemetry](ADR-022-trial-telemetry.md).

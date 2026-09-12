@@ -14,13 +14,13 @@ The [product specification](../PRODUCT_SPEC.md) retains the founding vision and 
 | --- | --- | --- |
 | Robotics Researcher | Compare pipeline configurations and understand which changes help on a task suite | Import cases, establish a baseline, change a component, inspect per-case results and uncertainty with preserved configuration/seed support |
 | ML Engineer on a Manipulation Team | Establish whether an agent meets a customer task's quality, cycle-time and intervention requirements | Onboard customer images/tasks, define outcome criteria, involve an SME, freeze reviewed cases and compare failures/constraints on the same dataset |
-| Platform Team / Azure AI Foundry Administrator | Connect supported models and agents consistently and make evaluation evidence usable by development teams | Configure adapters/endpoints, inspect versions and availability, reuse strategy definitions and retain an integration path for external analytics |
+| Platform / AI Infrastructure Team | Connect supported models and agents consistently and make evaluation evidence usable by development teams | Configure adapters/endpoints, inspect versions and availability, reuse strategy definitions and retain an integration path for external analytics |
 
 - As a **Robotics Researcher**, I want a candidate linked to a frozen baseline so I can distinguish a model/configuration change from a changed case or grader.
 - As an **ML Engineer on a Manipulation Team**, I want to start with a customer's unlabeled images and tasks, obtain expert-reviewed results and preserve a reusable dataset so I can evaluate business requirements without building one-off scripts.
-- As a **Platform Team / Azure AI Foundry Administrator**, I want a consistent configuration and evidence contract for supported agents and models so teams can swap a component and share results without coupling evaluation history to a provider's API.
+- As a **Platform / AI Infrastructure Team**, I want a consistent configuration and evidence contract for supported agents and models so teams can swap a component and share results without coupling evaluation history to a provider's API.
 
-An SME is a reviewer collaborating with these personas, not a replacement for them. The platform persona describes a product need; it does not imply that MCP servers, hosted collaboration, authentication or lakehouse connectors have shipped. The current supported integration surface is documented in [current implementation](../architecture/current-implementation.md).
+An SME is a reviewer collaborating with these personas, not a replacement for them. The platform persona spans local and hosted infrastructure; Azure is an integration example. This describes a product need; it does not imply that MCP servers, hosted collaboration, authentication or lakehouse connectors have shipped. The current supported integration surface is documented in [current implementation](../architecture/current-implementation.md).
 
 ## Problem and intended outcome
 
@@ -30,7 +30,7 @@ ROVE should support both starting points: evaluating a prepared dataset, and cre
 
 ## First value for a robotics company
 
-The primary promise is: **bring your customer data, connect the system you want to test, define the business outcome, and obtain a baseline you can inspect and improve.** A strategy may be an agent, a VLM, a VLA or a combination using supported endpoints/adapters. Do not force an agent that produces a plan to supply joint state, URDF files or a simulated execution stage. “Any model” means an extensible adapter contract, not a claim that every model API already works.
+The primary promise is: **bring your customer data, connect the system you want to test, define the business outcome, and obtain a baseline you can inspect and improve.** A strategy configures a pipeline that can combine vision-language reasoning, tool-using agents and VLA control through supported endpoints/adapters. Do not force an agent that produces a plan to supply joint state, URDF files or a simulated execution stage. “Any model” means an extensible adapter contract, not a claim that every model API already works.
 
 The onboarding flow is organized around the job the customer needs done:
 
@@ -70,6 +70,8 @@ The UI should make task, strategy and expected outcome the primary controls. Kee
 | Configured pipeline and verification | Strategy stages, local task evaluators, required constraints and diagnostics | Surface the criteria and expected measures before launch |
 | Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k and portable reports | Explicit baseline/version relationships and component diffs |
 | Quick evaluation history | JSONL records after completion, partial provenance | Record every trial before dispatch, recover interruption, promote by reference |
+| Trace inspection | Final stage results, check measurements and some live substeps | Durable event timelines, evidence drill-down and aligned baseline inspection |
+| Execution runtime | Built-in optional stages and agent-backed stage adapters | Assess external agent/robotics harnesses through an optional backend contract |
 | Case references | Gallery files and inline campaign images | Immutable case versions and shared asset references |
 | Human labels | Existing reference-label inputs | Review queue, rubric versions and output-specific assessments |
 | Evaluation datasets | Campaign task lists | Frozen reviewed dataset membership and reusable annotations |
@@ -138,6 +140,21 @@ The comparison uses matching case/condition blocks and explains mismatches. Chan
 
 Display task completion, reliability, constraint violations, intervention/recovery measures and task duration only where the captured evidence supports them. Keep robot completion time separate from pipeline wall time. A metric target for a campaign does not silently change the grader's definition of success. See the [metric specification](metrics-and-success.md).
 
+### Inspect a trial and explain a difference
+
+Open a failed or unknown result to its contributing trials, then select a grade or
+measurement to inspect the exact check, source output and available observation.
+The timeline separates candidate activity from grading, preserves parallel stages
+and shows gaps in captured calls or evidence. For baseline comparisons, inspect
+matching cases side by side with changed components and source-linked values.
+
+This inspection is part of the main workflow, not a separate monitoring product.
+A developer should be able to identify an actionable failure without reconstructing
+logs manually. The [trace specification](traces-and-measurements.md) defines durable
+recording, units, timing, clock alignment and evidence coverage. The
+[harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
+explains how external runtimes could supply that evidence.
+
 ## Robotics example
 
 For an image and “place the red block in the bin,” an SME can judge target identification and plan quality. They can flag insufficient depth information or annotate the intended target. A high plan rating is human acceptance of the proposal, not proof that the block moved.
@@ -159,17 +176,20 @@ Reviews record the reviewer, timestamp, target output/case version, rubric versi
 | Relational records and external assets | [019: Storage](../architecture/ADR-019-relational-storage-and-assets.md) |
 | Review and freeze datasets | [020: SME datasets](../architecture/ADR-020-sme-reviewed-datasets.md) |
 | Declare success and report meaningful measures | [021: Campaign reporting](../architecture/ADR-021-campaign-success-and-reporting.md) |
+| Retain inspectable trial telemetry | [022: Trial telemetry](../architecture/ADR-022-trial-telemetry.md) |
+| Evaluate replaceable execution backends | [023: Harness boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
 
 ## Acceptance and delivery order
 
 1. Shared recording preserves pending, completed, errored and interrupted trials. Legacy JSONL imports once without inventing missing provenance; old IDs and source history remain intact.
-2. The same asset can serve several cases/trials without copying its bytes. History uses paginated summary queries; missing or changed external assets remain explicit.
-3. Review drafts survive restart. An ambiguous case can be excluded with a reason, while a valid case with failed output can be included. Conflicting edits are detected.
-4. Dataset freezing preserves exact membership and review/rubric references. Corrections never rewrite a frozen dataset or old report. Missing required reviews remain visible.
-5. Candidate outputs receive independent ratings and can differ from an accepted reference answer. Private grading material is excluded from candidate inputs.
-6. A regrade changes the grading revision, not the number of robot attempts. Comparisons use matching dataset and grading versions and show curation/exclusion coverage.
-7. Baseline/ablation views retain complete component diffs, missing evidence and unsupported seeds. Renamed configurations can compare under the same contract.
-8. The full demonstration works without manual database edits: import → baseline → review → freeze → candidate → comparison. Quick-run promotion works after restarting ROVE.
+2. Trial history preserves recorded stage/call events and links each grade or measurement to its exact source evidence. Refresh, interruption and restart preserve captured events without replaying actions; missing telemetry remains explicit.
+3. The same asset can serve several cases/trials without copying its bytes. History uses paginated summary queries; missing or changed external assets remain explicit.
+4. Review drafts survive restart. An ambiguous case can be excluded with a reason, while a valid case with failed output can be included. Conflicting edits are detected.
+5. Dataset freezing preserves exact membership and review/rubric references. Corrections never rewrite a frozen dataset or old report. Missing required reviews remain visible.
+6. Candidate outputs receive independent ratings and can differ from an accepted reference answer. Private grading material is excluded from candidate inputs.
+7. A regrade changes the grading revision, not the number of robot attempts. Comparisons use matching dataset and grading versions and show curation/exclusion coverage.
+8. Baseline/ablation views retain complete component diffs, missing evidence and unsupported seeds. Renamed configurations can compare under the same contract.
+9. The full demonstration works without manual database edits: import → baseline → review → freeze → candidate → comparison. Quick-run promotion works after restarting ROVE.
 
 Validate the complete flow for each persona: the researcher can reproduce the comparison inputs, the ML engineer can find and review a failed customer case, and the platform administrator can identify which configured endpoint/version produced the evidence. These are acceptance scenarios, not claims of measured adoption or enterprise readiness.
 

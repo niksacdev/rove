@@ -9,17 +9,23 @@ Use [current implementation](current-implementation.md) to explain the shipped c
 | [019: Relational storage and assets](ADR-019-relational-storage-and-assets.md) | Accepted direction | Campaign SQLite exists; shared storage/assets pending |
 | [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Proposed | Review records, UI and dataset freezing pending |
 | [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Proposed | Current pass metrics retained; setup/report extensions pending |
+| [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable events, evidence navigation and aligned inspection pending |
+| [023: Evaluation and execution harnesses](ADR-023-evaluation-and-execution-harnesses.md) | Proposed | Existing pipeline retained; external-backend compatibility study pending |
 
 ## How the decisions connect
 
 ```mermaid
-flowchart LR
+flowchart TD
     V[017: Configured verification] --> C[018: Frozen contract and trial identity]
     C --> S[019: Relational records and assets]
     C --> H[020: Reviews and dataset revisions]
     H --> M[021: Success and meaningful measures]
     V --> M
     S --> M
+    C --> T[022: Trial telemetry]
+    S --> T
+    T --> M
+    E[023: Execution backend boundary] --> T
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

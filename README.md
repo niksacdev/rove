@@ -1,12 +1,15 @@
 # ROVE
 
+**Robot Observation & Vision Evaluation**
+
 **ROVE evaluates robotics agent pipelines on your task.**
 
 Bring your task and data, configure the models and agents in your pipeline,
 and compare their outputs. ROVE is an open-source workbench for inspecting the evidence
 behind each assessment, and the checks or observations that are still missing.
-A strategy can use a vision-language model, an agent, an action policy such as a
-VLA, or a combination; configure the stages relevant to the task.
+A strategy configures the system being evaluated: vision-language reasoning,
+tool-using agents, action policies such as VLAs, or a combination. Configure the
+stages relevant to the task; these capabilities can coexist in one pipeline.
 
 It connects supported model and agent adapters, optional MuJoCo diagnostics,
 and a local browser dashboard. This is an experimental OSS project for

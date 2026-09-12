@@ -103,6 +103,13 @@ units/time windows, version identities and links to raw trial evidence. Include
 the same information in exported reports. Controls need keyboard access, clear
 labels and status text that does not rely on color.
 
+Aggregate measures must link to their contributing trials. A per-trial measurement
+links to the exact check, grader version and source output or recording range;
+the inspector preserves missing evidence and clock-alignment uncertainty.
+[ADR-022](ADR-022-trial-telemetry.md) defines the proposed durable event and evidence
+contract. The report must distinguish recorded usage from pricing-derived cost
+estimates and requested actions from observed execution.
+
 ## Alternatives considered
 
 - **UI-only metric settings:** simple to display, but CLI/configuration runs could use different definitions. Use one validated contract for all entry points.

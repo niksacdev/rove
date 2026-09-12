@@ -46,7 +46,7 @@ An Experiment or Session container is not needed alongside Campaign.
 | --- | --- | --- |
 | Case | A task with specific starting inputs, conditions and criteria | Place the red block in the bin, starting from this camera view and reset state |
 | Task instruction | What the agent is asked to do; part of a case | “Place the red block in the bin” |
-| Strategy | Reusable system configuration built from supported adapters and pipeline stages | A VLM for scene understanding, a planning agent, a VLA policy or a combination, with its evaluator |
+| Strategy | Reusable system configuration built from supported adapters and pipeline stages | Models, agent runtime, tools and action components for the relevant stages, with declared grading |
 | System snapshot | Proposed frozen record of the strategy and component versions used | Policy checkpoint, prompt, action convention and controller revision |
 | Trial | One strategy attempting one case once | One placement attempt, including any actions within that attempt |
 | Campaign | A named evaluation across cases, configurations and repetitions | Ten placement cases evaluated five times per strategy |
@@ -66,6 +66,17 @@ the evaluation profile. An image-to-plan agent needs the image, instruction and
 planning rubric; it should not be forced to supply URDF or joint state. A modeled
 trajectory check or a physical completion assessment needs the additional geometry,
 state or outcome evidence required by that check.
+
+The **evaluation harness** runs and assesses trials. The **execution harness**
+operates the system under test, including its tools, memory and recovery. ROVE has
+an existing pipeline runtime; an external execution harness would be an optional
+backend, not another Cases/Trials/Campaigns container. Its version and configuration
+belong to the system snapshot. See the [harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md).
+
+A **trace** links recorded events and outputs for a trial. A **measurement** is a
+value with its unit, source quality, scope and evidence reference. Some current
+live events are not retained; the proposed [trial inspector](traces-and-measurements.md)
+requires durable, source-linked records rather than assuming full telemetry exists.
 
 ## Evidence Determines What a Result Means
 
