@@ -1,356 +1,193 @@
 # ROVE Product Specification
 
-**Version**: 0.3
-**Status**: Active
-**Last updated**: 2026-02-22
+**Version:** 0.4
+**Updated:** 2026-09-12
+**Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
----
+## 1. Core vision
 
-## 1. First Principles
-
-A robot that manipulates objects in the real world needs to:
-
-1. **See** (perceive) — understand what is in the scene, including object localization (VLM, with grounding folded in)
-2. **Plan** — decide how to accomplish the task (VLM, LLM, or Foundry agent)
-3. **Act** — predict physical movements to execute the plan (VLA)
-4. **Verify** — confirm the task succeeded (VLM)
-
-This is not one model's job. It is an agent pipeline — multiple models orchestrated together. The right combination of VLM, VLA, LLM, and grounding model depends entirely on the task, the environment, and the deployment constraints (latency, cost, hardware).
-
-Today, robotics teams have no systematic way to test these agent pipelines. They pick models based on paper benchmarks, vendor recommendations, or ad hoc scripts. Benchmark scores measure isolated model performance on curated tasks — they do not tell you how a VLM+VLA combination performs on *your* bin-picking task under *your* warehouse lighting.
-
-ROVE evaluates agent pipelines end-to-end. You define your task, select candidate models for each pipeline stage, and ROVE runs the full inference pipeline across every combination in simulation — measuring success rate, latency, and cost. The result is a ranked comparison of agent configurations for your specific scenario.
-
-**ROVE is inference-only.** It does not train, fine-tune, or modify models. It runs them in realistic robotics pipelines and measures the outcomes.
-
----
-
-## 2. Core Value Proposition
+**ROVE: Robot Observation & Vision Evaluation.**
 
 **ROVE evaluates robotics agent pipelines on your task.**
 
-The unit of evaluation is not a model — it is a complete pipeline configuration: which VLM perceives the scene, which model plans the task, which VLA or agent executes the actions, running in simulation against your task description and scene image.
+Bring your task and data, configure the models and agents in your pipeline, and assess the outcomes that matter to your application. ROVE should make it quick to establish a baseline, inspect failed or uncertain cases, and compare a change under consistent conditions.
 
-Three concrete implications:
+The unit being assessed is a configured robotics agent pipeline: its models, prompts, stage settings, tools and applicable action components. A strategy can combine vision-language reasoning, tool-using agents and action policies such as VLAs through supported adapters. An agent is a running system, while VLM and VLA describe model capabilities; these are not mutually exclusive choices. Perception or planning assessments do not require every action or simulation stage. The evaluation stays anchored to the customer's robotics task and business outcome.
 
-1. **You bring your task, not a benchmark.** ROVE evaluates agent pipelines against what you actually need to deploy.
-2. **Rankings are task-specific.** The VLM+VLA combination that tops LIBERO-Spatial may rank third on your industrial bin-picking task.
-3. **Variation study is a first-class workflow.** Define task variations in YAML. ROVE reports which agent configurations are robust and which degrade.
+ROVE is an inference and evaluation workbench. It does not train models or choose a deployment on the customer's behalf. It records outputs, grades and evidence so a person can make that decision. Human review can assess scene understanding and plan quality; claims about physical task completion require associated episode outcome evidence.
 
----
+## 2. Target users
 
-## 3. Target Users
+The three founding personas remain the product foundation, with the platform role broadened beyond one cloud provider.
 
 ### Persona 1: Robotics Researcher
 
-Works at a robotics company, academic lab, or AI lab on manipulation tasks. Familiar with Python, LIBERO, and at least one VLA framework.
+Works at a robotics company, academic lab or AI lab on manipulation tasks, often using Python, simulators and VLA frameworks.
 
-**Today**: Tests each VLM+VLA combination manually with custom scripts. No systematic way to compare agent pipeline configurations.
+**Need:** Compare complete configurations on a task suite, understand variability, and attribute a difference to a controlled change rather than changed test conditions.
 
-**With ROVE**: Single CLI command runs the full pipeline across all model combinations in parallel. Python API for notebook analysis. JSONL export for downstream tools.
+**ROVE journey:** Import cases, run repeated trials, inspect traces and measurements, preserve a baseline, and compare an ablation with a complete configuration diff. Existing CLI/API campaigns provide the repeated-trial foundation; explicit baseline lineage is proposed.
+
+**Value:** Less evaluation scripting; clear case-level evidence, uncertainty, missing observations and reproducibility limits.
 
 ### Persona 2: ML Engineer on a Manipulation Team
 
-Building a specific product: bin picking, assembly, kitting. Has production requirements — success rate targets (>95%), cycle time budgets, cost constraints.
+Builds a product such as bin picking, assembly or kitting, with requirements for completion, cycle time, human intervention and operating constraints.
 
-**Today**: No structured way to justify agent configuration choices. Pipeline testing is ad hoc and not reproducible.
+**Need:** Assess the team's models or agents on a customer's data, including customers who have images and tasks but no labeled evaluation dataset.
 
-**With ROVE**: Controlled pipeline evaluation with per-step latency, cost tracking, and Foundry-compatible export. Data-driven agent configuration decisions.
+**ROVE journey:** Onboard the data, define success, run an initial baseline, ask a subject-matter expert (SME) to review cases and outputs, freeze the resulting dataset, and compare a candidate against the same requirements. The review/freeze workflow is proposed.
 
-### Persona 3: Platform Team / Azure AI Foundry Administrator
+**Value:** A reusable customer evaluation set and an evidence-backed explanation of which tasks improve, fail or still need assessment.
 
-Responsible for AI infrastructure. Registers tools in Foundry for development teams.
+### Persona 3: Platform / AI Infrastructure Team
 
-**Today**: Agent frameworks hardcode model calls. Changing models requires agent code changes.
+Provides model endpoints, agent runtimes and evaluation infrastructure to development teams across local and hosted environments. Azure is one integration example, not the definition of this persona.
 
-**With ROVE**: MCP servers expose pipeline capabilities as tools. Agent calls `analyze_scene`; ROVE routes to the configured model. Swap models via YAML, no agent code changes.
+**Need:** Connect supported endpoints, preserve model/configuration identity and make results usable across tools without coupling the evaluation to one provider.
 
----
+**ROVE journey:** Configure adapters and strategies, check compatibility, inspect runtime/model/tool versions and traces, share versioned evidence, and integrate external analytics when required.
 
-## 4. Configuration-Driven Design (Inspired by SHIVA Pattern)
+**Value:** Reusable integration contracts and traceable results. PostgreSQL, Fabric/Databricks connectors, MCP services and hosted collaboration are not implied by this persona; see the capability table and current implementation.
 
-ROVE uses a single YAML file (`rove.yaml`) that defines:
+An SME is a collaborator in these workflows, not a fourth replacement persona. A local reviewer identity records attribution without claiming enterprise authentication.
 
-- **Models** (like SHIVA resources): Atomic model configurations — one entry per model with adapter type, credentials, cost, and capabilities.
-- **Strategies** (like SHIVA experiments): Named pipeline configurations that map one model per stage (perceive, plan, act, verify, sim). Each strategy is a complete agent pipeline configuration ready to run.
-- **Defaults**: Global settings for concurrency, timeouts, retries.
+## 3. Concepts and terminology
 
-This pattern means:
+Use [Anthropic's evaluation terminology](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) for tasks/test cases, trials, graders, traces and outcomes. Campaign is ROVE's organizational concept, not a term attributed to that guidance.
 
-- Adding a model = one YAML entry + one adapter class
-- Creating a strategy = one YAML block mapping models to pipeline stages
-- Running an evaluation = `rove evaluate --strategy mock`
-- Reproducing an evaluation = share the YAML file
+| Concept | Meaning |
+| --- | --- |
+| Task / test case | A concrete test with defined inputs and success criteria. ROVE calls it a **Case** in the proposed UI; the task instruction describes the robotics goal. |
+| Trial | One attempt at one case using one strategy. Running three strategies creates three trials. Regrading the same output does not create a new attempt. |
+| Grader | Logic or human review that assesses a declared aspect of the result. ROVE's configured verify stage hosts task evaluators, required constraints and diagnostics. |
+| Trace | The recorded outputs, calls, observations and intermediate results available for an attempt. A predicted action trajectory is not proof that actions executed. |
+| Outcome | The resulting state or artifact being assessed. Plan quality, an agent decision and observed robot completion have different evidence requirements. |
+| Suite / dataset revision | A selected collection of case versions. A frozen reviewed dataset also pins annotations, rubrics and reference-output links. |
+| Strategy | A reusable named configuration of stages and endpoints. Its mutable name is not sufficient identity for old results. |
+| Campaign | A named evaluation of cases, strategies and repetitions. Proposed version lineage connects baseline and candidate campaigns. |
+| Provenance | Configuration, input, version and evidence identity attached to records; not another navigation level. |
 
-The YAML is the single source of truth. CLI, Python library, API, and dashboard all read from it.
+Keep Cases, Trials, Campaigns and History as the working vocabulary. Dataset revisions are managed with cases. Do not introduce overlapping Experiment or Session entities. Existing evaluation IDs remain compatibility/grouping identifiers where needed.
 
----
-
-## 5. What Models Return — The Unification Challenge
-
-### VLMs Return Structured Scene Understanding
-
-VLMs are text-in, text-out systems with no robotics-specific output format. The adapter is responsible for: (a) prompting for structure, (b) parsing the output, (c) normalizing to ROVE's data models.
-
-**GPT-4o**: Supports `response_format={"type": "json_schema"}` for guaranteed valid JSON. Most reliable structured output.
-
-**Qwen2.5-VL-32B**: No native JSON mode. Adapter prompts for JSON and uses fallback parsing. Has native grounding — can return bounding boxes directly via `<|box_start|>(x,y),(x,y)<|box_end|>` tokens in 1000x1000 normalized space.
-
-**Cosmos-Reason2 2B**: Removed from rove.yaml due to unreliable JSON output (20-30% malformed responses from a 2B model). Not recommended for pipeline evaluation.
-
-**Key constraint**: VLMs operating on a single 2D image cannot provide metric 3D coordinates. `SceneAnalysis` uses simple structured fields (`objects: list[dict]`, `spatial_relations: list[str]`, `task_relevant: list[str]`). VLMs with native grounding (e.g., Qwen) can return bounding boxes directly, folding localization into the perceive stage.
-
-### VLAs Return Actions in Incompatible Formats
-
-Every VLA architecture produces different output. The adapter normalizes to a common `ActionPrediction` format:
-
-| VLA | Architecture | Steps/Call | Action Space | Normalization Required |
-|-----|-------------|------------|--------------|----------------------|
-| SmolVLA 450M | Flow matching | 10 (chunk) | EE delta, LeRobot-normalized | Denormalize using dataset stats |
-| OpenVLA-OFT 7B | Autoregressive | 1 | Discrete tokens (256 bins/dim) | Detokenize + denormalize |
-| CogACT 7B | Diffusion | 16 (chunk) | EE delta, may need FK | Denoising steps config |
-| GR00T N1.6 3B | Cross-embodiment | 10-16 | Embodiment-dependent | Requires embodiment_id |
-
-**Canonical action space**: ROVE normalizes to end-effector delta format: `[dx, dy, dz, droll, dpitch, dyaw, gripper]` in meters/radians/[0,1]. The adapter performs the conversion; raw model output is preserved for debugging.
-
-**Proprioception**: SmolVLA requires current joint state as input. OpenVLA does not. The Protocol accepts optional `proprioception: list[float] | None`. The orchestrator always queries the sim for current state and passes it; whether it's used is the adapter's decision.
-
-**Confidence is architecture-dependent**: Only OpenVLA (autoregressive) has principled per-token logprobs. Flow matching and diffusion models have no natural confidence score. The `confidence` field is optional and adapter-defined — not a standardized cross-model metric.
-
-### The Gripper Convention Problem
-
-VLAs use gripper values in [0, 1] (0=open, 1=closed). LIBERO expects [-1, 1] (-1=open, 1=closed). The sim adapter performs this conversion. Every VLA adapter documents its gripper convention.
-
----
-
-## 6. Where Simulators Fit
-
-### What the Simulator Provides
-
-1. **Initial observation**: `sim.reset(task_id)` → RGB image + depth + joint positions + object poses
-2. **Action execution**: `sim.step(action)` for each action in the VLA's predicted chunk
-3. **Ground truth success**: LIBERO provides per-task success functions that check object poses against target conditions
-4. **Post-execution observation**: The rendered image after actions execute — this is the "after" image for the verify step
-5. **Controlled variation**: Reset to known state between trials, vary object placement
-
-### The Execute Step in Detail
-
-```text
-VLA.predict_action(sim_image, task, proprio) → ActionPrediction (e.g., 10 steps)
-    ↓
-for each action_step in ActionPrediction.actions:
-    action_libero = convert_to_libero_format(action_step)  # gripper [0,1]→[-1,1], clip to bounds
-    obs, reward, done, info = sim.step(action_libero)
-    if info['success'] or done: break
-    ↓
-final_observation = obs['agentview_image']  # post-execution RGB
-sim_success = info['success']               # physics ground truth
+```mermaid
+flowchart TD
+    C[Case versions] --> D[Dataset or suite]
+    S[Strategy configuration] --> T[Trial: one attempt]
+    D --> T
+    T --> E[Trace and outcome evidence]
+    E --> G[Grading results]
+    T --> P[Campaign]
+    G --> R[Report]
+    P --> R
+    P --> V[Baseline and candidate lineage]
 ```
 
-### VLM-Only Mode (No Simulator)
+This is the target conceptual model. Frozen dataset revisions, independent quick-trial records and baseline lineage are proposed extensions; the current campaign runner already records attempts against configured tasks and strategies.
 
-When no sim is configured, ROVE evaluates stages 1-2 only (perceive and plan). This produces:
+## 4. Primary customer workflow
 
-- VLM scene understanding quality (object detection, spatial reasoning)
-- Planning quality (strategy, reasoning, confidence)
-- Latency and cost comparisons
-- **NOT** success rate (requires execution)
-
-VLM-only mode is valid for: comparing VLM perception across models, evaluating on real robot before/after images, Phase 1 development.
-
-### LIBERO Specifics
-
-- **Action space**: 7-DOF delta EE in robot base frame
-- **Workspace bounds**: position delta max 5cm/step, rotation max 0.2 rad/step
-- **Observation**: 256x256 RGB (agentview + optional wrist cam), depth, full robot state
-- **Success**: Binary, checked via BDDL task conditions on object poses
-- **Tasks**: 130+ across LIBERO-Spatial, LIBERO-Object, LIBERO-Goal, LIBERO-Long
-
----
-
-## 7. MCP Server Role
-
-### The Model-Agnostic Agent Pattern
-
-MCP servers expose ROVE's adapters as callable tools for AI agents. An agent built in Claude, Copilot, or Foundry calls `analyze_scene` and receives structured scene analysis without being coupled to any specific model.
-
-```text
-Agent:     "analyze this scene for pick-and-place"
-  → MCP:   analyze_scene(image, task, model_id="gpt-4o")
-  → ROVE:  AdapterRegistry.get_vlm("gpt-4o").analyze_scene(image, task)
-  → Agent: receives SceneAnalysis JSON
+```mermaid
+flowchart TD
+    I[Customer images and tasks] --> M[Map inputs and check readiness]
+    M --> O[Define success and expected measures]
+    O --> S[Connect supported strategy]
+    S --> B[Small baseline campaign]
+    B --> H[SME review when needed]
+    H --> D[Freeze dataset]
+    D --> A[Change a component and compare]
 ```
 
-Change `model_id` in the MCP call (or change the default in `rove.yaml`) — agent code stays the same.
+This proposed guided workflow should deliver a useful first report before requiring a large benchmark or external analytics platform. Input readiness distinguishes whether a case can run from whether its requested outcome can be graded. An image-to-plan agent should not be asked for joint state or a URDF unless its assessment needs them.
 
-### Why MCP Is Separate from the Evaluation Path
+The first report shows accepted/completed, failed and unknown cases; representative failures link to evidence. It shows what is unreviewed or unmeasured. A configurable pilot checks data and grading before the full campaign, with attempt count and available budget information shown before launch.
 
-The evaluation engine calls adapters directly (in-process Python). Routing adapter calls through HTTP for multi-strategy evaluation would add significant overhead. MCP servers are for external agent integration only — a different use case with different latency tolerance.
+Quick evaluations remain easy. Proposed durable recording captures their inputs and configuration before dispatch, preserves interruption, and lets the user create a campaign from history without copying or rerunning the original attempt. Post-hoc selected trials remain exploratory references, separate from planned reliability repetitions.
 
-### Image Size Constraint
+## 5. Create datasets and validate cases
 
-MCP has a 1MB binary payload limit. MCP server handlers resize images to <750KB before base64 encoding. The evaluation path (FastAPI → adapters) is not subject to this limit.
+A customer without labels can run the initial campaign and have an SME review three distinct targets:
 
----
+1. **Case validity:** usable input, clear instruction and sufficient evidence for the stated assessment.
+2. **Reusable annotation:** expected properties, constraints, acceptable alternatives or corrected reference labels.
+3. **Output rating:** assessment of one trial output under a versioned rubric, with rationale and evidence.
 
-## 8. Key Workflows
+Freeze exact case membership, annotations and rubric revisions with links to reference outputs/reviews. Failed outputs remain useful examples; dataset membership is not limited to successes. Exclusions retain reasons and history. A reference answer is not automatically ground truth or the only acceptable solution.
 
-### Workflow 1: Single Strategy Evaluation
+Candidate outputs receive their own grades. Baseline evidence can be regraded under the same rubric without increasing trial counts; original grades remain available. New task inputs require new case versions. Missing evidence remains unknown. Private grading material and baseline answers are excluded from candidate inputs unless that use is explicitly part of the evaluation.
 
-```yaml
-# In rove.yaml
-strategies:
-  scene_plan_action:
-    display_name: "Scene + Plan + Action (pi0.5)"
-    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes 7-DOF trajectory, Qwen verifies"
-    perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
-    act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    tags: [full, local, vla, lerobot, pi05]
-```
+## 6. Success definitions and meaningful measures
 
-```bash
-rove evaluate --strategy scene_plan_action --task "Pick the red bracket and place it in bin A" --image scenes/bracket.jpg
-```
+The proposed campaign setup uses one validated success/measurement contract from configuration or UI. Before launch, show the criteria, required evidence, grading source, repetition budget and measures expected in the report. Case success criteria and campaign performance targets are separate: changing a dashboard target must not rewrite task grades.
 
-### Workflow 2: Multi-Strategy Comparison
+Prioritize measures tied to robotics and agent work:
 
-```yaml
-strategies:
-  mock:
-    display_name: "Mock (Test)"
-    description: "All mock adapters — for testing pipeline plumbing without real models"
-    perceive: mock-vlm
-    plan: mock-vlm
-    act: mock-vla
-    verify: mock-vlm
-    sim: mock-sim
-    tags: [test, mock]
+- **Task correctness and completion:** scene/decision correctness, rubric-based plan acceptance or observed robot completion, with assessment scope explicit.
+- **Reliability:** pass^k across repeated attempts; pass@k as a secondary at-least-one-success view, not proof of deployed retry or recovery behavior.
+- **Constraints:** violations of declared force, contact, workspace or task constraints when their evidence is available.
+- **Autonomy and recovery:** human assistance, interventions and recovery under defined conditions, only when recorded.
+- **Time and resource use:** robot task duration separately from pipeline latency, plus cost or usage where measured.
+- **Evidence coverage:** completed, ungraded, unknown, interrupted and excluded observations, with units and source quality.
 
-  scene_detect:
-    display_name: "Scene Detection"
-    description: "Qwen3-VL 8B perceives the scene and verifies — no planning or action"
-    perceive: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    tags: [scene, vlm, local]
+The final report should lead with task outcomes and comparable differences. Collapsible details contain definitions, formulas, denominators, uncertainty assumptions, units, grader versions and links to underlying trials. Precision, recall and F1 are out of this iteration's scope.
 
-  scene_plan:
-    display_name: "Scene + Plan"
-    description: "Qwen3-VL 8B perceives the scene, plans a strategy, and verifies"
-    perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    tags: [scene, plan, vlm, local]
+The existing reports already calculate pass@k/pass^k, coverage, latency and configured verification measurements. The guided metric setup and additional intervention/recovery measures are proposed, not automatically available from today's inputs. See [success and performance measures](product/metrics-and-success.md).
 
-  scene_plan_action:
-    display_name: "Scene + Plan + Action (pi0.5)"
-    description: "Qwen3-VL 8B perceives and plans, pi0.5 executes 7-DOF trajectory, Qwen verifies"
-    perceive: qwen3-vl-8b
-    plan: qwen3-vl-8b
-    act: pi05-libero
-    verify: qwen3-vl-8b
-    sim: mock-sim
-    tags: [full, local, vla, lerobot, pi05]
-```
+### Inspect traces and measurements
 
-```bash
-rove evaluate --strategy scene_plan,scene_plan_action --task "Pick the red bracket" --trials 5
-```
+Every report should support **outcome → trial → measurement or grade → stage/call → supporting evidence**. A developer must be able to inspect what the system observed, returned, requested and actually executed, including errors and incomplete recording. Measurements carry values, units, source quality and the exact evidence used; timing distinguishes stage work, pipeline wall time and robot task time.
 
-Reports which strategy performs best on your task, with per-stage latency and cost breakdowns.
+The proposed trial inspector combines a timeline, stage/tool inputs and outputs, measurement details and relevant image/video/trajectory ranges. Baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to their source records. It supports failure investigation without presenting correlation as a proven cause.
 
-### Workflow 3: Task Variation Study
+Today, final stage results and structured check measurements are retained, but some live tool substeps disappear from durable history. Complete event capture, managed evidence links and aligned trace comparison are follow-up requirements, not shipped telemetry. See [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
 
-```bash
-rove evaluate --strategy cloud-fast --tasks tasks/bracket_variations.yaml --trials 10
-```
+## 7. Baselines, ablations and evidence
 
-Runs a single strategy against multiple task descriptions. Reports which tasks the strategy handles well and where it degrades.
+The initial campaign can be a baseline reference even while SME review is pending. A scored comparison identifies the exact baseline strategy, cases, grades and coverage. Proposed campaign lineage preserves earlier references when the user selects a new baseline.
 
----
+An ablation copies cases, repetitions and grading conditions and exposes both the intended component change and incidental differences. Renaming a strategy should not sever its relationship to a baseline. A changed evaluator, dataset or environment may require regrading or new matching trials; do not silently call it model improvement.
 
-## 9. Phased Delivery
+Robotics episode evidence must identify the producing configuration and attempt. Reusing policy A's recorded outcome cannot demonstrate policy B's performance. Matching seed labels alone do not establish matching physical conditions or statistical independence. Curated development data remains distinct from an independent held-out assessment.
 
-### Phase 1: Mock-First Foundation
+## 8. Storage and integration direction
 
-- Mock adapters for VLM, VLA, Agent, Sim
-- Full 4-stage pipeline (perceive, plan, act, verify)
-- CLI: `rove evaluate`, `rove models`, `rove export`, `rove serve`
-- FastAPI with async job queue + SSE streaming
-- Static HTML+JS dashboard (no npm)
-- SQLite persistence + JSONL export
-- Named strategies from `rove.yaml`
+Use SQLite for the current local product, including results, reviews and version relationships. Use relational constraints, migrations, short transactions, indexes and backup/restore. Consider PostgreSQL if shared deployment needs justify it. Store large images, video and sensor/trajectory recordings separately and reference their identity and relevant range.
 
-**Success criteria**: `rove evaluate --strategy mock` completes in <5s. CLI, library, and dashboard produce identical results.
+Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet or Delta export is optional when needed; neither is required to record local trials. Configuration snapshots identify accessible artifacts and declared model versions, but do not automatically archive remote weights or recreate a physical environment.
 
-### Phase 2: Local Models
+### Evaluation harness and agent runtime
 
-- pi0.5 and SmolVLA via LeRobot adapter (MPS) — **implemented**
-- LIBERO dataset examples with proprioception — **implemented**
-- OpenVLA-OFT (MLX), GroundingDINO, SAM2 (CoreML)
-- MuJoCo + LIBERO simulation integration
-- Real success rate from sim ground truth
+ROVE already has the core of an evaluation harness: configured trials, execution orchestration, grading, evidence and reporting. The system under test may have its own execution harness that manages model calls, tools, memory and recovery. These are separate responsibilities; choosing an agent runtime must not determine the customer's success criteria or replace evidence from the robot.
 
-**Success criteria**: Full 4-stage evaluation with real models on Apple Silicon. Sim-based success rate operational.
+ROVE develops and owns its evaluation and execution harness, building on the existing optional pipeline and stage adapters. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. ROVE should evaluate that configured system without inventing internal stages or substituting its own agent behavior. Extend ROVE's recording and execution contracts for the required robotics evidence, with Azure and Microsoft Fabric integration as future product directions. See [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md) and the [dated model assessment](product/model-landscape-2026-09.md).
 
-### Phase 3: Cloud Models
+## 9. Capability and delivery status
 
-- GPT-4o (Azure OpenAI), Qwen2.5-VL (Azure HF), CogACT (Azure GPU)
-- Per-call cost tracking
+| Capability | Status at source commit 776b393 |
+| --- | --- |
+| Configured optional stages, supported models/agents and local dashboard | Implemented; adapter availability depends on installed dependencies and endpoints |
+| Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
+| Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
+| Durable shared quick-trial recording and asset references | Proposed |
+| Durable tool/event timeline, measurement drill-down and aligned trace comparison | Proposed; final stage outputs and check measurements exist today |
+| ROVE-owned evaluation and execution harness | Accepted direction; existing pipeline retained, durable recording and lifecycle extensions pending |
+| Guided customer-data onboarding and expected-metric preview | Proposed |
+| SME review, reusable annotations and frozen datasets | Proposed |
+| Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
+| PostgreSQL backend or Delta Lake integration | Future, demand-driven |
+| Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-**Success criteria**: Cloud vs local comparison produces meaningful cost/latency tradeoffs.
+Deliver shared recording and inspectable trial evidence first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. Develop these capabilities within ROVE's own harness. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
 
-### Phase 4: MCP + Foundry
+## 10. Related specifications and decisions
 
-- Three MCP servers (FastMCP v2)
-- Foundry JSONL export validation
-- Foundry evaluator registration docs
+- [Concepts](product/concepts.md): vocabulary and current/proposed mappings.
+- [Customer workflows](product/evaluation-workflows.md): persona stories, onboarding, SME review and acceptance criteria.
+- [Metrics and success](product/metrics-and-success.md): configuration/UI contract and report explanations.
+- [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
+- [Model and harness assessment](product/model-landscape-2026-09.md): dated research informing architecture, not a ROVE benchmark.
+- [Current implementation](architecture/current-implementation.md): actual code paths, APIs, storage and tests.
+- [Architecture decisions](architecture/README.md): ADRs 017–023 with diagrams and implementation status.
+- [Campaign usage](BENCHMARKS.md) and [configured verification](VERIFICATION.md): supported configuration today.
 
-**Success criteria**: Claude agent calls ROVE MCP tools. Model swap via YAML without agent code changes.
-
----
-
-## 10. Non-Goals
-
-These will not be built:
-
-- **Model training or fine-tuning** — ROVE is inference-only. It consumes models, it does not produce or modify them.
-- **Real robot control** — Evaluation runs in simulation. Output is data, not robot motion.
-- **Model serving** — ROVE calls models (local or cloud), it does not host them.
-- **General LLM evaluation** — ROVE evaluates robotics agent pipelines (VLM+VLA+LLM combinations), not chatbots or text generation.
-- **Autonomous model selection** — ROVE produces ranked comparisons. Humans decide which agent configuration to deploy.
-- **Authentication/RBAC** — Single-tenant tool
-- **Multi-tenant SaaS** — Single team/organization
-- **Streaming video input** — Single images or image pairs
-
----
-
-## 11. Known Constraints
-
-| Constraint | Impact | Mitigation |
-|-----------|--------|------------|
-| Cosmos-Reason-1 deprecated 2026-03-18 | Not supported | Removed from rove.yaml. Cosmos-Reason2 2B also removed due to 20-30% malformed JSON output |
-| SAM2 PyTorch MPS broken | Cannot use PyTorch path | CoreML version only (`apple/coreml-sam2-large`) |
-| OpenVLA int4: bitsandbytes incompatible with MPS | Cannot use standard quantization | MLX quantization required |
-| GR00T N1.6 non-commercial license | N1/N1.5 weights ARE public (`nvidia/GR00T-N1-2B`, `nvidia/GR00T-N1.5-3B`). N1.6 available on GitHub (non-commercial) | Implement adapter for N1/N1.5 first |
-| MCP 1MB binary limit | Large images fail | Resize to <750KB in MCP server layer |
-| VLM confidence scores not calibrated across models | Cannot compare GPT-4o confidence to Qwen confidence | Report as model-specific, track judge calibration vs sim |
-| Local model concurrency on MPS | Single device queue | Per-adapter semaphores, serialize MPS calls |
-
----
-
-## Appendix: Terminology
-
-| Term | Definition |
-|------|-----------|
-| adapter | Model-specific implementation of a Protocol |
-| orchestrator | The 4-stage pipeline executor |
-| evaluation | Top-level assessment session with one or more strategies over N trials |
-| strategy | A named pipeline configuration mapping models to stages (perceive, plan, act, verify, sim) |
-| trial | A single execution of a strategy on a task |
-| variation study | Evaluation across related but distinct task descriptions |
-| perceive, plan, act, verify | The four pipeline stages (always lowercase) |
+Earlier versions of this file remain in Git history. The core vision and personas are retained; historical claims about unimplemented commands, full simulation, universal reproducibility or future integrations are not release guarantees.

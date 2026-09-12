@@ -33,7 +33,7 @@ Campaign metrics average the per-task estimates with equal task weights. A point
 
 Task-level pass@1 intervals use the 95% Wilson method under independent Bernoulli attempts. Correlation between episodes, changing providers and imperfect judges limit that assumption. Neither a perfect sample nor high model-reported confidence establishes reliability outside the tested configuration. The higher-k estimates describe exchangeable repeated trials, not a guarantee about a continuous deployment streak.
 
-The current grading source is the existing **verify stage**. Campaigns containing any mock endpoint are labeled `synthetic_or_mixed`; otherwise they are labeled `model_judgment`. The report does not promote either label into observed physical task correctness. Verifier parsing failures are invalid verdicts rather than task failures. Changing verification adapters remains a separate stage-configuration feature.
+The grading source is the configured **verify stage**, including the task evaluator and required checks. Campaigns containing any mock endpoint are labeled `synthetic_or_mixed`; otherwise they are labeled `configured_verifier`. Neither label establishes observed physical task correctness. Verifier parsing failures are invalid verdicts rather than task failures; unresolved configured evidence remains unknown. See [configured verification](VERIFICATION.md) for local task evaluators, constraint checks and diagnostic evidence.
 
 ## Isolation, resets and reproducibility
 

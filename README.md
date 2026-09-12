@@ -1,12 +1,21 @@
 # ROVE
 
-**An open-source workbench for inspecting robotics policy evaluations.**
+**Robot Observation & Vision Evaluation**
 
-ROVE helps you compare policy configurations on your tasks, trace failure
-hypotheses to supporting evidence, and spot missing checks before trusting an
-assessment. It connects model adapters, optional MuJoCo diagnostics, and a local
-browser dashboard. This is an experimental OSS project for demonstrating and
-improving evaluation engineering.
+**ROVE evaluates robotics agent pipelines on your task.**
+
+Bring your task and data, configure the models and agents in your pipeline,
+and compare their outputs. ROVE is an open-source workbench for inspecting the evidence
+behind each assessment, and the checks or observations that are still missing.
+A strategy configures the system being evaluated: vision-language reasoning,
+tool-using agents, action policies such as VLAs, or a combination. Configure the
+stages relevant to the task; these capabilities can coexist in one pipeline.
+
+It connects supported model and agent adapters, optional MuJoCo diagnostics,
+and a local browser dashboard. This is an experimental OSS project for
+demonstrating and improving evaluation engineering. Expert review, frozen
+evaluation datasets and explicit baseline/ablation lineage are proposed
+follow-ups in the [product specification](docs/PRODUCT_SPEC.md).
 
 ![ROVE dashboard](docs/images/rove-welcome.png)
 
@@ -98,6 +107,16 @@ The bundled frames are small demonstration samples, not a representative benchma
 Before making performance claims, add held-out episodes, independent outcome
 labels, repeated trials and uncertainty estimates. Current tests establish
 software behavior and evidence handling, not robotics model quality.
+
+## Product and architecture
+
+Use the [documentation guide](docs/README.md) to explain ROVE's
+[concepts](docs/product/concepts.md), [customer workflows](docs/product/evaluation-workflows.md),
+[success measures](docs/product/metrics-and-success.md), and
+[current implementation](docs/architecture/current-implementation.md).
+The linked [architecture decisions](docs/architecture/README.md) include diagrams,
+trade-offs and implementation status. Proposed SME review, frozen datasets and
+baseline/ablation workflows are labeled separately from available features.
 
 ## Development
 

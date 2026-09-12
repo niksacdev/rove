@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Product concepts and evaluation architecture
+
+Update the product specification around the robotics agent-pipeline vision, cases, trials, campaigns and customer-data onboarding, with a provider-neutral platform persona. Linked specifications and architecture decisions explain SME-reviewed datasets, robotics measures, inspectable telemetry and ROVE's own evaluation/execution harness, with diagrams and a dated model assessment. Proposed capabilities remain separate from shipped behavior. *(PR #15)*
+
 ### Configured verification stages
 
 Extend stage configuration with local task evaluators, required constraints, optional FK diagnostics, execution deadlines and versioned measurement evidence. *(PR #14)*

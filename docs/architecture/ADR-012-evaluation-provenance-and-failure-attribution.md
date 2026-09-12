@@ -3,6 +3,17 @@
 **Status**: Accepted
 **Date**: 2026-02-25
 **Authors**: Product Advisor, System Architect
+
+**Implementation note (2026-09-12):** This historical decision overstates some
+implemented guarantees. Quick-evaluation provenance is currently captured after
+execution; its seed is metadata unless applied by an adapter, and hashes alone
+do not make an evaluation reproducible. Hostname is deliberately blank and
+failure attribution remains a hypothesis. Campaigns now use SQLite.
+See [current implementation](current-implementation.md),
+[ADR-018](ADR-018-trial-lineage-and-snapshots.md) and
+[ADR-019](ADR-019-relational-storage-and-assets.md) for verified boundaries and
+the proposed shared recording design. The original rationale follows.
+
 **Related Docs**:
 
 - `docs/architecture/ADR-004-pipeline-data-flow-strategies-concurrency.md`
