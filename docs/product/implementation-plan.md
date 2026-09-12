@@ -1,6 +1,6 @@
 # ROVE Delivery Plan: From Trial Evidence to Customer Evaluation Workflows
 
-**Status:** Proposed implementation backlog; architecture direction is accepted. This documentation change implements none of the runtime features below.
+**Status:** First local slice delivered: durable trials, optional Copilot stages and history inspector. Remaining validation and customer workflows are listed below.
 **Updated:** 2026-09-12
 **Design:** [Architecture diagram](../architecture/target-architecture.md), [system diagram](../architecture/system-diagram.md), [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md)
 
@@ -20,10 +20,11 @@ and source links are in [current implementation](../architecture/current-impleme
 
 ## Task Sequence
 
-Every task below is pending. Each row is a reviewable delivery slice, normally one
-PR; split further if needed. Dependencies are completion gates, not dates or
-estimates. Each slice updates its relevant specification, ADR and diagram, runs
-repository checks, and receives merge approval under the standing PR workflow.
+The table describes the full accepted scope. The progress table below distinguishes
+delivered foundations from remaining gates. Each task is a reviewable delivery
+slice; split further if needed. Dependencies are completion gates, not dates or
+estimates. Each slice updates its specification, ADR and diagram and runs repository
+checks. The user has authorized implementation PR merges after required checks pass.
 
 | Order / ID | Deliverable | Depends on | Completion evidence |
 | --- | --- | --- | --- |
@@ -40,12 +41,29 @@ repository checks, and receives merge approval under the standing PR workflow.
 | 11 / T11 | Optional Azure Monitor and Grafana export profiles | T04; after local milestone | Same trial correlation in external trace views; bounded export and content policies; local use unaffected by exporter failure |
 | 12 / T12 | Versioned analytical exports for Fabric/Delta consumers | T07, T08; customer demand | Export/import preserves revisions, schemas and asset manifests; measured data volumes justify format and connector choices |
 
+### Progress after the first implementation slice
+
+| Task | Delivered | Remaining before full acceptance |
+| --- | --- | --- |
+| T01 | Pinned SDK `1.0.13` / CLI `1.0.81-9`; real CLI with controlled image/tool/usage/trace responses; offline lifecycle tests | Explicit live provider; Azure identity and deployment validation |
+| T02 | Shared quick/campaign IDs, frozen task/strategy/configuration hashes, SQLite journal, initial observation assets, ownership-aware recovery and idempotent legacy quick import | Full case/assessment revision model; archived auxiliary artifacts; complete migration away from compatibility journals |
+| T03 | Optional perceive/plan/verify adapter with fresh candidate/grader scope, bounded lifecycle and direct paths retained | Assistant service tools; explicit robot action/reset contracts; any declared cross-stage memory mode |
+| T04 | Existing exposed stage/tool events plus SDK events and usage persist; source deduplication; optional ROVE trial spans | Full application/native/export correlation; actual collector outage and bounded exporter shutdown; robot clock/range contracts |
+| T05 | Paginated history, saved snapshots, verdict/measurement inspection, stage-filtered activity, trace details and on-demand observations | Remote recording-range resolution, parallel trace graph and aligned comparison views |
+| T06–T09 | Pending; existing gallery/campaign/configuration services remain the starting point | Customer import/success setup, SME review/freeze, baseline/ablation workflow and guided assistant |
+| T10–T12 | Pending, with the authorization/demand gates below | Live Azure profile, external monitoring profiles and justified analytical export |
+
+The first slice is a useful durable inspection workflow, not completion of the full
+customer onboarding milestone. [Current implementation](../architecture/current-implementation.md),
+[setup](../TRIAL_HISTORY.md) and [compatibility evidence](../architecture/copilot-compatibility.md)
+describe what can be used and tested now.
+
 ```mermaid
 flowchart LR
-    A["T01 SDK proof"] --> B["T02 Records and snapshots"]
-    B --> C["T03 Runtime and lifecycle"]
-    C --> D["T04 Telemetry"]
-    D --> E["T05 Inspector"]
+    A["T01 Controlled SDK proof delivered"] --> B["T02 Shared recording delivered"]
+    B --> C["T03 Hosted-stage foundation delivered"]
+    C --> D["T04 Durable events delivered"]
+    D --> E["T05 Local inspector delivered"]
     B --> F["T06 Cases and success setup"]
     E --> G["T07 SME and dataset freeze"]
     F --> G
@@ -62,6 +80,9 @@ Its UI integration follows the inspector. Dashed branches are later optional
 integrations. T10 and T11 are independent after the local milestone; neither gates
 customer evaluation locally. The SDK proof comes first because schema coverage,
 trace behavior and runtime isolation influence the recording contract.
+
+Delivered labels in the diagram refer to the first-slice scope in the progress
+table; they do not close its remaining acceptance gates.
 
 ## Milestone A: One Trustworthy, Inspectable Trial — T01–T05
 

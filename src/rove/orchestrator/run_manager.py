@@ -10,6 +10,8 @@ from rove.adapters.registry import AdapterRegistry
 from rove.models import ExampleData, StageStatus, Strategy
 from rove.orchestrator.failure_attribution import attribute_failure
 from rove.orchestrator.pipeline import EvaluationPipeline
+from rove.orchestrator.recording import event_sink, trial_span
+from rove.trials.store import TrialStore
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ class RunManager:
         image_base64: str,
         on_event: Callable[[str, str, dict], Awaitable[None]],
         example: ExampleData | None = None,
+        trial_contexts: dict[str, tuple[TrialStore, str]] | None = None,
     ) -> list[dict]:
         """Run all strategies concurrently. on_event(strategy_id, event_type, data)."""
         results: list[dict] = []
@@ -41,10 +44,46 @@ class RunManager:
         async with asyncio.TaskGroup() as tg:
             for strategy in strategies:
                 tg.create_task(
-                    self._run_strategy(strategy, task, image_base64, results, on_event, example)
+                    self._recorded_strategy(
+                        strategy,
+                        task,
+                        image_base64,
+                        results,
+                        on_event,
+                        example,
+                        (trial_contexts or {}).get(strategy.id),
+                    )
                 )
 
         return results
+
+    async def _recorded_strategy(self, strategy, task, image, results, on_event, example, trial):
+        token = None
+        if trial is not None:
+            store, trial_id = trial
+
+            def sink(event):
+                store.append_event(trial_id, event)
+
+            token = event_sink.set(sink)
+
+        async def deliver(strategy_id, event_type, data):
+            if trial is not None:
+                sink({"event_type": event_type, "stage": data.get("stage"), "data": data})
+            await on_event(strategy_id, event_type, data)
+
+        try:
+            with trial_span(trial[1] if trial else None):
+                await self._run_strategy(strategy, task, image, results, deliver, example)
+            if trial is not None and store.get(trial_id)["source"] == "quick":
+                result = next(item for item in results if item["strategy_id"] == strategy.id)
+                failed = result.get("error") or any(
+                    s.get("status") == "error" for s in result.get("stages", [])
+                )
+                store.finish(trial_id, status="error" if failed else "completed", result=result)
+        finally:
+            if token is not None:
+                event_sink.reset(token)
 
     async def _run_strategy(
         self,

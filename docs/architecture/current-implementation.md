@@ -1,47 +1,48 @@
 # Current Implementation
 
-ROVE currently runs configurable robotics evaluation pipelines through a local
-dashboard and a repeated-trial campaign runner. Both use the same stage
-orchestrator, but they have different recording paths. This matters: campaign
-recovery and snapshots are stronger than quick-run history today.
+**Checked:** 12 September 2026, against the durable-trial/Copilot implementation
+slice. This document describes the source delivered with this change; the
+[delivery plan](../product/implementation-plan.md) records remaining work.
 
-This description was checked against commit `3bfd485803b2bf6984e83faa820f11259eeff001`
-on 12 September 2026, after the product documentation update was merged. It describes
-implemented behavior. The linked [product concepts](../product/concepts.md),
-[workflows](../product/evaluation-workflows.md) and
-[success/metrics specification](../product/metrics-and-success.md) and
-[trace/measurement specification](../product/traces-and-measurements.md) separately mark
-the proposed follow-up. Historical architecture documents may describe interfaces
-that are not implemented.
+ROVE runs configurable robotics evaluation pipelines from a local dashboard and a
+repeated-trial campaign runner. Both now create durable trial identities and frozen
+configuration records before execution, retain available intermediate events, and
+expose saved evidence through Trial history. The optional Copilot adapter hosts
+perception, planning and verification stages; customer adapters remain directly
+callable. The linked [product concepts](../product/concepts.md) and
+[trace specification](../product/traces-and-measurements.md) describe the fuller
+target, including capabilities not yet implemented.
 
 ## Two Entry Paths, One Pipeline
 
 ```mermaid
 flowchart TD
-    UI["Dashboard: image, task and strategies"] --> API["POST /api/evaluate"]
-    API --> MEM["In-memory evaluation and event queue"]
-    MEM --> RM["RunManager<br/>Bounded strategy concurrency"]
-    RM --> PIPE["EvaluationPipeline"]
-    PIPE --> EVENTS["Stage events and results"]
-    EVENTS --> SSE["SSE stream to dashboard"]
-    EVENTS --> RETAIN["Retain completed/error stage results"]
-    RETAIN --> QUICK["Quick completion callback<br/>Build provenance and result"]
-    QUICK --> JSONL["data/output/history.jsonl"]
-
-    CP["Campaign API or benchmark CLI"] --> PREP["prepare<br/>Freeze inputs, configuration and fingerprints"]
-    PREP --> DB[".rove/benchmarks/campaigns.sqlite3"]
-    DB --> RUN["Campaign runner<br/>Record attempt before launch"]
-    RUN --> WORK["Fresh worker process per attempt"]
+    UI["Dashboard: image, task, strategies"] --> API["Quick evaluation API"]
+    API --> START["Save asset and trial before dispatch"]
+    START --> RM["RunManager or legacy single pipeline"]
+    CP["Campaign API / CLI"] --> PLAN["Freeze campaign and planned repetitions"]
+    PLAN --> SLOT["Save attempted slot and shared trial ID"]
+    SLOT --> WORK["Fresh worker process"]
     WORK --> RM
-    WORK --> RESULT["Classified outcome and attempt evidence"]
-    RESULT --> DB
-    DB --> REPORT["HTML, JSON and CSV reports"]
+    RM --> PIPE["Configured EvaluationPipeline"]
+    PIPE --> DIRECT["Direct customer / model adapter"]
+    PIPE --> SDK["Optional Copilot stage host"]
+    DIRECT --> REC["Available events and results"]
+    SDK --> REC
+    START --> DB["trials.sqlite3 + private assets"]
+    SLOT --> DB
+    REC --> DB
+    REC --> LIVE["Live dashboard events"]
+    DB --> HISTORY["Trial history and evidence inspector"]
+    WORK --> CDB["campaigns.sqlite3"]
+    CDB --> REPORT["Campaign metrics and portable reports"]
 ```
 
-The diagram shows the normal selected-strategy path. The legacy quick API path
-without `strategy_ids` builds `EvaluationPipeline` directly. A campaign worker
-runs one selected strategy through `RunManager` and returns evidence to its parent;
-it does not append to quick-history JSONL.
+The selected-strategy path uses `RunManager`; the legacy quick API path without
+`strategy_ids` constructs `EvaluationPipeline` directly. Both record trials. An
+evaluation ID groups selected strategies for the existing dashboard; each strategy
+attempt has its own durable trial ID. Campaign workers record intermediate events
+directly into the shared journal and return final evidence to the campaign parent.
 
 The [API](../../src/rove/api/app.py) accepts an uploaded image and task. For a
 gallery image, `example_filename` loads additional fields from
@@ -112,67 +113,88 @@ they do not generate new physical outcomes from the candidate's actions.
 
 | Property | Quick evaluation | Campaign |
 | --- | --- | --- |
-| Initial record | In-memory evaluation ID and event queue | Saved campaign plus a persisted record before each attempted slot |
-| Completed results | Append to `data/output/history.jsonl`; dashboard also caches history | SQLite campaign and trial rows, with JSON payloads |
-| Configuration record | Provenance is assembled after execution; includes a configuration-file hash | Selected resolved configuration, inputs and fingerprints frozen before execution |
-| Attempt identity | Evaluation ID groups one or several strategy results | Composite key: campaign, task, strategy and seed |
-| Isolation | Concurrent strategies within the server process | One fresh child process at a time per campaign |
-| Seed handling | Requested seed is recorded, not passed into execution | Applied to supported mock adapters; other endpoints report unsupported |
-| Crash recovery | No durable in-flight quick-run record | Resume marks saved in-flight work interrupted/unknown and runs untouched slots |
-| History reads | Read the complete JSONL file; deletion rewrites it | Query campaign/trial rows; listing currently loads payloads |
+| Before dispatch | Input asset, frozen snapshot and running trial | Frozen campaign; shared trial and attempted-slot record before worker launch |
+| Attempt identity | One ID per selected strategy; launch ID groups them | Shared ID linked to campaign/task/strategy/seed |
+| Durable results | `trials.sqlite3`; JSONL remains a compatibility projection | Shared journal plus existing campaign report rows |
+| Isolation | Concurrent strategies in server; direct adapters may be cached | Fresh child process per attempted slot |
+| Recovery | Single UI-owner lock; abandoned quick work becomes interrupted on startup | Campaign-owner lock reconciles journals; potentially executed slots are not silently replayed |
+| Seed handling | Requested seed retained, not applied universally | Supported mock adapters receive seed; other endpoints report unsupported |
+| History | Paginated trial/event APIs and saved configuration inspector | Same history APIs, with campaign report link |
 
-The quick path has known durability gaps: top-level errors are retained in memory
-but not appended by the completion writer; persistence failures are logged rather
-than made durable; and the legacy single-pipeline result shape does not map all of
-its stage/output fields into the JSONL writer's `results` field. The provenance
-hash identifies a file, not a reconstructable snapshot of the loaded system.
-These gaps motivate the proposed shared relational store; this document does not
-claim they have been repaired.
+[TrialStore](../../src/rove/trials/store.py) uses schema-version checks, SQLite
+transactions, foreign keys, indexes, immutable terminal records and source-event
+deduplication. Snapshots separately hash supplied task, strategy and selected
+configuration, including available runtime and selected local-evaluator identities.
+These identify captured settings; they do not archive all imported
+helpers, remote weights or physical environment state. Terminal execution status
+is separate from an assessment verdict.
 
-[CampaignStore](../../src/rove/benchmarks/store.py) uses SQLite transactions and
-foreign keys. The [runner](../../src/rove/benchmarks/runner.py) uses a process/file
-lock to prevent simultaneous execution of one campaign. Cancellation terminates
-the worker process group. Resume preserves completed, failed and interrupted slots
-rather than silently repeating potentially executed actions. This process/lock
-implementation currently supports macOS and Linux.
+Initial observations are saved by content hash outside the public data mount.
+Other inline media are reduced to references by snapshot sanitization; a reference
+alone does not guarantee that its bytes were archived. Campaign manifests still
+contain inline images for compatibility.
 
-Campaign manifests embed base64 images, and worker requests serialize the task and
-configuration for each attempt. The gallery already stores image files separately.
-Neither path is the proposed large-asset store. There is no PostgreSQL backend,
-Parquet exporter or Delta Lake integration in this revision.
+The application imports legacy quick JSONL idempotently without modifying the
+source. New compatibility output goes to private `.rove/benchmarks/quick-history.jsonl`,
+not the original `data/output/history.jsonl`. Missing historical configuration and
+events remain unknown. Current JSONL entries referencing recorded trials do not
+create duplicate attempts. Old campaign
+results remain readable in their reports; this slice does not backfill every old
+campaign into shared history.
+
+`campaigns.sqlite3` and `trials.sqlite3` are separate journals under the same
+directory, not one cross-database transaction. Recovery reconciles known shared
+IDs under campaign ownership. Cancellation terminates the campaign worker process
+group. Process/lock handling supports macOS and Linux. See
+[Trial history](../TRIAL_HISTORY.md) for storage and backup requirements.
+
+## Optional Copilot Runtime
+
+[CopilotAgentAdapter](../../src/rove/adapters/copilot_agent.py) supports perceive,
+plan and verify through `adapter: copilot_agent`. Each stage starts a fresh runtime,
+session and temporary workspace. Candidate and grader roles are host-selected;
+candidate context excludes the private grading record. No tools are exposed by the
+configured adapter. The shared runtime supports explicitly role-scoped host tools,
+but robot action tools and the evaluation assistant are pending.
+
+The optional profile pins `github-copilot-sdk==1.0.13` and Copilot CLI `1.0.81-9`.
+The CLI is installed separately and checked before use. Startup, execution, abort
+and cleanup are bounded. Explicit provider configuration is required; ambient
+logged-in Copilot accounts and unrelated workspace instructions are not inherited.
+Direct evaluations do not start Copilot.
+
+The real SDK/CLI passed a controlled synthetic transport probe covering images,
+host tools, ephemeral usage and native trace-context propagation. Offline tests
+cover scope, timeout, cancellation, malformed output and recorder failures. No
+real model quality, Azure identity flow or external collector deployment was
+validated. See [compatibility evidence](copilot-compatibility.md) and
+[ADR-024](ADR-024-copilot-runtime-and-observability.md).
 
 ## Trace and Telemetry Coverage
 
-The saved evidence is a set of final stage results, not a full event transcript.
-[`PipelineStageResult`](../../src/rove/models/core.py) carries stage, status,
-duration, model, phase, output and error, but no stage timestamp or event/parent ID.
-`RunManager` streams events while retaining only completed/error results. The
-campaign worker ignores intermediate events and saves the returned final results.
-The visible verification tool loop belongs to ROVE's evaluation logic; it is not
-a transcript of an external candidate agent's internal runtime.
-
-| Evidence | Current behavior |
+| Evidence | Implemented behavior and limits |
 | --- | --- |
-| Verification calls | Live events show turn/tool/check names and tool duration. The tool conversation and those running substeps are not retained in the final stage list. |
-| Outputs | Stage schemas retain structured output and raw response text when an adapter supplies it; this is not a complete provider request/response transcript. |
-| Actions | Results retain predicted trajectories or declared tool calls. Actual simulator step counts are separate; a declared tool call does not prove execution. |
-| Checks and measurements | Saved verification results retain evaluator versions, verdicts, measurements, units, quality and evidence-reference strings. References are not managed asset links. |
-| Images and episodes | Campaign snapshots retain initial inline images and supplied example data. Quick server history does not save input images; available final observations reach the evaluator but are not automatically persisted as assets. |
-| Timing | Stage durations are retained. Campaigns also record attempt start/finish and separate worker pipeline/attempt wall durations. Quick total latency sums stages and can exceed elapsed time when they overlap. |
-| Usage and cost | The Azure provider has an internal accumulated token counter, but no per-call/per-trial usage or cost is retained by the runner. Reports label cost unavailable. |
+| Existing stage/tool activity | Events exposed by `RunManager` persist before UI delivery. Legacy single-pipeline recording includes stage events. Internal customer-agent calls require adapter support. |
+| SDK activity | Event identities, actor role, stage, available usage and trace context are retained. Content capture defaults off. Missing usage is not zero; a cost multiplier is not dollars. |
+| Results and measurements | Final stage outputs and configured checks retain values, units, quality, evaluator versions and evidence-reference strings. |
+| Images | Initial observations have managed assets. Supported images load on demand; arbitrary reference strings do not resolve automatically to remote assets or recording ranges. |
+| Timing | Stage durations and recorded event timestamps are available. Server receipt time is distinct from supplied source time. No synchronized robot/sensor clock model is implemented. |
+| OpenTelemetry | Optional ROVE trial spans retain trace/span identity when the tracing SDK is installed. The runtime accepts native telemetry settings; no ROVE exporter is configured by default. |
+| Inspector | Paginated history, source filters, deep links, frozen settings, measurements, stage outputs and stage-filtered activity. Parallel trace graphs and aligned baseline comparison remain pending. |
 
-The dashboard offers stage cards and side-by-side output comparisons. Verification
-substeps are displayed live, but are not restored as a durable timeline. Its browser
-cache truncates long `raw_response` strings to 500 characters; server stage results
-are not truncated by that browser rule. HTML campaign reports expand saved attempt
-JSON rather than provide linked event or recording inspection. See
-[dashboard handling](../../frontend/app.js) and
-[the report renderer](../../src/rove/benchmarks/report.py).
+Required recording failures fail execution visibly rather than silently discard
+evidence. Size/count limits are bounded; missing source telemetry cannot be
+reconstructed. The authoritative journal does not require an external monitoring
+account. Controlled fixtures exercise exporter separation, but a complete real
+collector-outage and shutdown test is pending. Native SDK tracing must be configured
+when distributed runtime/tool correlation is required.
 
-There is no shared clock/event identity contract for aligning a robot sensor stream
-with model or server calls. The proposed
-[trial telemetry decision](ADR-022-trial-telemetry.md) adds durable event recording,
-evidence links and explicit timing/coverage semantics; it is not implemented here.
+Predicted trajectories, requested calls, acknowledgements and observed outcomes are
+different evidence. Process cancellation does not establish physical robot stopping.
+The dashboard's older browser cache and JSONL view remain compatibility surfaces;
+the new inspector reads durable server records. The
+[trace specification](../product/traces-and-measurements.md) and
+[ADR-022](ADR-022-trial-telemetry.md) describe remaining coverage and comparison work.
 
 ## Reports and Comparability
 
@@ -218,7 +240,11 @@ constraint-failing and unresolved evidence; it is not a robot performance study.
 | --- | --- |
 | `POST /api/evaluate` | Start a quick evaluation from multipart inputs |
 | `GET /api/evaluate/{eval_id}/stream` | Stream stage and completion events |
-| `GET /api/history` | Read saved quick history |
+| `GET /api/history` | Compatibility quick-history view |
+| `GET /api/trials?limit=25&offset=0` | Paginated durable history, with optional source filter |
+| `GET /api/trials/{id}` | Frozen snapshot, result and lifecycle |
+| `GET /api/trials/{id}/events` | Paginated recorded events |
+| `GET /api/trial-assets/{sha256}` | Managed observation or safe asset download |
 | `POST /api/campaigns` | Validate, save and launch a campaign |
 | `GET /api/campaigns/{id}` | Read campaign status and summary |
 | `POST /api/campaigns/{id}/cancel` or `/resume` | Control pending campaign work |
@@ -229,7 +255,14 @@ The campaign routes are implemented in
 current HTTP schema. There is no supported `rove evaluate` batch command or
 `rove.evaluate()` convenience function.
 
-The corresponding regression tests cover
+Choose **Trial history** in the dashboard to reopen a saved attempt without
+executing it. The shared store adds regression tests for
+[storage](../../tests/test_trial_store.py),
+[quick/campaign recording](../../tests/test_trial_integration.py),
+[runtime lifecycle](../../tests/test_copilot_runtime.py), and
+[history presentation](../../tests/test_history_ui.cjs).
+
+Existing regression tests cover
 [attempt isolation, seeds, cancellation, resume, metrics and exports](../../tests/test_benchmarks.py),
 [required checks, evaluator drift and unknown verdicts](../../tests/test_configured_verification.py),
 [strategy execution](../../tests/test_run_manager.py) and
@@ -239,8 +272,8 @@ features.
 
 The decision trail distinguishes
 [implemented configured verification](ADR-017-configured-verification.md) from
-proposed [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
+partially implemented [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
 [relational recording and asset references](ADR-019-relational-storage-and-assets.md),
-[SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
+proposed [SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
 [campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
 [trial telemetry](ADR-022-trial-telemetry.md).

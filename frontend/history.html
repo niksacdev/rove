@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROVE · Trial history</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
+    catch { document.documentElement.dataset.theme = "dark"; }
+  </script>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/history.css">
+  <script src="/static/history.js" defer></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header class="history-header">
+    <a href="/" class="brand" aria-label="ROVE evaluation">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/><circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/></svg>
+      <strong>ROVE</strong><span>/</span><span>Trial history</span>
+    </a>
+    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/benchmarks.html">Benchmarks</a><a href="/static/history.html" aria-current="page">History</a></nav>
+    <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
+  </header>
+  <main id="main">
+    <div class="page-heading"><div><h1>Trial history</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p></div><a href="/" class="button">New evaluation</a></div>
+    <div class="history-layout">
+      <section class="history-list-panel" aria-labelledby="trialsHeading">
+        <div class="panel-heading"><h2 id="trialsHeading">Saved trials</h2><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>
+        <label class="filter-label" for="sourceFilter">Source</label>
+        <select id="sourceFilter"><option value="">All trials</option><option value="quick">Quick evaluations</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select>
+        <p id="listStatus" class="muted" role="status" aria-live="polite"></p>
+        <ul id="trialList" class="trial-list" aria-label="Saved trials"></ul>
+        <div class="pagination"><button type="button" id="previousPage" class="secondary" disabled>Previous</button><span id="pageLabel" class="muted"></span><button type="button" id="nextPage" class="secondary" disabled>Next</button></div>
+      </section>
+      <section id="inspector" class="inspector" aria-labelledby="inspectorHeading" aria-busy="false">
+        <div class="empty-state"><h2 id="inspectorHeading" tabindex="-1">Inspect a trial</h2><p>Select an attempt to inspect its assessment, measurements, stage activity and configuration.</p><p class="muted">Opening a saved trial never reruns the agent.</p></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

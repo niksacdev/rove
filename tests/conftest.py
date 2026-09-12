@@ -61,3 +61,11 @@ def _reset_config():
     reset_config_cache()
     yield
     reset_config_cache()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_trial_history(tmp_path, monkeypatch):
+    """No test writes trials or compatibility projections into the user's history."""
+    monkeypatch.setattr("rove.api.app._trial_root", tmp_path / "journal")
+    monkeypatch.setattr("rove.api.app._history_path", tmp_path / "history.jsonl")
+    monkeypatch.setattr("rove.api.app._legacy_history_path", tmp_path / "legacy.jsonl")

@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+copilot = ["github-copilot-sdk[telemetry]==1.0.13", "opentelemetry-sdk==1.44.0"]
 azure = [
     "azure-ai-projects>=2.0.0b3",
     "azure-identity>=1.19.0",

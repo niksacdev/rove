@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import fcntl
 import json
 import logging
 import tempfile
 import uuid
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,25 +21,67 @@ from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
 from rove.api.local_only import LocalOnlyMiddleware
+from rove.api.trials import create_trial_router
 from rove.benchmarks.api import create_router
 from rove.models import EvaluationProvenance, ExampleData, PipelineStage, StageStatus
 from rove.models.config import get_strategies, load_config
 from rove.orchestrator.failure_attribution import attribute_failure
 from rove.orchestrator.insights import compute_run_insights
 from rove.orchestrator.pipeline import EvaluationPipeline
+from rove.orchestrator.recording import event_sink
 from rove.orchestrator.run_manager import RunManager
+from rove.trials.store import TrialStore
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ROVE", version="0.1.0", description="Robot Observation & Vision Evaluation")
+_trial_root = Path(__file__).resolve().parents[3] / ".rove" / "benchmarks"
+
+
+def trial_store() -> TrialStore:
+    return TrialStore(_trial_root)
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    db = trial_store()
+    # Recovery is safe only with one UI owner; campaign CLI workers have separate ownership.
+    with (_trial_root / "ui.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        db.recover_interrupted(source="quick")
+        for path in (_legacy_history_path, _history_path):
+            if path.exists():
+                try:
+                    db.import_jsonl(path)
+                except (ValueError, OSError):
+                    logger.exception(
+                        "Legacy history import failed; original file remains unchanged"
+                    )
+        try:
+            yield
+        finally:
+            tasks = list(_background_tasks)
+            for background in tasks:
+                background.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+app = FastAPI(
+    title="ROVE",
+    version="0.1.0",
+    description="Robot Observation & Vision Evaluation",
+    lifespan=lifespan,
+)
 
 app.add_middleware(LocalOnlyMiddleware)
 app.include_router(create_router(Path(__file__).resolve().parents[3] / ".rove" / "benchmarks"))
+app.include_router(create_trial_router(trial_store))
 
 # Global state (no database for demo)
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"
 _output_dir = _data_dir / "output"
-_history_path = _output_dir / "history.jsonl"
+_legacy_history_path = _output_dir / "history.jsonl"
+_history_path = _trial_root / "quick-history.jsonl"
 registry = AdapterRegistry()
 _evaluations: dict[str, dict[str, Any]] = {}
 _eval_queues: dict[str, asyncio.Queue] = {}
@@ -47,7 +91,7 @@ _background_tasks: set[asyncio.Task] = set()  # prevent GC of background tasks
 def _persist_evaluation(eval_data: dict[str, Any]) -> None:
     """Append a completed evaluation record to history.jsonl."""
     try:
-        _output_dir.mkdir(parents=True, exist_ok=True)
+        _history_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         record = {
             "eval_id": eval_data.get("eval_id"),
             "task": eval_data.get("task", ""),
@@ -55,6 +99,7 @@ def _persist_evaluation(eval_data: dict[str, Any]) -> None:
             "status": eval_data.get("status", "completed"),
             "strategy_ids": eval_data.get("strategy_ids", []),
             "results": eval_data.get("results", {}),
+            "trial_ids": eval_data.get("trial_ids", {}),
         }
         if "provenance" in eval_data:
             record["provenance"] = eval_data["provenance"]
@@ -68,10 +113,14 @@ def _persist_evaluation(eval_data: dict[str, Any]) -> None:
 
 def _read_history() -> list[dict[str, Any]]:
     """Read all history records from JSONL, most recent first."""
-    if not _history_path.exists():
-        return []
     records = []
-    for line in _history_path.read_text().splitlines():
+    lines = [
+        line
+        for path in (_legacy_history_path, _history_path)
+        if path.exists()
+        for line in path.read_text().splitlines()
+    ]
+    for line in lines:
         line = line.strip()
         if not line:
             continue
@@ -131,6 +180,7 @@ async def _run_multi_strategy(
     example: ExampleData | None = None,
     urdf_path: str | None = None,
     seed: int | None = None,
+    trial_ids: dict[str, str] | None = None,
 ):
     """Background task that runs multiple strategies concurrently via RunManager."""
     queue = _eval_queues[eval_id]
@@ -158,7 +208,19 @@ async def _run_multi_strategy(
             image_base64,
             on_event,
             example=example,
+            trial_contexts={sid: (trial_store(), tid) for sid, tid in (trial_ids or {}).items()},
         )
+
+        for result in results:
+            if trial_ids:
+                trial_store().finish(
+                    trial_ids[result["strategy_id"]],
+                    status="error"
+                    if result.get("error")
+                    or any(s.get("status") == "error" for s in result.get("stages", []))
+                    else "completed",
+                    result=result,
+                )
 
         provenance = EvaluationProvenance.build(
             image_base64=image_base64,
@@ -176,12 +238,17 @@ async def _run_multi_strategy(
             "strategy_ids": strategy_ids,
             "provenance": provenance.model_dump(),
             "insights": insights,
+            "trial_ids": trial_ids or {},
         }
         _evaluations[eval_id] = complete_data
         _persist_evaluation(complete_data)
         await queue.put({"event": "complete", "data": complete_data})
 
+    except asyncio.CancelledError:
+        _finish_open_trials(trial_ids, "cancelled")
+        raise
     except Exception as e:
+        _finish_open_trials(trial_ids, "error", str(e))
         logger.exception(f"Evaluation {eval_id} failed")
         error_result = {"eval_id": eval_id, "status": "error", "error": str(e)}
         _evaluations[eval_id] = error_result
@@ -201,9 +268,15 @@ async def _run_evaluation(
     sim_id: str,
     example: ExampleData | None = None,
     seed: int | None = None,
+    trial_id: str | None = None,
 ):
     """Background task that runs a single pipeline and pushes events to the SSE queue."""
     queue = _eval_queues[eval_id]
+    token = (
+        event_sink.set(lambda event: trial_store().append_event(trial_id, event))
+        if trial_id
+        else None
+    )
     try:
         perceive = registry.get_adapter_for_stage(PipelineStage.PERCEIVE, perceive_model_id)
         plan = registry.get_adapter_for_stage(PipelineStage.PLAN, plan_model_id)
@@ -227,6 +300,11 @@ async def _run_evaluation(
             example=example,
         ):
             stage_dict = stage_result.model_dump()
+            if trial_id:
+                trial_store().append_event(
+                    trial_id,
+                    {"event_type": "stage", "stage": stage_dict["stage"], "data": stage_dict},
+                )
             if stage_result.status in (StageStatus.COMPLETED, StageStatus.ERROR):
                 stages.append(stage_dict)
             await queue.put({"event": "stage", "data": stage_dict})
@@ -294,18 +372,48 @@ async def _run_evaluation(
             "total_latency_ms": round(total_latency, 1),
             "provenance": provenance.model_dump(),
             "insights": insights,
+            "trial_ids": {"single": trial_id} if trial_id else {},
         }
+        if trial_id:
+            trial_store().finish(
+                trial_id,
+                status="error" if any(s["status"] == "error" for s in stages) else "completed",
+                result=result,
+            )
         _evaluations[eval_id] = result
         _persist_evaluation(result)
         await queue.put({"event": "complete", "data": result})
 
+    except asyncio.CancelledError:
+        _finish_open_trials({"single": trial_id} if trial_id else {}, "cancelled")
+        raise
     except Exception as e:
+        _finish_open_trials({"single": trial_id} if trial_id else {}, "error", str(e))
         logger.exception(f"Evaluation {eval_id} failed")
         error_result = {"eval_id": eval_id, "status": "error", "error": str(e)}
         _evaluations[eval_id] = error_result
         await queue.put({"event": "error", "data": error_result})
     finally:
+        if token is not None:
+            event_sink.reset(token)
         await queue.put(None)  # sentinel to end SSE stream
+
+
+def _finish_open_trials(trial_ids, status, error=None):
+    db = trial_store()
+    for trial_id in (trial_ids or {}).values():
+        if db.get(trial_id)["status"] == "running":
+            db.finish(trial_id, status=status, error=error)
+
+
+def _background_finished(background, trial_ids, urdf_path):
+    _background_tasks.discard(background)
+    if background.cancelled():
+        _finish_open_trials(trial_ids, "cancelled")
+    elif background.exception() is not None:
+        _finish_open_trials(trial_ids, "error", "Evaluation worker failed")
+    if urdf_path:
+        Path(urdf_path).unlink(missing_ok=True)
 
 
 @app.get("/api/strategies")
@@ -330,13 +438,24 @@ async def create_evaluation(
     seed: int | None = Form(default=None),
 ):
     eval_id = str(uuid.uuid4())
-    image_bytes = await image.read()
+    image_bytes = await image.read(16 * 1024 * 1024 + 1)
+    if len(image_bytes) > 16 * 1024 * 1024:
+        raise HTTPException(413, "Image exceeds 16 MiB")
     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+    ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
+    if strategy_ids and (not ids or len(ids) != len(set(ids))):
+        raise HTTPException(422, "Select distinct strategies")
+    config = load_config()
+    if any(sid not in config.strategies for sid in ids):
+        raise HTTPException(422, "Unknown strategy")
 
     # Save URDF to temp file if provided
     urdf_path: str | None = None
     if urdf is not None:
-        urdf_bytes = await urdf.read()
+        urdf_bytes = await urdf.read(4 * 1024 * 1024 + 1)
+        if len(urdf_bytes) > 4 * 1024 * 1024:
+            raise HTTPException(413, "Robot description exceeds 4 MiB")
         if urdf_bytes:
             suffix = Path(urdf.filename or "robot.urdf").suffix or ".urdf"
             with tempfile.NamedTemporaryFile(
@@ -348,12 +467,65 @@ async def create_evaluation(
     # Load example data (ground truth, proprioception, etc.) from manifest
     example = _load_example_data(example_filename) if example_filename else None
 
+    # Each selected system gets one durable identity before any model can be called.
+    from rove.benchmarks.runner import local_evaluator_versions, runtime_fingerprint
+
+    db = trial_store()
+    asset = db.save_asset(image_bytes, image.content_type or "application/octet-stream")
+    task_snapshot = {
+        "task": task,
+        "image_asset": asset,
+        "example": example.model_dump() if example else None,
+    }
+    selected = {sid: config.strategies[sid].model_dump(mode="json") for sid in ids}
+    if not selected:
+        selected = {
+            "single": {
+                "perceive": perceive_model_id,
+                "plan": plan_model_id,
+                "act": act_model_id,
+                "verify": verify_model_id,
+                "sim": sim_id,
+            }
+        }
+    runtime = runtime_fingerprint()
+    frozen = {
+        "defaults": config.defaults.model_dump(mode="json"),
+        "runtime": runtime,
+        "seed_support": "requested_only" if seed is not None else "not_requested",
+    }
+    if urdf_path:
+        frozen["robot_asset"] = db.save_asset(Path(urdf_path).read_bytes(), "application/xml")
+    trial_ids = {}
+    try:
+        for sid, definition in selected.items():
+            refs = config.strategies[sid].endpoint_refs() if ids else set(definition.values())
+            system_config = {
+                **frozen,
+                "strategies": {sid: definition},
+                "endpoints": {
+                    key: endpoint.model_dump(mode="json")
+                    for key, endpoint in config.endpoints.items()
+                    if key in refs
+                },
+            }
+            system_config["local_evaluators"] = local_evaluator_versions(system_config)
+            trial_ids[sid] = db.begin(
+                source="quick",
+                task=task_snapshot,
+                strategy={"id": sid, **definition},
+                config=system_config,
+                seed=seed,
+            )
+    except Exception:
+        _finish_open_trials(trial_ids, "error", "Trial preparation failed")
+        raise
+
     _eval_queues[eval_id] = asyncio.Queue()
     _evaluations[eval_id] = {"eval_id": eval_id, "status": "running"}
 
     # If strategy_ids provided, use multi-strategy RunManager path
     if strategy_ids:
-        ids = [s.strip() for s in strategy_ids.split(",") if s.strip()]
         bg = asyncio.create_task(
             _run_multi_strategy(
                 eval_id,
@@ -363,11 +535,12 @@ async def create_evaluation(
                 example=example,
                 urdf_path=urdf_path,
                 seed=seed,
+                trial_ids=trial_ids,
             )
         )
         _background_tasks.add(bg)
-        bg.add_done_callback(_background_tasks.discard)
-        return {"eval_id": eval_id, "status": "running", "strategies": ids}
+        bg.add_done_callback(lambda done: _background_finished(done, trial_ids, urdf_path))
+        return {"eval_id": eval_id, "status": "running", "strategies": ids, "trial_ids": trial_ids}
 
     # Legacy single-pipeline path
     bg = asyncio.create_task(
@@ -382,12 +555,13 @@ async def create_evaluation(
             sim_id,
             example=example,
             seed=seed,
+            trial_id=trial_ids["single"],
         )
     )
     _background_tasks.add(bg)
-    bg.add_done_callback(_background_tasks.discard)
+    bg.add_done_callback(lambda done: _background_finished(done, trial_ids, urdf_path))
 
-    return {"eval_id": eval_id, "status": "running"}
+    return {"eval_id": eval_id, "status": "running", "trial_ids": trial_ids}
 
 
 @app.get("/api/evaluate/{eval_id}/stream")

@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.5
+**Version:** 0.6
 **Updated:** 2026-09-12
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -83,7 +83,7 @@ flowchart TD
     P --> V[Baseline and candidate lineage]
 ```
 
-This is the target conceptual model. Frozen dataset revisions, independent quick-trial records and baseline lineage are proposed extensions; the current campaign runner already records attempts against configured tasks and strategies.
+This is the target conceptual model. Independent quick and campaign trials now share durable identities, frozen configuration and history. Frozen reviewed dataset revisions and baseline lineage remain proposed extensions.
 
 ## 4. Primary customer workflow
 
@@ -102,7 +102,7 @@ This proposed guided workflow should deliver a useful first report before requir
 
 The first report shows accepted/completed, failed and unknown cases; representative failures link to evidence. It shows what is unreviewed or unmeasured. A configurable pilot checks data and grading before the full campaign, with attempt count and available budget information shown before launch.
 
-Quick evaluations remain easy. Proposed durable recording captures their inputs and configuration before dispatch, preserves interruption, and lets the user create a campaign from history without copying or rerunning the original attempt. Post-hoc selected trials remain exploratory references, separate from planned reliability repetitions.
+Quick evaluations remain easy. Durable recording now captures their inputs and configuration before dispatch and preserves interruption. Users can reopen a saved trial without running it again. Creating a campaign from history by reference remains proposed; post-hoc selected trials must remain exploratory references, separate from planned reliability repetitions.
 
 ## 5. Create datasets and validate cases
 
@@ -137,9 +137,9 @@ The existing reports already calculate pass@k/pass^k, coverage, latency and conf
 
 Every report should support **outcome → trial → measurement or grade → stage/call → supporting evidence**. A developer must be able to inspect what the system observed, returned, requested and actually executed, including errors and incomplete recording. Measurements carry values, units, source quality and the exact evidence used; timing distinguishes stage work, pipeline wall time and robot task time.
 
-The proposed trial inspector combines a timeline, stage/tool inputs and outputs, measurement details and relevant image/video/trajectory ranges. Baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to their source records. It supports failure investigation without presenting correlation as a proven cause.
+The trial inspector now combines saved configuration, verdicts, measurement details, stage outputs, stage-filtered activity and on-demand initial observations. Supplied role, usage and trace identifiers are inspectable; missing usage stays unknown. Arbitrary remote assets, image/video/trajectory ranges and parallel trace graphs remain follow-up work. Proposed baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to source records without presenting correlation as a proven cause.
 
-Today, final stage results and structured check measurements are retained, but some live tool substeps disappear from durable history. Complete event capture, managed evidence links and aligned trace comparison are follow-up requirements, not shipped telemetry. See [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
+Quick and campaign paths now retain the events exposed by their orchestrator and optional Copilot runtime, alongside final stage results and structured checks. Internal customer-agent calls still require adapter support; no transcript is reconstructed when the source omits it. Initial observations have managed asset references. Full evidence-range resolution, robot clock alignment and baseline trace comparison remain pending. See [Trial history](TRIAL_HISTORY.md), [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
 
 ## 7. Baselines, ablations and evidence
 
@@ -151,7 +151,7 @@ Robotics episode evidence must identify the producing configuration and attempt.
 
 ## 8. Storage and integration direction
 
-Use SQLite for the current local product, including results, reviews and version relationships. Use relational constraints, migrations, short transactions, indexes and backup/restore. Consider PostgreSQL if shared deployment needs justify it. Store large images, video and sensor/trajectory recordings separately and reference their identity and relevant range.
+Use SQLite for the local product. The implemented shared journal stores trial identities, snapshots, events and asset metadata with constraints, schema-version checks and indexed history. Initial observations are separate content-addressed files. Reviews, broader version relationships and recording ranges remain proposed. A complete backup must preserve the journal, assets and separate campaign database together. Consider PostgreSQL only if shared deployment needs justify it; large video and sensor/trajectory recordings should remain separate referenced assets.
 
 Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet or Delta export is optional when needed; neither is required to record local trials. Configuration snapshots identify accessible artifacts and declared model versions, but do not automatically archive remote weights or recreate a physical environment.
 
@@ -162,28 +162,35 @@ ROVE already has the core evaluation services: configured trials, execution orch
 ROVE owns these evaluation contracts and execution services while reusing Copilot's agent loop, tool and telemetry capabilities. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. Direct customer agents, VLMs and VLAs remain evaluable through supported adapters. Adding Copilot planning or recovery around one creates a different combined strategy and must be compared explicitly. See the [target architecture](architecture/target-architecture.md), [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md), [ADR-024](architecture/ADR-024-copilot-runtime-and-observability.md) and the [dated model assessment](product/model-landscape-2026-09.md).
 
 SDK session events feed ROVE's durable trial timeline; native OpenTelemetry and
-ROVE spans support optional operational monitoring. Session persistence and sampled
-monitoring data do not replace trial records or robotics evidence. Azure Monitor,
+optional ROVE spans provide the correlation foundation. The configured Copilot
+adapter now hosts perceive, plan and verify with fresh candidate/grader scopes;
+robot action tools and the evaluation assistant remain pending. The real pinned
+SDK/CLI passed a controlled synthetic transport probe; live model/Azure and complete
+external collector validation remain open gates. No ROVE exporter is configured by
+default. Session persistence and sampled monitoring data do not replace trial
+records or robotics evidence. Azure Monitor,
 Application Insights, Log Analytics and Grafana are future optional destinations.
 Versioned Fabric/Delta export remains a separate analytical integration.
 
 ## 9. Capability and delivery status
 
-| Capability | Status at source commit 3bfd485 |
+| Capability | Status in the first durable-trial implementation slice, 2026-09-12 |
 | --- | --- |
 | Configured optional stages, supported models/agents and local dashboard | Implemented; adapter availability depends on installed dependencies and endpoints |
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
-| Durable shared quick-trial recording and asset references | Proposed |
-| Durable tool/event timeline, measurement drill-down and aligned trace comparison | Proposed; final stage outputs and check measurements exist today |
-| ROVE evaluation services and Copilot shared agent runtime | Accepted direction in ADRs 023–024; existing pipeline retained, SDK integration and lifecycle extensions pending |
+| Durable shared quick/campaign trial recording and initial observation assets | Implemented; frozen snapshots, interrupted-work recovery and idempotent legacy quick-history import |
+| Durable activity, measurement drill-down and history inspector | Implemented for events exposed by the orchestrator/SDK; remote recording ranges and aligned trace comparison pending |
+| Copilot runtime for hosted perception, planning and verification | Implemented as an optional pinned dependency; fresh role scopes and controlled real-CLI proof; live-provider validation pending |
+| ROVE trial spans and optional native SDK telemetry settings | Correlation foundation implemented; no default ROVE exporter or validated Azure/Grafana deployment |
+| Guided evaluation assistant and robot action tools | Pending; existing direct customer action adapters remain supported |
 | Guided customer-data onboarding and expected-metric preview | Proposed |
 | SME review, reusable annotations and frozen datasets | Proposed |
 | Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
 | PostgreSQL backend or Delta Lake integration | Future, demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-First validate the SDK/runtime contract, then deliver shared recording and inspectable trial evidence, sample-case contracts and SME review/dataset freezing, baseline comparisons and the guided assistant. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) defines the task gates.
+The first slice delivers inspectable durable trials and the hosted-stage runtime foundation. Next close remaining runtime/telemetry validation gates and deliver customer case contracts, success setup, SME review/dataset freezing, baseline comparisons and the guided assistant. Full acceptance remains completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) distinguishes delivered work from remaining gates.
 
 ## 10. Related specifications and decisions
 
@@ -193,6 +200,7 @@ First validate the SDK/runtime contract, then deliver shared recording and inspe
 - [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
 - [Model and harness assessment](product/model-landscape-2026-09.md): dated research informing architecture, not a ROVE benchmark.
 - [Current implementation](architecture/current-implementation.md): actual code paths, APIs, storage and tests.
+- [Trial history and optional Copilot stages](TRIAL_HISTORY.md): local setup, inspector usage, privacy and complete backups.
 - [Target architecture](architecture/target-architecture.md) and [system diagram](architecture/system-diagram.md): logical responsibilities, processes, data and optional integrations.
 - [Implementation plan](product/implementation-plan.md): sequenced tasks, dependencies and milestone acceptance.
 - [Architecture decisions](architecture/README.md): ADRs 017–024 with diagrams and implementation status.
