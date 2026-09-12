@@ -33,6 +33,7 @@ _VLA_ADAPTERS = {
 }
 
 _AGENT_ADAPTERS = {
+    "copilot_agent": "rove.adapters.copilot_agent:CopilotAgentAdapter",
     "mock_agent": "rove.adapters.mock_agent:MockAgentAdapter",
     "azure_foundry_agent": "rove.adapters.azure_foundry_agent:AzureFoundryAgentAdapter",
 }

@@ -14,6 +14,7 @@ from rove.adapters.registry import AdapterRegistry
 from rove.models import ExampleData
 from rove.models.config import StrategyConfig, get_strategies, load_config, reset_config_cache
 from rove.orchestrator.run_manager import RunManager
+from rove.trials.store import TrialStore
 
 
 def classify(result: dict) -> dict:
@@ -67,6 +68,11 @@ async def execute(request: dict, config_path: Path) -> dict:
         task["image_base64"],
         ignore_event,
         ExampleData.model_validate(task["example"]) if task.get("example") else None,
+        trial_contexts={
+            request["strategy_id"]: (TrialStore(Path(request["trial_root"])), request["trial_id"])
+        }
+        if request.get("trial_id")
+        else None,
     )
     result = results[0]
     return {

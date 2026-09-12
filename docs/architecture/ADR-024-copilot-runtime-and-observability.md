@@ -1,7 +1,7 @@
 # ADR-024: Use Copilot SDK for ROVE-Owned Agents and Reuse Its Telemetry
 
 **Status:** Accepted direction
-**Implementation status:** Not implemented; SDK compatibility and recording integration must be validated first
+**Implementation status:** First slice implemented: controlled SDK/CLI proof, optional hosted stages, shared trial journal and local inspector. Live-provider/export validation and assistant tools remain pending.
 **Date:** 2026-09-12
 **Supersedes in part:** [ADR-023](ADR-023-evaluation-and-execution-harnesses.md), for runtime ownership; ROVE retains its evaluation responsibilities
 **Amends:** [ADR-022](ADR-022-trial-telemetry.md), with SDK events and OpenTelemetry as telemetry sources
@@ -16,10 +16,11 @@ infrastructure, with Azure/Foundry provider alignment as a practical considerati
 Selection does not establish that every SDK capability is useful or that every
 customer model should execute inside a Copilot agent.
 
-The existing system has optional pipeline stages, agent adapters, configured
-verification and repeated-trial reporting. It does not have a Copilot dependency
-or a shared durable agent-event recorder. These are architecture decisions and
-delivery requirements, not claims about released behavior.
+At decision time, the system had optional pipeline stages, agent adapters,
+configured verification and repeated-trial reporting, but no Copilot dependency
+or shared durable event recorder. The first implementation now provides those
+foundations. The implementation record below distinguishes delivered behavior from
+the broader accepted direction.
 
 ## Decision
 
@@ -31,7 +32,7 @@ required checks, durable evidence, metric arithmetic and baseline relationships.
 
 ```mermaid
 flowchart TD
-    A["Evaluation assistant: Copilot"] -->|"Validated tools"| C["ROVE campaign and trial services"]
+    A["Proposed evaluation assistant: Copilot"] -.->|"Future validated tools"| C["ROVE campaign and trial services"]
     C --> H["Configured hosted agent: Copilot"]
     C --> X["Direct customer agent / model adapter"]
     H --> E["Outputs and observed evidence"]
@@ -43,7 +44,7 @@ flowchart TD
     G --> D
     H -.-> O["Native OpenTelemetry + ROVE spans"]
     G -.-> O
-    D --> R["Reports and evidence inspector"]
+    D --> R["Trial history and evidence inspector"]
 ```
 
 An assistant may start a campaign through a tool; the tool's service validates the
@@ -113,9 +114,10 @@ callbacks for identity integration. This is model access, not automatic provisio
 of Azure resources or Fabric integration.
 [Source: provider guide](https://docs.github.com/en/copilot/how-tos/copilot-sdk/auth/byok).
 
-Start with a local application and a controlled child runtime. Pin the SDK and
-runtime versions after a compatibility spike; record accessible versions and
-configuration. A remote deployment's claimed model revision is not a weight
+Start with a local application and a controlled child runtime. The first profile
+pins SDK `1.0.13` and CLI `1.0.81-9` after a controlled compatibility proof; upgrades
+require revalidation. Record accessible versions and configuration. A remote
+deployment's claimed model revision is not a weight
 archive. Keep ordinary mock/direct evaluations available without SDK startup or
 cloud credentials. Add hosting complexity only when measured concurrency or
 customer deployment needs require it.
@@ -137,6 +139,37 @@ MCP, persistent cross-trial memory or automatic recovery by default. Revisit the
 selected runtime if measured limitations prevent the required customer workflow.
 
 ## Acceptance and Migration
+
+### Implementation record — 12 September 2026
+
+- **Compatibility:** the real pinned SDK and CLI passed a controlled synthetic
+  transport probe for image input, host-tool execution, usage and native trace
+  propagation. It did not call a live model provider. Azure authentication,
+  provider quality and external monitoring remain unverified. Exact evidence is
+  in the [compatibility record](copilot-compatibility.md).
+- **Execution:** `copilot_agent` supports perceive, plan and verify. Each stage has
+  a fresh child runtime/session/workspace with host-selected candidate or grader
+  scope. The shared runtime validates role-scoped tools; the configured adapter
+  exposes no tools and rejects robot `act`. Assistant tools and cross-stage agent
+  memory are not implemented. Existing direct adapters remain directly callable.
+- **Recording:** quick and campaign attempts receive durable IDs and sanitized
+  snapshots before dispatch. Available stage and SDK events are retained in a
+  shared SQLite journal; initial observations have private managed assets. Legacy
+  quick-history import is idempotent and preserves missing provenance. The campaign
+  journal remains separate and recovery reconciles known IDs under ownership.
+- **Tracing:** optional ROVE trial spans retain identities; native SDK telemetry
+  settings can be supplied, and ephemeral usage is persisted. No ROVE exporter is
+  configured by default. The standalone controlled correlation proof does not
+  establish complete application-to-collector correlation or real outage handling.
+- **Inspection:** local history shows lifecycle, assessment, measurements,
+  stage-filtered activity, trace details, configuration and on-demand initial
+  observations. Arbitrary remote evidence resolution, parallel trace graphs and
+  aligned baseline comparison remain pending.
+
+See [current implementation](current-implementation.md) for code/test links and
+[Trial history](../TRIAL_HISTORY.md) for setup and backup. The following criteria
+continue to govern remaining implementation; this slice does not complete every
+criterion.
 
 1. Validate a pinned SDK/runtime pair with a controlled tool call, image input,
    cancellation, isolated sessions and captured usage/events. Report provider

@@ -17,10 +17,17 @@ def anyio_backend():
 
 
 @pytest.fixture
-async def client():
+async def client(tmp_path, monkeypatch):
+    monkeypatch.setattr("rove.api.app._trial_root", tmp_path / "trials")
+    monkeypatch.setattr("rove.api.app._history_path", tmp_path / "history.jsonl")
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://localhost") as c:
         yield c
+        import asyncio
+
+        from rove.api.app import _background_tasks
+
+        await asyncio.gather(*list(_background_tasks), return_exceptions=True)
 
 
 class TestStrategiesEndpoint:

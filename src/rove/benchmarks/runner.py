@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import importlib.metadata
 import json
 import os
@@ -200,9 +201,37 @@ async def run_attempt(request: dict, timeout_s: float) -> dict:
             await process.wait()
 
 
+def trial_status(execution: str) -> str:
+    if execution in {"completed", "invalid_verdict", "unresolved_evidence"}:
+        return "completed"
+    return execution if execution in {"timeout", "cancelled", "interrupted"} else "error"
+
+
 async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) -> None:
+    from rove.trials.store import TrialStore
+
+    trial_store = TrialStore(store.root)
     with campaign_lock(store, campaign_id):
         campaign = store.get(campaign_id)
+        # Reconcile two journals after any crash boundary, while holding ownership.
+        indexed = {r["trial_id"]: r for r in store.trials(campaign_id) if r.get("trial_id")}
+        for shared in trial_store.for_campaign(campaign_id):
+            if shared["status"] != "running":
+                continue
+            prior = indexed.get(shared["id"])
+            if prior and prior["execution"] != "running":
+                state = prior["execution"]
+                trial_store.finish(
+                    shared["id"],
+                    status=trial_status(state),
+                    result=prior,
+                )
+            else:
+                trial_store.finish(
+                    shared["id"],
+                    status="interrupted",
+                    error="Campaign owner interrupted before committing completion",
+                )
         validate_local_evaluators(campaign)
         if campaign["runtime"] != runtime_fingerprint():
             raise ValueError("Runtime changed; create a new campaign instead of mixing revisions")
@@ -215,6 +244,11 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
             if result["execution"] == "running":
                 result.update(execution="interrupted", outcome="unknown")
                 store.finish_trial(campaign_id, result)
+                if (
+                    result.get("trial_id")
+                    and trial_store.get(result["trial_id"])["status"] == "running"
+                ):
+                    trial_store.finish(result["trial_id"], status="interrupted", result=result)
         done = {(r["task_id"], r["strategy_id"], r["seed"]) for r in existing}
         store.status(campaign_id, "running")
         try:
@@ -241,12 +275,56 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                             "outcome": "unknown",
                             "execution": "running",
                         }
+                        task_snapshot = task.model_dump(mode="json")
+                        image_bytes = base64.b64decode(task.image_base64, validate=True)
+                        media_type = (
+                            "image/png"
+                            if image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+                            else "image/jpeg"
+                            if image_bytes.startswith(b"\xff\xd8\xff")
+                            else "application/octet-stream"
+                        )
+                        task_snapshot["image_asset"] = trial_store.save_asset(
+                            image_bytes, media_type
+                        )
+                        refs = StrategyConfig.model_validate(
+                            campaign["config"]["strategies"][strategy]
+                        ).endpoint_refs()
+                        system_config = {
+                            **campaign["config"],
+                            "strategies": {strategy: campaign["config"]["strategies"][strategy]},
+                            "endpoints": {
+                                k: v
+                                for k, v in campaign["config"]["endpoints"].items()
+                                if k in refs
+                            },
+                        }
+                        trial_id = trial_store.begin(
+                            source="campaign",
+                            campaign_id=campaign_id,
+                            seed=seed,
+                            task=task_snapshot,
+                            strategy={"id": strategy, **campaign["config"]["strategies"][strategy]},
+                            config={
+                                **system_config,
+                                "runtime": campaign["runtime"],
+                                "evaluation_contract": campaign["spec"],
+                                "local_evaluators": {
+                                    k: v
+                                    for k, v in campaign["local_evaluators"].items()
+                                    if k in refs
+                                },
+                            },
+                        )
+                        record["trial_id"] = trial_id
                         store.save_trial(campaign_id, record)
                         request = {
                             "config": campaign["config"],
                             "task": task.model_dump(mode="json"),
                             "strategy_id": strategy,
                             "seed": seed,
+                            "trial_id": trial_id,
+                            "trial_root": str(store.root.resolve()),
                         }
                         started = time.monotonic()
                         try:
@@ -254,6 +332,7 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                         except asyncio.CancelledError:
                             record.update(execution="cancelled", finished_at=now())
                             store.finish_trial(campaign_id, record)
+                            trial_store.finish(trial_id, status="cancelled", result=record)
                             raise
                         except Exception:
                             result = {
@@ -273,6 +352,12 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                         except ValueError:
                             record.update(outcome="unknown", execution="evaluator_changed")
                         store.finish_trial(campaign_id, record)
+                        execution = record["execution"]
+                        trial_store.finish(
+                            trial_id,
+                            status=trial_status(execution),
+                            result=record,
+                        )
                         if progress:
                             await progress(record)
             store.status(campaign_id, "completed")
