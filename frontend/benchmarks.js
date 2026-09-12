@@ -120,7 +120,7 @@ async function history(refreshAll = false) {
       $("historyEmpty")?.remove();
       if (!campaigns.length) {
         const empty = document.createElement("p"); empty.id = "historyEmpty"; empty.className = "empty-state";
-        empty.textContent = "No campaigns yet. Start a new evaluation to build a baseline and compare results here.";
+        empty.textContent = "No campaigns yet. Create a campaign to build a baseline and compare results here.";
         $("history").append(empty);
       }
       hasActiveCampaigns = campaigns.some(c => ["running", "pending"].includes(c.status));

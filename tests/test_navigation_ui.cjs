@@ -74,3 +74,17 @@ test("root journey routes configuration and quick runs without losing an in-prog
     assert.equal(calls.some(c=>c.method!=="GET"),false);
   } finally {w.close();}
 });
+
+
+test("campaign creation actions and destination use one name", () => {
+  for (const page of ["index.html", "benchmarks.html", "history.html"]) {
+    const dom = new JSDOM(fs.readFileSync(path.join(root, "frontend", page), "utf8"));
+    const links = [...dom.window.document.querySelectorAll('a[href="/static/datasets.html"]')];
+    assert.ok(links.some(link => link.textContent.includes("Create a campaign")), page);
+    assert.ok(links.every(link => !/New evaluation|Create an evaluation/.test(link.textContent)), page);
+    dom.window.close();
+  }
+  const dom = new JSDOM(fs.readFileSync(path.join(root, "frontend/datasets.html"), "utf8"));
+  assert.equal(dom.window.document.getElementById("workspaceTitle").textContent, "Create a campaign");
+  dom.window.close();
+});

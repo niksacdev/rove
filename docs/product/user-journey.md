@@ -45,6 +45,9 @@ on the right, providing strategies, models/connections and application preferenc
 Configure is a stage within an evaluation: it chooses from those existing strategies
 and defines the assessment. Settings maintains the reusable configurations themselves.
 
+The creation action and destination title both say **Create a campaign**.
+“Evaluate” is an activity label; a campaign is the saved record containing trials.
+
 Start explains what a campaign produces and offers a clear **Create a campaign**
 action. A campaign is a named evaluation of selected cases against selected strategies,
 with a chosen number of attempts per case and strategy. It produces a report backed

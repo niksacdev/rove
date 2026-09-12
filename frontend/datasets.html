@@ -8,18 +8,18 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-2">
-  <link rel="stylesheet" href="/static/history.css?v=campaign-workspace-2">
-  <link rel="stylesheet" href="/static/datasets.css?v=campaign-workspace-2">
-  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-2">
-  <script src="/static/navigation.js?v=campaign-workspace-2" defer></script>
-  <script src="/static/datasets.js?v=campaign-workspace-2" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-3">
+  <link rel="stylesheet" href="/static/history.css?v=campaign-workspace-3">
+  <link rel="stylesheet" href="/static/datasets.css?v=campaign-workspace-3">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-3">
+  <script src="/static/navigation.js?v=campaign-workspace-3" defer></script>
+  <script src="/static/datasets.js?v=campaign-workspace-3" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <header id="roveNav" data-section="evaluate"></header>
   <main id="main">
-    <div class="page-heading"><div><h1 id="workspaceTitle">Create an evaluation</h1><p class="intro">Build a campaign: your cases, your strategies, and clear evidence of what works.</p></div></div>
+    <div class="page-heading"><div><h1 id="workspaceTitle">Create a campaign</h1><p class="intro">Build a campaign: your cases, your strategies, and clear evidence of what works.</p></div></div>
     <nav class="journey" aria-label="Evaluation steps"><a href="?step=cases" data-journey-step="cases"><span>1</span><div>Cases<small>Choose what to test</small></div></a><a href="?step=configure" data-journey-step="configure"><span>2</span><div>Configure<small>Strategy &amp; success</small></div></a><a href="?step=run" data-journey-step="run"><span>3</span><div>Run<small>Follow each trial</small></div></a><a href="?step=review" data-journey-step="review"><span>4</span><div>Review &amp; improve<small>Evidence &amp; comparisons</small></div></a></nav>
     <div class="step-heading"><h2 id="stepHeading" tabindex="-1">Prepare your cases</h2><p id="stepDescription" class="muted">Choose observations and instructions for a repeatable evaluation.</p></div>
     <p id="message" role="status" aria-live="polite"></p>
@@ -119,7 +119,7 @@
       <summary>Configure with the assistant <span class="muted">Optional</span></summary>
       <p id="assistantStatus" class="muted" role="status">Checking assistant availability…</p>
       <label>Attach an observation for assistant-prepared case import<input id="assistantAsset" type="file" accept="image/png,image/jpeg"></label><p id="assistantAssetStatus" class="muted" role="status">Images are uploaded only when you select a file. Metadata changes require a separate confirmation.</p>
-      <form id="assistantForm"><label>Describe the evaluation you want<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="Use my selected cases to compare a planning strategy. Help me set success criteria and repetitions." required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Prepare configuration</button></form>
+      <form id="assistantForm"><label>Describe the campaign you want<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="Use my selected cases to compare a planning strategy. Help me set success criteria and repetitions." required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Prepare configuration</button></form>
       <div id="assistantResponse" aria-live="polite"></div>
     </details>
     <dialog id="casePicker" aria-labelledby="casesHeading"><div class="dialog-top"><span class="eyebrow">CASE LIBRARY</span><button id="closeCasePicker" type="button" class="secondary" aria-label="Close case library">Close</button></div>      <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">

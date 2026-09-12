@@ -8,11 +8,11 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-2">
-  <link rel="stylesheet" href="/static/benchmarks.css?v=campaign-workspace-2">
-  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-2">
-  <script src="/static/navigation.js?v=campaign-workspace-2" defer></script>
-  <script src="/static/benchmarks.js?v=campaign-workspace-2" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-3">
+  <link rel="stylesheet" href="/static/benchmarks.css?v=campaign-workspace-3">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-3">
+  <script src="/static/navigation.js?v=campaign-workspace-3" defer></script>
+  <script src="/static/benchmarks.js?v=campaign-workspace-3" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -20,7 +20,7 @@
   <main id="main">
     <div class="page-heading">
       <div><h1>Results</h1><p class="intro">Review campaign outcomes, compare revisions, and follow each result back to its trials and evidence.</p></div>
-      <a class="primary-link" href="/static/datasets.html">New evaluation</a>
+      <a class="primary-link" href="/static/datasets.html">Create a campaign</a>
     </div>
     <nav class="workspace-tabs" aria-label="Results views">
       <a href="/static/benchmarks.html" aria-current="page">Campaigns</a>
@@ -35,7 +35,7 @@
     </section>
     <details id="advancedConfiguration" class="advanced-configuration">
       <summary>Advanced campaign configuration</summary>
-      <p class="muted">Use the manifest builder for task suites and saved JSON configurations. For a guided evaluation with versioned cases and success criteria, choose New evaluation.</p>
+      <p class="muted">Use the manifest builder for task suites and saved JSON configurations. For a guided evaluation with versioned cases and success criteria, choose Create a campaign.</p>
       <p class="notice">This builder uses your configured verify stage. Mock results are synthetic; model judgments do not establish observed robot task success.</p>
       <p id="advancedStatus" role="status" aria-live="polite"></p>
       <button id="retryAdvanced" class="secondary" type="button" hidden>Retry loading configuration</button>

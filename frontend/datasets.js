@@ -161,7 +161,7 @@ if (typeof document !== "undefined") (() => {
   function goStep(step, push = true, focus = true) {
     if (state.step !== step) tell("");
     state.step = Object.hasOwn(stepCopy, step) ? step : "cases";
-    $("workspaceTitle").textContent = state.step === "review" ? "Review results" : "Create an evaluation";
+    $("workspaceTitle").textContent = state.step === "review" ? "Review results" : state.step === "run" && state.campaignId && !state.preparingRun ? "Campaign trials" : "Create a campaign";
     document.title = state.step === "review" ? "ROVE · Results · Review" : "ROVE · Evaluate";
     window.RoveNavigation?.setActive(state.step === "review" ? "results" : "evaluate");
     for (const panel of document.querySelectorAll("[data-workflow-panel]")) panel.hidden = panel.dataset.workflowPanel !== state.step;
