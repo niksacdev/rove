@@ -1,9 +1,14 @@
 # ROVE — High-Level Architecture
 
-**Status**: Accepted
+**Status**: Historical design; implementation varies
 **Date**: 2026-02-18
 **Authors**: System Architect
 **Version**: 1.2 — simplified strategies, optional stages
+
+Use [current implementation](current-implementation.md) for verified routes,
+execution paths and storage, and the [decision index](README.md) for later ADRs.
+This older design includes proposed CLI commands, APIs, persistence and simulator
+integrations that are not all implemented. Its diagrams preserve that proposal.
 
 ---
 

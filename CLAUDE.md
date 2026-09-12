@@ -1,5 +1,17 @@
 # ROVE — Robot Observation & Vision Evaluation
 
+## Documentation status and feature changes
+
+Use [docs/README.md](docs/README.md) as the documentation entry point and
+[current implementation](docs/architecture/current-implementation.md) for
+verified behavior. Older architecture descriptions in this file and historical
+specifications include proposed paths, commands and integrations; verify them
+against source before making implementation claims. Update the relevant product
+specification, ADR and diagram with each feature PR, including implementation
+status and source/test evidence. The product vocabulary and current roadmap are
+in [concepts](docs/product/concepts.md) and
+[workflows](docs/product/evaluation-workflows.md).
+
 ## Project Overview
 
 ROVE evaluates robotics agent pipelines by running real inference through VLM+VLA+LLM+Agent combinations. It orchestrates a standardized 4-step pipeline (perceive → plan → act → verify) across multiple model combinations in parallel, producing ranked comparisons of success rate, latency, and cost for each agent configuration.

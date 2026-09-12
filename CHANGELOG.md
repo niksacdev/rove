@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Product concepts and evaluation architecture
+
+Update the product specification around the original robotics agent-pipeline vision and personas, with cases, trials, campaigns and customer-data onboarding. Linked workflow specifications and architecture decisions explain SME-reviewed datasets, robotics measures and implementation boundaries with diagrams.
+
 ### Configured verification stages
 
 Extend stage configuration with local task evaluators, required constraints, optional FK diagnostics, execution deadlines and versioned measurement evidence. *(PR #14)*
