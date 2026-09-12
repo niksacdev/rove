@@ -122,3 +122,9 @@ ROVE's original software is [MIT](LICENSE). Bundled research assets retain their
 upstream terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Design notes
 under `docs/` include historical proposals and may describe unimplemented work;
 this README and executable tests describe the supported release behavior.
+
+### Configured task verification
+
+Use [configured verification](docs/VERIFICATION.md) to provide a task evaluator,
+required constraints and optional FK diagnostics through the existing verify stage.
+Results carry measurements, evidence quality and evaluator versions into campaign reports.

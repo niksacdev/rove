@@ -12,7 +12,7 @@ import yaml
 
 from rove.adapters.registry import AdapterRegistry
 from rove.models import ExampleData
-from rove.models.config import get_strategies, load_config, reset_config_cache
+from rove.models.config import StrategyConfig, get_strategies, load_config, reset_config_cache
 from rove.orchestrator.run_manager import RunManager
 
 
@@ -25,6 +25,12 @@ def classify(result: dict) -> dict:
     )
     output = verify.get("output", {}) if verify else {}
     if (
+        output
+        and not output.get("verdict_valid", True)
+        and (output.get("evaluator_result") or output.get("check_results"))
+    ):
+        return {"outcome": "unknown", "execution": "unresolved_evidence"}
+    if (
         not output
         or not output.get("verdict_valid", True)
         or type(output.get("success")) is not bool
@@ -36,7 +42,7 @@ def classify(result: dict) -> dict:
 async def execute(request: dict, config_path: Path) -> dict:
     config = request["config"]
     strategy = config["strategies"][request["strategy_id"]]
-    used = {strategy.get(stage) for stage in ("perceive", "plan", "act", "verify", "sim")}
+    used = StrategyConfig.model_validate(strategy).endpoint_refs()
     config["strategies"] = {request["strategy_id"]: strategy}
     config["endpoints"] = {key: value for key, value in config["endpoints"].items() if key in used}
     seed_support = {}

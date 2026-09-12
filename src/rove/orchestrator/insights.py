@@ -7,8 +7,12 @@ def _dynamics_all_ok(dyn_data: dict) -> bool | None:
     """Unknown or estimated checks cannot count as passes or failures."""
     from rove.orchestrator.failure_attribution import _get_evidence_value
 
-    expected = {"joint_limits_ok": True, "self_collision": False,
-                "torque_feasible": True, "near_singularity": False}
+    expected = {
+        "joint_limits_ok": True,
+        "self_collision": False,
+        "torque_feasible": True,
+        "near_singularity": False,
+    }
     values = {key: _get_evidence_value(dyn_data, key) for key in expected}
     if any(value is not None and value != expected[key] for key, value in values.items()):
         return False
@@ -32,6 +36,7 @@ FAILURE_LABELS = {
     "action_unsafe": "Unsafe Action",
     "action_out_of_workspace": "Out of Workspace",
     "verify_error": "Verification Error",
+    "unknown": "Unresolved evidence",
     "verification_mismatch": "Verification Mismatch",
 }
 
@@ -159,7 +164,8 @@ def _compute_stage_health(results: list[dict]) -> dict[str, float]:
         # Verify: 1.0 if success, 0.0 if not
         v = stage_map.get("verify")
         if v and v.get("output"):
-            stage_data["verify"].append(1.0 if v["output"].get("success") else 0.0)
+            if v["output"].get("verdict_valid", True):
+                stage_data["verify"].append(1.0 if v["output"].get("success") else 0.0)
         elif v and v.get("status") == "error":
             stage_data["verify"].append(0.0)
 
@@ -178,6 +184,11 @@ def _compute_model_comparison(results: list[dict]) -> list[dict]:
     for r in results:
         models = r.get("models", {})
         confidence = r.get("confidence", 0.0)
+        has_model_confidence = r.get("verdict_valid") is not False and not any(
+            (s.get("output") or {}).get("evaluator_result")
+            for s in r.get("stages", [])
+            if s.get("stage") == "verify"
+        )
         latency = r.get("total_latency_ms", 0)
 
         for stage, model_id in models.items():
@@ -191,14 +202,15 @@ def _compute_model_comparison(results: list[dict]) -> list[dict]:
             model_stats[model_id]["total"] += 1
             model_stats[model_id]["latencies"].append(latency)
             model_stats[model_id]["stages"].add(stage)
-            model_stats[model_id]["confidences"].append(confidence)
+            if has_model_confidence:
+                model_stats[model_id]["confidences"].append(confidence)
 
     comparison = []
     for model_id, stats in sorted(model_stats.items()):
         avg_conf = (
             round(sum(stats["confidences"]) / len(stats["confidences"]), 2)
             if stats["confidences"]
-            else 0
+            else None
         )
         comparison.append(
             {
@@ -261,7 +273,11 @@ def _compute_top_finding(
     n: int,
 ) -> str:
     """Single-sentence summary of the most important insight."""
-    successes = sum(1 for r in results if r.get("success"))
+    successes = sum(1 for r in results if r.get("success") and r.get("verdict_valid") is not False)
+
+    unknown = sum(r.get("verdict_valid") is False for r in results)
+    if unknown:
+        return f"{successes}/{n} strategies passed; {unknown} have unresolved evidence."
 
     if successes == n:
         avg_lat = sum(r.get("total_latency_ms", 0) for r in results) / n
@@ -341,6 +357,12 @@ def _compute_confidence_scores(results: list[dict]) -> list[dict]:
     for r in results:
         sid = r.get("strategy_id", "")
         display_name = r.get("display_name", sid)
+        if r.get("verdict_valid") is False or any(
+            (s.get("output") or {}).get("evaluator_result")
+            for s in r.get("stages", [])
+            if s.get("stage") == "verify"
+        ):
+            continue
         confidence = r.get("confidence", 0.0)
         success = r.get("success", False)
         scores.append(

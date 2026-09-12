@@ -33,6 +33,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+from rove.models.verification import CheckConfig, CheckResult, EvaluatorResult
+
 
 class EvaluationProvenance(BaseModel):
     """Mandatory metadata captured at evaluation start for reproducibility."""
@@ -300,6 +302,10 @@ class ActionPlausibility(BaseModel, extra="allow"):
 
 
 class VerificationResult(BaseModel):
+    evaluator_result: EvaluatorResult | None = None
+    evaluator_version: str = ""
+    check_results: list[CheckResult] = Field(default_factory=list)
+    aggregation_version: str = ""
     success: bool
     verdict_valid: bool = True  # False for parser fallbacks; not an observed task failure.
     confidence: float  # 0.0 - 1.0
@@ -336,6 +342,9 @@ class StageAssignment(BaseModel):
 class PipelineContext(BaseModel):
     """Accumulates stage outputs as the pipeline progresses."""
 
+    sim_steps: int = 0
+    episode_evidence: dict = Field(default_factory=dict)
+    check_results: dict[str, CheckResult] = Field(default_factory=dict)
     task: str = ""
     image_base64: str = ""
     scene: SceneAnalysis | None = None
@@ -445,6 +454,8 @@ class Strategy(BaseModel):
     pipeline_mode: str = "sequential"  # "sequential" | "parallel"
     verify_mode: str = "auto"  # "auto" | "agent_loop" | "precompute"
     tags: list[str] = Field(default_factory=list)
+    stage_timeouts: dict[str, int] = Field(default_factory=dict)
+    verification_checks: list[CheckConfig] = Field(default_factory=list)
 
 
 class TrialResult(BaseModel):

@@ -110,6 +110,7 @@ def _load_example_data(example_filename: str) -> ExampleData | None:
                     "turns",
                     "acceptable_interpretations",
                     "difficulty",
+                    "episode",
                 ):
                     if k in entry:
                         extras[k] = entry[k]
@@ -233,7 +234,7 @@ async def _run_evaluation(
         total_latency = sum(s.get("latency_ms", 0) for s in stages)
         verify_stage = next((s for s in stages if s["stage"] == "verify"), None)
         success = (
-            verify_stage["output"]["success"]
+            verify_stage["output"].get("success", False)
             if verify_stage and verify_stage.get("output")
             else False
         )

@@ -205,9 +205,9 @@ const removeUrdfBtn = document.getElementById("removeUrdf");
 const STAGES = {
   perceive: { label: "Scene Analysis",     icon: "eye"          },
   plan:     { label: "Task Planning",       icon: "brain"        },
-  act:      { label: "Action Execution",    icon: "bot"          },
+  act:      { label: "Actions",    icon: "bot"          },
   dynamics: { label: "Dynamics Analysis",   icon: "activity"     },
-  verify:   { label: "Action Plausibility",  icon: "shield-check" },
+  verify:   { label: "Verification",  icon: "shield-check" },
 };
 
 const STAGE_COLORS = {
@@ -1912,14 +1912,14 @@ function restoreHistory() {
                     modelId: stg.model_id,
                   };
                 }),
-                success: sr.success,
+                success: sr.verdict_valid === false ? null : sr.success,
                 totalLatencyMs: sr.total_latency_ms,
                 failureStage: sr.failure_stage || null,
                 failureCategory: sr.failure_category || null,
               };
               entry.summaryResults[sid] = {
                 status: sr.success != null ? "completed" : "error",
-                success: sr.success,
+                success: sr.verdict_valid === false ? null : sr.success,
                 latency_ms: sr.total_latency_ms,
                 currentStage: null,
                 stageStatuses: {},
@@ -2574,7 +2574,7 @@ function updateSummaryTable(strategyIds) {
       resultCell.textContent = "Fail";
     } else {
       resultCell.className = "text-[11px] text-gray-600";
-      resultCell.textContent = "\u2014";
+      resultCell.textContent = sr.status === "completed" ? "Unknown" : "\u2014";
     }
     row.appendChild(resultCell);
 
@@ -2790,7 +2790,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
         badge.textContent = "Fail";
       } else {
         badge.className += "bg-gray-500/15 text-gray-400";
-        badge.textContent = "\u2014";
+        badge.textContent = "Unknown";
       }
       card.appendChild(badge);
       var lat = item.r.totalLatencyMs;
@@ -2818,7 +2818,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
   // Per-stage comparison cards
   var STAGE_NAMES = ["perceive", "plan", "act", "verify"];
   var STAGE_ICONS = { perceive: "eye", plan: "brain", act: "bot", verify: "shield-check" };
-  var STAGE_LABELS = { perceive: "Scene Analysis", plan: "Task Planning", act: "Action Execution", verify: "Action Plausibility" };
+  var STAGE_LABELS = { perceive: "Scene Analysis", plan: "Task Planning", act: "Actions", verify: "Verification" };
 
   STAGE_NAMES.forEach(function(stageName) {
     var stageA = findStageInResults(resultsA, stageName);
@@ -3393,6 +3393,8 @@ function connectSSE(evalId) {
             badge.textContent = t;
             subItem.appendChild(badge);
           });
+        } else if (output.substep === "check") {
+          subItem.textContent = "Checking " + output.check;
         } else if (output.substep === "tool") {
           var arrow = document.createElement("span");
           arrow.className = "text-green-400";
@@ -3497,7 +3499,7 @@ function connectSSE(evalId) {
     if (summaryResults[sid]) {
       summaryResults[sid].status = "completed";
       summaryResults[sid].latency_ms = data.total_latency_ms;
-      summaryResults[sid].success = data.success != null ? data.success : null;
+      summaryResults[sid].success = data.verdict_valid === false ? null : (data.success != null ? data.success : null);
       summaryResults[sid].currentStage = null;
       summaryResults[sid].failureCategory = data.failure_category || null;
       updateSummaryTable();
@@ -3505,7 +3507,7 @@ function connectSSE(evalId) {
 
     // Store in history entry
     if (historyEntry && historyEntry.results[sid]) {
-      historyEntry.results[sid].success = data.success;
+      historyEntry.results[sid].success = data.verdict_valid === false ? null : data.success;
       historyEntry.results[sid].totalLatencyMs = data.total_latency_ms;
       historyEntry.results[sid].failureStage = data.failure_stage || null;
       historyEntry.results[sid].failureCategory = data.failure_category || null;
@@ -3844,7 +3846,10 @@ function addStageCard(stage, status, latencyMs, output, error, modelId, containe
   // Success/fail badge for verify
   if (stage === "verify" && output && output.success != null) {
     var badge = document.createElement("span");
-    if (output.success) {
+    if (output.verdict_valid === false) {
+      badge.className = "text-[10px] font-bold bg-yellow-500/15 text-yellow-400 px-2 py-0.5 rounded ml-2";
+      badge.textContent = "Unknown";
+    } else if (output.success) {
       badge.className = "text-[10px] font-bold bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded ml-2";
       badge.textContent = "Success";
     } else {
@@ -4611,6 +4616,34 @@ function renderAct(container, o) {
 }
 
 function renderVerify(container, o) {
+  var configured = [];
+  if (o.evaluator_result) configured.push({label: "Task evaluator", result: o.evaluator_result, version: o.evaluator_version});
+  (o.check_results || []).forEach(function(check) {
+    configured.push({label: check.endpoint + " · " + check.role + (check.required ? " · required" : " · optional") + " · " + check.execution, result: check.result, version: check.evaluator_version});
+  });
+  configured.forEach(function(item) {
+    var panel = document.createElement("details");
+    panel.className = "my-3 p-3 border border-f-border rounded-lg";
+    var heading = document.createElement("summary");
+    heading.className = "text-xs cursor-pointer";
+    heading.textContent = item.label + ": " + item.result.verdict + " · " + item.result.evidence_quality;
+    panel.appendChild(heading);
+    var reason = document.createElement("p");
+    reason.className = "text-xs text-gray-400 mt-2";
+    reason.textContent = item.result.reasoning;
+    panel.appendChild(reason);
+    (item.result.measurements || []).forEach(function(measurement) {
+      var line = document.createElement("p");
+      line.className = "text-xs mt-1";
+      line.textContent = measurement.name + ": " + (measurement.value == null ? "Unavailable" : measurement.value + " " + measurement.unit) + " · " + measurement.quality;
+      panel.appendChild(line);
+    });
+    var provenance = document.createElement("p");
+    provenance.className = "text-xs text-gray-500 mt-2 break-all";
+    provenance.textContent = "Evaluator version: " + item.version + " · Evidence: " + (item.result.evidence_refs || []).join(", ");
+    panel.appendChild(provenance);
+    container.appendChild(panel);
+  });
   if (o.dynamics_analysis) {
     var evidencePanel = document.createElement("details");
     evidencePanel.className = "my-3 p-3 border border-blue-500/20 rounded-lg";
@@ -4624,7 +4657,7 @@ function renderVerify(container, o) {
 
   var rendered = false;
 
-  if (o.confidence != null) {
+  if (o.confidence != null && !o.evaluator_result && o.verdict_valid !== false) {
     rendered = true;
     var pct = (o.confidence * 100).toFixed(1);
     var color = o.confidence >= 0.7 ? "green" : (o.confidence >= 0.4 ? "yellow" : "red");

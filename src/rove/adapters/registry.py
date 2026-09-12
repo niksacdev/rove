@@ -13,6 +13,7 @@ from rove.adapters.protocols import (
     AgentAdapter,
     SimAdapter,
     StageAdapter,
+    VerifierAdapter,
     VLAAdapter,
     VLMAdapter,
 )
@@ -38,6 +39,11 @@ _AGENT_ADAPTERS = {
 
 _SIM_ADAPTERS = {
     "mock_sim": "rove.adapters.mock_sim:MockSimAdapter",
+}
+
+_VERIFIER_ADAPTERS = {
+    "local_verifier": "rove.adapters.local_verifier:LocalVerifierAdapter",
+    "forward_kinematics": "rove.adapters.forward_kinematics:ForwardKinematicsAdapter",
 }
 
 # Capability → which pipeline stages a model can serve
@@ -129,6 +135,7 @@ class AdapterRegistry:
         self._vlm_cache: dict[str, VLMAdapter] = {}
         self._vla_cache: dict[str, VLAAdapter] = {}
         self._agent_cache: dict[str, AgentAdapter] = {}
+        self._verifier_cache: dict[str, VerifierAdapter] = {}
         self._sim_cache: dict[str, SimAdapter] = {}
         self._semaphores: dict[str, asyncio.Semaphore] = {}
 
@@ -181,6 +188,9 @@ class AdapterRegistry:
         self._agent_cache[model_id] = instance
         return instance
 
+    def get_verifier(self, model_id: str) -> VerifierAdapter:
+        return _build_adapter(model_id, _VERIFIER_ADAPTERS, self._verifier_cache)
+
     def get_sim(self, model_id: str) -> SimAdapter:
         return _build_adapter(model_id, _SIM_ADAPTERS, self._sim_cache)
 
@@ -200,6 +210,17 @@ class AdapterRegistry:
     def get_adapter_for_stage(self, stage: PipelineStage, model_id: str) -> StageAdapter:
         """Resolve a model for a specific pipeline stage, validating capability."""
         ep = get_endpoint_config(model_id)
+
+        if ep.type == "verifier":
+            if (
+                stage != PipelineStage.VERIFY
+                or "verification" not in ep.capabilities
+                or ep.adapter == "forward_kinematics"
+            ):
+                raise ValueError(
+                    "Verifier cannot serve this stage or lacks verification capability"
+                )
+            return self.get_verifier(model_id)
 
         # Agent type — can serve any stage if it has the right capability
         if ep.type == "agent":
@@ -312,6 +333,22 @@ class AdapterRegistry:
             for stage_name in eligible_stages:
                 if stage_name in stages:
                     stages[stage_name].append(dict(entry))
+
+        for model_id, model_cfg in all_models.get("verifier", {}).items():
+            if (
+                "verification" in model_cfg.get("capabilities", [])
+                and model_cfg.get("adapter") != "forward_kinematics"
+            ):
+                stages["verify"].append(
+                    {
+                        "id": model_id,
+                        "display_name": model_cfg.get("display_name") or model_id,
+                        "model_type": "verifier",
+                        "adapter": model_cfg.get("adapter"),
+                        "available": model_cfg.get("adapter") in _VERIFIER_ADAPTERS,
+                        "deployment_type": "local",
+                    }
+                )
 
         # Sim environments
         for model_id, model_cfg in all_models.get("sim", {}).items():

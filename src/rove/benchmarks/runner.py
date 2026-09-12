@@ -16,7 +16,8 @@ from pathlib import Path
 
 from rove.benchmarks.models import CampaignSpec, fingerprint
 from rove.benchmarks.store import CampaignStore, now
-from rove.models.config import RoveConfig
+from rove.models.config import RoveConfig, StrategyConfig
+from rove.models.verification import AGGREGATION_VERSION
 
 
 def runtime_fingerprint() -> dict:
@@ -50,6 +51,21 @@ def runtime_fingerprint() -> dict:
     }
 
 
+def local_evaluator_versions(config: dict) -> dict:
+    from rove.adapters.local_verifier import evaluator_identity
+
+    return {
+        key: evaluator_identity(ep["config"])
+        for key, ep in config["endpoints"].items()
+        if ep.get("adapter") == "local_verifier"
+    }
+
+
+def validate_local_evaluators(campaign: dict) -> None:
+    if campaign.get("local_evaluators", {}) != local_evaluator_versions(campaign["config"]):
+        raise ValueError("Local evaluator changed; create a new campaign")
+
+
 def prepare(spec: CampaignSpec, config: RoveConfig) -> dict:
     selected = {}
     endpoints = {}
@@ -58,10 +74,8 @@ def prepare(spec: CampaignSpec, config: RoveConfig) -> dict:
             raise ValueError(f"Unknown strategy: {sid}")
         strategy = config.strategies[sid].model_dump(mode="json")
         selected[sid] = strategy
-        for stage in ("perceive", "plan", "act", "verify", "sim"):
-            ref = strategy.get(stage)
-            if ref:
-                endpoints[ref] = config.endpoints[ref].model_dump(mode="json")
+        for ref in config.strategies[sid].endpoint_refs():
+            endpoints[ref] = config.endpoints[ref].model_dump(mode="json")
     frozen = {
         "version": config.version,
         "endpoints": endpoints,
@@ -71,7 +85,18 @@ def prepare(spec: CampaignSpec, config: RoveConfig) -> dict:
     runtime = runtime_fingerprint()
     evaluators = {
         sid: {
-            "endpoint": endpoints[s["verify"]],
+            "endpoint": endpoints[
+                StrategyConfig.model_validate(s).stage_options("verify").endpoint
+            ],
+            "verify_settings": StrategyConfig.model_validate(s)
+            .stage_options("verify")
+            .model_dump(mode="json"),
+            "checks": {
+                c.endpoint: endpoints[c.endpoint]
+                for c in StrategyConfig.model_validate(s).stage_options("verify").checks
+            },
+            "aggregation_version": AGGREGATION_VERSION,
+            "local_evaluators": local_evaluator_versions(frozen),
             "verify_mode": s["verify_mode"],
             "pipeline_mode": s["pipeline_mode"],
             "compute_dynamics": s["compute_dynamics"],
@@ -98,10 +123,11 @@ def prepare(spec: CampaignSpec, config: RoveConfig) -> dict:
         "spec": spec.model_dump(mode="json"),
         "config": frozen,
         "runtime": runtime,
+        "local_evaluators": local_evaluator_versions(frozen),
         "config_hash": fingerprint(frozen),
         "comparison_keys": comparisons,
         "strategy_definitions": selected,
-        "evidence_kind": "synthetic_or_mixed" if synthetic else "model_judgment",
+        "evidence_kind": "synthetic_or_mixed" if synthetic else "configured_verifier",
         "model_versions": {
             key: {
                 "adapter": e.get("adapter"),
@@ -177,6 +203,7 @@ async def run_attempt(request: dict, timeout_s: float) -> dict:
 async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) -> None:
     with campaign_lock(store, campaign_id):
         campaign = store.get(campaign_id)
+        validate_local_evaluators(campaign)
         if campaign["runtime"] != runtime_fingerprint():
             raise ValueError("Runtime changed; create a new campaign instead of mixing revisions")
         if campaign["status"] == "completed":
@@ -198,6 +225,7 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                     for strategy in spec.strategies:
                         if (task.id, strategy, seed) in done:
                             continue
+                        validate_local_evaluators(campaign)
                         if campaign["runtime"] != runtime_fingerprint():
                             raise ValueError(
                                 "Runtime changed during campaign; start a new campaign"
@@ -240,6 +268,10 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                         )
                         if campaign["runtime"] != runtime_fingerprint():
                             record.update(outcome="unknown", execution="runtime_changed")
+                        try:
+                            validate_local_evaluators(campaign)
+                        except ValueError:
+                            record.update(outcome="unknown", execution="evaluator_changed")
                         store.finish_trial(campaign_id, record)
                         if progress:
                             await progress(record)
