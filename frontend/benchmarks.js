@@ -1,5 +1,15 @@
 "use strict";
 const $ = id => document.getElementById(id);
+function updateThemeLabel() {
+  $("themeToggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode";
+}
+$("themeToggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("rove-theme", next); } catch { /* Keep the in-page theme usable. */ }
+  updateThemeLabel();
+});
+updateThemeLabel();
 let taskData = [];
 let loadedSpec = null;
 async function request(url, options) {

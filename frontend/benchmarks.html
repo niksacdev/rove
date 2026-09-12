@@ -4,14 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ROVE · Benchmarks</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
+    catch { document.documentElement.dataset.theme = "dark"; }
+  </script>
+  <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/benchmarks.css">
   <script src="/static/benchmarks.js" defer></script>
 </head>
 <body>
-  <header><a href="/">ROVE / Evaluation</a><span>BENCHMARKS</span></header>
-  <main>
-    <p class="eyebrow">REPEAT · COMPARE · INSPECT</p>
-    <h1>One success is a start.<br>Measure what repeats.</h1>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header>
+    <a href="/" class="brand" aria-label="ROVE evaluation">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/>
+        <circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/>
+      </svg>
+      <strong>ROVE</strong><span class="divider">/</span><span>Benchmarks</span>
+    </a>
+    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/benchmarks.html" aria-current="page">Benchmarks</a></nav>
+    <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
+  </header>
+  <main id="main">
+    <h1>Benchmarks</h1>
     <p class="intro">Run a fixed set of tasks across pipeline configurations. Compare success with retries, repeatability, and the evidence behind every result.</p>
     <p class="notice">Current scores use your configured verify stage. Mock results are synthetic; model judgments do not establish observed robot task success.</p>
     <div class="layout">
