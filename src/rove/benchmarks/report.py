@@ -31,7 +31,13 @@ def report_data(
         summary = summarize(previous, previous_trials)
         for row in summary["strategies"]:
             sid = row["strategy_id"]
-            if previous["comparison_keys"].get(sid) != campaign["comparison_keys"].get(sid):
+            same_assessment = all(
+                previous.get(key) == campaign.get(key)
+                for key in ("contract_id", "contract", "dataset_revision_id", "metric_scope")
+            )
+            if not same_assessment or previous["comparison_keys"].get(sid) != campaign[
+                "comparison_keys"
+            ].get(sid):
                 excluded += 1
                 continue
             trends.append(
@@ -39,6 +45,16 @@ def report_data(
                     "campaign_id": previous["id"],
                     "created_at": previous["created_at"],
                     "revision": previous["spec"]["revision"],
+                    "metric_scope": previous.get("metric_scope", "configured_verification"),
+                    "contract_id": previous.get("contract_id"),
+                    "assessment_ids": sorted(
+                        {
+                            identity
+                            for trial in previous_trials
+                            if trial["strategy_id"] == sid
+                            for identity in trial.get("assessment_ids", [])
+                        }
+                    ),
                     **row,
                 }
             )
@@ -57,7 +73,22 @@ def to_csv(data: dict) -> str:
     stream = io.StringIO()
     writer = csv.writer(stream)
     writer.writerow(
-        ["task", "strategy", "seed", "outcome", "execution", "latency_ms", "attempt_wall_ms"]
+        [
+            "task",
+            "strategy",
+            "seed",
+            "outcome",
+            "execution",
+            "latency_ms",
+            "attempt_wall_ms",
+            "trial_id",
+            "configured_outcome",
+            "assessment_ids",
+            "metric_scope",
+            "contract_id",
+            "dataset_revision_id",
+            "assessment_set_hash",
+        ]
     )
     for trial in data["trials"]:
         writer.writerow(
@@ -72,6 +103,15 @@ def to_csv(data: dict) -> str:
                     "latency_ms",
                     "attempt_wall_ms",
                 )
+            ]
+            + [
+                trial.get("trial_id", ""),
+                trial.get("configured_outcome", trial.get("outcome", "")),
+                json.dumps(trial.get("assessment_ids", [])),
+                data.get("assessments", {}).get("scope", "configured_verification"),
+                data["campaign"].get("contract_id", ""),
+                data["campaign"].get("dataset_revision_id", ""),
+                data.get("assessments", {}).get("assessment_set_hash", ""),
             ]
         )
     return stream.getvalue()
@@ -266,6 +306,9 @@ pre{{white-space:pre-wrap;overflow-wrap:anywhere}}.notice{{border-left:4px solid
 .table{{overflow:auto}}h1{{letter-spacing:-.04em}}small{{color:#526078}}</style>
 <script>{get_plotlyjs()}</script></head><body>
 <p>ROVE / BENCHMARK REPORT</p><h1>{escape(campaign["spec"]["name"])}</h1>
+<p>Assessment scope: {escape(data.get("assessments", {}).get("scope", "configured_verification"))}.
+{escape(data.get("assessments", {}).get("note", "Metrics reflect the configured verification stage."))}</p>
+<details><summary>Assessment revisions used in this report</summary><pre>{escape(json.dumps(data.get("assessments", {}), indent=2))}</pre></details>
 <p>{escape(campaign["spec"]["suite_version"])} · revision {escape(campaign["spec"]["revision"])} · {escape(campaign["status"])}</p>
 <p class="notice"><strong>{escape(campaign["evidence_kind"])}</strong> — {escape(campaign["grading_note"])}</p>
 <p>{summary["completed_trials"]} of {summary["planned_trials"]} attempts recorded.

@@ -9,13 +9,13 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | ADR | Decision status | Implementation |
 | --- | --- | --- |
 | [017: Configured verification](ADR-017-configured-verification.md) | Accepted, retrospective | Implemented in PR #14 |
-| [018: Trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md) | Proposed | Shared quick-trial recording and baseline lineage pending |
-| [019: Relational storage and assets](ADR-019-relational-storage-and-assets.md) | Accepted direction | Campaign SQLite exists; shared storage/assets pending |
-| [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Proposed | Review records, UI and dataset freezing pending |
-| [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Proposed | Current pass metrics retained; setup/report extensions pending |
-| [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable events, evidence navigation and aligned inspection pending |
-| [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline retained; recording and lifecycle extensions pending |
-| [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Compatibility validation and implementation pending |
+| [018: Trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md) | Accepted | Shared trial recording, case revisions, baseline references and exploratory promotion implemented |
+| [019: Relational storage and assets](ADR-019-relational-storage-and-assets.md) | Accepted direction | Shared trial/case/review schema and managed images implemented; campaign journal remains separate |
+| [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Accepted | Local review drafts, immutable corrections and previewed dataset freezing implemented |
+| [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Accepted | Success contracts, preview and assessment comparison implemented; aggregate targets pending |
+| [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable event and inspector foundation implemented; aligned traces and complete external export pending |
+| [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline and shared recording retained; complete robot lifecycle contracts pending |
+| [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime and controlled transport proof implemented; live provider/collector validation pending |
 
 ## How the decisions connect
 

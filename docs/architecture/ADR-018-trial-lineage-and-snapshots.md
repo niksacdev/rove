@@ -1,11 +1,11 @@
 # ADR-018: Preserve trial identity and campaign version lineage
 
-**Status:** Proposed
-**Implementation status:** Follow-up design; shared quick-trial recording and lineage are pending
+**Status:** Accepted
+**Implementation status:** Shared trial snapshots, case revisions, baseline references, component comparison and exploratory quick promotion implemented locally
 **Date:** 2026-09-12
 **Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [ADR-019](ADR-019-relational-storage-and-assets.md)
 
-## Context
+## Context at proposal
 
 Campaigns already freeze configuration and store attempts, but quick evaluations use a
 separate history path and assemble provenance after execution. Configuration hashes do
@@ -66,11 +66,27 @@ produce three trials, even when launched by one Run action.
 
 ## Implementation boundaries and acceptance
 
+The local customer workflow now implements immutable case revisions, baseline
+campaign/strategy references and comparison under matching case, contract and
+repetition conditions. Quick promotion atomically creates a case revision and a
+`quick_promotions` reference to the original trial. The original trial and outcome
+remain unchanged; new campaigns schedule their own attempts. Operation IDs prevent
+duplicate promotion after retries.
+
+Case membership, selected reviews and success contracts are frozen in SQLite.
+Comparison remains conservative about changed graders and unattributed runtime
+changes. Rich campaign timelines, synchronized trace comparison and physical reset
+reproduction remain outside this implementation. See
+[current implementation](current-implementation.md) and
+[promotion tests](../../tests/test_promotion.py).
+
 Extend [campaign models/store](../../src/rove/benchmarks/store.py),
 [snapshot preparation](../../src/rove/benchmarks/runner.py),
 [report comparison](../../src/rove/benchmarks/report.py), and
 [quick evaluation/history](../../src/rove/api/app.py). Existing
-[campaign tests](../../tests/test_benchmarks.py) cover interruption and drift, not this full design.
+[campaign tests](../../tests/test_benchmarks.py) cover interruption and drift;
+[dataset](../../tests/test_datasets.py) and [promotion](../../tests/test_promotion.py)
+tests cover the implemented local revision and lineage rules.
 
 - Restart retains every started quick trial; recovery never silently retries robot actions.
 - Strategy or input edits cannot change an old trial's saved explanation.

@@ -125,16 +125,28 @@ model latency or robot throughput benchmark.
 `tests/test_copilot_runtime.py` independently exercises missing usage, duplicate
 events, role restrictions, content capture, recorder failure, size/count limits,
 malformed output, partial startup, timeout, cancellation, resource cleanup, image
-delivery and trace identity handling. The offline unreachable-collector fixture
-checks the host's separation from export transport; it is not proof of a live
-Collector outage or Azure/Grafana interoperability.
+delivery and trace identity handling. `tests/test_telemetry_resilience.py` also
+runs the pinned SDK/CLI against a real local OTLP HTTP endpoint returning 503.
+It verifies that native trace payloads reach that endpoint, runtime cleanup
+finishes within its five-second bound (with scheduler tolerance), and a reopened
+SQLite journal retains the completed synthetic outcome and both usage events.
+Separate real OpenTelemetry SDK exporter tests return failure or raise an
+exception without losing local span events or the terminal result. CLI discovery
+checks installed, packaged and cached runtimes without downloading one; the native
+test skips when the pinned executable is unavailable.
+
+This proves resilience to controlled, responsive collector failure. It does not
+establish behavior for every network blackhole, an indefinitely blocked custom
+exporter, or Azure/Grafana interoperability. ROVE's optional private Python tracer
+still has no external exporter configured by default.
 
 ## Remaining Validation Gates
 
 - One explicitly configured real provider, including image handling and supplied usage.
 - Azure endpoint and bearer-token refresh against an authorized customer environment.
 - ROVE trial root spans connected to native runtime/tool spans and persisted identities.
-- Actual Collector outage, bounded export shutdown and external trace navigation.
+- Blackholed collector/blocked exporter behavior and external trace navigation;
+  controlled HTTP 503 outage and bounded native cleanup are covered locally.
 - Long-running tool cancellation and declared environment acknowledgement semantics.
 - SDK/CLI upgrade matrix, supported platforms and measured startup overhead under concurrent campaigns.
 

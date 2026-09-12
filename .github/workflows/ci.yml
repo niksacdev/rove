@@ -32,7 +32,8 @@ jobs:
           node --check frontend/app.js
           node --check frontend/benchmarks.js
           node --check frontend/history.js
-          node --test tests/test_history_ui.cjs
+          node --check frontend/datasets.js
+          node --test tests/test_history_ui.cjs tests/test_datasets_ui.cjs
       - name: Regression tests and mock report
         run: |
           uv run --frozen pytest -q

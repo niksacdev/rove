@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROVE · Cases and datasets</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
+    catch { document.documentElement.dataset.theme = "dark"; }
+  </script>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/history.css">
+  <link rel="stylesheet" href="/static/datasets.css">
+  <script src="/static/datasets.js" defer></script>
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header class="history-header">
+    <a href="/" class="brand" aria-label="ROVE evaluation">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/><circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/></svg>
+      <strong>ROVE</strong><span>/</span><span>Cases and datasets</span>
+    </a>
+    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/datasets.html" aria-current="page">Cases</a><a href="/static/benchmarks.html">Benchmarks</a><a href="/static/history.html">History</a></nav>
+    <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
+  </header>
+  <main id="main">
+    <div class="page-heading"><div><h1>Your tasks. Your evaluation data.</h1><p class="intro">Bring observations, define success, inspect a baseline, and freeze what your team has reviewed.</p></div><button type="button" id="showImport">Add cases</button></div>
+    <ol class="journey" aria-label="Evaluation workflow"><li><span>1</span>Bring data and define success</li><li><span>2</span>Run a baseline</li><li><span>3</span>Review cases and outputs</li><li><span>4</span>Freeze a dataset</li></ol>
+    <details id="assistantPanel" class="workspace-panel assistant-panel">
+      <summary>Evaluation assistant <span class="muted">Optional Copilot guidance</span></summary>
+      <p id="assistantStatus" class="muted" role="status">Checking assistant availability…</p>
+      <form id="assistantForm"><label>Ask about your selected cases or campaign<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="What can we assess on these cases, and what evidence is missing?" required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Ask assistant</button></form>
+      <div id="assistantResponse" aria-live="polite"></div>
+    </details>
+    <p id="message" role="status" aria-live="polite"></p>
+    <details id="importPanel" class="workspace-panel import-panel" open>
+      <summary>Add a robotics case</summary>
+      <p class="muted">Start with a scene image and instruction. You can assess a plan before you have robot execution evidence.</p>
+      <form id="caseForm">
+        <p id="caseEditStatus" class="muted">New case. Saved inputs receive an immutable revision.</p>
+        <div class="form-grid">
+          <label>Case name<input id="caseName" required maxlength="160" placeholder="Red part into bin A"></label>
+          <label>Observation image<input id="caseImage" type="file" accept="image/png,image/jpeg" required></label>
+          <label class="full-width">Task instruction<textarea id="caseTask" rows="2" required placeholder="Pick the red part and place it in bin A without disturbing the adjacent part."></textarea></label>
+        </div>
+        <p class="notice">Images and tasks can support output assessment. Recorded robot completion needs episode evidence with its producing configuration and units.</p>
+        <details><summary>Advanced: context and episode evidence</summary>
+          <label>Recorded episode evidence (JSON)<textarea id="episodeEvidence" rows="4" spellcheck="false" placeholder="Optional episode evidence, producing system and reset identity; never sent as candidate context"></textarea></label>
+          <label>Evaluation conditions (JSON)<textarea id="caseConditions" rows="2" spellcheck="false" placeholder="Optional environment and test conditions"></textarea></label>
+          <label>Candidate-visible context (JSON)<textarea id="candidateContext" rows="2" spellcheck="false" placeholder="Optional constraints and observations; do not include private labels"></textarea></label>
+        </details>
+        <div class="form-actions"><button id="saveCase" type="submit">Save case</button><button id="cancelCaseRevision" type="button" class="secondary" hidden>Cancel revision</button><button id="loadExamples" type="button" class="secondary">Try robotics sample cases</button></div>
+      </form>
+    </details>
+    <div class="case-workspace">
+      <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">
+        <div class="panel-heading"><h2 id="casesHeading">Cases</h2><button id="refreshCases" type="button" class="secondary">Refresh</button></div>
+        <p class="muted">Select cases for a baseline or frozen dataset. Open a case to inspect and review it.</p>
+        <div class="selection-bar"><label><input id="selectPage" type="checkbox"> Select this page</label><span id="selectionCount" class="muted">0 selected</span></div>
+        <p id="caseListStatus" class="muted" role="status" aria-live="polite">Loading cases…</p>
+        <ul id="caseList" class="case-list"></ul>
+        <div class="pagination"><button id="previousCases" class="secondary" type="button" disabled>Previous</button><span id="casePageLabel" class="muted"></span><button id="nextCases" class="secondary" type="button" disabled>Next</button></div>
+      </section>
+      <section id="caseInspector" class="workspace-panel" aria-labelledby="caseDetailHeading"><div class="empty-state"><h2 id="caseDetailHeading" tabindex="-1">Inspect a case</h2><p>See its success contract, available measures, baseline outputs and expert reviews.</p></div></section>
+    </div>
+    <section id="baselinePanel" class="workspace-panel" aria-labelledby="baselineHeading">
+      <h2 id="baselineHeading">Run a baseline on selected cases</h2>
+      <p class="muted">Start with a small pilot. The campaign freezes selected cases and strategy settings before any attempt runs.</p>
+      <details id="contractPanel">
+        <summary>Define a reusable success contract</summary>
+        <form id="contractForm">
+          <div class="form-grid"><label>Contract name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>Assessment scope<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Grading method<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">Required acceptance criterion<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
+          <label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
+          <p id="scopeHint" class="notice">Output acceptance does not establish observed robot task success.</p>
+          <details><summary>Advanced: exact success contract (JSON)</summary><label>Override the fields above with a versioned contract<textarea id="contractJson" rows="4" spellcheck="false" placeholder="Optional complete success contract with named criteria and metrics"></textarea></label></details>
+          <button type="submit" id="saveContract">Save success contract</button>
+        </form>
+      </details>
+      <form id="baselineForm">
+        <label>Success contract<select id="campaignContract" required><option value="">Choose a saved contract</option></select></label>
+        <div class="form-grid"><label>Campaign name<input id="campaignName" value="Customer baseline" required maxlength="160"></label><label>Strategy<select id="campaignStrategy" required><option value="">Loading strategies…</option></select></label><label>Repeats per case<input id="campaignRepeats" type="number" min="1" max="1000" value="3" required></label><label>Attempt timeout (seconds)<input id="campaignTimeout" type="number" min="1" max="3600" value="120" required></label></div>
+        <p id="campaignBudget" class="notice">Select cases and a strategy to preview your campaign.</p>
+        <div id="campaignMeasures" class="metric-preview"></div>
+        <div class="form-actions"><button id="previewCampaign" type="button" class="secondary">Preview success and measures</button><button id="startBaseline" type="submit" disabled>Run this baseline</button></div>
+        <p id="campaignStatus" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section id="resultsPanel" class="workspace-panel" aria-labelledby="resultsHeading">
+      <div class="panel-heading"><h2 id="resultsHeading">Campaign results and improvements</h2><button id="refreshCampaigns" type="button" class="secondary">Refresh results</button></div>
+      <label>Saved campaign<select id="resultCampaign"><option value="">Choose a campaign</option></select></label>
+      <div id="campaignResults"><p class="muted">Open a baseline to inspect assessed outcomes and prepare one controlled change.</p></div>
+      <details id="ablationPanel" hidden>
+        <summary>Compare a changed strategy against this campaign</summary>
+        <p class="muted">Keep cases, success criteria and repetition conditions fixed. Inspect all changed components before running a candidate.</p>
+        <form id="ablationForm"><div class="form-grid"><label>Baseline strategy<select id="baselineStrategy" required></select></label><label>Candidate strategy<select id="candidateStrategy" required><option value="">Choose a candidate</option></select></label><label>Candidate campaign name<input id="ablationName" value="Candidate ablation" required maxlength="160"></label><label>Intended change<input id="intendedChange" placeholder="For example: use a different planning model" maxlength="2000"></label></div><div id="ablationPreview" class="notice">Preview to confirm that conditions match and see every recorded difference.</div><div class="form-actions"><button id="previewAblation" type="button" class="secondary">Preview comparison</button><button id="runAblation" type="submit" disabled>Run candidate</button></div></form>
+      </details>
+      <div id="comparisonResults"></div>
+    </section>
+    <section id="freezePanel" class="workspace-panel" aria-labelledby="freezeHeading">
+      <h2 id="freezeHeading">Freeze a reviewed dataset</h2>
+      <p class="muted">Keep exact case and review revisions for future evaluations. Failed baseline outputs can still belong to a useful dataset; output ratings are not reusable ground truth.</p>
+      <form id="freezeForm"><div class="form-grid"><label>Dataset name<input id="datasetName" value="Customer evaluation set" required maxlength="160"></label><label>Previous revision (optional)<select id="datasetParent"><option value="">First revision</option></select></label></div><div id="freezePreview" class="notice">Select cases, review them, then preview the exact revisions to freeze.</div><div class="form-actions"><button id="previewFreeze" class="secondary" type="button">Preview selected revisions</button><button id="freezeDataset" type="submit" disabled>Freeze this revision</button></div></form>
+      <div class="inspector-section"><h3>Frozen datasets</h3><div id="datasetList"><p class="muted">Loading frozen datasets…</p></div></div>
+    </section>
+  </main>
+</body>
+</html>

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from rove.trials.snapshots import canonical_json, sanitize, snapshot
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_EVENT_BYTES = 256 * 1024
 MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_ASSET_BYTES = 64 * 1024 * 1024
@@ -42,7 +42,7 @@ class TrialStore:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, SCHEMA_VERSION}:
+            if version not in {0, 1, SCHEMA_VERSION}:
                 raise ValueError(f"Unsupported trial schema version: {version}")
             if version == 0:
                 for statement in (
@@ -68,6 +68,10 @@ class TrialStore:
                         media_type TEXT NOT NULL)""",
                 ):
                     db.execute(statement)
+            if version < 2:
+                from rove.datasets.schema import migrate_v2
+
+                migrate_v2(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         self.path.chmod(0o600)
 
@@ -201,7 +205,13 @@ class TrialStore:
             raise KeyError(trial_id)
         return self._record(row)
 
-    def list(self, limit: int = 50, offset: int = 0, source: str | None = None) -> list[dict]:
+    def list(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        source: str | None = None,
+        case_revision_id: str | None = None,
+    ) -> list[dict]:
         self._page(limit, offset)
         query = (
             """SELECT t.*, (SELECT count(*) FROM events e WHERE e.trial_id=t.id)
@@ -213,12 +223,37 @@ class TrialStore:
                 ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?"""
         )
         args = (source, limit, offset) if source is not None else (limit, offset)
+        if case_revision_id is not None:
+            query = (
+                """SELECT t.*, (SELECT count(*) FROM events e WHERE e.trial_id=t.id)
+                    AS event_count FROM trials t WHERE json_extract(task,'$.case_revision_id')=?
+                    AND source=? ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?"""
+                if source is not None
+                else """SELECT t.*, (SELECT count(*) FROM events e WHERE e.trial_id=t.id)
+                    AS event_count FROM trials t WHERE json_extract(task,'$.case_revision_id')=?
+                    ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?"""
+            )
+            args = (
+                (case_revision_id, source, limit, offset)
+                if source is not None
+                else (case_revision_id, limit, offset)
+            )
         with self.connect() as db:
             rows = db.execute(query, args).fetchall()
         return [self._record(row) for row in rows]
 
-    def count(self, source: str | None = None) -> int:
+    def count(self, source: str | None = None, case_revision_id: str | None = None) -> int:
         with self.connect() as db:
+            if case_revision_id is not None:
+                if source is not None:
+                    return db.execute(
+                        "SELECT count(*) FROM trials WHERE json_extract(task,'$.case_revision_id')=? AND source=?",
+                        (case_revision_id, source),
+                    ).fetchone()[0]
+                return db.execute(
+                    "SELECT count(*) FROM trials WHERE json_extract(task,'$.case_revision_id')=?",
+                    (case_revision_id,),
+                ).fetchone()[0]
             if source is None:
                 return db.execute("SELECT count(*) FROM trials").fetchone()[0]
             return db.execute("SELECT count(*) FROM trials WHERE source=?", (source,)).fetchone()[0]

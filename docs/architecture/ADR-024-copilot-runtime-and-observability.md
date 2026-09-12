@@ -1,7 +1,7 @@
 # ADR-024: Use Copilot SDK for ROVE-Owned Agents and Reuse Its Telemetry
 
 **Status:** Accepted direction
-**Implementation status:** First slice implemented: controlled SDK/CLI proof, optional hosted stages, shared trial journal and local inspector. Live-provider/export validation and assistant tools remain pending.
+**Implementation status:** Controlled SDK/CLI proof, optional hosted stages, shared trial journal, local inspector and scoped evaluation assistant implemented. Live-provider/export validation and broader assistant mutations remain future work.
 **Date:** 2026-09-12
 **Supersedes in part:** [ADR-023](ADR-023-evaluation-and-execution-harnesses.md), for runtime ownership; ROVE retains its evaluation responsibilities
 **Amends:** [ADR-022](ADR-022-trial-telemetry.md), with SDK events and OpenTelemetry as telemetry sources
@@ -32,7 +32,9 @@ required checks, durable evidence, metric arithmetic and baseline relationships.
 
 ```mermaid
 flowchart TD
-    A["Proposed evaluation assistant: Copilot"] -.->|"Future validated tools"| C["ROVE campaign and trial services"]
+    A["Evaluation assistant: Copilot"] -->|"Read and preview tools"| C["ROVE campaign and trial services"]
+    A --> H["Host-issued preview confirmation"]
+    H -->|"Revalidate then launch"| C
     C --> H["Configured hosted agent: Copilot"]
     C --> X["Direct customer agent / model adapter"]
     H --> E["Outputs and observed evidence"]
@@ -47,12 +49,19 @@ flowchart TD
     D --> R["Trial history and evidence inspector"]
 ```
 
-An assistant may start a campaign through a tool; the tool's service validates the
+The original direction allowed an assistant to start a campaign through a tool; the tool's service validates the
 request and records its identity before dispatch. The assistant does not count
 trials from conversational memory. A model-based grader is permitted, but its
 rubric, role and evidence are independently identified; required checks and report
 arithmetic remain explicit code. Adaptive case selection must be a declared
 evaluation protocol, not an unrecorded assistant choice within a fixed campaign.
+
+**Local implementation amendment, 12 September 2026:** the assistant receives read
+and preview tools. A separate host confirmation revalidates the exact prepared
+campaign and starts it with a stable operation ID. Media uploads, case edits and
+SME judgments remain explicit user actions. This completes the local prepare,
+launch and inspect interaction without permitting an agent to manufacture expert
+review. Broader mutation tools remain optional extensions of the original direction.
 
 ## Customer System Boundary
 

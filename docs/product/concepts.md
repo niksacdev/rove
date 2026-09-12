@@ -6,15 +6,15 @@ can assess scene understanding or a proposed plan before robot execution evidenc
 is available. The report must make that scope clear.
 
 A robotics team can start with its own images and task instructions, choose a
-supported system configuration and collect initial outputs. The proposed onboarding
+supported system configuration and collect initial outputs. The local onboarding
 workflow turns those outputs into a reviewed baseline for a stated customer outcome:
 for example, whether a planning agent produces an acceptable placement plan. It
 does not require a VLA or a complete robot recording to be useful.
 
 This page defines the product vocabulary and distinguishes it from the current
-implementation. Current behavior was checked against commit `3bfd485` on
-12 September 2026. The versioned case, review and campaign workflows below are
-**proposed**, not existing API or UI capabilities.
+implementation as of the customer workflow slice on 12 September 2026. Versioned
+cases, explicit reviews, dataset freezing and baseline references are implemented;
+complete robot reset contracts and general recording ingestion remain future work.
 
 ## One Attempt Has One Identity
 
@@ -33,9 +33,9 @@ flowchart TD
     P --> B["Baseline and ablation comparisons"]
 ```
 
-This is the target hierarchy. A quick trial will not require a campaign name before
-execution. Promoting it later will reference the same trial rather than manufacture
-another attempt. New planned repetitions receive their own identities.
+This hierarchy now has local implementation support. A quick trial needs no campaign
+name before execution. Promotion preserves the same trial as an exploratory reference
+and creates a reusable input case without manufacturing another attempt. New planned repetitions receive their own identities.
 
 The vocabulary follows the distinction between a test case, an individual attempt
 and its outcome in [Anthropic's evaluation guidance](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
@@ -47,11 +47,11 @@ An Experiment or Session container is not needed alongside Campaign.
 | Case | A task with specific starting inputs, conditions and criteria | Place the red block in the bin, starting from this camera view and reset state |
 | Task instruction | What the agent is asked to do; part of a case | “Place the red block in the bin” |
 | Strategy | Reusable system configuration built from supported adapters and pipeline stages | Models, agent runtime, tools and action components for the relevant stages, with declared grading |
-| System snapshot | Proposed frozen record of the strategy and component versions used | Policy checkpoint, prompt, action convention and controller revision |
+| System snapshot | Frozen record of the strategy and component versions used | Policy checkpoint, prompt, action convention and controller revision |
 | Trial | One strategy attempting one case once | One placement attempt, including any actions within that attempt |
 | Campaign | A named evaluation across cases, configurations and repetitions | Ten placement cases evaluated five times per strategy |
-| Baseline / ablation | Proposed roles and links between exact campaign versions and system snapshots | Compare a changed policy with the baseline under the same grading criteria |
-| Dataset revision | Proposed frozen case selection, annotations and grading revisions; managed under Cases | SME-approved placement cases and labels, including difficult or failed examples |
+| Baseline / ablation | Roles and links between exact campaign versions and system snapshots | Compare a changed policy with the baseline under the same grading criteria |
+| Dataset revision | Frozen case selection, annotations and grading revisions; managed under Cases | SME-approved placement cases and labels, including difficult or failed examples |
 | Provenance | Identity and origin metadata attached to records, not another container | Input hash, evaluator revision, producing system and evidence origin |
 | History | A view of saved work | Quick trials, campaign attempts and their later reviews |
 
@@ -61,7 +61,7 @@ copying the recordings or treating a dataset as an execution.
 
 The strategy is the system under test. Current optional stages and the generic
 agent adapter allow different system shapes; integration still requires an adapter
-that implements ROVE's stage contracts. The proposed case input requirements follow
+that implements ROVE's stage contracts. Case input requirements follow
 the evaluation profile. An image-to-plan agent needs the image, instruction and
 planning rubric; it should not be forced to supply URDF or joint state. A modeled
 trajectory check or a physical completion assessment needs the additional geometry,
@@ -77,9 +77,9 @@ another Cases/Trials/Campaigns container. See the
 and [runtime decision](../architecture/ADR-024-copilot-runtime-and-observability.md).
 
 A **trace** links recorded events and outputs for a trial. A **measurement** is a
-value with its unit, source quality, scope and evidence reference. Some current
-live events are not retained; the proposed [trial inspector](traces-and-measurements.md)
-requires durable, source-linked records rather than assuming full telemetry exists.
+value with its unit, source quality, scope and evidence reference. The [trial inspector](traces-and-measurements.md) retains the events exposed by
+the orchestrator and optional SDK; unsupported customer-internal calls are not
+reconstructed. Durability does not imply that every source supplies full telemetry.
 
 ## Evidence Determines What a Result Means
 
@@ -99,7 +99,7 @@ The bundled placement verifier evaluates supplied final observations. Regrading
 the same recording with a new evaluator creates another **assessment**, not another
 robot attempt or evidence that a new policy improved.
 
-In the proposed review workflow, an SME can validate a case, approve reusable
+In the local review workflow, an SME can validate a case, approve reusable
 annotations and rate a particular trial output. These remain separate records.
 A baseline output is not automatically ground truth; a different valid solution
 must be allowed. A reviewed plan does not become observed physical completion.
@@ -107,16 +107,16 @@ See [evaluation workflows](evaluation-workflows.md) for review and dataset freez
 
 ## What Exists Today
 
-| Product concept | Current implementation | Proposed change |
+| Product concept | Current implementation | Remaining extension |
 | --- | --- | --- |
-| Case | `BenchmarkTask` stores an ID, instruction, inline image and optional example data; gallery entries reference image files | Shared immutable case versions and asset references |
-| Trial | Campaign attempts have a task/strategy/seed key within a campaign; quick evaluation results group selected strategies under one evaluation ID | Stable trial IDs shared by quick runs and campaigns |
-| Campaign | Campaign preparation freezes selected task inputs and configuration for one saved execution | Explicit version lineage, baseline selection and clone-to-ablation |
-| Strategy and provenance | Strategies resolve configured endpoints; campaigns save selected configuration and fingerprints; quick results save lighter metadata | Shared snapshots captured before execution, with component differences |
-| History | Completed quick evaluations use JSONL and browser storage; campaigns use SQLite | One durable, indexed recording path including interrupted quick trials |
-| Dataset and SME review | Some examples provide existing reference labels | Review queue, case/output reviews and frozen dataset revisions |
-| Success and performance metrics | Configured verification and required checks; pass@k, pass^k and evidence summaries | Campaign success-contract editor and robotics measures with expandable details |
-| Session | A dashboard connection-information heading; no persisted Session entity | Rename the panel to Connection |
+| Case | Immutable task/input revisions with managed PNG/JPEG assets and separate recorded evidence | General recording/video ingestion |
+| Trial | Stable identities shared by quick and campaign attempts, persisted before execution | Complete robot reset and episode identity contracts |
+| Campaign | Frozen selected inputs/configuration, explicit baseline references and clone-to-ablation | Richer campaign version navigation |
+| Strategy and provenance | Frozen snapshots and component comparisons | Archival of remote weights and auxiliary artifacts |
+| History | Durable indexed records, interrupted-work recovery and exploratory promotion | Aligned trace graphs and recording ranges |
+| Dataset and SME review | Attributed drafts, immutable corrections, explicit annotations and frozen membership | Automatic mapping to configured graders and team adjudication |
+| Success and performance metrics | Frozen contracts, expected-metric preview, existing pass metrics and per-output review | Aggregate campaign targets and evidence-backed autonomy/recovery aggregation |
+| Session | Existing connection information; no additional persisted evaluation container | Keep connection and internal runtime session details separate from campaigns |
 
 The source types are in [benchmark models](../../src/rove/benchmarks/models.py)
 and [shared models](../../src/rove/models/core.py). The quick-history and Session
@@ -137,8 +137,7 @@ evidence coverage. Several of these require signals that current adapters do not
 supply. They must show **not measured** when unavailable, with expandable details
 explaining the evidence, denominator and assessment scope. Robot completion time
 and pipeline wall time are separate quantities. See
-[success and metrics](metrics-and-success.md) for current support and the proposed
-contract.
+[success and metrics](metrics-and-success.md) for current support and remaining contract extensions.
 
 The design principles are simple: capture every attempt, preserve what was known
 when it ran, keep evidence separate from judgments, and compare configurations

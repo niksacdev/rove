@@ -41,12 +41,25 @@ class CampaignStore:
         finally:
             db.close()
 
-    def create(self, payload: dict) -> str:
-        campaign_id = uuid.uuid4().hex
+    def create(self, payload: dict, operation_id: str | None = None) -> str:
+        campaign_id = (
+            uuid.uuid5(uuid.NAMESPACE_URL, "rove-campaign:" + operation_id).hex
+            if operation_id
+            else uuid.uuid4().hex
+        )
+        encoded = json.dumps(payload, allow_nan=False, sort_keys=True)
         with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT payload FROM campaigns WHERE id=?", (campaign_id,)
+            ).fetchone()
+            if existing:
+                if json.loads(existing["payload"]) != payload:
+                    raise ValueError("Operation ID already belongs to different campaign settings")
+                return campaign_id
             db.execute(
                 "INSERT INTO campaigns VALUES (?, ?, 'pending', ?)",
-                (campaign_id, now(), json.dumps(payload, allow_nan=False)),
+                (campaign_id, now(), encoded),
             )
         return campaign_id
 

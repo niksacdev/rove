@@ -29,7 +29,7 @@ def create_router(root: Path) -> APIRouter:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
-    router = APIRouter(prefix="/api/campaigns", lifespan=lifespan)
+    router = APIRouter(prefix="/api/campaigns")
 
     def store() -> CampaignStore:
         return CampaignStore(root)
@@ -80,10 +80,14 @@ def create_router(root: Path) -> APIRouter:
 
     @router.get("/{campaign_id}")
     async def detail(campaign_id: str):
+        from rove.benchmarks.workflow import assessed_trials
+
         campaign = get(campaign_id)
+        trials, assessments = assessed_trials(root, campaign, store().trials(campaign_id))
         return {
             "campaign": public_campaign(campaign),
-            "summary": summarize(campaign, store().trials(campaign_id)),
+            "summary": summarize(campaign, trials),
+            "assessments": assessments,
         }
 
     @router.post("/{campaign_id}/cancel")
@@ -110,10 +114,14 @@ def create_router(root: Path) -> APIRouter:
 
     @router.get("/{campaign_id}/report")
     async def report(campaign_id: str, format: str = "html"):
+        from rove.benchmarks.workflow import assessed_trials
+
         campaign = get(campaign_id)
         db = store()
-        history = [(c, db.trials(c["id"])) for c in db.list()]
-        data = report_data(campaign, db.trials(campaign_id), history)
+        history = [(c, assessed_trials(root, c, db.trials(c["id"]))[0]) for c in db.list()]
+        trials, assessments = assessed_trials(root, campaign, db.trials(campaign_id))
+        data = report_data(campaign, trials, history)
+        data["assessments"] = assessments
         headers = {"Content-Disposition": f'attachment; filename="rove-{campaign_id}.{format}"'}
         if format == "json":
             return Response(
@@ -125,4 +133,16 @@ def create_router(root: Path) -> APIRouter:
             return HTMLResponse(await asyncio.to_thread(to_html, data))
         raise HTTPException(422, "Use html, json or csv")
 
-    return router
+    from rove.api.assistant import create_assistant_router
+    from rove.api.datasets import create_dataset_router
+
+    combined = APIRouter(lifespan=lifespan)
+
+    def ensure_launched(campaign_id: str):
+        if campaign_id not in running:
+            launch(campaign_id)
+
+    combined.include_router(create_dataset_router(root, ensure_launched))
+    combined.include_router(create_assistant_router(root, ensure_launched))
+    combined.include_router(router)
+    return combined

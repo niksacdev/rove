@@ -122,8 +122,13 @@ scope. Every stage gets a separate session and temporary workspace, with no ambi
 Copilot login, filesystem tools or cross-stage conversation memory. Structured stage
 outputs still flow through ROVE's pipeline. The configured adapter currently exposes
 no robot tools and rejects `act`; use a direct action adapter for that stage.
-The shared runtime's role-scoped tool interface is a foundation for later assistant
-and robot integration work, not an existing guided assistant.
+The shared runtime also hosts an optional evaluation assistant in **Cases**. Set
+`ROVE_ASSISTANT_ENDPOINT` to an explicitly configured `copilot_agent` endpoint to
+enable evidence inspection and campaign previews. Its role-scoped tools are reads
+and previews; a separate host confirmation launches the exact validated campaign.
+Proposals expire after ten minutes or server restart. Uploaded media, case changes
+and SME decisions remain explicit UI actions. The assistant does not create expert
+judgments, import files or approve datasets. Robot tools remain future integration work.
 
 ## Storage, Recovery and Backup
 

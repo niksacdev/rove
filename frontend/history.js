@@ -18,7 +18,9 @@ function trialPresentation(trial) {
   if (checks.some(check => check.required && (check.execution !== "completed" || check.result?.verdict === "unknown"))) verdict = "unknown";
   else if (checks.some(check => check.required && check.result?.verdict === "fail") && verdict !== "unknown") verdict = "fail";
   const quality = assessment?.evidence_quality || envelope.evidence_quality || "unknown";
-  return {result, stages, output, assessment, checks, verdict, quality};
+  const pipelineVerdict = verdict;
+  if (["pass", "fail", "unknown"].includes(trial.assessment?.outcome)) verdict = trial.assessment.outcome;
+  return {result, stages, output, assessment, checks, verdict, pipelineVerdict, quality, contractAssessment: trial.assessment};
 }
 
 function trialTitle(trial) {
@@ -50,7 +52,11 @@ function eventIsError(event) {
   return /error|failed/.test(type) || data.status === "error" || (type.startsWith("tool.") && data.success === false) || Boolean(data.error);
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = {trialPresentation, trialTitle, trialStrategy, usagePresentation, eventIsError};
+function promotionEligible(trial) {
+  return trial.source === "quick" && Boolean(trial.status) && trial.status !== "running" && /^[a-f0-9]{64}$/.test(trial.task?.image_asset?.sha256 || "") && Boolean((trial.task?.task || trial.task?.instruction || "").trim());
+}
+
+if (typeof module !== "undefined" && module.exports) module.exports = {trialPresentation, trialTitle, trialStrategy, usagePresentation, eventIsError, promotionEligible};
 
 if (typeof document !== "undefined") (() => {
   const $ = id => document.getElementById(id);
@@ -78,9 +84,13 @@ if (typeof document !== "undefined") (() => {
     const element = node("section", null, "inspector-section");
     element.append(node("h3", title)); return element;
   }
-  async function request(url) {
-    const response = await fetch(url, {headers: {Accept: "application/json"}});
-    if (!response.ok) throw new Error(response.status === 404 ? "This saved trial could not be found." : `Unable to load saved evidence (HTTP ${response.status}). Try again.`);
+  async function request(url, options = {}) {
+    const response = await fetch(url, {...options, headers: {Accept: "application/json", ...options.headers}});
+    if (!response.ok) {
+      let detail;
+      try { detail = (await response.json()).detail; } catch { /* Preserve a useful fallback. */ }
+      throw new Error(typeof detail === "string" ? detail : response.status === 404 ? "This saved trial could not be found." : `Unable to access saved evidence (HTTP ${response.status}). Try again.`);
+    }
     return response.json();
   }
   function markSelected() {
@@ -134,7 +144,8 @@ if (typeof document !== "undefined") (() => {
     const checks = [];
     if (view.assessment) checks.push({endpoint: "Task assessment", role: "assessment", result: view.assessment, evaluator_version: view.output.evaluator_version});
     checks.push(...view.checks);
-    const content = section("Assessment and measurements");
+    const content = section(view.contractAssessment ? "Configured verifier and measurements" : "Assessment and measurements");
+    if (view.contractAssessment) content.append(node("p", `Recorded pipeline verdict: ${view.pipelineVerdict}. These original checks are retained separately from the contract assessment and expert reviews shown above.`, "muted"));
     const refs = new Set();
     if (!checks.length) {
       content.append(node("p", view.output.reasoning || "No structured assessment was recorded. A completed pipeline alone does not establish task success.", "muted"));
@@ -180,14 +191,32 @@ if (typeof document !== "undefined") (() => {
     const heading = node("h2", trialTitle(trial), "detail-title"); heading.id = "inspectorHeading"; heading.tabIndex = -1;
     container.append(heading, node("p", `${trialStrategy(trial)} · Trial ${trial.id}`, "muted trial-id"));
     const grid = node("div", null, "summary-grid");
-    grid.append(summaryItem("Assessment verdict", view.verdict), summaryItem("Execution", trial.status || "Unknown"), summaryItem("Evidence quality", view.quality), summaryItem("Started", date(trial.created_at)), summaryItem("Finished", trial.finished_at ? date(trial.finished_at) : "Not recorded"), summaryItem("Reported usage (loaded events)", "Loading…", "usageSummary"));
+    grid.append(summaryItem(view.contractAssessment ? "Contract assessment" : "Pipeline verdict", view.verdict), summaryItem("Execution", trial.status || "Unknown"), summaryItem("Recorded evidence quality", view.quality), summaryItem("Started", date(trial.created_at)), summaryItem("Finished", trial.finished_at ? date(trial.finished_at) : "Not recorded"), summaryItem("Reported usage (loaded events)", "Loading…", "usageSummary"));
     container.append(grid);
     const meaning = view.quality === "observed" ? "Observed evidence is reported by the configured evaluator. Inspect its required criteria and measurements to understand the verdict." : `This verdict uses ${view.quality} evidence. It does not establish observed robot task success.`;
     container.append(node("p", meaning, "notice"));
+    if (view.contractAssessment) {
+      container.append(node("p", view.contractAssessment.note || "The contract assessment includes required expert ratings. Missing or conflicting reviews remain unknown even when the original pipeline reported success.", "notice"), details("Authoritative assessment and review revisions", view.contractAssessment));
+      if (trial.task?.case_revision_id) container.append(link("Open case and expert reviews", `/static/datasets.html?case=${encodeURIComponent(trial.task.case_revision_id)}`));
+    }
     if (trial.source === "legacy") container.append(node("p", "Imported history may lack configuration or live events. Missing provenance remains unknown.", "notice"));
     if (trial.error) container.append(node("p", typeof trial.error === "string" ? trial.error : JSON.stringify(trial.error), "error-text"));
     if (["cancelled", "interrupted"].includes(trial.status)) container.append(node("p", "Execution ended before normal completion. Process cancellation does not confirm that a robot stopped.", "notice"));
     if (trial.campaign_id) container.append(link("Open campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
+    if (promotionEligible(trial)) {
+      const promotion = section("Use this trial for future evaluations");
+      promotion.append(node("p", "Create a reusable case from this input and preserve the existing trial as an exploratory reference. Future campaigns run fresh attempts; this selected result does not enter their reliability denominator.", "muted"));
+      const operationId = crypto.randomUUID(), promote = node("button", "Promote to case", "secondary"); promote.type = "button";
+      const message = node("p", "", "muted"); message.setAttribute("role", "status");
+      promote.addEventListener("click", async () => {
+        promote.disabled = true;
+        try {
+          const result = await request(`/api/trials/${encodeURIComponent(trial.id)}/promote`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({operation_id: operationId, name: trialTitle(trial).slice(0, 160)})});
+          message.replaceChildren(node("span", "Case saved. The original attempt remains an exploratory reference. "), link("Open and review the case", `/static/datasets.html?case=${encodeURIComponent(result.case_revision_id)}`)); promote.remove();
+        } catch (error) { message.textContent = error.message; promote.disabled = false; }
+      });
+      promotion.append(promote, message); container.append(promotion);
+    }
     const asset = trial.task?.image_asset;
     if (asset && /^[a-f0-9]{64}$/.test(asset.sha256 || "")) {
       const observation = section("Input observation");
