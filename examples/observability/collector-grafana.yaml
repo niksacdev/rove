@@ -1,0 +1,34 @@
+# OPT-IN HOSTED TEMPLATE. Source-reviewed for Contrib 0.160.0, not live validated.
+# Require an approved HTTPS endpoint and token before selecting this profile.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+extensions:
+  basicauth/grafana:
+    client_auth:
+      username: "${env:GRAFANA_CLOUD_INSTANCE_ID}"
+      password: "${env:GRAFANA_CLOUD_API_KEY}"
+exporters:
+  otlp_http/grafana:
+    endpoint: "${env:GRAFANA_CLOUD_OTLP_ENDPOINT}"
+    encoding: proto
+    timeout: 5s
+    auth:
+      authenticator: basicauth/grafana
+    retry_on_failure:
+      enabled: false
+    sending_queue:
+      enabled: true
+      num_consumers: 2
+      queue_size: 128
+service:
+  extensions: [basicauth/grafana]
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp_http/grafana]

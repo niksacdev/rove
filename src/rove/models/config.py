@@ -6,8 +6,11 @@ __all__ = [
     "CostConfig",
     "DefaultsConfig",
     "EndpointConfig",
+    "ObservabilityConfig",
     "RoveConfig",
+    "RuntimeContract",
     "StrategyConfig",
+    "effective_runtime_contract",
     "find_model_config",
     "get_all_models",
     "get_endpoint_config",
@@ -23,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from rove.models.verification import StageConfig, VerifyStageConfig
 
@@ -43,6 +46,84 @@ class CostConfig(BaseModel):
     output_per_1k: float = 0.0
 
 
+class RuntimeContract(BaseModel):
+    """Declared execution boundaries; these fields do not attest a customer's reset."""
+
+    model_config = ConfigDict(extra="forbid")
+    memory: str = "unknown"
+    reset: str = "unknown"
+    telemetry_coverage: str = "stage_only"
+
+    @model_validator(mode="after")
+    def supported(self):
+        if self.memory not in {
+            "unknown",
+            "stateless",
+            "fresh_per_stage",
+            "fresh_per_trial",
+            "customer_managed",
+        }:
+            raise ValueError("Unsupported stage memory declaration")
+        if self.reset not in {
+            "unknown",
+            "none",
+            "fresh_process_session",
+            "fresh_environment",
+            "customer_managed",
+        }:
+            raise ValueError("Unsupported stage reset declaration")
+        if self.telemetry_coverage not in {
+            "unknown",
+            "stage_only",
+            "customer_reported",
+            "sdk_events",
+            "sdk_events_and_native_spans",
+        }:
+            raise ValueError("Unsupported telemetry coverage declaration")
+        return self
+
+
+class ObservabilityConfig(BaseModel):
+    """Optional, bounded monitoring export; the local trial journal is independent."""
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    enabled: bool = False
+    endpoint: str | None = None
+    request_timeout_s: float = Field(default=1, gt=0, le=5)
+    shutdown_timeout_s: float = Field(default=0.1, ge=0, le=2)
+    queue_capacity: int = Field(default=64, ge=1, le=1000)
+    max_payload_bytes: int = Field(default=1_000_000, ge=1024, le=4_000_000)
+
+    @model_validator(mode="after")
+    def explicit_endpoint(self):
+        from ipaddress import ip_address
+        from urllib.parse import urlsplit
+
+        if self.enabled and not self.endpoint:
+            raise ValueError("Enabled observability requires an explicit OTLP HTTP endpoint")
+        if self.endpoint:
+            url = urlsplit(self.endpoint)
+            if (
+                url.scheme not in {"http", "https"}
+                or not url.hostname
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+            ):
+                raise ValueError(
+                    "Use an explicit HTTP(S) collector endpoint without credentials or query parameters"
+                )
+            try:
+                local = ip_address(url.hostname).is_loopback
+                _ = url.port
+            except ValueError:
+                local = False
+            if not local:
+                raise ValueError("The local monitoring profile requires a numeric loopback address")
+        return self
+
+
 class EndpointConfig(BaseModel):
     type: str  # "vlm" | "vla" | "llm" | "grounding" | "agent" | "sim"
     adapter: str | None = None
@@ -56,12 +137,37 @@ class EndpointConfig(BaseModel):
     max_concurrent: int | None = None
     availability: dict[str, Any] = {}
     notes: str = ""
+    runtime_contract: RuntimeContract | None = None
 
     @model_validator(mode="after")
     def _require_adapter_or_provider(self) -> EndpointConfig:
         if not self.adapter and not self.provider:
             raise ValueError("EndpointConfig must have at least one of 'adapter' or 'provider'")
+        if self.adapter == "copilot_agent" and self.runtime_contract is not None:
+            expected = effective_runtime_contract(self)
+            for key in self.runtime_contract.model_fields_set:
+                if getattr(self.runtime_contract, key) != expected[key]:
+                    raise ValueError(
+                        "Copilot stages require the implemented fresh-stage runtime contract"
+                    )
         return self
+
+
+def effective_runtime_contract(endpoint: EndpointConfig) -> dict:
+    """Report implemented Copilot scope or an explicitly attributed direct declaration."""
+    if endpoint.adapter == "copilot_agent":
+        return {
+            "memory": "fresh_per_stage",
+            "reset": "fresh_process_session",
+            "telemetry_coverage": "sdk_events_and_native_spans"
+            if endpoint.config.get("native_traces", True)
+            else "sdk_events",
+            "attribution": "rove_implemented",
+        }
+    return {
+        **(endpoint.runtime_contract or RuntimeContract()).model_dump(),
+        "attribution": "customer_declared" if endpoint.runtime_contract else "unspecified",
+    }
 
 
 class StrategyConfig(BaseModel):
@@ -118,6 +224,7 @@ class StrategyConfig(BaseModel):
 
 
 class DefaultsConfig(BaseModel):
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     grounding: str = ""
     sim: str = ""
     trials: int = 1

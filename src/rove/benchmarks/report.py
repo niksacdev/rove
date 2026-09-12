@@ -316,10 +316,17 @@ def to_html(data: dict) -> str:
         )
         return f'<div class="chart" role="img" aria-label="{escape(label)}">{markup}</div>'
 
+    def display_cell(value):
+        if value is None:
+            return "Unavailable"
+        if isinstance(value, float):
+            return f"{value:.3f}".rstrip("0").rstrip(".")
+        return value
+
     def rows_table(rows, fields):
         return "".join(
             "<tr>"
-            + "".join(f"<td>{escape(row.get(key, 'Unavailable'))}</td>" for key in fields)
+            + "".join(f"<td>{escape(display_cell(row.get(key)))}</td>" for key in fields)
             + "</tr>"
             for row in rows
         )
@@ -553,6 +560,53 @@ def to_html(data: dict) -> str:
             "p95",
         ),
     )
+    robotics_rows = []
+    for strategy in summary.get("robotics", []):
+        for name, measurement in strategy.get("metrics", {}).items():
+            robotics_rows.append(
+                {"strategy": strategy["strategy_id"], "metric": name, **measurement}
+            )
+    robotics_table = rows_table(
+        robotics_rows,
+        (
+            "strategy",
+            "metric",
+            "value",
+            "unit",
+            "quality",
+            "aggregation",
+            "known_trials",
+            "planned_trials",
+            "denominator",
+            "reason",
+        ),
+    )
+    targets_table = rows_table(
+        summary.get("campaign_targets", []),
+        (
+            "strategy_id",
+            "metric",
+            "operator",
+            "threshold",
+            "unit",
+            "value",
+            "status",
+            "denominator",
+            "unknown_trials",
+        ),
+    )
+    robotics_section = ""
+    if robotics_rows or summary.get("campaign_targets"):
+        robotics_section = (
+            '<section class="section" id="business-outcomes"><h2>Declared outcomes and campaign targets</h2>'
+            "<p>These measures use the frozen success contract. Missing required evidence leaves targets unknown. Synthetic rollout and recorded episode evidence retain their distinct scope.</p>"
+            '<div class="table"><table><thead><tr><th>Strategy</th><th>Metric</th><th>Value</th><th>Unit</th><th>Quality</th><th>Aggregation</th><th>Known</th><th>Planned</th><th>Eligible denominator</th><th>Availability</th></tr></thead><tbody>'
+            + robotics_table
+            + "</tbody></table></div>"
+            '<details><summary>Target thresholds and results</summary><div class="table"><table><thead><tr><th>Strategy</th><th>Metric</th><th>Operator</th><th>Threshold</th><th>Unit</th><th>Value</th><th>Status</th><th>Denominator</th><th>Unknown</th></tr></thead><tbody>'
+            + targets_table
+            + "</tbody></table></div></details></section>"
+        )
     portfolio = summary["portfolio"]
     campaign_url = f"/static/benchmarks.html?campaign={quote(str(campaign['id']), safe='')}"
     invalid_note = f"{invalid} invalid configured verdicts · {execution_issues} execution issues. These are execution diagnostics, separate from contract assessments."
@@ -573,6 +627,7 @@ def to_html(data: dict) -> str:
 <div class="coverage"><div class="coverage-head"><span>Verdict coverage · {resolved} / {planned} trials resolved</span><strong>{coverage:.0%}</strong></div><div class="coverage-track" role="meter" aria-label="Verdict coverage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{coverage * 100:.2f}"><div class="coverage-fill" style="width:{coverage * 100:.2f}%"></div></div></div>
 <p class="context-line">{human_note}</p><p class="context-line" data-invalid-count="{invalid}">{invalid_note}</p></section>
 <section class="section"><h2>Compare strategies</h2><p class="section-intro">{portfolio["tasks_solved"]} / {portfolio["tasks_total"]} cases succeeded at least once across the selected strategies, with {portfolio["attempt_budget_per_task"]} planned attempts per case. This is hindsight coverage, not a deployed selection policy.</p><div class="panel chart-panel">{outcome_chart}</div><div class="strategy-grid">{"".join(strategy_cards)}</div></section>
+{robotics_section}
 <section class="section" id="reliability"><h2>Correctness and repeatability</h2><p class="section-intro">Each case has equal weight. Unknown outcomes stay visible as bounds; they cannot inflate a point estimate.</p><div class="chart-grid">{"".join(reliability)}</div>
 <details><summary>How to read the curves and uncertainty</summary><p>Solid points require a verdict for every planned attempt. Dotted lines bound unresolved outcomes; they are not confidence intervals. Missing points at k greater than the repeat count mean insufficient trials.</p><p>pass@k = 1 - C(n-c,k)/C(n,k); pass^k = C(c,k)/C(n,k), for n repeats and c successes. Errors, timeouts, interrupted and pending trials remain unknown.</p><p>Task-level pass@1 intervals are 95% Wilson intervals assuming independent attempts. Correlated environments or provider changes weaken that assumption. A verifier's confidence is never used as reliability.</p></details>
 <details><summary>Exact metric values and unresolved bounds</summary><div class="table"><table><thead><tr><th>Strategy</th><th>Metric</th><th>k</th><th>Estimate</th><th>Unresolved lower bound</th><th>Unresolved upper bound</th></tr></thead><tbody>{"".join(metric_table)}</tbody></table></div></details></section>

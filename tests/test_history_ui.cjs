@@ -78,3 +78,19 @@ test("missing human reviews remain unknown even when the stored pipeline passed"
   assert.equal(trialPresentation(saved).verdict, "fail");
   assert.equal(saved.result.stages[0].output.success, true);
 });
+
+const {laneExtent, traceEvidenceHref, renderTraceLanes} = require("../frontend/history-traces.js");
+test("trace selections preserve IDs and unknown spans do not gain duration", () => {
+  assert.equal(laneExtent({items:[{offset_seconds:2,duration_seconds:null},{offset_seconds:0,duration_seconds:5}]}),5);
+  assert.equal(traceEvidenceHref("a/b", "x?y"), "/api/trials/a%2Fb/evidence/x%3Fy");
+});
+test("trace rendering keeps untrusted labels as text and reports partial coverage", () => {
+  const doc = {createElement: tag => ({tag,children:[],style:{},append(...items){this.children.push(...items);}})};
+  const root = renderTraceLanes({trial_id:"trial",complete:false,loaded_events:1,total_events:20,note:"Clocks differ",lanes:[{clock_id:"c",stage:"<img onerror=bad>",alignment:"unknown",items:[{name:"<script>bad</script>",offset_seconds:null,duration_seconds:null}]}]},doc);
+  const nodes = [];
+  function visit(node){nodes.push(node);for(const child of node.children||[])visit(child);} visit(root);
+  assert.ok(nodes.some(node => node.textContent?.includes("Partial trace")));
+  assert.ok(nodes.some(node => node.textContent === "<img onerror=bad>"));
+  assert.ok(nodes.some(node => node.textContent?.includes("duration unavailable")));
+  assert.ok(!nodes.some(node => node.tag === "script" || node.tag === "img"));
+});

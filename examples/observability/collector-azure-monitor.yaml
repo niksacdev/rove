@@ -1,0 +1,33 @@
+# OPT-IN HOSTED TEMPLATE. Source-reviewed for Contrib 0.160.0, not live validated.
+# Intended for a collector on an Azure host with an explicitly assigned identity.
+# Empty managed_identity means system-assigned identity, not default credentials.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:4318
+extensions:
+  azure_auth/monitor:
+    managed_identity: {}
+    scopes: ["https://monitor.azure.com/.default"]
+exporters:
+  azure_monitor:
+    connection_string: "${env:APPLICATIONINSIGHTS_CONNECTION_STRING}"
+    auth:
+      authenticator: azure_auth/monitor
+    timeout: 5s
+    shutdown_timeout: 1s
+    maxbatchsize: 128
+    maxbatchinterval: 1s
+    spaneventsenabled: false
+    sending_queue:
+      enabled: false
+service:
+  extensions: [azure_auth/monitor]
+  telemetry:
+    metrics:
+      level: none
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [azure_monitor]

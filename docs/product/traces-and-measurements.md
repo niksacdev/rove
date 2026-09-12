@@ -1,8 +1,9 @@
 # Inspect a Trial and Explain a Difference
 
-**Status:** Proposed product behavior. Current ROVE retains final stage results and
-configured measurements, and shows some live substeps. The durable event timeline,
-linked evidence inspector and baseline-aligned inspection below are not implemented.
+**Status:** Durable trial events, managed stage/episode evidence, bounded range
+inspection, producer-clock lanes and paired baseline/candidate traces are implemented
+locally. Missing adapter telemetry and cross-clock synchronization remain explicit.
+Live-provider and hosted monitoring validation is specification-only.
 
 A score should lead directly to the attempt that produced it. A robotics team needs
 to see the inputs, agent outputs, relevant calls, measurements and grading decision
@@ -43,12 +44,16 @@ that an external runtime does not provide.
 For ROVE-owned agents, Copilot SDK session events provide message, tool, error and
 usage activity for the product timeline. ROVE persists the events needed for trial
 history, including essential events the SDK does not replay when a session resumes.
-The SDK's OpenTelemetry export and ROVE spans can share trace context for optional
-operational monitoring. Trace/span IDs link the views; sampled external telemetry
-never becomes the source of truth for outcomes or metric denominators. See
+ROVE captures available native SDK spans before removing the temporary workspace
+and preserves actual trial/stage/native/tool ancestry. Optional loopback OTLP export
+copies structural monitoring fields through a bounded queue; export failure cannot
+change trial evidence or metric denominators. It is disabled by default. This local
+path is not a deployed Azure/Grafana profile. See
+[runtime lifecycle](../architecture/runtime-lifecycle.md),
+[local observability](../architecture/runtime-observability.md) and
 [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md).
 
-The proposed trial page has three connected views:
+The trial page connects three views:
 
 - **Outcome and measurements:** declared criteria, raw and combined verdicts,
   required constraints, measurements, coverage and unresolved evidence. Selecting
@@ -56,10 +61,10 @@ The proposed trial page has three connected views:
 - **Timeline:** stages and recorded model/tool/check calls, with their identities,
   ordering, durations and lifecycle states. Show parallel work in separate lanes.
   A failed call, retry or interrupted stage remains visible after the trial ends.
-- **Evidence inspector:** the selected input, output, observation or measurement
-  source, alongside the frozen case and system identity. Open images, trajectory
-  ranges and sensor intervals on demand; do not load an entire episode to show a
-  scalar result.
+- **Evidence inspector:** selected inputs, preserved outputs, observations and
+  measurements alongside frozen identities. Managed byte ranges and indexed JSON
+  sample/frame/time ranges load on demand. General video decoding and remote URL
+  fetching are unsupported; binary files can be preserved/downloaded within limits.
 
 For example, a placement attempt can fail because its final position is outside
 the target. The user opens that outcome, sees the configured target bounds and
@@ -119,10 +124,12 @@ declared clock mapping and its uncertainty. If synchronization is unknown, show
 separate timelines or uncertain alignment. Arrival order alone must not imply that
 a contact observation happened before or after a particular command.
 
-These requirements define evidence interpretation, not a new monitoring platform.
-The initial implementation should capture the existing pipeline's events and
-linked measurements through the shared local recording path. It does not require
-an external telemetry service or lakehouse.
+The shared local recorder implements these interpretation boundaries without
+requiring an external telemetry service or lakehouse. Host events use their process
+clock, native SDK clocks remain separately identified, and each synthetic reset
+gets a distinct clock identity. No clock mapping or uncertainty is invented. Trace
+projection caps its initial read at 10,000 events and labels incomplete coverage;
+paginated raw events remain available.
 
 ## Compare the Same Assessment
 
@@ -132,21 +139,33 @@ call evidence side by side. Preserve optional or changed stages instead of forci
 one-to-one call alignment. Explain why a value is absent, unmeasured or graded under
 a different criterion.
 
-The comparison should help locate evidence for a difference; it cannot establish
+Paired-trial links show baseline and candidate lanes side by side with each source
+clock intact. The comparison helps locate evidence for a difference; it cannot establish
 causation from temporal proximity or a score change alone. A stored outcome from
 policy A cannot support policy B's physical performance claim. Reviewed plans,
 synthetic rollouts and observed physical episodes keep their assessment scope.
 
 ## Current Foundation and Acceptance
 
-Today, completed/error stage outputs, raw response text when supplied, task/check
-verdicts and typed measurements are retained. Verification tool substeps can appear
-live but are not saved in the final stage list. Campaign reports offer expandable
-attempt JSON, and the dashboard compares stage outputs. These are foundations for
-the inspector, not a complete durable timeline. See
+Quick and campaign trials preserve exposed stage/call events, execution states,
+outputs, supplied usage, checks and measurements in the shared SQLite journal.
+Stage outputs and explicitly emitted episode evidence are archived as addressed
+assets. Evidence identities resolve within their trial; changed or missing bytes
+remain unavailable. Arbitrary reference text does not imply a preserved recording.
+
+Assets are bounded to 64 MiB. Sample/frame/time selections require indexed JSON
+records; time ranges also need matching source clocks and a declared duration.
+Typed robotics recordings validate units, frame and availability. General codecs,
+hardware drivers and hidden customer-agent traces are not supplied. Named baseline
+revisions pin their assessed outcomes and evidence; later review changes do not
+rewrite that saved comparison basis.
+
+See [evidence and exchange](evidence-and-exchange.md),
+[robotics evidence](robotics-evidence.md),
+[named baselines](named-baselines-and-assistant.md) and
 [current implementation](../architecture/current-implementation.md).
 
-Acceptance for the first implementation:
+Acceptance invariants for the local implementation:
 
 1. **Durable timeline:** a quick trial and a campaign trial preserve recorded
    stage/call events after refresh, interruption and restart. Parallel durations,
@@ -155,7 +174,8 @@ Acceptance for the first implementation:
 2. **Evidence navigation:** each displayed outcome or measurement opens the exact
    grader/criterion and available source output or asset range. Quality, units,
    evidence origin, missing references, truncation and clock uncertainty remain
-   visible. A large recording is loaded only when the user opens its needed range.
+   visible. The browser requests selected recording content on demand; the server
+   validates the bounded underlying asset before serving it.
 3. **Baseline inspection:** matching cases open side by side with frozen identities,
    complete configuration differences and linked evidence. Missing telemetry stays
    unavailable; stage work, wall time and robot task time remain distinct. Regrades

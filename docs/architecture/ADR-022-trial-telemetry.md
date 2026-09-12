@@ -149,3 +149,17 @@ are implementation starting points, not evidence that the proposed recorder exis
 - For an SDK-hosted trial, retain per-call usage received live, correlate a ROVE
   trial span through a custom tool span, tolerate collector outage and expose a
   recorder failure or telemetry gap instead of silently completing the trace.
+
+## Managed evidence and trace lanes, September 2026
+
+Schema v3 adds immutable trial-scoped evidence references to content-addressed assets.
+Producer events can archive an explicit JSON evidence payload before the event is
+committed; a conflicting reference rolls back that event. Terminal stage outputs
+are also archived without rewriting their original trial result. History exposes
+availability, recording selection and source metadata, with no implicit remote fetch.
+
+Trace lanes project recorded producer timestamps, span ancestry and durations.
+Each producer clock has its own origin; unmatched clocks are not silently aligned.
+A paired trial view supports baseline investigations while preserving this limit.
+See [the evidence product contract](../product/evidence-and-exchange.md) for diagrams
+and [regressions](../../tests/test_evidence_exchange.py) for tested boundaries.

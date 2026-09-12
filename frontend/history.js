@@ -60,7 +60,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = {trialPres
 
 if (typeof document !== "undefined") (() => {
   const $ = id => document.getElementById(id);
-  const state = {offset: 0, limit: 25, total: 0, listVersion: 0, detailVersion: 0, selected: null, events: [], eventOffset: 0, eventLimit: 100, stage: "all"};
+  const state = {offset: 0, limit: 25, total: 0, listVersion: 0, detailVersion: 0, selected: null, events: [], eventOffset: 0, eventLimit: 100, stage: "all", recent: [], currentTrial: null};
   const node = (tag, text, className) => {
     const element = document.createElement(tag);
     if (text !== undefined && text !== null) element.textContent = String(text);
@@ -109,7 +109,7 @@ if (typeof document !== "undefined") (() => {
     try {
       const page = await request(`/api/trials?${query}`);
       if (version !== state.listVersion) return;
-      state.total = page.total;
+      state.total = page.total; state.recent = page.trials;
       $("trialList").replaceChildren();
       for (const trial of page.trials) {
         const item = node("li");
@@ -180,7 +180,14 @@ if (typeof document !== "undefined") (() => {
       evidence.append(node("p", "References are preserved as recorded. This view does not fetch remote assets or infer an observed outcome from an asset name.", "muted"));
       for (const ref of refs) {
         const item = node("li"); item.id = `evidence-${encodeURIComponent(ref)}`; item.tabIndex = -1;
-        item.append(node("span", ref, "evidence-ref"), node("span", "Recorded reference · asset preview unavailable", "muted")); list.append(item);
+        item.append(node("span", ref, "evidence-ref"));
+        const managed = (state.currentTrial?.evidence_refs || []).find(value => value.id === ref);
+        if (managed) {
+          item.append(node("span", `${managed.kind} · ${managed.availability} · ${managed.frame || "frame unspecified"}`, "muted"));
+          if (managed.availability === "available") item.append(link("Open exact recording selection", traceEvidenceHref(state.selected, ref)));
+          if (managed.selector) item.append(node("span", `${managed.selector.unit} [${managed.selector.start}, ${managed.selector.end})`, "muted"));
+        } else item.append(node("span", "Recorded reference · managed asset unavailable", "muted"));
+        list.append(item);
       }
       evidence.append(list); container.append(evidence);
     }
@@ -237,14 +244,53 @@ if (typeof document !== "undefined") (() => {
       observation.append(download); container.append(observation);
     }
     renderMeasurements(container, view);
+    if (trial.evidence_refs?.length) {
+      const archive = section("Preserved recordings and outputs");
+      for (const ref of trial.evidence_refs) {
+        const row = node("div", null, "check");
+        row.append(node("strong", ref.id), node("p", `${ref.kind} · ${ref.availability} · ${ref.asset?.size_bytes ?? "unknown"} bytes`, "muted"));
+        if (ref.availability === "available") row.append(link("Inspect preserved evidence", traceEvidenceHref(trial.id, ref.id)));
+        else row.append(node("p", ref.reason || "Evidence unavailable", "notice"));
+        row.append(details("Recording range, clock and units", ref)); archive.append(row);
+      }
+      container.append(archive);
+    }
+    const tracePanel = section("Trace lanes and comparison");
+    tracePanel.append(node("p", "Compare activity relative to each producer clock. Side-by-side traces help investigate behavior; they do not establish equivalent evaluation conditions.", "muted"));
+    const traceControls = node("div", null, "trace-controls"), load = node("button", "Load trace lanes", "secondary"); load.type = "button";
+    const comparison = node("select"); comparison.setAttribute("aria-label", "Compare with another saved trial");
+    const placeholder = node("option", "This trial only"); placeholder.value = ""; comparison.append(placeholder);
+    for (const other of state.recent.filter(value => value.id !== trial.id)) {
+      const option = node("option", `${trialTitle(other).slice(0,60)} · ${trialStrategy(other)} · ${other.id.slice(0,8)}`); option.value = other.id; comparison.append(option);
+    }
+    const requested = new URLSearchParams(location.search).get("compare");
+    if (requested && requested !== trial.id && !state.recent.some(value => value.id === requested)) { const option = node("option", `Linked comparison ${requested}`); option.value = requested; comparison.append(option); }
+    if (requested) comparison.value = requested;
+    const panes = node("div", null, "trace-comparison"), message = node("p", "", "muted"); message.setAttribute("role", "status");
+    let traceVersion = 0;
+    load.addEventListener("click", async () => {
+      const version = ++traceVersion, selectionVersion = state.detailVersion;
+      load.disabled = true; message.textContent = "Loading recorded traces…";
+      try {
+        const ids = [trial.id, comparison.value].filter(Boolean);
+        const values = await Promise.all(ids.map(id => request(`/api/trials/${encodeURIComponent(id)}/trace`)));
+        if (version !== traceVersion || selectionVersion !== state.detailVersion) return;
+        panes.replaceChildren();
+        for (const trace of values) { const pane = node("div"); pane.append(node("h4", `Trial ${trace.trial_id.slice(0,12)}`), renderTraceLanes(trace)); panes.append(pane); }
+        message.textContent = "Recorded traces loaded. Unknown timing remains explicit.";
+      } catch (error) { if (selectionVersion === state.detailVersion) message.textContent = error.message; }
+      finally { load.disabled = false; }
+    });
+    traceControls.append(comparison, load); tracePanel.append(traceControls, message, panes); container.append(tracePanel);
     if (view.stages.length) {
       const stages = section("Pipeline stages");
-      for (const stage of view.stages) {
+      for (const [stageIndex, stage] of view.stages.entries()) {
         const card = node("div", null, "stage-result");
         const line = node("div", null, "check-heading");
         line.append(node("h4", stage.stage), badge(stage.status || "unknown", stage.status), node("span", stage.model_id || "Model not recorded", "muted"));
         card.append(line);
         if (stage.error) card.append(node("p", stage.error, "error-text"));
+        if (trial.evidence_refs?.some(ref => ref.id === `rove.stage.${stageIndex}` && ref.availability === "available")) card.append(link("Open preserved stage output", traceEvidenceHref(trial.id, `rove.stage.${stageIndex}`)));
         card.append(details("Recorded stage output", stage)); stages.append(card);
       }
       container.append(stages);
@@ -310,7 +356,7 @@ if (typeof document !== "undefined") (() => {
     try {
       const trial = await request(`/api/trials/${encodeURIComponent(id)}`);
       if (version !== state.detailVersion) return;
-      renderTrial(trial); if (focus) $("inspectorHeading").focus();
+      state.currentTrial = trial; renderTrial(trial); if (focus) $("inspectorHeading").focus();
       await loadEvents(version);
     } catch (error) {
       if (version !== state.detailVersion) return;
@@ -339,6 +385,19 @@ if (typeof document !== "undefined") (() => {
       $("inspector").replaceChildren(title, node("p", "Select an attempt to inspect its saved evidence.", "muted"));
       $("inspector").setAttribute("aria-busy", "false");
     }
+  });
+  $("exportExchange").addEventListener("click", async () => {
+    const button = $("exportExchange"), status = $("exportStatus");
+    button.disabled = true; status.textContent = "Preparing verified workspace export…";
+    try {
+      const response = await fetch("/api/exchange");
+      if (!response.ok) { const error = await response.json(); throw new Error(error.detail || "Export unavailable"); }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = link("Download", url); anchor.download = "rove-exchange.zip"; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      status.textContent = "Export downloaded. It contains private workspace records and assets.";
+    } catch (error) { status.textContent = error.message; }
+    finally { button.disabled = false; }
   });
   themeLabel(); loadList();
   const selected = new URLSearchParams(location.search).get("trial");

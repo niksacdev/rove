@@ -51,6 +51,8 @@ class EvaluatorContext(BaseModel):
     task: str
     pipeline: dict[str, Any] = Field(default_factory=dict)
     episode: dict[str, Any] = Field(default_factory=dict)
+    annotations: dict[str, Any] = Field(default_factory=dict)
+    annotation_review_ids: list[str] = Field(default_factory=list)
     before_image_base64: str = ""
     after_image_base64: str = ""
     urdf_path: str | None = None

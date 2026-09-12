@@ -1,6 +1,6 @@
 # Product specification: build, review and compare robotics evaluations
 
-**Status:** Local case intake, success setup, SME review, dataset freezing, promotion and baseline comparison implemented. General recording ingestion and broader assistant mutation tools remain follow-up work.
+**Status:** Local case/evidence intake, success targets, SME review, frozen labels, dataset freezing, named baselines, paired traces and confirmed assistant workflows implemented. Live-provider/cloud validation remains specification-only; hardware drivers and analytical connectors remain separate.
 **Scope:** Local OSS workbench for robotics developers and subject-matter experts (SMEs).
 **Related:** [Concepts](concepts.md), [metrics and success](metrics-and-success.md), [current implementation](../architecture/current-implementation.md), [ADRs](../architecture/README.md).
 
@@ -24,7 +24,7 @@ An SME is a reviewer collaborating with these personas, not a replacement for th
 
 ## Problem and intended outcome
 
-A developer may have images and robot tasks but no labeled evaluation dataset. They need an initial baseline, a way for an expert to validate cases and assess outputs, and a stable reference for comparing a changed model or strategy. Today, quick evaluations and campaigns record different amounts of context, and strategy names alone do not connect baselines to later ablations.
+A developer may have images and robot tasks but no labeled evaluation dataset. They need an initial baseline, a way for an expert to validate cases and assess outputs, and a stable reference for comparing a changed model or strategy. Quick evaluations and campaigns now share durable trial identities and saved evidence; named baseline revisions preserve the exact configuration and assessment used for a later comparison.
 
 ROVE should support both starting points: evaluating a prepared dataset, and creating a reviewed dataset from an initial campaign. The outcome is an explainable comparison tied to fixed inputs, criteria, configuration and evidence. Physical completion claims require outcome evidence from the relevant robot episode; expert assessment of perception and planning is useful before such episodes exist.
 
@@ -63,19 +63,19 @@ Success for this journey means a developer can reach a report on their own data,
 
 The UI should make task, strategy and expected outcome the primary controls. Keep protocol details, hashes and advanced configuration in expandable views. Provide templates for common robotics jobs, but permit developer-supplied task graders through the existing verification stage. Do not require an external analytics service, a full benchmark dataset or a hardware integration to obtain useful agent-output assessments.
 
-## What exists and what is proposed
+## Implemented local workflow and remaining boundaries
 
 | Capability | Current implementation | Follow-up |
 | --- | --- | --- |
-| Configured pipeline and verification | Strategy stages, local task evaluators, required constraints and diagnostics | Surface the criteria and expected measures before launch |
-| Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k, baseline references and component diffs | Richer campaign timelines and justified delta statistics |
+| Configured pipeline and verification | Strategy stages, local evaluators, required constraints, diagnostics and success/measure preflight | Customer-specific graders remain explicit integrations |
+| Repeated campaigns | Frozen configuration, pass@k/pass^k, named baseline revisions, component diffs and aggregate targets | Statistical significance needs justified sampling assumptions |
 | Quick evaluation history | Durable pre-dispatch recording, restart recovery and exploratory promotion | Complete retirement of compatibility projections |
-| Trace inspection | Final stage results, check measurements and some live substeps | Durable event timelines, evidence drill-down and aligned baseline inspection |
-| Execution runtime | Built-in optional stages and agent-backed stage adapters | Add Copilot SDK for ROVE-owned agents; preserve direct customer/model paths and add explicit lifecycle contracts |
-| Case references | Immutable case revisions and managed PNG/JPEG images | General recording/video ingestion |
-| Human labels | Separate validity, annotation and output reviews with frozen rubrics | Explicit automatic grader mapping and team adjudication |
+| Trace inspection | Durable events, stage outputs, clock-aware lanes, managed ranges and paired baseline/candidate traces | Hidden adapter activity and unsynchronized clocks remain explicit gaps |
+| Execution runtime | Pinned Copilot stage host, scoped tools, lifecycle contracts, native trace capture and direct adapters | Live provider/Azure validation is specified, not executed |
+| Case references | Immutable cases, managed images/auxiliary files, indexed JSON recording ranges and typed episode validation | General video decoding and customer hardware drivers are unsupported |
+| Human labels | Separate review subjects; exact frozen annotations bind explicitly to participating local graders | No automatic label inference, judge training or authenticated team adjudication |
 | Evaluation datasets | Previewed immutable case/review membership and review coverage | Richer editing and selection tools |
-| Storage/integration | Local SQLite campaigns and JSONL quick history | Shared relational storage; optional PostgreSQL or Delta integration when needed |
+| Storage/integration | Shared SQLite recording and validated versioned relational/asset exchange | PostgreSQL and Delta/Fabric connectors remain demand-driven |
 
 ## Core user journeys
 
@@ -95,7 +95,7 @@ flowchart TD
     B --> X
 ```
 
-This diagram describes the implemented local workflow. The first campaign freezes the input cases and selected strategy and records all outputs. It can be named as the initial baseline immediately, with human-review coverage shown as pending. An SME then reviews the original inputs and outputs through the Cases workflow.
+This diagram describes the implemented local workflow. The first campaign freezes the input cases and selected strategy and records all outputs. After completion it can be named as the initial baseline, with human-review coverage shown as pending. An SME then reviews the original inputs and outputs through the Cases workflow.
 
 Three review targets remain distinct:
 
@@ -134,9 +134,9 @@ Promotion references the original trial ID. A trial selected after inspecting it
 
 ### Compare a baseline and an ablation
 
-The user selects an exact baseline campaign version and strategy snapshot, then chooses Create ablation. ROVE copies case versions, grading criteria and repetition conditions and shows every changed component before execution. Changing the action model may be intentional; an incidental prompt, evaluator or environment change must also be visible.
+The user names/pins a completed campaign strategy or selects an immutable saved baseline revision, then chooses Create ablation. ROVE copies case versions, grading criteria and repetition conditions and shows every changed component before execution. Changing the action model may be intentional; an incidental prompt, evaluator or environment change must also be visible.
 
-The comparison uses matching case/condition blocks and explains mismatches. Changing a strategy's name does not prevent comparison when its contract matches. Changing the current baseline preserves older comparison references. Shared code changes that cannot be attributed to a known component remain conservatively incomparable.
+The comparison uses matching case/condition blocks and explains mismatches. Changing a strategy's name does not prevent comparison when its contract matches. Baseline revisions capture assessment outcomes and review identities; later SME edits and baseline-head changes preserve older references. Shared code changes that cannot be attributed to a known component remain conservatively incomparable. Paired-trial links show source-clock lanes side by side without claiming synchronized clocks.
 
 Display task completion, reliability, constraint violations, intervention/recovery measures and task duration only where the captured evidence supports them. Keep robot completion time separate from pipeline wall time. A metric target for a campaign does not silently change the grader's definition of success. See the [metric specification](metrics-and-success.md).
 
@@ -162,7 +162,7 @@ For an image and “place the red block in the bin,” an SME can judge target i
 
 For observed completion, the trial needs its own associated episode evidence: producing configuration, case/reset identity, timestamps, relevant state and constraint observations. A developer-supplied hardware adapter can provide these through the existing pipeline boundaries. Regrading a recording from policy A cannot demonstrate physical improvement by policy B.
 
-The sample pack should include successful placement, outside-target placement, excessive-force placement and missing final sensing. Small separate images and timestamped pose/force records exercise the input contract. These supplied records are static fixtures; action-dependent rollout integration remains pending.
+The existing verification examples include static placement, force and missing-evidence fixtures for regrading. The [action-dependent robotics example](../../examples/robotics/README.md) adds a deterministic one-dimensional environment: candidate trajectories cause success, failure, constraint violation or recovery after a declared disturbance. It records actual executed samples with fresh reset/clock identities and synthetic quality. This tests the integration contract without claiming contact physics or robot performance.
 
 ## Data and architecture decisions
 
@@ -186,16 +186,25 @@ Reviews record the reviewer, timestamp, target output/case version, rubric versi
 The fully reviewed dataset badge currently requires selected accepted validity
 and annotation reviews with no unresolved active disagreement. Incomplete datasets
 remain usable with their coverage exposed. Output ratings alone never create labels.
-Annotations are retained for inspection; automatic mapping into future graders
-requires explicit integration. Reviewer names provide local attribution, not team
-authentication. Static episode fixtures do not become a new candidate's outcomes.
+An explicit contract binding resolves selected accepted frozen annotations into
+endpoint-scoped local-verifier context, retaining review IDs. No annotation or
+baseline output enters candidate inputs automatically. Reviewer names provide
+local attribution, not team authentication. Static episodes remain regrading.
 
-PNG/JPEG intake and bounded metadata are supported. Video/trajectory ingestion,
-hardware drivers, action-dependent rollout and aggregate campaign targets remain
-outside this slice. The optional Copilot assistant supports evidence inspection and
-campaign preview with host-confirmed launch; it does not import, review or freeze data. See
-[current implementation](../architecture/current-implementation.md) for code paths
-and the [delivery plan](implementation-plan.md) for remaining gates.
+Managed auxiliary assets are bounded to 64 MiB; indexed JSON supplies sample/frame/
+time ranges. Arbitrary video decoding and hardware drivers are unsupported. Typed
+episode validation and deterministic synthetic execution support evidence-qualified
+robotics measures and aggregate targets. HTML/JSON retain aggregate results; CSV
+remains one row per trial. The optional assistant prepares imports/revisions,
+contracts, dataset freezes, named baselines and campaign/ablation operations, each
+requiring host confirmation. It cannot create SME judgments or private labels.
+
+See [robotics evidence](robotics-evidence.md), [evidence and exchange](evidence-and-exchange.md),
+[named baselines and assistance](named-baselines-and-assistant.md),
+[runtime lifecycle](../architecture/runtime-lifecycle.md) and
+[local observability](../architecture/runtime-observability.md) for exact contracts.
+Live-provider validation remains [specification-only](live-provider-validation.md).
+The [delivery plan](implementation-plan.md) records final validation status.
 
 ## Acceptance and delivery order
 

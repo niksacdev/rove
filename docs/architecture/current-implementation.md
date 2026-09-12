@@ -1,8 +1,9 @@
 # Current Implementation
 
 **Checked:** 12 September 2026, against the customer evaluation workflow and
-original T01–T12 acceptance. The 49 bundled samples now import as versioned Cases; private reference
-annotations and the report redesign have regression coverage. The
+original T01–T12 acceptance, with live provider validation excluded by request.
+Local follow-up adds preserved recording selections, native trace ancestry, causal
+synthetic episodes, explicit annotation bindings and named baselines. The
 [delivery plan](../product/implementation-plan.md) records remaining work.
 
 ROVE runs configurable robotics evaluation pipelines from a local dashboard and a
@@ -51,7 +52,8 @@ gallery image, `example_filename` loads additional fields from
 `data/manifest.json`, including embodiment, reference-label and optional episode
 data. The quick API encodes the uploaded image as base64. The Cases workflow
 stores managed PNG/JPEG assets and task revisions; it hydrates bounded images only
-at execution. General video/trajectory ingestion and hardware drivers are not provided.
+at execution. Bounded recording assets and indexed trajectory JSON can be imported;
+general video codec indexing and hardware drivers are not provided.
 
 [RunManager](../../src/rove/orchestrator/run_manager.py) builds pipelines from
 [validated strategy configuration](../../src/rove/models/config.py), bounds
@@ -174,8 +176,9 @@ flowchart LR
     L --> C
 ```
 
-Schema version 2 adds case revisions, success contracts, reviews, dataset
-membership and quick-promotion links to `trials.sqlite3`. Final reviews are
+Schema version 2 added case revisions, success contracts, reviews, dataset
+membership and quick-promotion links to `trials.sqlite3`. Version 3 adds managed
+evidence references, named baseline revisions and idempotent workflow operations. Final reviews are
 immutable; corrections keep the target, rubric and reviewer and supersede the old
 review. Dataset freezing is one transaction and requires the exact preview hash.
 New reviewer disagreement invalidates a stale preview. Case validity, reusable
@@ -185,10 +188,12 @@ does not become a label for another candidate.
 The current fully reviewed dataset badge requires selected accepted case-validity
 and annotation reviews, with no unresolved active disagreement. Incomplete datasets
 can still be frozen and used with their coverage exposed. Annotations are retained
-as explicit review material; automatic injection into model prompts or future
-graders is not implemented. Public candidate context and archived episode evidence
-are separate input fields. Static episode evidence can evaluate a grader, not a
-new candidate's physical performance. Action-dependent rollout integration is pending.
+as explicit review material. Frozen annotations can bind to a participating local
+verifier through the success contract; candidate stages receive no private labels.
+Public candidate context and archived episode evidence are separate input fields.
+Static episode evidence evaluates the archived system. The action-dependent
+synthetic adapter separately executes the current candidate trajectory in a bounded
+one-axis world; its measurements are explicitly synthetic.
 
 [Quick promotion](../../src/rove/datasets/promotion.py) creates a case from a
 finished quick trial's retained image/task and links its original trial ID as an
@@ -204,7 +209,7 @@ session and temporary workspace. Candidate and grader roles are host-selected;
 candidate context excludes the private grading record. No tools are exposed by the
 configured adapter. The shared runtime supports explicitly role-scoped host tools,
 but robot action tools remain pending. The optional evaluation assistant uses a
-separate assistant role with read and campaign-preview tools.
+separate assistant role with typed read and workflow-preview tools.
 
 The optional profile pins `github-copilot-sdk==1.0.13` and Copilot CLI `1.0.81-9`.
 The CLI is installed separately and checked before use. Startup, execution, abort
@@ -224,42 +229,39 @@ validated. See [compatibility evidence](copilot-compatibility.md) and
 The [evaluation assistant API](../../src/rove/api/assistant.py) is enabled by
 `ROVE_ASSISTANT_ENDPOINT`, which must name an explicitly configured `copilot_agent`
 endpoint. Cases exposes its optional assistant panel. Tools read bounded case,
-dataset, strategy and trial records and prepare a campaign preview. The model has
-no launch, import, review or freeze tool. Launch requires a host-issued confirmation
-token and a fresh validation of the exact preview; proposals expire after ten
-minutes or server restart. Operation IDs prevent duplicate campaign creation.
-The assistant uses the same evaluation services; it does not decide trial scores.
-
-The read/preview boundary is deliberate for the local milestone: media selection,
-case changes and expert review remain explicit user actions. The original T09
-import-to-comparison assistant acceptance is therefore only partially implemented. Further tools require explicit user-directed operations;
-that original scope never authorizes inventing SME judgments.
+dataset, strategy and trial records and prepare typed case imports/revisions,
+contracts, dataset freezes, baseline changes, launches and comparisons. Only the
+host confirms mutations using an expiring token and exact-preview revalidation.
+Case media must already have been uploaded/selected by the user. SME judgments
+remain explicit human input; the assistant cannot manufacture review records.
+Durable operation identities prevent repeat confirmations from duplicating writes.
+See [named baselines and assistant](../product/named-baselines-and-assistant.md).
 
 The pinned SDK/runtime and provider configuration remain required. The assistant
 status check verifies configuration/runtime availability, not deployed model
 quality or robot performance. Its API and confirmation boundaries have controlled
-regression coverage; a live Azure/provider workflow remains a validation gate.
+regression coverage; a live Azure/provider workflow is specified but not executed.
 
 | Evidence | Implemented behavior and limits |
 | --- | --- |
 | Existing stage/tool activity | Events exposed by `RunManager` persist before UI delivery. Legacy single-pipeline recording includes stage events. Internal customer-agent calls require adapter support. |
 | SDK activity | Event identities, actor role, stage, available usage and trace context are retained. Content capture defaults off. Missing usage is not zero; a cost multiplier is not dollars. |
 | Results and measurements | Final stage outputs and configured checks retain values, units, quality, evaluator versions and evidence-reference strings. |
-| Images | Initial observations have managed assets. Supported images load on demand; arbitrary reference strings do not resolve automatically to remote assets or recording ranges. |
+| Assets | Images and auxiliary recordings have managed bytes. Explicit references resolve validated recording ranges; remote URLs are never fetched automatically. |
 | Timing | Stage durations and recorded event timestamps are available. Server receipt time is distinct from supplied source time. No synchronized robot/sensor clock model is implemented. |
 | OpenTelemetry | Optional ROVE trial spans retain trace/span identity when the tracing SDK is installed. The runtime accepts native telemetry settings; no ROVE exporter is configured by default. |
-| Inspector | Paginated history, source filters, deep links, frozen settings, measurements, stage outputs and stage-filtered activity. Parallel trace graphs and aligned baseline comparison remain pending. |
+| Inspector | Paginated history, preserved stage outputs, exact recording selections, parallel clock-aware lanes and paired baseline/candidate trace views. Unrelated clocks remain unaligned. |
 
 Required recording failures fail execution visibly rather than silently discard
 evidence. Size/count limits are bounded; missing source telemetry cannot be
 reconstructed. The authoritative journal does not require an external monitoring
-account. The actual pinned SDK/CLI has a controlled HTTP 503 OTLP collector test, with
-bounded cleanup and retained events/usage after reopening the journal; Python
-exporter exceptions and failure results are covered too. These concrete outage
-tests do not establish blackholed connections, blocked custom exporters, or a
-complete application → native SDK → tool → external collector trace tree. Native
-SDK tracing must be configured when distributed runtime/tool correlation is required.
-See [telemetry resilience tests](../../tests/test_telemetry_resilience.py).
+account. The actual pinned SDK/CLI now has controlled healthy, HTTP 503 and blackholed
+collector tests. They verify journalled application → stage → native SDK → named
+tool ancestry, retained usage and bounded monitoring disposal. Callback context
+restoration preserves ROVE's journal while retaining the SDK's actual parent span.
+A bounded optional exporter targets a local collector; external service validation
+remains separate. See [runtime observability tests](../../tests/test_runtime_observability.py)
+and [telemetry resilience tests](../../tests/test_telemetry_resilience.py).
 
 Predicted trajectories, requested calls, acknowledgements and observed outcomes are
 different evidence. Process cancellation does not establish physical robot stopping.
@@ -289,18 +291,20 @@ strategies can compare when their assessment conditions match. Changed graders,
 conditions or unattributed runtime changes are exposed as incompatibilities;
 the broad source fingerprint remains conservative about intentional code changes.
 
-A candidate points to an existing baseline campaign/strategy; this is usable baseline
-lineage, not a separate named/pinned baseline registry. Comparisons require the full
+Named/pinned baseline revisions preserve a campaign/strategy and its assessment
+projection, with conflict-checked history. A candidate references a baseline under
+matching evaluation conditions. Comparisons require the full
 matching case cohort; selecting arbitrary overlapping subsets is not implemented.
 Paired improvement/regression counts are descriptive, not a causal or statistical
-significance claim. Parallel/aligned trace navigation remains pending.
+significance claim. Paired trial links open side-by-side producer-clock trace lanes.
 
 The [workflow service](../../src/rove/benchmarks/workflow.py) previews expected
 measures and projects per-output SME assessments onto retained attempts while
 keeping the original execution results. Pending/disputed reviews remain unknown.
-Pipeline latency is available; episode duration, autonomy and recovery remain
-unavailable without the required evidence and aggregation implementation. Declaring
-a desired metric does not make it observed. Aggregate campaign targets are pending.
+Pipeline latency and supplied episode duration, autonomy, recovery and constraints
+use explicit evidence and denominators. Frozen contract targets report met, not met
+or unknown; missing planned-trial evidence prevents a target success claim. Declaring
+a desired metric does not make it observed.
 
 Fingerprints detect selected changes; they do not preserve remote model weights,
 resolve mutable provider aliases or recreate a physical scene. Model revisions are
@@ -372,8 +376,16 @@ requests, rollback and unchanged trial counts.
 
 The decision trail distinguishes
 [implemented configured verification](ADR-017-configured-verification.md) from
-partially implemented [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
+local [trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md),
 [relational recording and asset references](ADR-019-relational-storage-and-assets.md),
 implemented local [SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md),
-partially implemented [campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
+local [campaign success and reporting](ADR-021-campaign-success-and-reporting.md) and
 [trial telemetry](ADR-022-trial-telemetry.md).
+
+## Portable relational exchange
+
+The [exchange service](../../src/rove/trials/exchange.py) exports versioned table
+schemas, hashes and managed assets. Fresh-store import validates records and
+foreign keys without regenerating identities. SQLite remains the transactional
+store; Fabric/Delta-specific transformations and deployments remain future
+integrations. See [evidence and exchange](../product/evidence-and-exchange.md).

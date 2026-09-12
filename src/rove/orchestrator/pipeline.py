@@ -275,8 +275,40 @@ class EvaluationPipeline:
             return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
 
         timeout = self._stage_timeouts.get(stage)
-        async with asyncio.timeout(timeout / 1000 if timeout else None):
-            return await dispatch()
+        from rove.orchestrator.recording import stage_span
+
+        with stage_span(stage, adapter.model_id, self._runtime_contract(adapter.model_id)):
+            async with asyncio.timeout(timeout / 1000 if timeout else None):
+                return await dispatch()
+
+    def _runtime_contract(self, endpoint_id):
+        from rove.models.config import effective_runtime_contract, get_endpoint_config
+
+        try:
+            return effective_runtime_contract(get_endpoint_config(endpoint_id))
+        except KeyError:
+            return None
+
+    async def _evaluate_adapter(self, adapter, ctx, endpoint_id):
+        from rove.orchestrator.recording import stage_span
+
+        with stage_span("verify", endpoint_id, self._runtime_contract(endpoint_id)):
+            return await adapter.evaluate(self._evaluator_context(ctx, endpoint_id))
+
+    def _validate_sim_actions(self, prediction):
+        from rove.adapters.synthetic_sim import SyntheticSimAdapter
+
+        if isinstance(self.sim, SyntheticSimAdapter) and (
+            prediction.action_type != "trajectory"
+            or prediction.action_space != ActionSpace.EEF_DELTA
+        ):
+            raise ValueError("Synthetic reaching requires explicit trajectory deltas in metres")
+
+    async def _reset_sim(self, task):
+        from rove.orchestrator.recording import stage_span
+
+        with stage_span("reset", self.sim.model_id, self._runtime_contract(self.sim.model_id)):
+            return await self.sim.reset(task)
 
     async def _call_adapter_inner(
         self,
@@ -1095,6 +1127,20 @@ class EvaluationPipeline:
 
         if example:
             ctx.episode_evidence = example.extras.get("episode", {})
+            ctx.grader_context = example.extras.get("grader_context", {})
+            environment = example.extras.get("synthetic_environment")
+            if environment is not None:
+                from rove.adapters.synthetic_sim import SyntheticSimAdapter
+
+                if not isinstance(self.sim, SyntheticSimAdapter) or self.act_adapter is None:
+                    raise ValueError(
+                        "Synthetic environment requires synthetic_sim and candidate act stage"
+                    )
+                self.sim.configure_episode(
+                    environment, example.extras.get("case_revision_id", "standalone")
+                )
+                # Supplied recordings cannot stand in for this candidate execution.
+                ctx.episode_evidence = {}
 
         # Seed proprioception from example data (dataset mode, no sim)
         if example and example.extras.get("proprioception"):
@@ -1219,10 +1265,14 @@ class EvaluationPipeline:
         # --- SIM RESET + PROPRIOCEPTION (only if act stage is present) ---
         if self.act_adapter is not None and self.sim is not None:
             try:
-                reset_obs = await self.sim.reset(task)
+                reset_obs = await self._reset_sim(task)
                 ctx.proprioception = reset_obs.proprioception
             except Exception as e:
                 logger.warning(f"sim.reset failed: {e}")
+                yield PipelineStageResult(
+                    stage="act", status=StageStatus.ERROR, error=f"Simulation reset failed: {e}"
+                )
+                return
 
         # --- PLAN (optional) ---
         if self.plan_adapter is not None:
@@ -1281,6 +1331,7 @@ class EvaluationPipeline:
 
                 last_obs = reset_obs
                 if self.sim is not None:
+                    self._validate_sim_actions(action_pred)
                     if action_pred.action_type == "trajectory" and action_pred.actions:
                         for action in action_pred.actions:
                             last_obs = await self.sim.step(action)
@@ -1346,10 +1397,14 @@ class EvaluationPipeline:
         # --- SIM RESET + PROPRIOCEPTION ---
         if self.sim is not None:
             try:
-                reset_obs = await self.sim.reset(task)
+                reset_obs = await self._reset_sim(task)
                 ctx.proprioception = reset_obs.proprioception
             except Exception as e:
                 logger.warning(f"sim.reset failed: {e}")
+                yield PipelineStageResult(
+                    stage="act", status=StageStatus.ERROR, error=f"Simulation reset failed: {e}"
+                )
+                return
 
         resolved_mode = self._resolve_verify_mode()
 
@@ -1442,6 +1497,7 @@ class EvaluationPipeline:
 
             last_obs = reset_obs
             if self.sim is not None:
+                self._validate_sim_actions(action_pred)
                 if action_pred.action_type == "trajectory" and action_pred.actions:
                     for action in action_pred.actions:
                         last_obs = await self.sim.step(action)
@@ -1645,13 +1701,21 @@ class EvaluationPipeline:
                 phase="evaluation",
             )
 
-    def _evaluator_context(self, ctx: PipelineContext) -> EvaluatorContext:
+    def _evaluator_context(self, ctx: PipelineContext, endpoint_id: str = "") -> EvaluatorContext:
         return EvaluatorContext(
             task=ctx.task,
             pipeline=ctx.model_dump(
-                mode="json", exclude={"image_base64", "after_image_base64", "episode_evidence"}
+                mode="json",
+                exclude={
+                    "image_base64",
+                    "after_image_base64",
+                    "episode_evidence",
+                    "grader_context",
+                },
             ),
             episode=ctx.episode_evidence,
+            annotations=ctx.grader_context.get(endpoint_id, {}).get("annotations", {}),
+            annotation_review_ids=ctx.grader_context.get(endpoint_id, {}).get("review_ids", []),
             before_image_base64=ctx.image_base64,
             after_image_base64=ctx.after_image_base64,
             urdf_path=self._urdf_path,
@@ -1668,9 +1732,9 @@ class EvaluationPipeline:
                 sem = self._registry.get_semaphore(check.endpoint)
                 if sem is not None:
                     async with sem:
-                        result = await adapter.evaluate(self._evaluator_context(ctx))
+                        result = await self._evaluate_adapter(adapter, ctx, check.endpoint)
                 else:
-                    result = await adapter.evaluate(self._evaluator_context(ctx))
+                    result = await self._evaluate_adapter(adapter, ctx, check.endpoint)
         except Exception as error:
             execution = "timeout" if isinstance(error, TimeoutError) else "error"
             result = EvaluatorResult(
@@ -1744,6 +1808,8 @@ class EvaluationPipeline:
 
     async def _run_verification(self, task, image_base64, ctx, phase=""):
         """Execute required checks independently of the model's tool choices."""
+        from rove.adapters.synthetic_sim import SyntheticSimAdapter
+
         t0 = time.monotonic()
         mode = self._resolve_verify_mode()
         try:
@@ -1752,6 +1818,45 @@ class EvaluationPipeline:
                 if self.sim is not None and self.act_adapter is not None:
                     observation = await self.sim.get_observation()
                     ctx.after_image_base64 = observation.image_base64
+                    from rove.adapters.synthetic_sim import SyntheticSimAdapter
+
+                    if isinstance(self.sim, SyntheticSimAdapter):
+                        from rove.orchestrator.recording import record_event
+
+                        ctx.episode_evidence = self.sim.episode_evidence()
+                        record_event(
+                            {
+                                "event_type": "episode.recorded",
+                                "stage": "act",
+                                "evidence_payload": {
+                                    "id": "episode",
+                                    "kind": "trajectory",
+                                    "content": ctx.episode_evidence,
+                                    "clock_id": ctx.episode_evidence["source_clock_id"],
+                                    "frame": ctx.episode_evidence["frame"],
+                                    "units": ctx.episode_evidence["units"],
+                                },
+                            }
+                        )
+                if ctx.episode_evidence.get("schema_version") == 1 and not isinstance(
+                    self.sim, SyntheticSimAdapter
+                ):
+                    from rove.orchestrator.recording import record_event
+
+                    record_event(
+                        {
+                            "event_type": "episode.recorded",
+                            "stage": "verify",
+                            "evidence_payload": {
+                                "id": "episode",
+                                "kind": "trajectory",
+                                "content": ctx.episode_evidence,
+                                "clock_id": ctx.episode_evidence["source_clock_id"],
+                                "frame": ctx.episode_evidence["frame"],
+                                "units": ctx.episode_evidence["units"],
+                            },
+                        }
+                    )
                 for check in self._checks:
                     if check.required or mode != "agent_loop":
                         yield PipelineStageResult(
@@ -1821,9 +1926,11 @@ class EvaluationPipeline:
                 sem = self._registry.get_semaphore(verify_model) if self._registry else None
                 if sem is not None:
                     async with sem:
-                        evidence = await self.verify_adapter.evaluate(self._evaluator_context(ctx))
+                        evidence = await self._evaluate_adapter(
+                            self.verify_adapter, ctx, verify_model
+                        )
                 else:
-                    evidence = await self.verify_adapter.evaluate(self._evaluator_context(ctx))
+                    evidence = await self._evaluate_adapter(self.verify_adapter, ctx, verify_model)
                 verification = VerificationResult(
                     success=evidence.verdict == "pass",
                     verdict_valid=evidence.verdict != "unknown",

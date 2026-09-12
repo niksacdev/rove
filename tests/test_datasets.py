@@ -410,6 +410,11 @@ def _downgrade_empty_dataset_schema(root):
     with sqlite3.connect(root / "trials.sqlite3") as db:
         db.execute("DROP INDEX trial_case_revision")
         for table in (
+            "evidence_refs",
+            "baseline_revisions",
+            "named_baselines",
+            "assistant_operations",
+            "workflow_mutations",
             "quick_promotions",
             "dataset_member_reviews",
             "dataset_members",
@@ -434,7 +439,7 @@ def test_v1_database_migrates_without_changing_existing_trial_evidence(tmp_path)
     assert service.trials.get(trial) == original
     assert len(service.trials.events(trial)) == 1
     with service.trials.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
 
 
 def test_failed_migration_rolls_back_schema_and_version(tmp_path, monkeypatch):
@@ -531,7 +536,7 @@ def test_v1_backup_restores_assets_and_migrates_without_losing_history(tmp_path)
     case = restored.import_case({"name": "Restored input", "task": "Pick"}, asset["sha256"])
     assert restored.validate_case_image(case["id"]) == asset
     with restored.trials.connect() as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 3
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 
 

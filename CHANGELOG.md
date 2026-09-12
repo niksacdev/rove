@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Complete the local robotics evaluation workflow
+
+Inspect clock-aware SDK/tool traces and preserved recording selections, execute action-dependent synthetic trials, and bind frozen SME annotations to graders. Named baseline revisions, confirmed assistant workflows, campaign targets and relational exchange connect evaluation results to reproducible evidence. Live provider/Azure validation remains specification-only. *(PR #20)*
+
 ### Sample cases and clearer campaign reports
 
 All 49 bundled gallery samples now become versioned Cases with original source metadata and private reference annotations preserved. Campaign reports use ROVE themes, outcome and coverage cards, reliability bounds and expandable evidence; the implementation plan now distinguishes delivered local capabilities from unfinished acceptance criteria. *(PR #19)*

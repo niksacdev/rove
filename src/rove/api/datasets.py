@@ -8,6 +8,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
+from rove.benchmarks.assistant_workflow import AblationDraft, prepare_ablation
+from rove.benchmarks.baselines import BaselineInput, BaselineStore
 from rove.benchmarks.comparison import compare_campaigns
 from rove.benchmarks.metrics import summarize
 from rove.benchmarks.store import CampaignStore
@@ -210,36 +212,40 @@ def create_dataset_router(root: Path, launch) -> APIRouter:
                 "assessments": evidence,
             }
 
+    @router.get("/api/baselines")
+    async def named_baselines():
+        return {"baselines": BaselineStore(root).list()}
+
+    @router.get("/api/baselines/{baseline_id}")
+    async def named_baseline(baseline_id: str):
+        with errors():
+            return BaselineStore(root).get(baseline_id)
+
+    @router.get("/api/baselines/{baseline_id}/revisions")
+    async def baseline_revisions(baseline_id: str):
+        with errors():
+            return {"revisions": BaselineStore(root).revisions(baseline_id)}
+
+    @router.post("/api/baselines", status_code=201)
+    async def save_baseline(request: BaselineInput):
+        with errors():
+            return BaselineStore(root).save(request)
+
+    @router.patch("/api/baselines/{baseline_id}")
+    async def revise_baseline(baseline_id: str, request: BaselineInput):
+        with errors():
+            return BaselineStore(root).save(request, baseline_id)
+
     def ablation(baseline_id: str, payload: dict):
-        baseline = CampaignStore(root).get(baseline_id)
-        if not baseline.get("case_revision_ids") or not baseline.get("contract_id"):
-            raise ValueError(
-                "Ablations require a campaign created from versioned cases and a success contract"
-            )
-        baseline_strategy = payload.get("baseline_strategy_id")
-        if baseline_strategy not in baseline["spec"]["strategies"]:
-            raise ValueError("Select a strategy recorded in the baseline")
-        candidate_strategy = payload.get("candidate_strategy_id")
-        request = LaunchRequest(
-            name=payload.get("name", "Candidate ablation"),
-            case_revision_ids=[]
-            if baseline.get("dataset_revision_id")
-            else baseline["case_revision_ids"],
-            dataset_revision_id=baseline.get("dataset_revision_id"),
-            contract_id=baseline["contract_id"],
-            strategies=[candidate_strategy],
-            seeds=baseline["spec"]["seeds"],
-            ks=baseline["spec"]["ks"],
-            timeout_s=baseline["spec"]["timeout_s"],
-            operation_id=payload.get("operation_id"),
+        operation_id = payload.get("operation_id")
+        args = AblationDraft.model_validate(
+            {
+                "baseline_campaign_id": baseline_id,
+                **{key: value for key, value in payload.items() if key != "operation_id"},
+            }
         )
-        candidate, preview = prepare_launch(root, request, load_config())
-        candidate["baseline"] = {"campaign_id": baseline_id, "strategy_id": baseline_strategy}
-        candidate["intended_change"] = str(payload.get("intended_change", ""))[:2000]
-        comparison = compare_campaigns(
-            baseline, [], candidate, [], baseline_strategy, candidate_strategy
-        )
-        return candidate, preview, comparison
+        candidate, preview = prepare_ablation(root, args, load_config(), operation_id)
+        return candidate, preview, preview["comparison"]
 
     @router.post("/api/campaigns/{baseline_id}/ablation-preview")
     async def preview_ablation(baseline_id: str, payload: dict):
@@ -273,6 +279,10 @@ def create_dataset_router(root: Path, launch) -> APIRouter:
             base_trials, base_assessments = assessed_trials(
                 root, baseline, store.trials(baseline["id"])
             )
+            if reference.get("revision_id"):
+                named = BaselineStore(root).get(reference["revision_id"])
+                base_trials = named["trial_outcomes"]
+                base_assessments = named["assessments"]
             candidate_trials, candidate_assessments = assessed_trials(
                 root, candidate, store.trials(candidate_id)
             )

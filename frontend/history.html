@@ -10,7 +10,8 @@
   </script>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/history.css">
-  <script src="/static/history.js" defer></script>
+  <script src="/static/history-traces.js"></script>
+  <script src="/static/history.js?v=trace-lanes-1" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -23,7 +24,8 @@
     <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
   </header>
   <main id="main">
-    <div class="page-heading"><div><h1>Trial history</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p></div><a href="/" class="button">New evaluation</a></div>
+    <div class="page-heading"><div><h1>Trial history</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p>
+        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/" class="button">New evaluation</a></div>
     <div class="history-layout">
       <section class="history-list-panel" aria-labelledby="trialsHeading">
         <div class="panel-heading"><h2 id="trialsHeading">Saved trials</h2><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>

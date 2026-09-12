@@ -12,6 +12,26 @@ function buildCaseMetadata(input) {
   return {name: input.name.trim(), task: input.task.trim(), candidate_context: parseObject(input.context || "", "Candidate context"), conditions: parseObject(input.conditions || "", "Conditions"), recorded_evidence: parseObject(input.episode || "", "Recorded evidence"), reference_data: parseObject(input.references || "", "Reference annotations")};
 }
 
+function buildRecordingReference(input, asset) {
+  if (!asset?.sha256) throw new Error("Upload the evidence file first.");
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(input.id)) throw new Error("Use a unique reference ID with letters, numbers, dots, colons or dashes.");
+  const units = parseObject(input.units || "", "Recording units");
+  if (Object.values(units).some(value => typeof value !== "string" || !value.trim())) throw new Error("Each recording unit must be an explicit unit name.");
+  const reference = {id: input.id, asset_sha256: asset.sha256, kind: input.kind, units};
+  if (input.clock?.trim()) reference.clock_id = input.clock.trim();
+  if (input.frame?.trim()) reference.frame = input.frame.trim();
+  if (input.range) {
+    const start = Number(input.start), end = Number(input.end);
+    if (String(input.start).trim() === "" || String(input.end).trim() === "" || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) throw new Error("Enter a nonempty range with a start before its end.");
+    if (input.range !== "second" && (!Number.isInteger(start) || !Number.isInteger(end))) throw new Error("Bytes, samples and frames require integer offsets.");
+    if (input.range === "byte" && end > asset.size_bytes) throw new Error("Byte range exceeds the uploaded file.");
+    if (input.range !== "byte" && asset.media_type !== "application/json") throw new Error("Sample, frame and time ranges require an indexed JSON recording.");
+    if (input.range === "second" && !reference.clock_id) throw new Error("Time ranges require an explicit source clock ID.");
+    reference.selector = {unit: input.range, start, end};
+  }
+  return reference;
+}
+
 function caseSourceLabels(item) {
   const conditions = item.conditions || {};
   const labels = [];
@@ -30,7 +50,18 @@ function buildContract(input) {
     criterion.endpoint = input.endpoint.trim();
   }
   if (!criterion.description) throw new Error("Describe the acceptance criterion before saving.");
-  return {name: input.name.trim(), scope: input.scope, evidence_mode: input.evidenceMode, criteria: [criterion], metrics: ["task_success", "pass_at_k", "pass_pow_k", "pipeline_latency"]};
+  const contract = {name: input.name.trim(), scope: input.scope, evidence_mode: input.evidenceMode, criteria: [criterion], metrics: ["task_success", "pass_at_k", "pass_pow_k", "pipeline_latency"]};
+  if (input.targetMetric) {
+    const threshold = Number(input.targetThreshold), unit = input.targetMetric === "pipeline_latency" ? "ms" : input.targetMetric === "episode_completion_time" ? "s" : "fraction";
+    if (String(input.targetThreshold).trim() === "" || !Number.isFinite(threshold) || threshold < 0 || (unit === "fraction" && threshold > 1)) throw new Error("Enter a valid target threshold; fractions range from 0 to 1.");
+    contract.campaign_targets = [{metric: input.targetMetric, operator: input.targetOperator, threshold, unit}];
+    if (!contract.metrics.includes(input.targetMetric)) contract.metrics.push(input.targetMetric);
+  }
+  if (input.annotationEndpoint || input.annotationKey || input.annotationTarget) {
+    if (![input.annotationEndpoint, input.annotationKey, input.annotationTarget].every(value => value?.trim())) throw new Error("An annotation binding needs the verifier endpoint, reviewed field and reference field.");
+    contract.annotation_bindings = [{endpoint: input.annotationEndpoint.trim(), annotation_key: input.annotationKey.trim(), target_key: input.annotationTarget.trim()}];
+  }
+  return contract;
 }
 
 function buildReview(input) {
@@ -85,12 +116,12 @@ function evidenceHref(value) {
   return value;
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = {parseObject, buildCaseMetadata, caseSourceLabels, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref};
+if (typeof module !== "undefined" && module.exports) module.exports = {buildRecordingReference, parseObject, buildCaseMetadata, caseSourceLabels, buildContract, buildReview, buildCampaign, metricLabel, activeReviewIds, assessedCounts, metricValue, pairedTrialId, evidenceHref};
 
 if (typeof document !== "undefined") (() => {
   const $ = id => document.getElementById(id);
   const state = {cases: [], selected: new Map(), contracts: [], datasets: [], caseId: null, detail: null, reviews: [], trials: [], offset: 0, limit: 25, listVersion: 0, detailVersion: 0, contractId: "", frozenDataset: null, campaignPreview: null, campaignOperation: null, freezePreview: null, freezeMembers: null, reviewEdit: null};
-  Object.assign(state, {campaigns: [], campaignId: null, campaignVersion: 0, ablationPreview: null, ablationOperation: null, caseEdit: null});
+  Object.assign(state, {campaigns: [], campaignId: null, campaignVersion: 0, ablationPreview: null, ablationOperation: null, caseEdit: null, namedBaselines: [], namedBaseline: null, baselineOperation: null, assistantAssets: [], recordingAsset: null});
   const node = (tag, text, className) => { const element = document.createElement(tag); if (text != null) element.textContent = String(text); if (className) element.className = className; return element; };
   const objectDetails = (title, data) => { const element = node("details"); element.append(node("summary", title), node("pre", JSON.stringify(data ?? null, null, 2))); return element; };
   const link = (text, href) => { const element = node("a", text); element.href = href; return element; };
@@ -116,7 +147,7 @@ if (typeof document !== "undefined") (() => {
   async function loadAssistantStatus() {
     try {
       const status = await request("/api/assistant/status");
-      $("assistantStatus").textContent = status.available ? "Uses your configured Copilot model to inspect and preview evaluations. Launch proposals require your explicit confirmation." : status.reason || "The optional assistant is not configured. All evaluation controls below remain available.";
+      $("assistantStatus").textContent = status.available ? "Uses your configured Copilot model to inspect and preview evaluations. Every prepared change requires your explicit confirmation; the assistant cannot create SME judgments." : status.reason || "The optional assistant is not configured. All evaluation controls below remain available.";
       $("assistantQuestion").disabled = !status.available; $("askAssistant").disabled = !status.available;
     } catch { $("assistantStatus").textContent = "The optional assistant is unavailable. Use the case, campaign and review controls below."; }
   }
@@ -129,6 +160,8 @@ if (typeof document !== "undefined") (() => {
       if (state.frozenDataset) context.dataset_revision_id = state.frozenDataset.id;
       if ($("campaignContract").value) context.contract_id = $("campaignContract").value;
       if (state.campaignId) context.campaign_id = state.campaignId;
+      if (state.assistantAssets.length) context.asset_sha256s = state.assistantAssets;
+      if (state.namedBaseline) context.baseline_revision_id = state.namedBaseline.revision_id;
       const result = await post("/api/assistant/ask", {message: $("assistantQuestion").value.trim(), context});
       $("assistantResponse").replaceChildren(node("p", result.answer || "No answer was returned.", "assistant-answer"));
       const evidence = node("div", null, "assistant-evidence");
@@ -136,21 +169,88 @@ if (typeof document !== "undefined") (() => {
       $("assistantResponse").append(evidence);
       for (const proposal of result.proposals || []) {
         const card = node("div", null, "review-card"); card.append(node("h4", proposal.request?.name || "Proposed evaluation"));
-        if (proposal.kind !== "launch_campaign") { card.append(node("p", "This proposal type is not supported by this interface.", "muted")); $("assistantResponse").append(card); continue; }
-        card.append(node("p", `${proposal.preview?.planned_trials ?? "Unknown number of"} planned attempts. Review the exact cases, strategy and success contract before confirming.`, "notice"));
-        const metrics = node("div", null, "metric-preview"); metricsPreview(metrics, proposal.preview || {}); card.append(metrics, objectDetails("Exact proposed configuration", proposal.request));
+        const operations = {launch_campaign: "Confirm campaign launch", launch_ablation: "Confirm candidate launch", import_case: "Confirm case import", revise_case: "Confirm case revision", create_contract: "Confirm success contract", freeze_dataset: "Confirm dataset freeze", save_baseline: "Confirm named baseline"};
+        if (!operations[proposal.kind]) { card.append(node("p", "This operation is not supported by this interface.", "muted")); $("assistantResponse").append(card); continue; }
+        const isRun = ["launch_campaign", "launch_ablation"].includes(proposal.kind);
+        card.append(node("p", isRun ? `${proposal.preview?.planned_trials ?? "Unknown number of"} planned attempts. Review exact cases, strategy, conditions and contract before confirming.` : proposal.preview?.note || "Review the exact prepared change before confirming. Existing judgments are never invented.", "notice"));
+        if (isRun) { const metrics = node("div", null, "metric-preview"); metricsPreview(metrics, proposal.preview || {}); card.append(metrics); }
+        card.append(objectDetails("Exact prepared change", proposal.request), objectDetails("Validated preview and evidence revisions", proposal.preview));
         for (const blocker of proposal.preview?.blockers || []) card.append(node("p", blocker, "error-text"));
-        const confirm = button("Confirm campaign launch", async () => {
+        const confirm = button(operations[proposal.kind], async () => {
           confirm.disabled = true;
           try {
-            const launched = await post("/api/assistant/confirm", {operation_id: proposal.operation_id, confirmation_token: proposal.confirmation_token, confirmed: true});
-            confirm.remove(); card.append(node("p", `Campaign created: ${launched.planned_trials} planned attempts.`), link("Open report", `/api/campaigns/${encodeURIComponent(launched.id)}/report?format=html`)); await loadCampaigns(launched.id);
+            const result = await post("/api/assistant/confirm", {operation_id: proposal.operation_id, confirmation_token: proposal.confirmation_token, confirmed: true});
+            confirm.remove(); card.append(node("p", "Confirmed change saved."), objectDetails("Saved record", result));
+            if (isRun) { card.append(link("Open report", `/api/campaigns/${encodeURIComponent(result.id)}/report?format=html`)); await loadCampaigns(result.id); }
+            else if (["import_case", "revise_case"].includes(proposal.kind)) { state.selected.set(caseId(result), result); selectionChanged(); await loadCases(); await openCase(caseId(result), true); }
+            else if (proposal.kind === "create_contract") { await loadContracts(); $("campaignContract").value = result.id; invalidateCampaign(); }
+            else if (proposal.kind === "freeze_dataset") await loadDatasets();
+            else if (proposal.kind === "save_baseline") await loadNamedBaselines(result.id);
           } catch (error) { tell(`${error.message} If the preview changed, ask the assistant to prepare it again.`, true); confirm.disabled = false; }
         }, "");
         confirm.disabled = !proposal.preview?.ready || !proposal.operation_id || !proposal.confirmation_token; card.append(confirm); $("assistantResponse").append(card);
       }
     } catch (error) { $("assistantResponse").replaceChildren(node("p", error.message, "error-text")); }
     finally { $("askAssistant").disabled = false; }
+  });
+  $("recordingFile").addEventListener("change", async () => {
+    const file = $("recordingFile").files?.[0]; state.recordingAsset = null; $("attachRecording").disabled = true;
+    $("recordingSnippet").hidden = true;
+    if (!file) return;
+    $("recordingUploadStatus").textContent = "Uploading the selected evidence file…";
+    try { if (file.size > 64 * 1024 * 1024) throw new Error("Use a file no larger than 64 MiB."); const media = file.name.toLowerCase().endsWith(".json") ? "application/json" : file.type || "application/octet-stream"; state.recordingAsset = await request("/api/evidence-assets", {method:"POST",headers:{"Content-Type":media},body:file}); $("recordingUploadStatus").textContent = `${file.name} uploaded (${state.recordingAsset.size_bytes} bytes). Supply the reference meaning and ranges explicitly.`; $("attachRecording").disabled = false; }
+    catch(error) { $("recordingUploadStatus").textContent = error.message; }
+  });
+  $("attachRecording").addEventListener("click", () => {
+    try {
+      const reference = buildRecordingReference({id:$("recordingId").value.trim(),kind:$("recordingKind").value,clock:$("recordingClock").value,frame:$("recordingFrame").value,units:$("recordingUnits").value,range:$("recordingRange").value,start:$("recordingStart").value,end:$("recordingEnd").value}, state.recordingAsset);
+      const evidence = parseObject($("episodeEvidence").value,"Recorded evidence");
+      if (evidence.evidence_refs && !Array.isArray(evidence.evidence_refs)) throw new Error("Recorded evidence_refs must be an array.");
+      const refs = evidence.evidence_refs || [];
+      if (refs.some(item=>item.id===reference.id)) throw new Error("This reference ID is already present; choose a new ID or edit the existing JSON.");
+      if (["trajectory","state"].includes(reference.kind)) {
+        if (!reference.clock_id || !reference.frame || !Object.keys(reference.units).length) throw new Error("Trajectory/state references require explicit clock, frame and units.");
+        for (const [key,value] of [["source_clock_id",reference.clock_id],["frame",reference.frame],["units",reference.units]]) { if (evidence[key] != null && JSON.stringify(evidence[key]) !== JSON.stringify(value)) throw new Error("Reference metadata differs from the existing recording envelope."); evidence[key]=value; }
+      }
+      evidence.evidence_refs = [...refs,reference]; $("episodeEvidence").value = JSON.stringify(evidence,null,2); $("recordingSnippet").textContent=JSON.stringify(reference,null,2); $("recordingSnippet").hidden=false; $("recordingUploadStatus").textContent="Reference added to the unsaved case. Review the episode metadata and save the case when ready.";
+    } catch(error) { $("recordingUploadStatus").textContent=error.message; }
+  });
+  $("assistantAsset").addEventListener("change", async () => {
+    const file = $("assistantAsset").files?.[0]; state.assistantAssets = [];
+    if (!file) return;
+    $("assistantAssetStatus").textContent = "Uploading the selected observation…";
+    try { if (file.size > 16 * 1024 * 1024) throw new Error("Use an image under 16 MiB."); const asset = await request("/api/evidence-assets", {method: "POST", headers: {"Content-Type": file.type || "application/octet-stream"}, body: file}); state.assistantAssets = [asset.sha256]; $("assistantAssetStatus").textContent = `${file.name} attached. Ask the assistant to prepare case metadata; no case has been created yet.`; }
+    catch (error) { $("assistantAssetStatus").textContent = error.message; }
+  });
+  async function loadNamedBaselines(selectedId) {
+    const page = await request("/api/baselines"); state.namedBaselines = page.baselines;
+    $("namedBaseline").replaceChildren(...select(null, [["", "Choose a saved baseline"], ...page.baselines.map(row => [row.id, `${row.pinned ? "Pinned · " : ""}${row.name} · revision ${row.revision}`])], selectedId || "").childNodes); $("namedBaseline").value = selectedId || "";
+    if (selectedId) await openNamedBaseline(selectedId);
+  }
+  async function openNamedBaseline(id, revisionId) {
+    if (!id) { state.namedBaseline = null; $("namedBaselineDetails").replaceChildren(); return; }
+    const item = await request(`/api/baselines/${encodeURIComponent(revisionId || id)}`);
+    await openCampaign(item.campaign_id); state.namedBaseline = item; state.baselineOperation = null;
+    $("namedBaselineName").value = item.name; $("namedBaselinePinned").checked = item.pinned; $("baselineStrategy").value = item.strategy_id; invalidateAblation();
+    $("saveNamedBaseline").textContent = "Save a new baseline revision";
+    const container = $("namedBaselineDetails"); container.replaceChildren(node("p", `${item.name} · revision ${item.revision}. ${item.note}`, "notice"), objectDetails("Frozen assessment and provenance", item));
+    const page = await request(`/api/baselines/${encodeURIComponent(id)}/revisions`);
+    const history = select("baselineRevisionHistory", page.revisions.map(row => [row.revision_id, `Revision ${row.revision} · ${row.name} · ${date(row.created_at)}`]), item.revision_id);
+    history.addEventListener("change", () => openNamedBaseline(id, history.value).catch(error => tell(error.message, true))); container.append(label("Baseline revision history", history));
+  }
+  $("namedBaseline").addEventListener("change", () => openNamedBaseline($("namedBaseline").value).catch(error => tell(error.message, true)));
+  $("newNamedBaseline").addEventListener("click", () => { state.namedBaseline = null; state.baselineOperation = null; $("namedBaseline").value = ""; $("namedBaselineName").value = ""; $("namedBaselineDetails").replaceChildren(); $("saveNamedBaseline").textContent = "Save selected campaign as baseline"; invalidateAblation(); });
+  for (const id of ["namedBaselineName", "namedBaselinePinned", "baselineStrategy"]) $(id).addEventListener("input", () => { state.baselineOperation = null; });
+  $("namedBaselineForm").addEventListener("submit", async event => {
+    event.preventDefault(); $("saveNamedBaseline").disabled = true;
+    try {
+      if (!state.campaignId || !$("baselineStrategy").value) throw new Error("Open a completed campaign and choose its baseline strategy first.");
+      state.baselineOperation ||= crypto.randomUUID();
+      const payload = {name: $("namedBaselineName").value.trim(), pinned: $("namedBaselinePinned").checked, campaign_id: state.campaignId, strategy_id: $("baselineStrategy").value, operation_id: state.baselineOperation, ...(state.namedBaseline ? {expected_head_revision_id: state.namedBaseline.revision_id} : {})};
+      const result = await post(state.namedBaseline ? `/api/baselines/${encodeURIComponent(state.namedBaseline.id)}` : "/api/baselines", payload, state.namedBaseline ? "PATCH" : "POST");
+      await loadNamedBaselines(result.id); $("namedBaselineStatus").textContent = `Saved ${result.name}, revision ${result.revision}. Later reviews do not change this reference.`;
+    } catch (error) { $("namedBaselineStatus").textContent = error.message; }
+    finally { $("saveNamedBaseline").disabled = false; }
   });
   function invalidateCampaign() { state.campaignPreview = null; state.campaignOperation = null; $("startBaseline").disabled = true; $("campaignMeasures").replaceChildren(); updateBudget(); }
   function invalidateFreeze() { state.freezePreview = null; $("freezeDataset").disabled = true; }
@@ -340,6 +440,10 @@ if (typeof document !== "undefined") (() => {
     $("resultCampaign").replaceChildren(...select(null, [["", "Choose a campaign"], ...campaigns.map(item => [item.id, `${item.name} · ${item.status}`])], selected).childNodes); $("resultCampaign").value = selected;
     if (selectedId) await openCampaign(selectedId);
   }
+  function displayMeasure(value, unit) {
+    if (value == null) return "unavailable";
+    return unit === "fraction" ? `${(value * 100).toFixed(1)}%` : `${Number(value.toFixed(3))} ${unit}`;
+  }
   function renderSummary(summary, container, heading) {
     if (heading) container.append(node("h3", heading));
     const counts = assessedCounts(summary), grid = node("div", null, "summary-grid");
@@ -353,6 +457,21 @@ if (typeof document !== "undefined") (() => {
       table.append(thead, body); const scroll = node("div", null, "table-scroll"); scroll.append(table); metrics.append(scroll, node("p", `Pipeline latency p95: ${strategy.latency_p95_ms == null ? "unavailable" : `${strategy.latency_p95_ms} ms`}. This is not robot task completion time.`, "muted"));
     }
     container.append(metrics);
+    if (summary.campaign_targets?.length) {
+      const targets = node("section", null, "target-results"); targets.append(node("h4", "Campaign targets"));
+      for (const target of summary.campaign_targets) {
+        const row = node("div", null, "notice"); row.append(node("strong", `${target.strategy_id} · ${metricLabel(target.metric)}: ${target.status === "met" ? "Met" : target.status === "not_met" ? "Not met" : "Unknown"}`), node("p", `${target.operator === "gte" ? "At least" : "At most"} ${displayMeasure(target.threshold, target.unit)}. Measured value: ${displayMeasure(target.value, target.unit)}. Denominator: ${target.denominator}; unknown trials: ${target.unknown_trials}.`, "muted")); targets.append(row);
+      }
+      container.append(targets);
+    }
+    if (summary.robotics?.length) {
+      const robotics = node("details"); robotics.append(node("summary", "Robotics measures and evidence coverage"));
+      for (const item of summary.robotics) {
+        robotics.append(node("h4", `${item.strategy_id} · ${item.evidence_mode}`));
+        for (const [name, metric] of Object.entries(item.metrics || {})) robotics.append(node("p", `${metricLabel(name)}: ${displayMeasure(metric.value, metric.unit)}. ${metric.known_trials}/${metric.planned_trials} trials with evidence; quality ${metric.quality}; aggregation ${metric.aggregation}. ${metric.reason || ""}`, "muted"));
+      }
+      robotics.append(objectDetails("Exact metric denominators", summary.robotics)); container.append(robotics);
+    }
   }
   function renderDifferences(comparison, container) {
     const details = node("details"); details.append(node("summary", `${comparison.differences?.length || 0} recorded component differences`));
@@ -368,13 +487,13 @@ if (typeof document !== "undefined") (() => {
     for (const item of comparison.case_comparisons || []) {
       const card = node("div", null, "output-card"); card.append(link(`Case ${item.case_id}`, `/static/datasets.html?case=${encodeURIComponent(item.case_id)}`), node("p", `${item.status.replaceAll("_", " ")} · ${item.planned_pairs} planned pairs · ${((item.paired_coverage || 0) * 100).toFixed(1)}% assessed pairing coverage`, "muted"));
       const rows = node("details"); rows.append(node("summary", "Paired attempts and evidence"));
-      for (const attempt of item.attempts || []) { const line = node("p", `Seed ${attempt.seed}: ${attempt.baseline} → ${attempt.candidate}. `, "muted"); const baselineId = pairedTrialId(comparison, item, attempt, "baseline"), candidateId = pairedTrialId(comparison, item, attempt, "candidate"); if (baselineId) line.append(link("Baseline trial", `/static/history.html?trial=${encodeURIComponent(baselineId)}`), document.createTextNode(" · ")); if (candidateId) line.append(link("Candidate trial", `/static/history.html?trial=${encodeURIComponent(candidateId)}`)); rows.append(line); }
+      for (const attempt of item.attempts || []) { const line = node("p", `Seed ${attempt.seed}: ${attempt.baseline} → ${attempt.candidate}. `, "muted"); const baselineId = pairedTrialId(comparison, item, attempt, "baseline"), candidateId = pairedTrialId(comparison, item, attempt, "candidate"); if (baselineId) line.append(link("Baseline trial", `/static/history.html?trial=${encodeURIComponent(baselineId)}`), document.createTextNode(" · ")); if (candidateId) line.append(link("Candidate trial", `/static/history.html?trial=${encodeURIComponent(candidateId)}`)); if (candidateId && baselineId) line.append(document.createTextNode(" · "), link("Compare trace lanes", `/static/history.html?trial=${encodeURIComponent(candidateId)}&compare=${encodeURIComponent(baselineId)}`)); rows.append(line); }
       card.append(rows); container.append(card);
     }
     container.append(objectDetails("Exact comparison and assessment revisions", comparison));
   }
   async function openCampaign(id) {
-    const version = ++state.campaignVersion; state.campaignId = id; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true;
+    const version = ++state.campaignVersion; state.campaignId = id; state.namedBaseline = null; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true;
     if (!id) { $("campaignResults").replaceChildren(node("p", "Choose a campaign to inspect its assessed outcomes.", "muted")); return; }
     $("campaignResults").replaceChildren(node("p", "Loading authoritative campaign assessments…", "muted"));
     try {
@@ -397,7 +516,7 @@ if (typeof document !== "undefined") (() => {
     } catch (error) { if (version === state.campaignVersion) $("campaignResults").replaceChildren(node("p", error.message, "error-text"), button("Retry results", () => openCampaign(id))); }
   }
   function invalidateAblation() { state.ablationPreview = null; state.ablationOperation = null; $("runAblation").disabled = true; $("ablationPreview").textContent = "Preview to confirm that conditions match and inspect recorded differences."; }
-  function ablationPayload() { if (!state.campaignId || !$("baselineStrategy").value || !$("candidateStrategy").value) throw new Error("Choose the baseline and candidate strategies."); return {baseline_strategy_id: $("baselineStrategy").value, candidate_strategy_id: $("candidateStrategy").value, name: $("ablationName").value.trim(), intended_change: $("intendedChange").value.trim()}; }
+  function ablationPayload() { if (!state.campaignId || !$("baselineStrategy").value || !$("candidateStrategy").value) throw new Error("Choose the baseline and candidate strategies."); return {...(state.namedBaseline ? {baseline_revision_id: state.namedBaseline.revision_id} : {}), baseline_strategy_id: $("baselineStrategy").value, candidate_strategy_id: $("candidateStrategy").value, name: $("ablationName").value.trim(), intended_change: $("intendedChange").value.trim()}; }
   $("previewAblation").addEventListener("click", async () => {
     $("previewAblation").disabled = true; $("runAblation").disabled = true;
     try {
@@ -471,7 +590,7 @@ if (typeof document !== "undefined") (() => {
   $("contractForm").addEventListener("submit", async event => {
     event.preventDefault(); $("saveContract").disabled = true;
     try {
-      const payload = buildContract({json: $("contractJson").value, name: $("contractName").value, scope: $("successScope").value, evidenceMode: $("evidenceMode").value, assessment: $("assessmentMethod").value, criteria: $("successCriteria").value, endpoint: $("verifierEndpoint").value});
+      const payload = buildContract({json: $("contractJson").value, targetMetric: $("targetMetric").value, targetOperator: $("targetOperator").value, targetThreshold: $("targetThreshold").value, annotationEndpoint: $("annotationEndpoint").value, annotationKey: $("annotationKey").value, annotationTarget: $("annotationTarget").value, name: $("contractName").value, scope: $("successScope").value, evidenceMode: $("evidenceMode").value, assessment: $("assessmentMethod").value, criteria: $("successCriteria").value, endpoint: $("verifierEndpoint").value});
       const contract = await post("/api/success-contracts", payload); await loadContracts(contract.id); invalidateCampaign(); invalidateFreeze(); state.freezeMembers = null; $("contractPanel").open = false; tell("Success contract saved. Preview shows which measures this data and strategy can support.");
     } catch (error) { tell(error.message, true); } finally { $("saveContract").disabled = false; }
   });
@@ -493,7 +612,7 @@ if (typeof document !== "undefined") (() => {
       state.freezePreview = null; await loadDatasets(); tell(`Frozen dataset ${dataset.name} saved with exact case and review references. Later corrections require another revision.`);
     } catch (error) { tell(error.message, true); invalidateFreeze(); }
   });
-  function resetCaseForm() { state.caseEdit = null; $("caseForm").reset(); $("caseImage").required = true; $("saveCase").textContent = "Save case"; $("cancelCaseRevision").hidden = true; $("caseEditStatus").textContent = "New case. Saved inputs receive an immutable revision."; }
+  function resetCaseForm() { state.recordingAsset = null; $("attachRecording").disabled = true; $("recordingSnippet").hidden = true; $("recordingUploadStatus").textContent = "Choose a file to upload it."; state.caseEdit = null; $("caseForm").reset(); $("caseImage").required = true; $("saveCase").textContent = "Save case"; $("cancelCaseRevision").hidden = true; $("caseEditStatus").textContent = "New case. Saved inputs receive an immutable revision."; }
   $("loadExamples").addEventListener("click", async () => { $("loadExamples").disabled = true; try { const result = await post("/api/cases/examples", {}); for (const item of result.cases) state.selected.set(caseId(item), item); selectionChanged(); await loadCases(); if (result.cases.length) await openCase(caseId(result.cases[0]), true); $("importPanel").open = false; tell("Synthetic robotics examples imported and selected. Their observations demonstrate evaluation behavior, not physical performance."); } catch (error) { tell(error.message, true); } finally { $("loadExamples").disabled = false; } });
   $("showImport").addEventListener("click", () => { if (state.caseEdit) resetCaseForm(); $("importPanel").open = true; $("caseName").focus(); });
   $("cancelCaseRevision").addEventListener("click", resetCaseForm);
@@ -513,5 +632,5 @@ if (typeof document !== "undefined") (() => {
   $("themeToggle").addEventListener("click", () => { const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = theme; try { localStorage.setItem("rove-theme", theme); } catch { /* Keep in-page theming available. */ } themeLabel(); });
   window.addEventListener("popstate", () => { const id = new URLSearchParams(location.search).get("case"); if (id) openCase(id); });
   themeLabel(); updateBudget(); loadAssistantStatus();
-  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), request("/api/strategies").then(page => { const options = [["", "Choose a strategy"], ...page.strategies.map(item => [item.id, item.display_name || item.id])]; $("campaignStrategy").replaceChildren(...select(null, options).childNodes); $("candidateStrategy").replaceChildren(...select(null, options).childNodes); $("campaignStrategy").value = ""; $("candidateStrategy").value = ""; })]).then(() => { const id = new URLSearchParams(location.search).get("case"); if (id) openCase(id); }).catch(error => tell(error.message, true));
+  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), loadNamedBaselines(), request("/api/strategies").then(page => { const options = [["", "Choose a strategy"], ...page.strategies.map(item => [item.id, item.display_name || item.id])]; $("campaignStrategy").replaceChildren(...select(null, options).childNodes); $("candidateStrategy").replaceChildren(...select(null, options).childNodes); $("campaignStrategy").value = ""; $("candidateStrategy").value = ""; })]).then(() => { const id = new URLSearchParams(location.search).get("case"); if (id) openCase(id); }).catch(error => tell(error.message, true));
 })();

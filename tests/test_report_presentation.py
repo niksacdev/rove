@@ -273,3 +273,42 @@ def test_resolved_curve_keeps_full_point_estimates_without_unresolved_traces(rep
     assert list(figures["pass_at_k"]["data"][0]["y"]) == [0.5, 1.0, None]
     assert list(figures["pass_pow_k"]["data"][0]["y"]) == [0.5, 0.0, None]
     assert len(figures["pass_at_k"]["data"]) == 2
+
+
+def test_declared_robotics_targets_preserve_unknown_and_scope(report):
+    report["summary"]["robotics"] = [
+        {
+            "strategy_id": "baseline",
+            "metrics": {
+                "autonomous_completion": {
+                    "value": None,
+                    "unit": "fraction",
+                    "quality": "synthetic",
+                    "aggregation": "ratio",
+                    "known_trials": 1,
+                    "planned_trials": 4,
+                    "denominator": 1,
+                    "reason": "Missing intervention evidence",
+                }
+            },
+        }
+    ]
+    report["summary"]["campaign_targets"] = [
+        {
+            "strategy_id": "baseline",
+            "metric": "autonomous_completion",
+            "operator": "gte",
+            "threshold": 0.9,
+            "unit": "fraction",
+            "value": None,
+            "status": "unknown",
+            "denominator": 1,
+            "unknown_trials": 3,
+        }
+    ]
+    html = to_html(report)
+    assert "Declared outcomes and campaign targets" in html
+    assert "Missing intervention evidence" in html
+    assert "synthetic" in html
+    assert "autonomous_completion" in html
+    assert "Target thresholds and results" in html

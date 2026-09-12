@@ -344,6 +344,7 @@ class PipelineContext(BaseModel):
 
     sim_steps: int = 0
     episode_evidence: dict = Field(default_factory=dict)
+    grader_context: dict = Field(default_factory=dict)
     check_results: dict[str, CheckResult] = Field(default_factory=dict)
     task: str = ""
     image_base64: str = ""

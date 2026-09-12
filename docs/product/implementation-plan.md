@@ -1,6 +1,6 @@
 # ROVE Delivery Plan: From Trial Evidence to Customer Evaluation Workflows
 
-**Status:** Local customer workflow implemented; the full accepted plan is not complete. Task-by-task acceptance audit below separates delivered behavior, unfinished local work and deferred integrations.
+**Status:** Local completion implemented and verified; PR checks govern merge readiness. Live provider/Azure validation is specification-only at user request; hosted integrations remain explicitly unvalidated.
 **Updated:** 2026-09-12
 **Design:** [Architecture diagram](../architecture/target-architecture.md), [system diagram](../architecture/system-diagram.md), [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md)
 
@@ -41,34 +41,33 @@ checks. The user has authorized implementation PR merges after required checks p
 | 11 / T11 | Optional Azure Monitor and Grafana export profiles | T04; after local milestone | Same trial correlation in external trace views; bounded export and content policies; local use unaffected by exporter failure |
 | 12 / T12 | Versioned analytical exports for Fabric/Delta consumers | T07, T08; customer demand | Export/import preserves revisions, schemas and asset manifests; measured data volumes justify format and connector choices |
 
-### Acceptance audit, 12 September 2026
+### Local completion and explicit validation exclusions
 
-“Complete” means the original task's stated local acceptance is covered. “Partial”
-means useful functionality exists but at least one original acceptance criterion
-remains. “Pending” means the integration deliverable has not been implemented and
-validated. This is a source/test audit, not a claim that every test or live provider
-was rerun during the audit. Original milestone requirements below remain unchanged.
+The user authorized completing the remaining local implementation and requested
+**live provider validation as a specification only**. No live model calls, Azure
+resources or hosted monitoring credentials are used to establish local acceptance.
+The original milestones below remain the design rationale; this table records the
+implementation boundary after the follow-up work.
 
-| Task | Status | Delivered evidence | Remaining before full acceptance |
-| --- | --- | --- | --- |
-| T01 | Partial | Pinned SDK `1.0.13` / CLI `1.0.81-9`; real CLI controlled image/tool/usage/trace probe; lifecycle tests | One explicitly configured live provider and measured startup overhead; Azure-specific validation belongs to T10 |
-| T02 | Complete for shared local recording | Pre-execution quick/campaign IDs, frozen task/strategy/configuration hashes, schema migrations, SQLite events, initial managed assets, ownership-aware recovery, idempotent legacy import and backup/restore tests | Auxiliary output/recording bytes are not comprehensively archived; asset-range coverage remains T04/T06 work. Compatibility journals and two databases remain documented implementation choices, not an unimplemented shared identity |
-| T03 | Partial | Hosted perceive/plan/verify, fresh candidate/grader/assistant scopes, typed host tools, bounded cleanup, direct adapters retained | General stage memory/reset and telemetry-coverage contracts; action/reset integration beyond fresh process/session isolation |
-| T04 | Partial | Existing exposed events and SDK usage persist with deduplication; optional trial spans; real SDK/CLI HTTP 503 OTLP collector and Python exporter failure tests preserve journal/cleanup | Full application → native SDK → tool → collector correlation; blackholed collector/blocked exporter behavior; source-clock identity and recording ranges |
-| T05 | Partial | Paginated history, snapshots, measurements, stage-filtered activity, trace IDs and on-demand observations | Parallel activity lanes and complete measurement/criterion-to-recording-range navigation; aligned comparison traces |
-| T06 | Partial | Managed PNG/JPEG intake, immutable cases, contracts and expected-measure preview; synthetic image examples | General episode/trajectory assets with unit/frame/availability validation; action-dependent synthetic execution; aggregate campaign targets. The 49 existing gallery samples now import as immutable Cases |
-| T07 | Complete for review/freezing | Revision-checked drafts, immutable corrections, separate validity/annotation/output reviews, disagreement detection and atomic exact-membership freezes | Stored annotations are not yet consumed through a configured grader mapping. Private reference annotations are exposed separately in the case editor. Team authentication/adjudication is deferred platform scope |
-| T08 | Partial | Immutable baseline references, matching-case/component comparisons, bounded pass estimates, paired regressions, report exports/trends and identity-preserving exploratory promotion | Dedicated named/pinned baseline management, aligned traces and fuller history/report UX; outcome cards, coverage, reliability bounds and expandable evidence are delivered. Selective subset comparisons are not supported; formal delta statistics require justified assumptions before addition |
-| T09 | Partial against original scope | Optional assistant reads evidence, previews campaigns and requests host-confirmed idempotent launch | Full import-to-comparison assistant journey and live-provider validation. Uploads/SME/freeze remain explicit UI actions by current design; this deliberate boundary does not make the original broader acceptance complete |
-| T10 | Pending, external validation gate | Existing Azure adapters are separate from the proposed SDK deployment profile | Authorized Azure/Foundry identity, endpoint, usage, rate-limit and overhead validation |
-| T11 | Pending, external integration | Local optional spans and controlled exporter failure tests provide foundations | Packaged Monitor/Grafana profiles, externally navigable correlation, permissions, redaction and queue/drop/shutdown validation |
-| T12 | Pending, demand-gated | SQLite revision/lineage records and HTML/JSON/CSV reports exist | Versioned analytical manifest with asset lineage, round-trip fidelity and justified Parquet/Delta/Fabric integration |
+| Task | Local delivery | Validation boundary |
+| --- | --- | --- |
+| T01 | Pinned SDK/CLI compatibility, real local protocol and native trace probes | Live provider behavior and Azure identity are specification-only |
+| T02 | Shared durable recording, managed assets and schema v3 migrations | Local SQLite; remote model weights and physical scenes are not reproduced |
+| T03 | Explicit stage memory/reset/telemetry contracts, scoped SDK sessions and actual stage/tool spans | Direct adapter declarations are customer contracts; cross-trial memory is not enabled |
+| T04 | Native/application/tool ancestry, source clocks, bounded optional exporter and outage handling | Controlled loopback collector tests; external service validation is specified separately |
+| T05 | Parallel clock-aware lanes, paired-trial views, preserved outputs and exact recording selections | Unknown clocks stay unaligned; initial lane projection is bounded and reports truncation |
+| T06 | Versioned episode/trajectory references, action-dependent synthetic execution, target setup and measures | Idealized one-axis test world; general video codecs and hardware drivers are excluded |
+| T07 | Explicit frozen annotation bindings to participating local graders; immutable review/freezing workflow | No automatic SME judgment, judge training or team authentication |
+| T08 | Named/pinned baseline revisions, frozen assessment projections, controlled ablations and trace links | Full matching cohorts; no unsupported significance claims or selective subset statistics |
+| T09 | Typed guided import/revise/contract/freeze/baseline/launch/comparison services with host confirmation | SME decisions stay explicit human input; live-provider answer quality remains unvalidated |
+| T10 | Live provider/Azure validation specification | Execution skipped at user request |
+| T11 | Bounded local OTLP profile, structural redaction, queue/drop/shutdown behavior and collector examples | Hosted Azure/Grafana permissions and externally navigable views require the specified validation |
+| T12 | Versioned relational exchange with schema/hash/asset/lineage round-trip | SQLite remains transactional; target-specific Fabric/Delta transforms are future integrations |
 
-The core import → baseline → review → freeze → candidate → comparison journey is
-implemented; that does not close every original trace, robotics-evidence, assistant
-or integration requirement. Hardware drivers are deliberately excluded, but the
-missing **action-dependent synthetic rollout** is local accepted work, not a
-hardware-access gate. Unknown or unsupported metrics remain unavailable.
+The local acceptance evidence is in the source-linked specifications:
+[robotics evidence](robotics-evidence.md), [baselines and assistant](named-baselines-and-assistant.md),
+and [preserved evidence and exchange](evidence-and-exchange.md). Missing outcome
+evidence remains unknown throughout these workflows.
 
 ### Regression evidence for delivered behavior
 
@@ -97,23 +96,17 @@ hardware-access gate. Unknown or unsupported metrics remain unavailable.
   read/preview tool boundary, host confirmation, stale inputs and duplicate launches.
   They do not establish the broader assistant journey or live-provider quality.
 
-### Remaining work in recommended order
+### Deferred validation and future extensions
 
-1. The sample library, private-annotation form and report redesign are validated
-   locally: 49 imported Cases, unchanged historical trial count, and regression
-   coverage for source revisions, unknown outcomes and offline reports.
-2. Complete local evidence coverage: managed auxiliary assets/ranges, explicit
-   source clocks and stage memory/reset/coverage contracts, then parallel and
-   aligned trace navigation with end-to-end native/application correlation.
-3. Deliver action-dependent synthetic rollout fixtures and explicit reusable-label
-   grader bindings. Neither archived episode outcomes nor accepted baseline
-   outputs may silently become a new candidate's physical success.
-4. Complete baseline pin/history/report acceptance. Add statistical comparisons
-   only when repeat structure and independence assumptions support them.
-5. Validate one configured live SDK provider and explicitly decide whether to
-   extend the deliberately bounded assistant toward the original full journey.
-6. Pursue T10/T11 only in an authorized target environment and T12 when a concrete
-   analytical consumer justifies its format and fidelity contract.
+Live model/provider and Azure validation is intentionally not executed. The
+[live validation specification](live-provider-validation.md) defines required identity, endpoint, usage, timeout, rate-limit and
+startup-overhead evidence before any deployment claim. Hosted monitoring/Fabric
+validation also requires an actual authorized target environment.
+
+Future work is driven by customer needs: richer simulator physics, hardware drivers,
+video indexing, shared multi-user storage, team review/authentication, selective
+comparison cohorts and analytical connector scale. These are not silently implied
+by the completed local fixture and relational exchange.
 
 See [current implementation](../architecture/current-implementation.md),
 [setup](../TRIAL_HISTORY.md) and [compatibility evidence](../architecture/copilot-compatibility.md)
@@ -213,19 +206,12 @@ distinct from data used to tune the candidate or grader.
 
 ## Milestone C: Guided Workflow — T09
 
-**Accepted implementation boundary, 12 September 2026:** the local assistant
-inspects saved evidence, prepares a validated campaign and requests an explicit
-host-confirmed launch. Media uploads, edits and SME decisions stay in the UI so
-the agent cannot manufacture expert review or silently curate the evaluation set.
-Read/preview tools and host-generated operation/confirmation identities enforce
-this separation. Confirming revalidates the exact inputs and configuration.
-
-This scoped assistant completes the local prepare → launch → inspect interaction.
-The broader original scope below remains undelivered, so T09 is partial against
-the accepted plan. This does not require automating SME judgment: any extension
-must preserve explicit human decisions and exact-revision confirmation. The current
-boundary is an intentional implementation decision, not evidence that the original
-full journey was completed. Live-provider validation remains open.
+**Implemented local boundary:** the assistant reads evidence and proposes typed
+imports, case revisions, contracts, freezes, named baselines, campaign launches
+and comparisons. The host requires explicit confirmation and revalidates exact
+inputs before every mutation. Media selection and SME judgment remain human
+inputs; no assistant tool manufactures expert reviews. Durable operation identities
+make confirmed retries idempotent. Live-provider validation is specification-only.
 
 **Original broader scope, retained for acceptance tracking:**
 
@@ -235,7 +221,7 @@ validation and operation IDs. Draft suggestions become frozen configuration when
 the user launches the evaluation; the assistant cannot silently change that
 configuration during execution. Proposed changes create a new candidate revision.
 
-**Original acceptance (not yet complete):** complete the same customer journey through the assistant, with
+**Guided acceptance:** complete the same customer journey through the assistant, with
 traceable tool actions and evidence-linked explanations. Duplicate requests do not
 duplicate campaigns. Review/freeze actions operate on exact revisions. Candidate
 agents cannot access private labels through assistant or grader sessions.
@@ -265,3 +251,18 @@ benefit; do not add them because the runtime offers them. Revisit worker topolog
 when measured concurrency warrants it, and storage when workload/hosting needs
 outgrow local SQLite. External integrations require their own validation before
 being described as available.
+
+## Local completion verification
+
+The local regression suite passed with 568 tests and 3 existing skips; the
+subsequently added five collector-profile checks also passed. All 33 mandatory
+JavaScript UI tests passed. Documentation validation checked 297 relative links
+and parsed 29 Mermaid diagrams. Browser checks covered named baseline creation,
+pinned revision history, paired trace lanes and target results without horizontal
+overflow. The isolated action-dependent demo completed all 18 trials: baseline
+0/9 and candidate 6/9, using synthetic evidence only.
+
+The [live provider validation specification](live-provider-validation.md) defines
+the deferred acceptance gate. [Collector profiles](../../examples/observability/README.md)
+are locally parsed configuration examples; hosted ingestion and authentication
+remain unvalidated.

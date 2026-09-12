@@ -94,3 +94,26 @@ tests cover the implemented local revision and lineage rules.
 - Renamed strategies compare under matching contracts; changed graders or conditions expose
   incompatibility. Missing evidence and unsupported seeds remain explicit.
 - History shows baseline versions and component differences without loading heavy assets.
+
+## Local completion: named and pinned baseline revisions
+
+A named baseline is now a revisioned reference over a completed campaign strategy,
+not a new execution container. `named_baselines` holds the current head;
+`baseline_revisions` preserves name, pin state, campaign/configuration identity,
+contract/case/dataset IDs, assessed outcomes, verifier measurement evidence and the
+review revision set. Optimistic head checks prevent lost edits. An ablation can retain
+an exact baseline revision and compare against that frozen assessment projection even
+when later reviews change the source campaign's current report.
+
+```mermaid
+flowchart LR
+    Campaign[Campaign + strategy] --> Revision[Immutable baseline revision]
+    Reviews[Assessment revisions + measurements] --> Revision
+    Head[Named baseline head] --> Revision
+    Candidate[Candidate campaign] --> Revision
+    Revision --> Comparison[Frozen reference vs candidate evidence]
+```
+
+The baseline may remain incomplete; pinning never converts unknowns into successes.
+See [named baselines and assistance](../product/named-baselines-and-assistant.md) for
+interfaces and the confirmation/idempotency boundary.
