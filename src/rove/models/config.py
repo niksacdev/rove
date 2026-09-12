@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any
 import yaml
 from pydantic import BaseModel, model_validator
 
+from rove.models.verification import StageConfig, VerifyStageConfig
+
 if TYPE_CHECKING:
     from rove.models.core import Strategy
 
@@ -65,16 +67,54 @@ class EndpointConfig(BaseModel):
 class StrategyConfig(BaseModel):
     display_name: str = ""
     description: str = ""
-    perceive: str | None = None
-    plan: str | None = None
-    act: str | None = None
-    verify: str
+    perceive: str | StageConfig | None = None
+    plan: str | StageConfig | None = None
+    act: str | StageConfig | None = None
+    verify: str | VerifyStageConfig
     sim: str | None = None
     compute_dynamics: bool = False
     pipeline_mode: str = "sequential"  # "sequential" | "parallel"
     verify_mode: str = "auto"  # "auto" | "agent_loop" | "precompute"
     tags: list[str] = []
     latency_budget: dict[str, int] = {}  # per-stage overrides (ms), empty = use defaults
+
+    @model_validator(mode="after")
+    def validate_stage_options(self):
+        if self.pipeline_mode not in {"sequential", "parallel"}:
+            raise ValueError("Invalid pipeline_mode")
+        if self.verify_mode not in {"auto", "precompute", "agent_loop"}:
+            raise ValueError("Invalid verify_mode")
+        if isinstance(self.verify, VerifyStageConfig):
+            if (
+                self.verify.mode != "auto"
+                and self.verify_mode != "auto"
+                and self.verify.mode != self.verify_mode
+            ):
+                raise ValueError("Conflicting verify_mode and verify.mode")
+            if self.compute_dynamics and self.verify.checks:
+                raise ValueError("Use either compute_dynamics or verify.checks, not both")
+        for stage, budget in self.latency_budget.items():
+            if stage not in {"perceive", "plan", "act", "verify"} or budget <= 0:
+                raise ValueError("Invalid stage latency budget")
+        return self
+
+    def stage_options(self, name: str) -> StageConfig | None:
+        value = getattr(self, name)
+        if value is None:
+            return None
+        cls = VerifyStageConfig if name == "verify" else StageConfig
+        return cls(endpoint=value) if isinstance(value, str) else value
+
+    def endpoint_refs(self) -> set[str]:
+        refs = {
+            self.stage_options(name).endpoint
+            for name in ("perceive", "plan", "act", "verify")
+            if self.stage_options(name)
+        }
+        if self.sim:
+            refs.add(self.sim)
+        refs.update(c.endpoint for c in self.stage_options("verify").checks)
+        return refs
 
 
 class DefaultsConfig(BaseModel):
@@ -106,11 +146,36 @@ class RoveConfig(BaseModel):
         for sid, strat in self.strategies.items():
             for field in ("perceive", "plan", "act", "verify", "sim"):
                 ref = getattr(strat, field)
+                if isinstance(ref, StageConfig):
+                    ref = ref.endpoint
                 if ref is not None and ref not in self.endpoints:
                     raise ValueError(
                         f"Strategy '{sid}' references endpoint '{ref}' "
                         f"in '{field}' but it is not defined in endpoints."
                     )
+            verify = strat.stage_options("verify")
+            for check in verify.checks:
+                if check.endpoint not in self.endpoints:
+                    raise ValueError(
+                        f"Check endpoint '{check.endpoint}' is not defined in endpoints"
+                    )
+                ep = self.endpoints[check.endpoint]
+                if ep.type != "verifier" or "diagnostic_check" not in ep.capabilities:
+                    raise ValueError(
+                        f"Check '{check.endpoint}' requires a verifier with diagnostic_check capability"
+                    )
+                if ep.adapter == "forward_kinematics" and check.role != "diagnostic":
+                    raise ValueError("Forward kinematics is a diagnostic, not a task constraint")
+            ep = self.endpoints[verify.endpoint]
+            mode = verify.mode if verify.mode != "auto" else strat.verify_mode
+            if ep.type == "verifier" and mode == "agent_loop":
+                raise ValueError("Local task evaluators require precompute mode")
+            if ep.type == "verifier" and (
+                "verification" not in ep.capabilities or ep.adapter == "forward_kinematics"
+            ):
+                raise ValueError(
+                    "Task evaluator requires verification capability; FK is diagnostic only"
+                )
             # At least one optional stage must be present
             optional = [getattr(strat, f) for f in ("perceive", "plan", "act")]
             if not any(optional):
@@ -228,14 +293,30 @@ def get_strategies() -> dict[str, Strategy]:
             id=sid,
             display_name=entry.display_name or sid,
             description=entry.description,
-            perceive=entry.perceive,
-            plan=entry.plan,
-            act=entry.act,
-            verify=entry.verify,
+            perceive=entry.stage_options("perceive").endpoint
+            if entry.stage_options("perceive")
+            else None,
+            plan=entry.stage_options("plan").endpoint if entry.stage_options("plan") else None,
+            act=entry.stage_options("act").endpoint if entry.stage_options("act") else None,
+            verify=entry.stage_options("verify").endpoint
+            if entry.stage_options("verify")
+            else None,
             sim=entry.sim,
             compute_dynamics=entry.compute_dynamics,
             pipeline_mode=entry.pipeline_mode,
-            verify_mode=entry.verify_mode,
+            verify_mode=(
+                entry.stage_options("verify").mode
+                if entry.stage_options("verify").mode != "auto"
+                else entry.verify_mode
+            ),
+            stage_timeouts={
+                name: option.timeout_ms
+                or entry.latency_budget.get(name)
+                or config.defaults.timeout_per_step_ms
+                for name in ("perceive", "plan", "act", "verify")
+                if (option := entry.stage_options(name))
+            },
+            verification_checks=entry.stage_options("verify").checks,
             tags=list(entry.tags),
         )
     return strategies

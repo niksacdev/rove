@@ -1,0 +1,47 @@
+version: "1.0"
+endpoints:
+  mock-policy:
+    type: vla
+    adapter: mock_vla
+    capabilities: [action_execution]
+    config:
+      mock_latency_ms: [0, 0]
+  object-in-target:
+    type: verifier
+    adapter: local_verifier
+    capabilities: [verification]
+    config:
+      entrypoint: rove.evaluators.examples:object_in_target
+      revision: final-position-v1
+      target_min_m: [0.0, 0.0, 0.0]
+      target_max_m: [0.2, 0.2, 0.2]
+  contact-force:
+    type: verifier
+    adapter: local_verifier
+    capabilities: [diagnostic_check]
+    config:
+      entrypoint: rove.evaluators.examples:force_limit
+      revision: force-limit-v1
+      max_force_n: 10.0
+  robot-kinematics:
+    type: verifier
+    adapter: forward_kinematics
+    capabilities: [diagnostic_check]
+strategies:
+  recorded-outcome:
+    display_name: Recorded outcome (synthetic example)
+    act:
+      endpoint: mock-policy
+      timeout_ms: 5000
+    verify:
+      endpoint: object-in-target
+      mode: precompute
+      timeout_ms: 5000
+      checks:
+        - endpoint: contact-force
+          role: constraint
+          required: true
+          timeout_ms: 1000
+        - endpoint: robot-kinematics
+          role: diagnostic
+          required: false

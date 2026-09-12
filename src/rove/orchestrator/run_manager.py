@@ -91,7 +91,7 @@ class RunManager:
                 total_latency = sum(s.get("latency_ms", 0) for s in stages)
                 verify_stage = next((s for s in stages if s["stage"] == "verify"), None)
                 success = (
-                    verify_stage["output"]["success"]
+                    verify_stage["output"].get("success", False)
                     if verify_stage and verify_stage.get("output")
                     else False
                 )
@@ -101,12 +101,19 @@ class RunManager:
                     else 0.0
                 )
 
+                verdict_valid = bool(
+                    verify_stage and (verify_stage.get("output") or {}).get("verdict_valid", False)
+                ) and not any(s["status"] == "error" for s in stages)
                 failure_stage, failure_category = attribute_failure(stages, success)
+                if not verdict_valid:
+                    failure_category = "unknown"
 
                 result = {
                     "strategy_id": strategy.id,
                     "display_name": strategy.display_name,
                     "success": success,
+                    "verdict_valid": verdict_valid,
+                    "outcome": ("pass" if success else "fail") if verdict_valid else "unknown",
                     "confidence": confidence,
                     "total_latency_ms": round(total_latency, 1),
                     "failure_stage": failure_stage,
@@ -134,6 +141,8 @@ class RunManager:
                     "display_name": strategy.display_name,
                     "success": False,
                     "error": str(e),
+                    "verdict_valid": False,
+                    "outcome": "unknown",
                     "stages": [],
                 }
                 await on_event(strategy.id, "strategy_error", error_result)
@@ -172,4 +181,6 @@ class RunManager:
             urdf_path=self._urdf_path,
             pipeline_mode=strategy.pipeline_mode,
             verify_mode=strategy.verify_mode,
+            verification_checks=strategy.verification_checks,
+            stage_timeouts=strategy.stage_timeouts,
         )

@@ -19,6 +19,7 @@ from rove.adapters.protocols import (
     AgentAdapter,
     SimAdapter,
     StageAdapter,
+    VerifierAdapter,
     VLAAdapter,
 )
 from rove.adapters.registry import AdapterRegistry
@@ -34,6 +35,13 @@ from rove.models import (
     TaskPlan,
     VerificationResult,
     VLACapabilities,
+)
+from rove.models.verification import (
+    AGGREGATION_VERSION,
+    CheckConfig,
+    CheckResult,
+    EvaluatorContext,
+    EvaluatorResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +77,8 @@ class EvaluationPipeline:
         urdf_path: str | None = None,
         pipeline_mode: str = "sequential",
         verify_mode: str = "auto",
+        verification_checks: list[CheckConfig] | None = None,
+        stage_timeouts: dict[str, int] | None = None,
     ):
         self.perceive_adapter = perceive_adapter
         self.plan_adapter = plan_adapter
@@ -80,6 +90,20 @@ class EvaluationPipeline:
         self._urdf_path = urdf_path
         self._pipeline_mode = pipeline_mode
         self._verify_mode = verify_mode
+        self._checks = verification_checks or []
+        self._stage_timeouts = stage_timeouts or {
+            stage: 30000 for stage in ("perceive", "plan", "act", "verify")
+        }
+        self._check_adapters = (
+            {c.endpoint: registry.get_verifier(c.endpoint) for c in self._checks}
+            if registry
+            else {}
+        )
+        if self._checks and not registry:
+            raise ValueError("Configured checks require an adapter registry")
+        self._uses_kinematics = compute_dynamics or any(
+            type(a).__name__ == "ForwardKinematicsAdapter" for a in self._check_adapters.values()
+        )
         self._urdf_robot_info = self._extract_urdf_robot_info()
 
     def _extract_urdf_robot_info(self) -> dict:
@@ -240,11 +264,19 @@ class EvaluationPipeline:
         **context: Any,
     ) -> Any:
         """Dispatch to the appropriate adapter method based on adapter type and stage."""
-        sem = self._registry.get_semaphore(adapter.model_id) if self._registry else None
-        if sem is not None:
-            async with sem:
-                return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
-        return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
+
+        async def dispatch():
+            sem = self._registry.get_semaphore(adapter.model_id) if self._registry else None
+            if sem is not None:
+                async with sem:
+                    return await self._call_adapter_inner(
+                        stage, adapter, image_base64, task, **context
+                    )
+            return await self._call_adapter_inner(stage, adapter, image_base64, task, **context)
+
+        timeout = self._stage_timeouts.get(stage)
+        async with asyncio.timeout(timeout / 1000 if timeout else None):
+            return await dispatch()
 
     async def _call_adapter_inner(
         self,
@@ -420,6 +452,8 @@ class EvaluationPipeline:
         'auto' → 'agent_loop' when pipeline_mode is parallel and act adapter present,
         otherwise 'precompute'.
         """
+        if isinstance(self.verify_adapter, VerifierAdapter):
+            return "precompute"
         if self._verify_mode != "auto":
             return self._verify_mode
         if self._pipeline_mode == "parallel" and self.act_adapter is not None:
@@ -484,6 +518,22 @@ class EvaluationPipeline:
 
             executors["compute_dynamics"] = _exec_dynamics
 
+        for index, check in enumerate(self._checks):
+            name = f"check_{index}"
+            tools.append(
+                {
+                    "type": "function",
+                    "name": name,
+                    "description": f"Read configured {check.role}: {check.endpoint}",
+                    "parameters": {"type": "object", "properties": {}},
+                }
+            )
+
+            async def execute_check(check=check):
+                result = await self._evaluate_check(check, ctx)
+                return result.model_dump(mode="json")
+
+            executors[name] = execute_check
         return tools, executors
 
     def _build_verify_input(
@@ -505,6 +555,11 @@ class EvaluationPipeline:
         robot_spec = self._build_robot_spec(ctx)
 
         user_text = pm.render_verify_loop_user(task, action_summary, robot_spec)
+        if ctx.check_results:
+            user_text += (
+                "\nConfigured check evidence (required checks cannot be overridden):\n"
+                + json.dumps({k: v.model_dump(mode="json") for k, v in ctx.check_results.items()})
+            )
 
         user_parts: list[dict] = [{"type": "input_text", "text": user_text}]
         if image_base64:
@@ -908,7 +963,7 @@ class EvaluationPipeline:
                     verification = self._parse_verify_response(response, turn=turn + 1)
 
                     # Validate evidence consistency (flags contradictions, nullifies hallucinations)
-                    has_dynamics = "compute_dynamics" in executed_tools and ctx.dynamics_analysis
+                    has_dynamics = ctx.dynamics_analysis
                     verification = self._validate_evidence_consistency(
                         verification, ctx.dynamics_analysis if has_dynamics else None
                     )
@@ -1003,7 +1058,7 @@ class EvaluationPipeline:
 
             # Max turns exhausted — parse whatever we have
             verification = self._parse_verify_response(response, turn=max_turns)
-            has_dynamics = "compute_dynamics" in executed_tools and ctx.dynamics_analysis
+            has_dynamics = ctx.dynamics_analysis
             verification = self._validate_evidence_consistency(
                 verification, ctx.dynamics_analysis if has_dynamics else None
             )
@@ -1038,6 +1093,9 @@ class EvaluationPipeline:
         ground_truth = example.ground_truth if example else None
         ctx = PipelineContext(task=task, image_base64=image_base64, ground_truth=ground_truth)
 
+        if example:
+            ctx.episode_evidence = example.extras.get("episode", {})
+
         # Seed proprioception from example data (dataset mode, no sim)
         if example and example.extras.get("proprioception"):
             ctx.proprioception = example.extras["proprioception"]
@@ -1067,7 +1125,7 @@ class EvaluationPipeline:
                 ctx.task_metadata = meta
 
         # Auto-detect URDF from example robot type if dynamics enabled but no URDF provided
-        if self._compute_dynamics and not self._urdf_path and example:
+        if self._uses_kinematics and not self._urdf_path and example:
             robot = example.extras.get("robot")
             if robot:
                 from pathlib import Path
@@ -1226,6 +1284,7 @@ class EvaluationPipeline:
                     if action_pred.action_type == "trajectory" and action_pred.actions:
                         for action in action_pred.actions:
                             last_obs = await self.sim.step(action)
+                            ctx.sim_steps += 1
                             if last_obs.done:
                                 break
                     elif action_pred.action_type == "tool_calls":
@@ -1262,7 +1321,7 @@ class EvaluationPipeline:
                 return
 
         # --- VERIFY (always runs) ---
-        async for result in self._run_verify(task, image_base64, ctx):
+        async for result in self._run_verification(task, image_base64, ctx):
             yield result
 
     async def _run_parallel(
@@ -1353,19 +1412,11 @@ class EvaluationPipeline:
         if act_failed:
             return
 
-        if resolved_mode == "agent_loop":
-            # Agent loop mode: perceive/plan/dynamics become verify sub-steps
-            # Only run dynamics eagerly if compute_dynamics is set (tool needs URDF)
-            async for result in self._run_verify_loop(task, image_base64, ctx, phase="evaluation"):
+        if resolved_mode != "agent_loop" and self._compute_dynamics and ctx.action:
+            async for result in self._run_dynamics(ctx, ctx.action):
                 yield result
-        else:
-            # Precompute mode: run dynamics as separate stage, then single-call verify
-            if self._compute_dynamics and ctx.action:
-                async for result in self._run_dynamics(ctx, ctx.action):
-                    yield result
-
-            async for result in self._run_verify(task, image_base64, ctx, phase="evaluation"):
-                yield result
+        async for result in self._run_verification(task, image_base64, ctx, phase="evaluation"):
+            yield result
 
     async def _exec_act(
         self,
@@ -1394,6 +1445,7 @@ class EvaluationPipeline:
                 if action_pred.action_type == "trajectory" and action_pred.actions:
                     for action in action_pred.actions:
                         last_obs = await self.sim.step(action)
+                        ctx.sim_steps += 1
                         if last_obs.done:
                             break
                 elif action_pred.action_type == "tool_calls":
@@ -1401,14 +1453,7 @@ class EvaluationPipeline:
 
             latency = (time.monotonic() - t0) * 1000
 
-            act_output: dict[str, Any] = action_pred.model_dump()
-            act_output["sim_done"] = last_obs.done if last_obs else False
-            act_output["sim_success"] = last_obs.success if last_obs else False
-            act_output["sim_is_mock"] = self.sim is not None and getattr(
-                self.sim, "model_id", ""
-            ).startswith("mock")
-            if action_pred.action_type == "trajectory":
-                act_output["actions_executed"] = len(action_pred.actions)
+            act_output = self._build_act_output(action_pred, last_obs, ctx, None)
 
             return [
                 PipelineStageResult(
@@ -1538,45 +1583,14 @@ class EvaluationPipeline:
         self, ctx: PipelineContext, action_pred: ActionPrediction
     ) -> str | None:
         """Compute dynamics analysis, returning skip reason if skipped."""
-        if not self._urdf_path:
-            logger.warning("Dynamics enabled but no URDF path — skipping")
-            return "No URDF provided — upload a URDF or use a dataset with robot metadata"
-        if not action_pred.actions:
-            logger.warning("Dynamics enabled but no actions — skipping")
-            return "No trajectory actions to analyze"
+        from rove.adapters.forward_kinematics import analyze_trajectory
 
-        meta = ctx.task_metadata or {}
-        # The adapter's declared action convention is authoritative. End-effector
-        # observations must never be silently interpreted as joint positions.
-        if action_pred.action_space == ActionSpace.EEF_DELTA:
-            control_space = "end_effector_delta"
-        elif action_pred.action_space == ActionSpace.JOINT_DELTA:
-            control_space = "joint_space"
-        else:
-            return f"Dynamics does not support {action_pred.action_space} trajectories yet"
-
-        try:
-            from rove.adapters.dynamics_mujoco import compute_dynamics
-
-            dyn = compute_dynamics(
-                self._urdf_path,
-                action_pred.actions,
-                initial_qpos=meta.get("initial_joint_positions"),
-                control_space=control_space,
-            )
-            ctx.dynamics_analysis = dyn
-            logger.info(
-                "Dynamics analysis: %d steps, mode=%s",
-                dyn.get("summary", {}).get("steps_analyzed", 0),
-                dyn.get("analysis_mode", "unknown"),
-            )
-            return None
-        except ImportError:
-            logger.warning("MuJoCo not installed — skipping dynamics")
-            return "MuJoCo not installed"
-        except Exception as dyn_err:
-            logger.warning("Dynamics computation failed: %s", dyn_err)
-            return f"Dynamics computation failed: {dyn_err}"
+        dynamics, reason = analyze_trajectory(
+            self._urdf_path, action_pred.model_dump(), ctx.task_metadata
+        )
+        if dynamics is not None:
+            ctx.dynamics_analysis = dynamics
+        return reason
 
     def _build_act_output(
         self,
@@ -1587,13 +1601,15 @@ class EvaluationPipeline:
     ) -> dict[str, Any]:
         """Build the act stage output dict."""
         act_output: dict[str, Any] = action_pred.model_dump()
-        act_output["sim_done"] = last_obs.done if last_obs else False
-        act_output["sim_success"] = last_obs.success if last_obs else False
+        act_output["sim_done"] = last_obs.done if last_obs else None
+        act_output["sim_success"] = last_obs.success if last_obs else None
         act_output["sim_is_mock"] = self.sim is not None and getattr(
             self.sim, "model_id", ""
         ).startswith("mock")
         if action_pred.action_type == "trajectory":
-            act_output["actions_executed"] = len(action_pred.actions)
+            act_output["actions_predicted"] = len(action_pred.actions)
+            if self.sim is not None:
+                act_output["actions_executed"] = ctx.sim_steps
         if ctx.dynamics_analysis:
             act_output["dynamics_analysis"] = ctx.dynamics_analysis
         if dynamics_skipped_reason:
@@ -1629,6 +1645,152 @@ class EvaluationPipeline:
                 phase="evaluation",
             )
 
+    def _evaluator_context(self, ctx: PipelineContext) -> EvaluatorContext:
+        return EvaluatorContext(
+            task=ctx.task,
+            pipeline=ctx.model_dump(
+                mode="json", exclude={"image_base64", "after_image_base64", "episode_evidence"}
+            ),
+            episode=ctx.episode_evidence,
+            before_image_base64=ctx.image_base64,
+            after_image_base64=ctx.after_image_base64,
+            urdf_path=self._urdf_path,
+        )
+
+    async def _evaluate_check(self, check: CheckConfig, ctx: PipelineContext) -> CheckResult:
+        if check.endpoint in ctx.check_results:
+            return ctx.check_results[check.endpoint]
+        adapter = self._check_adapters[check.endpoint]
+        execution = "completed"
+        try:
+            timeout = check.timeout_ms or self._stage_timeouts.get("verify", 30000)
+            async with asyncio.timeout(timeout / 1000):
+                sem = self._registry.get_semaphore(check.endpoint)
+                if sem is not None:
+                    async with sem:
+                        result = await adapter.evaluate(self._evaluator_context(ctx))
+                else:
+                    result = await adapter.evaluate(self._evaluator_context(ctx))
+        except Exception as error:
+            execution = "timeout" if isinstance(error, TimeoutError) else "error"
+            result = EvaluatorResult(
+                verdict="unknown",
+                reasoning=f"Check {execution}: {type(error).__name__}",
+                evidence_quality="unknown",
+            )
+        record = CheckResult(
+            endpoint=check.endpoint,
+            role=check.role,
+            required=check.required,
+            execution=execution,
+            evaluator_version=adapter.version,
+            result=result,
+        )
+        ctx.check_results[check.endpoint] = record
+        dynamics = result.details.get("dynamics_analysis")
+        if type(adapter).__name__ == "ForwardKinematicsAdapter" and dynamics:
+            ctx.dynamics_analysis = dynamics
+        return record
+
+    def _combine_verification(
+        self, verification: VerificationResult, ctx: PipelineContext
+    ) -> VerificationResult:
+        checks = []
+        for check in self._checks:
+            checks.append(
+                ctx.check_results.get(check.endpoint)
+                or CheckResult(
+                    endpoint=check.endpoint,
+                    role=check.role,
+                    required=check.required,
+                    execution="not_requested",
+                    evaluator_version=self._check_adapters[check.endpoint].version,
+                    result=EvaluatorResult(
+                        verdict="unknown",
+                        reasoning="Optional check was not requested",
+                        evidence_quality="unknown",
+                    ),
+                )
+            )
+        required = [c for c in checks if c.required]
+        violations = [c for c in required if c.role == "constraint" and c.result.verdict == "fail"]
+        missing = [
+            c
+            for c in required
+            if c.execution != "completed"
+            or (c.role == "constraint" and c.result.verdict == "unknown")
+            or c.result.evidence_quality == "unknown"
+        ]
+        updates = {"check_results": checks, "aggregation_version": AGGREGATION_VERSION}
+        if not isinstance(self.verify_adapter, VerifierAdapter):
+            updates.update(evaluator_result=None, evaluator_version="")
+        if violations:
+            updates.update(
+                success=False,
+                verdict_valid=True,
+                reasoning=verification.reasoning
+                + " Required constraint failed: "
+                + ", ".join(c.endpoint for c in violations),
+            )
+        elif missing:
+            updates.update(
+                success=False,
+                verdict_valid=False,
+                reasoning=verification.reasoning
+                + " Required evidence unavailable: "
+                + ", ".join(c.endpoint for c in missing),
+            )
+        return verification.model_copy(update=updates)
+
+    async def _run_verification(self, task, image_base64, ctx, phase=""):
+        """Execute required checks independently of the model's tool choices."""
+        t0 = time.monotonic()
+        mode = self._resolve_verify_mode()
+        try:
+            timeout = self._stage_timeouts.get("verify")
+            async with asyncio.timeout(timeout / 1000 if timeout else None):
+                if self.sim is not None and self.act_adapter is not None:
+                    observation = await self.sim.get_observation()
+                    ctx.after_image_base64 = observation.image_base64
+                for check in self._checks:
+                    if check.required or mode != "agent_loop":
+                        yield PipelineStageResult(
+                            stage="verify",
+                            status=StageStatus.RUNNING,
+                            model_id=self._get_model_id(self.verify_adapter),
+                            phase=phase,
+                            output={"substep": "check", "check": check.endpoint},
+                        )
+                        await self._evaluate_check(check, ctx)
+                runner = self._run_verify_loop if mode == "agent_loop" else self._run_verify
+                async for event in runner(task, image_base64, ctx, phase=phase):
+                    if event.status == StageStatus.COMPLETED and event.output:
+                        result = self._combine_verification(
+                            VerificationResult.model_validate(event.output), ctx
+                        )
+                        event.output = result.model_dump(mode="json")
+                        event.latency_ms = round((time.monotonic() - t0) * 1000, 1)
+                    if event.status == StageStatus.ERROR:
+                        event.output = {
+                            **(event.output or {}),
+                            "check_results": [
+                                c.model_dump(mode="json") for c in ctx.check_results.values()
+                            ],
+                        }
+                    yield event
+        except TimeoutError:
+            yield PipelineStageResult(
+                stage="verify",
+                status=StageStatus.ERROR,
+                model_id=self._get_model_id(self.verify_adapter),
+                phase=phase,
+                error="Verification stage timed out",
+                latency_ms=round((time.monotonic() - t0) * 1000, 1),
+                output={
+                    "check_results": [c.model_dump(mode="json") for c in ctx.check_results.values()]
+                },
+            )
+
     async def _run_verify(
         self,
         task: str,
@@ -1649,16 +1811,41 @@ class EvaluationPipeline:
                 after_image = after_obs.image_base64 or image_base64
             else:
                 after_image = image_base64
-            ctx.after_image_base64 = after_image
-
-            verification = await self._call_adapter(
-                "verify",
-                self.verify_adapter,
-                image_base64,
-                task,
-                after_image=after_image,
-                pipeline_context=ctx.to_dict(),
+            ctx.after_image_base64 = (
+                after_obs.image_base64
+                if self.sim is not None and self.act_adapter is not None
+                else ""
             )
+
+            if isinstance(self.verify_adapter, VerifierAdapter):
+                sem = self._registry.get_semaphore(verify_model) if self._registry else None
+                if sem is not None:
+                    async with sem:
+                        evidence = await self.verify_adapter.evaluate(self._evaluator_context(ctx))
+                else:
+                    evidence = await self.verify_adapter.evaluate(self._evaluator_context(ctx))
+                verification = VerificationResult(
+                    success=evidence.verdict == "pass",
+                    verdict_valid=evidence.verdict != "unknown",
+                    confidence=0.0,
+                    reasoning=evidence.reasoning,
+                    evaluator_result=evidence,
+                    evaluator_version=self.verify_adapter.version,
+                )
+            else:
+                context = ctx.to_dict()
+                if ctx.check_results:
+                    context["check_results"] = {
+                        k: v.model_dump(mode="json") for k, v in ctx.check_results.items()
+                    }
+                verification = await self._call_adapter(
+                    "verify",
+                    self.verify_adapter,
+                    image_base64,
+                    task,
+                    after_image=after_image,
+                    pipeline_context=context,
+                )
             verification = self._validate_evidence_consistency(verification, ctx.dynamics_analysis)
             latency = (time.monotonic() - t0) * 1000
             yield PipelineStageResult(

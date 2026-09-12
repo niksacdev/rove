@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-__all__ = ["AgentAdapter", "SimAdapter", "StageAdapter", "VLAAdapter", "VLMAdapter"]
+__all__ = [
+    "AgentAdapter",
+    "SimAdapter",
+    "StageAdapter",
+    "VLAAdapter",
+    "VLMAdapter",
+    "VerifierAdapter",
+]
 
 from typing import Protocol, runtime_checkable
 
@@ -15,6 +22,7 @@ from rove.models import (
     VerificationResult,
     VLACapabilities,
 )
+from rove.models.verification import EvaluatorContext, EvaluatorResult
 
 
 @runtime_checkable
@@ -115,4 +123,13 @@ class SimAdapter(Protocol):
         ...
 
 
-StageAdapter = VLMAdapter | VLAAdapter | AgentAdapter
+@runtime_checkable
+class VerifierAdapter(Protocol):
+    model_id: str
+    display_name: str
+    version: str
+
+    async def evaluate(self, context: EvaluatorContext) -> EvaluatorResult: ...
+
+
+StageAdapter = VLMAdapter | VLAAdapter | AgentAdapter | VerifierAdapter

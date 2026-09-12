@@ -8,6 +8,7 @@ import io
 import json
 from datetime import datetime, timedelta
 
+from rove.benchmarks.evidence import summarize_evidence
 from rove.benchmarks.metrics import summarize
 
 
@@ -42,7 +43,8 @@ def report_data(
                 }
             )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "verification": summarize_evidence(campaign, trials),
         "campaign": public_campaign(campaign),
         "summary": summarize(campaign, trials),
         "trials": trials,
@@ -226,6 +228,33 @@ def to_html(data: dict) -> str:
         evidence.append(
             f"<details><summary>{escape(label)}</summary><pre>{escape(json.dumps(trial, indent=2))}</pre></details>"
         )
+
+    def evidence_table(rows, fields):
+        return "".join(
+            "<tr>" + "".join(f"<td>{escape(str(row[key]))}</td>" for key in fields) + "</tr>"
+            for row in rows
+        )
+
+    verification = data.get("verification", {})
+    checks_table = evidence_table(
+        verification.get("checks", []),
+        ("strategy", "endpoint", "role", "required", "passed", "failed", "unknown", "planned"),
+    )
+    measurements_table = evidence_table(
+        verification.get("measurements", []),
+        (
+            "strategy",
+            "endpoint",
+            "name",
+            "unit",
+            "quality",
+            "measured",
+            "planned",
+            "min",
+            "max",
+            "p95",
+        ),
+    )
     portfolio = summary["portfolio"]
     manifest = escape(json.dumps(campaign, indent=2))
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -258,6 +287,10 @@ environment, runtime or trial policy changed. Empty trends require another compa
 <tbody>{"".join(metric_table)}</tbody></table></section>
 <section><h2>Timing and cost</h2><p>95th percentile pipeline wall time for attempts with timing evidence (model loading included). Worker startup and timeout durations are recorded separately in each attempt.</p>
 <ul>{"".join(timing)}</ul><p>Cost: unavailable. Provider token/call costs are not measured by this runner.</p></section>
+<section class="table"><h2>Configured checks</h2><p>Constraint failures are reported independently. Unknown includes missing, pending and unrequested evidence. FK is diagnostic and cannot establish task success.</p>
+<table><thead><tr><th>Configuration</th><th>Check</th><th>Role</th><th>Required</th><th>Pass</th><th>Fail</th><th>Unknown</th><th>Planned</th></tr></thead><tbody>{checks_table}</tbody></table></section>
+<section class="table"><h2>Task measurements</h2><p>Only supplied measurements appear. Units and evidence quality are kept separate. Episode completion time comes from episode evidence; it is distinct from pipeline processing time. Missing measurements are unavailable, not zero. Aggregates describe the measured subset; inspect task-level evidence before comparing configurations.</p>
+<table><thead><tr><th>Configuration</th><th>Evaluator</th><th>Measurement</th><th>Unit</th><th>Quality</th><th>Measured</th><th>Planned</th><th>Min</th><th>Max</th><th>p95</th></tr></thead><tbody>{measurements_table}</tbody></table></section>
 <section><h2>Attempt evidence</h2>{"".join(evidence)}</section>
 <details><summary>Configuration identity and provenance</summary><pre>{manifest}</pre></details>
 </body></html>"""

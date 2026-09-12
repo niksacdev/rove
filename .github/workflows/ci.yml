@@ -36,6 +36,7 @@ jobs:
           uv run --frozen pytest -q
           uv run --frozen python scripts/demo.py --output data/output/ci-demo.json
           uv run --frozen rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml
+          uv run --frozen rove benchmark run examples/verification/campaign.json --config examples/verification/rove.yaml
       - name: Dependency audit
         run: |
           uv export --frozen --extra dev --extra data --extra kinematics --no-emit-project --no-hashes --output-file /tmp/rove-requirements.txt
