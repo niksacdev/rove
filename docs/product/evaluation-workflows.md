@@ -71,7 +71,7 @@ The UI should make task, strategy and expected outcome the primary controls. Kee
 | Repeated campaigns | Frozen configuration, SQLite trial records, pass@k/pass^k and portable reports | Explicit baseline/version relationships and component diffs |
 | Quick evaluation history | JSONL records after completion, partial provenance | Record every trial before dispatch, recover interruption, promote by reference |
 | Trace inspection | Final stage results, check measurements and some live substeps | Durable event timelines, evidence drill-down and aligned baseline inspection |
-| Execution runtime | Built-in optional stages and agent-backed stage adapters | Assess external agent/robotics harnesses through an optional backend contract |
+| Execution runtime | Built-in optional stages and agent-backed stage adapters | Extend ROVE's own harness with durable events and explicit trial lifecycle contracts |
 | Case references | Gallery files and inline campaign images | Immutable case versions and shared asset references |
 | Human labels | Existing reference-label inputs | Review queue, rubric versions and output-specific assessments |
 | Evaluation datasets | Campaign task lists | Frozen reviewed dataset membership and reusable annotations |
@@ -153,7 +153,7 @@ A developer should be able to identify an actionable failure without reconstruct
 logs manually. The [trace specification](traces-and-measurements.md) defines durable
 recording, units, timing, clock alignment and evidence coverage. The
 [harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
-explains how external runtimes could supply that evidence.
+explains how ROVE's own harness records evidence from configured models and agents.
 
 ## Robotics example
 
@@ -177,7 +177,7 @@ Reviews record the reviewer, timestamp, target output/case version, rubric versi
 | Review and freeze datasets | [020: SME datasets](../architecture/ADR-020-sme-reviewed-datasets.md) |
 | Declare success and report meaningful measures | [021: Campaign reporting](../architecture/ADR-021-campaign-success-and-reporting.md) |
 | Retain inspectable trial telemetry | [022: Trial telemetry](../architecture/ADR-022-trial-telemetry.md) |
-| Evaluate replaceable execution backends | [023: Harness boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
+| Develop ROVE's own evaluation and execution harness | [023: Harness boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md) |
 
 ## Acceptance and delivery order
 

@@ -159,7 +159,7 @@ Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet 
 
 ROVE already has the core of an evaluation harness: configured trials, execution orchestration, grading, evidence and reporting. The system under test may have its own execution harness that manages model calls, tools, memory and recovery. These are separate responsibilities; choosing an agent runtime must not determine the customer's success criteria or replace evidence from the robot.
 
-The proposed direction is to retain ROVE's evaluation contract and make execution backends replaceable, starting from existing stage adapters. A complete external agent should be evaluated as that configured system rather than reconstructed into invented internal stages. Its runtime, tools, prompts and action interface become versioned components of a strategy. An external robotics harness such as Inspect Robots is a candidate for a compatibility study, not an integration already selected or implemented. See [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md) and the [dated model assessment](product/model-landscape-2026-09.md).
+ROVE develops and owns its evaluation and execution harness, building on the existing optional pipeline and stage adapters. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. ROVE should evaluate that configured system without inventing internal stages or substituting its own agent behavior. Extend ROVE's recording and execution contracts for the required robotics evidence, with Azure and Microsoft Fabric integration as future product directions. See [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md) and the [dated model assessment](product/model-landscape-2026-09.md).
 
 ## 9. Capability and delivery status
 
@@ -170,14 +170,14 @@ The proposed direction is to retain ROVE's evaluation contract and make executio
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
 | Durable shared quick-trial recording and asset references | Proposed |
 | Durable tool/event timeline, measurement drill-down and aligned trace comparison | Proposed; final stage outputs and check measurements exist today |
-| External execution-harness integration | Proposed compatibility study; no new backend selected |
+| ROVE-owned evaluation and execution harness | Accepted direction; existing pipeline retained, durable recording and lifecycle extensions pending |
 | Guided customer-data onboarding and expected-metric preview | Proposed |
 | SME review, reusable annotations and frozen datasets | Proposed |
 | Baseline/ablation lineage, component diffs and campaign version timeline | Proposed |
 | PostgreSQL backend or Delta Lake integration | Future, demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-Deliver shared recording and inspectable trial evidence first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. A small external-harness compatibility study should inform recording contracts before they are finalized. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
+Deliver shared recording and inspectable trial evidence first, then sample-case contracts and SME review/dataset freezing, then baseline comparisons and the guided UI. Develop these capabilities within ROVE's own harness. Acceptance is completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. Detailed acceptance criteria live in the linked workflow and metric specs.
 
 ## 10. Related specifications and decisions
 

@@ -10,7 +10,7 @@ Use [current implementation](current-implementation.md) to explain the shipped c
 | [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Proposed | Review records, UI and dataset freezing pending |
 | [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Proposed | Current pass metrics retained; setup/report extensions pending |
 | [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable events, evidence navigation and aligned inspection pending |
-| [023: Evaluation and execution harnesses](ADR-023-evaluation-and-execution-harnesses.md) | Proposed | Existing pipeline retained; external-backend compatibility study pending |
+| [023: ROVE's evaluation and execution harness](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction | Existing pipeline retained; recording and lifecycle extensions pending |
 
 ## How the decisions connect
 
@@ -25,7 +25,7 @@ flowchart TD
     C --> T[022: Trial telemetry]
     S --> T
     T --> M
-    E[023: Execution backend boundary] --> T
+    E[023: ROVE harness responsibilities] --> T
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

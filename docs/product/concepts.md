@@ -68,10 +68,11 @@ trajectory check or a physical completion assessment needs the additional geomet
 state or outcome evidence required by that check.
 
 The **evaluation harness** runs and assesses trials. The **execution harness**
-operates the system under test, including its tools, memory and recovery. ROVE has
-an existing pipeline runtime; an external execution harness would be an optional
-backend, not another Cases/Trials/Campaigns container. Its version and configuration
-belong to the system snapshot. See the [harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md).
+operates the system under test through its configured adapters. ROVE develops both
+layers from its existing pipeline. A customer's agent may manage its own tools,
+memory and recovery; those remain part of the system being evaluated. Record the
+relevant versions and settings in the system snapshot without introducing another
+Cases/Trials/Campaigns container. See the [harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md).
 
 A **trace** links recorded events and outputs for a trial. A **measurement** is a
 value with its unit, source quality, scope and evidence reference. Some current

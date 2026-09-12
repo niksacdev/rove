@@ -56,21 +56,16 @@ This retains the promise **“ROVE evaluates robotics agent pipelines on your ta
 The platform persona is **Platform / AI Infrastructure Team**; Azure is an
 integration example alongside local and other hosted environments.
 
-## Reuse a Robotics Harness Where It Fits
+## ROVE's Architecture Direction
 
-Inspect Robots is a concrete reuse candidate: its documented policy/embodiment
-boundary and compatibility checks cover important execution concerns that ROVE
-does not yet implement. Assessing it as a backend is preferable to assuming ROVE
-must build every robot-control facility. It also overlaps with evaluation and
-reporting, so the integration must justify what ROVE adds. [Interfaces](https://docs.inspectrobots.org/guide/policies-and-embodiments/)
-
-The proposed first study imports a pinned example log and evidence into ROVE,
-preserving identities, errors, grading scope and trace references. Follow that with
-a mock-world execution test before selecting a backend. See
+ROVE develops its own evaluation and execution harness around the configured
+pipeline. The architecture separates customer agent behavior from trial recording,
+grading and comparison so each can evolve under explicit contracts. See
 [ADR-023](../architecture/ADR-023-evaluation-and-execution-harnesses.md) for the
-decision boundary and acceptance criteria. No harness dependency or model adapter
-is added by this document.
+accepted direction and pending implementation work.
 
-The product value to test is whether customer onboarding, success definitions,
-SME review, frozen datasets and baseline/ablation inspection become easier through
-one workflow. These are proposed capabilities, not a claim of unique market coverage.
+Prioritize customer onboarding, success definitions, SME review, frozen datasets,
+telemetry and baseline/ablation inspection. Azure and Microsoft Fabric integration
+are future directions; they do not change the meaning of a case, trial or outcome.
+These are product requirements, not claims of shipped capability or unique market
+coverage.

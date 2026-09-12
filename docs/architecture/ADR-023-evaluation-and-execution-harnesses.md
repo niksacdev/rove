@@ -1,128 +1,112 @@
-# ADR-023: Separate evaluation ownership from agent execution
+# ADR-023: Develop ROVE's Own Evaluation and Execution Harness
 
-**Status:** Proposed
-**Implementation status:** Architecture proposal only; no external harness integration or runtime replacement
-**Date / research checked:** 2026-09-12
+**Status:** Accepted direction
+**Implementation status:** Existing pipeline retained; shared recording and lifecycle extensions pending
+**Date:** 2026-09-12
 **Related:** [Concepts](../product/concepts.md), [evaluation workflows](../product/evaluation-workflows.md), [current implementation](current-implementation.md)
 
 ## Context
 
-ROVE already performs evaluation-harness work: scheduling attempts, capturing campaign
-configuration, collecting evidence, applying graders and reporting repeated-trial metrics.
-It also runs an execution pipeline that calls models and agents through optional stages.
-Available agent runtimes and robotics evaluation frameworks create an opportunity to reuse
-execution machinery, but they do not all own the same responsibilities.
+ROVE already schedules campaign attempts, captures selected configuration, runs
+optional pipeline stages, applies graders and reports repeated-trial metrics.
+Developers need those capabilities to form a consistent evaluation workflow across
+quick runs and campaigns, with inspectable evidence and baseline comparisons.
 
-The system under test is the customer's configured agent, including its tools, memory,
-models and control behavior. ROVE must measure that system. Substituting another agent to
-solve the case would change what is being evaluated, even if it produced a better result.
+The customer supplies the system under test: its models, agents, tools and applicable
+action components. ROVE must evaluate that configuration. Substituting another agent
+to solve the case would change what is being evaluated.
 
 ## Decision
 
-Formalize the evaluation boundary and assess an optional robotics execution backend before
-building additional low-level rollout machinery. Retain the existing stage pipeline for
-supported perception, planning and action assessments. Do not require a provider's agent
-runtime, add a parallel hooks framework or select a new dependency through this ADR.
+Develop ROVE's own evaluation and execution harness from its existing pipeline and
+adapter contracts. Keep responsibility for trial scheduling, recording, grading and
+reporting within ROVE. Extend the current stage configuration as needed rather than
+introduce another hooks framework or replace the orchestrator.
+
+Separate responsibilities within this architecture:
+
+| Responsibility | Owner |
+| --- | --- |
+| Case selection, repetitions, frozen conditions and trial identity | ROVE evaluation layer |
+| Stage dispatch, deadlines, progress and terminal state | ROVE execution layer |
+| Model behavior, agent tools, memory and recovery choices | Customer's configured system under test |
+| Actual observations, action execution, reset and hardware fault handling | Configured robot/environment integration, when supplied |
+| Grading, evidence inspection, reviews and baseline comparison | ROVE evaluation and product layers |
 
 ```mermaid
-flowchart TB
-    C[Case versions and frozen system configuration] --> R
-    subgraph ROVE[ROVE evaluation layer]
-        R[Trial identity, schedule and execution conditions]
-        G[Independent grading and required checks]
-        H[History, SME review and baseline comparison]
-        G --> H
-    end
-    R --> X[Trial executor boundary]
-    X --> P[Existing optional-stage pipeline]
-    X -.-> B[Proposed external robotics backend]
-    P --> A[Customer agent: models, tools, memory and control]
-    B --> A
-    A --> E[Environment: observations, actions and reset]
-    E --> T[Trace, outcome evidence and terminal state]
-    T --> G
+flowchart TD
+    C[Case and frozen system configuration] --> R[ROVE trial scheduling]
+    R --> P[ROVE optional-stage pipeline]
+    P --> A[Configured model and agent adapters]
+    A --> S[Customer system under test]
+    S --> E[Outputs and available episode evidence]
+    E --> G[Configured grading and required checks]
+    E -.-> T[Shared durable trial recorder: proposed]
+    G -.-> T
+    T -.-> I[Trace inspection and baseline comparison: proposed]
+    G --> H[Current results and reports]
 ```
 
-ROVE owns case selection, trial IDs, repetition plans, evaluation contracts, grading,
-review and comparisons. The chosen execution system owns the customer's agent behavior.
-The robotics backend owns the observation/action interface, reset protocol, control timing
-and hardware fault handling. Evaluator labels and future outcome observations remain
-separate from candidate-visible inputs. Hardware stopping must be acknowledged through
-the execution boundary; killing a worker process is not proof that a robot has stopped.
+The diagram shows existing execution foundations and proposed shared recording and
+inspection. It does not imply that a closed-loop robot driver or the new UI exists.
+A customer's agent may manage its own internal tool loop; those decisions and
+settings belong to the system under test, not ROVE's grader. Record the activity
+that its adapter exposes and mark unavailable internals explicitly.
 
-## Existing foundations and gaps
+## Existing Foundations and Gaps
 
 - [Campaign runner](../../src/rove/benchmarks/runner.py),
   [store](../../src/rove/benchmarks/store.py) and [reports](../../src/rove/benchmarks/report.py)
-  already implement part of the evaluation harness.
+  already provide repeated execution, campaign records and result summaries.
 - [RunManager](../../src/rove/orchestrator/run_manager.py) builds the
   [pipeline](../../src/rove/orchestrator/pipeline.py) from configured optional stages.
-  Its generic agent dispatch exists, but verification still contains provider-specific branches.
-- [AgentAdapter](../../src/rove/adapters/protocols.py) exposes `run_stage`, not a complete
-  episode lifecycle. It does not define memory reset, full trace delivery or terminal reasons.
-- `SimAdapter.reset(task)` cannot describe an immutable case/reset state or acknowledge seed
-  support. The pipeline predicts an action sequence; it does not execute returned agent
-  `tool_calls` as robot tools. These are boundaries to extend or delegate, not shipped capabilities.
-- [Quick evaluation](../../src/rove/api/app.py) still needs shared durable trial recording
-  and snapshots captured before execution, as proposed in [ADR-018](ADR-018-trial-lineage-and-snapshots.md).
+  Its generic agent dispatch exists, while verification still has provider-specific branches.
+- [AgentAdapter](../../src/rove/adapters/protocols.py) exposes `run_stage`; memory
+  reset, complete trace delivery and episode terminal reasons need explicit contracts
+  when a supported task requires them.
+- The current `SimAdapter.reset(task)` does not express a frozen reset state or
+  acknowledge seed support. Generated actions and returned `tool_calls` do not
+  establish robot execution. Physical stopping needs execution-side acknowledgement;
+  cancelling a worker is not proof that a robot stopped.
+- [Quick evaluation](../../src/rove/api/app.py) needs the shared durable recording
+  and pre-execution snapshots proposed in [ADR-018](ADR-018-trial-lineage-and-snapshots.md).
+  [ADR-022](ADR-022-trial-telemetry.md) defines the missing event and evidence links.
 
-## Options and tradeoffs
+## Alternatives and Consequences
 
-| Option | Benefit | Limitation / direction |
-| --- | --- | --- |
-| Keep and extend every ROVE execution component | Complete control and familiar code | Duplicates robotics reset, control, compatibility and logging work; retain only where justified |
-| Require a particular agent runtime | Reuses its model/tool/memory loop | Changes the supported system boundary and does not alone supply robot execution or evaluation contracts |
-| Keep the workbench and add an optional robotics backend | Reuses rollout machinery while preserving evaluation workflows | Requires explicit trace, identity, lifecycle and grading mappings; investigate first |
+- **Build one fixed model pipeline:** simpler initially, but would exclude useful
+  image-to-plan agents and other valid stage combinations. Preserve optional stages.
+- **Require one agent runtime for every strategy:** would couple evaluation to a
+  particular execution system. Evaluate the customer's actual configuration through
+  supported adapters while ROVE owns the evaluation workflow.
+- **Create separate engines for quick runs and campaigns:** could optimize each
+  entry point, but would duplicate recording and grading behavior. Share the same
+  trial and evidence contracts.
 
-A customer may already use a general agent runtime. An adapter should evaluate that actual
-configuration without forcing all other strategies into it. Stage-level adapters remain
-appropriate for stage assessments; a complete external episode needs an episode-level boundary.
+Owning the harness gives ROVE control over its product behavior and integration
+contracts. It also makes ROVE responsible for lifecycle handling, trace durability,
+versioning and failure semantics. Deliver those capabilities incrementally and
+retain explicit implementation boundaries in the documentation.
 
-## Inspect Robots as a candidate
+Azure model and agent integration and Microsoft Fabric data integration are future
+product directions. Keep identity, evidence and export contracts independent of
+provider APIs. Existing Azure adapters do not imply that all proposed integrations
+or a Fabric connector are implemented.
 
-Inspect Robots documents a Policy/Embodiment separation, compatibility checks, a controller
-and approver within the rollout, and recorded trials consumed by scorers. This substantially
-overlaps with machinery ROVE would otherwise build. Its embodiment contract includes
-observations, actions, control rate and reset capabilities. These are reasons to investigate
-reuse, not evidence that its integrations work in ROVE.
-[Concepts](https://docs.inspectrobots.org/guide/concepts/),
-[policy and embodiment interfaces](https://docs.inspectrobots.org/guide/policies-and-embodiments/).
+## Acceptance and Delivery
 
-Start by importing its canonical, versioned evaluation log and referenced frame/action
-assets. Its documentation distinguishes those records from Rerun visualization streams,
-which can drop data under backpressure. A visualization recording must not silently become
-the authoritative trajectory. One log may contain multiple trials; preserve their source
-run, scene and repetition identities rather than counting one imported file as one attempt.
-[Logging documentation](https://docs.inspectrobots.org/guide/logging-and-rerun/).
+1. Preserve the existing optional-stage and configured-verification behavior.
+   Ordinary local use must continue without cloud credentials or hardware.
+2. Share pre-execution snapshots and durable trial/event recording across quick
+   runs and campaigns, including errored, interrupted and incomplete work.
+3. Identify the configured model/agent, prompts, tools, memory/reset settings and
+   applicable action conventions; unavailable versions or telemetry remain unknown.
+4. Retain outcome, required-constraint and planned-attempt semantics across reports.
+   Regrading evidence adds an assessment, not a new attempt.
+5. Validate lifecycle extensions with action-dependent synthetic cases, explicit
+   timing, interruption and reset support before claiming fresh robot outcomes.
+6. Make each outcome or measurement inspectable back to its grading rule and source
+   evidence. Preserve these identities for baseline comparisons and future exports.
 
-Semantic differences need explicit translation. Inspect Robots documents errored trials as
-unscored; ROVE retains planned attempts and unresolved bounds. Import raw errors and trials,
-not just aggregates. Its `success_at_end` reads a success termination, whereas operator
-judgments need a judgment-reading scorer. Preserve the scorer, rubric and evidence origin;
-never map every positive value to observed robot completion.
-[Concepts](https://docs.inspectrobots.org/guide/concepts/),
-[scoring documentation](https://docs.inspectrobots.org/guide/scoring/).
-
-The project identifies its API as early and subject to change. Pin an exact tested version
-for the investigation. No adoption, hardware compatibility or performance validation is
-claimed by this documentation. [Repository](https://github.com/robocurve/inspect-robots).
-
-## Smallest future boundary and acceptance
-
-Define a trial executor receiving the frozen case, system configuration and execution
-conditions, then emitting progress, terminal state and trace/outcome asset references.
-The existing pipeline is its first implementation. Record backend identity, requested and
-supported reset/seed behavior, interventions, timing, partial evidence and stop acknowledgement.
-Include agent runtime, tool and memory settings in system identity; unavailable versions stay unknown.
-
-1. Prove a pinned-version importer against successful, failed, errored, cancelled and
-   missing-asset examples. Preserve native IDs and grading records; reimport is idempotent.
-2. Recompute ROVE summaries from individual attempts. Retain unknowns and required-constraint
-   semantics. Regrading a recording adds an assessment, never another robot attempt.
-3. Validate a mock-world backend with action-dependent outcomes, reset acknowledgement,
-   cancellation, partial evidence and separate observation/action timestamps. An intentional
-   candidate change must be visible in its snapshot and associated episode.
-4. Confirm optional-stage diagnostics and existing configured-verification tests still work.
-   Do not require hardware, cloud credentials or an external runtime for ordinary local use.
-5. Decide whether to adopt the dependency only after those mappings and tests demonstrate
-   reduced maintenance without losing ROVE's evidence and comparison semantics.
+These are implementation acceptance criteria. This ADR records the architecture
+direction; it does not implement the proposed lifecycle, inspection or integrations.
