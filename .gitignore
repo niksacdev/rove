@@ -40,6 +40,7 @@ htmlcov/
 
 # Evaluation output (runtime-generated)
 data/output/
+.rove/
 
 # URDF visual meshes (not needed for FK — collision meshes suffice)
 data/urdf/*/meshes/visual/

@@ -30,10 +30,12 @@ jobs:
           uv run --frozen python -m compileall -q src
           uv run --frozen bandit -q -r src -c pyproject.toml
           node --check frontend/app.js
+          node --check frontend/benchmarks.js
       - name: Regression tests and mock report
         run: |
           uv run --frozen pytest -q
           uv run --frozen python scripts/demo.py --output data/output/ci-demo.json
+          uv run --frozen rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml
       - name: Dependency audit
         run: |
           uv export --frozen --extra dev --extra data --extra kinematics --no-emit-project --no-hashes --output-file /tmp/rove-requirements.txt

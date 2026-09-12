@@ -1,0 +1,31 @@
+# Synthetic verifier qualities demonstrate metrics, not model performance.
+endpoints:
+  consistent:
+    type: vlm
+    adapter: mock_vlm
+    capabilities:
+    - scene_analysis
+    - verification
+    config:
+      mock_quality: 0.95
+      mock_latency_ms:
+      - 0
+      - 0
+  variable:
+    type: vlm
+    adapter: mock_vlm
+    capabilities:
+    - scene_analysis
+    - verification
+    config:
+      mock_quality: 0.5
+      mock_latency_ms:
+      - 0
+      - 0
+strategies:
+  mock-consistent:
+    perceive: consistent
+    verify: consistent
+  mock-variable:
+    perceive: variable
+    verify: variable

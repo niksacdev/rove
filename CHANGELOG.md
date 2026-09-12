@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Repeated trials and portable benchmark reports
+
+Saved task suites can now run repeatedly across configured pipelines, with pass@k, pass^k, cross-model coverage and comparable history. The dashboard, CLI and local API share durable campaign records and offline reports; missing verdicts remain unknown and mock results remain explicitly synthetic.
+
 ### OSS evidence workbench and safer local defaults
 
 Integrates the newer evaluation branch with provenance, stage comparisons and action-space metadata. Missing physics evidence now stays unknown throughout reports, prompts and the dashboard; torque/payload feasibility is explicitly unavailable pending a validated physical contract. Local access restrictions, refreshed dependencies, CI and asset notices prepare the code for an OSS release. Historical repository publication remains a separate cleanup step. *(PR #12)*

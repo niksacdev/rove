@@ -1,10 +1,17 @@
 """Run the local ROVE dashboard from a source checkout."""
+
 from __future__ import annotations
 
 import argparse
+import sys
 
 
 def main():
+    if sys.argv[1:2] == ["benchmark"]:
+        from rove.benchmarks.cli import main as benchmark_main
+
+        benchmark_main(sys.argv[2:])
+        return
     parser = argparse.ArgumentParser(description="ROVE local robotics evaluation workbench")
     parser.add_argument("command", nargs="?", choices=["serve"], default="serve")
     parser.add_argument("--port", type=int, default=5001)

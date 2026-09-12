@@ -37,6 +37,16 @@ uv run --frozen python scripts/demo.py --output data/output/demo.json
 The demo uses fresh seeded mock adapters and produces a JSON evidence report.
 Latency and timestamps vary; mock actions and judgments repeat for the same seed.
 
+For repeated trials, open **Benchmarks** in the dashboard or run:
+
+```bash
+uv run --frozen rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml
+```
+
+This produces offline HTML, JSON and CSV reports with pass@k, pass^k, task
+outcomes and comparable history. See [benchmark configuration and scoring](docs/BENCHMARKS.md)
+for seed support, unknown outcomes, cancellation and resume behavior.
+
 ## What you can inspect
 
 - VLA action generation separately from later perception, planning and judging.
@@ -72,7 +82,7 @@ credentials and compatible checkpoints.
   checkpoint requirements before downloading weights. These are not exercised
   by the lightweight CI suite.
 
-Use `/docs` for the implemented HTTP API. `rove serve` is the supported CLI;
+Use `/docs` for the implemented HTTP API. `rove serve` and `rove benchmark` are supported CLI commands;
 there is no published-package guarantee, batch `rove evaluate` command, or
 `rove.evaluate()` convenience function yet.
 

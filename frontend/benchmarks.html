@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROVE · Benchmarks</title>
+  <link rel="stylesheet" href="/static/benchmarks.css">
+  <script src="/static/benchmarks.js" defer></script>
+</head>
+<body>
+  <header><a href="/">ROVE / Evaluation</a><span>BENCHMARKS</span></header>
+  <main>
+    <p class="eyebrow">REPEAT · COMPARE · INSPECT</p>
+    <h1>One success is a start.<br>Measure what repeats.</h1>
+    <p class="intro">Run a fixed set of tasks across pipeline configurations. Compare success with retries, repeatability, and the evidence behind every result.</p>
+    <p class="notice">Current scores use your configured verify stage. Mock results are synthetic; model judgments do not establish observed robot task success.</p>
+    <div class="layout">
+      <section>
+        <h2>Configure a campaign</h2>
+        <form id="campaignForm">
+          <label>Campaign name<input id="name" value="Pipeline comparison" maxlength="160" required></label>
+          <div class="pair">
+            <label>Task suite version<input id="suite" value="tabletop-v1" required></label>
+            <label>Model / configuration revision<input id="revision" value="baseline" required></label>
+          </div>
+          <div class="pair">
+            <label>Repeats per task and configuration<input id="repeats" type="number" value="5" min="1" max="1000" required></label>
+            <label>Attempt timeout (seconds)<input id="timeout" type="number" value="120" min="1" max="3600" required></label>
+          </div>
+          <fieldset><legend>Pipeline configurations</legend><div id="strategies" class="choices"></div></fieldset>
+          <fieldset><legend>Task suite</legend><div id="tasks" class="choices tasks"></div></fieldset>
+          <details><summary>Add your own task</summary>
+            <label>Task instruction<input id="customInstruction"></label>
+            <label>Scene image<input id="customImage" type="file" accept="image/png,image/jpeg"></label>
+            <button id="addTask" type="button" class="secondary">Add task</button>
+          </details>
+          <p id="budget" class="budget" aria-live="polite"></p>
+          <div class="actions"><button type="submit" id="run">Run campaign</button><button type="button" id="save" class="secondary">Save configuration</button></div>
+          <label>Load a saved configuration<input id="load" type="file" accept=".json,.yaml,.yml"></label>
+        </form>
+      </section>
+      <section>
+        <h2>Campaign history</h2>
+        <p class="muted">Reports include pass@k, pass^k, task outcomes, uncertainty, and comparable revisions over time.</p>
+        <div id="history"></div>
+      </section>
+    </div>
+    <p id="message" role="status" aria-live="polite"></p>
+  </main>
+</body>
+</html>
