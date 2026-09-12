@@ -104,6 +104,24 @@ The first report shows accepted/completed, failed and unknown cases; representat
 
 Quick evaluations remain easy. Durable recording now captures their inputs and configuration before dispatch and preserves interruption. Users can reopen a saved trial without running it again. Promotion preserves an existing quick trial as an exploratory reference and creates a reusable input case; a later campaign schedules fresh repetitions separately.
 
+### Navigation and workspace design
+
+The accepted navigation direction is **Start · Evaluate · Results · Configure**.
+Start explains the workflow: cases and success → strategy and repetitions → results
+and traces → baseline and improvement. Evaluate owns the Cases → Run → Review &
+improve workspace, with one visible step and retained selections. Results owns
+campaign reports/comparisons and subordinate trial inspection. Configure groups
+strategies, models and settings. Quick run and manifest-based campaigns remain
+secondary paths with their existing recording semantics.
+
+Results returns to the exact campaign's review step through an explicit deep link.
+Moving between steps never launches a trial or changes a frozen record. Existing
+routes remain usable; navigation must preserve keyboard access, visible focus,
+responsive layouts and both themes. This consolidation is being implemented;
+browser acceptance is not yet claimed. See the [user journey](product/user-journey.md)
+and [ADR-025](architecture/ADR-025-workflow-navigation.md) for route ownership,
+compatibility and persona acceptance.
+
 ## 5. Create datasets and validate cases
 
 A customer without labels can run the initial campaign and have an SME review three distinct targets:
@@ -210,6 +228,7 @@ The local product connects durable trials to case contracts, approved labels, sy
 
 - [Concepts](product/concepts.md): vocabulary and current/proposed mappings.
 - [Customer workflows](product/evaluation-workflows.md): persona stories, onboarding, SME review and acceptance criteria.
+- [User journey and navigation](product/user-journey.md): primary destinations, staged evaluation, route ownership and accessibility acceptance.
 - [Metrics and success](product/metrics-and-success.md): configuration/UI contract and report explanations.
 - [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
 - [Robotics evidence](product/robotics-evidence.md): action-dependent synthetic trials, typed recordings, frozen annotation bindings and aggregate targets.

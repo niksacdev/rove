@@ -608,12 +608,14 @@ def to_html(data: dict) -> str:
             + "</tbody></table></div></details></section>"
         )
     portfolio = summary["portfolio"]
-    campaign_url = f"/static/benchmarks.html?campaign={quote(str(campaign['id']), safe='')}"
+    campaign_url = (
+        f"/static/datasets.html?step=review&campaign={quote(str(campaign['id']), safe='')}"
+    )
     invalid_note = f"{invalid} invalid configured verdicts · {execution_issues} execution issues. These are execution diagnostics, separate from contract assessments."
     return f'''<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(spec["name"])} · ROVE campaign report</title>
 <style>{_REPORT_STYLE}</style><script>{get_plotlyjs()}</script></head><body>
-<a class="skip" href="#report">Skip to report</a><header class="topbar"><a class="brand" href="/">ROVE</a><span>/ Campaign report</span><button id="theme-toggle" type="button">Light theme</button></header>
+<a class="skip" href="#report">Skip to report</a><header class="topbar"><a class="brand" href="/">ROVE</a><a href="/static/benchmarks.html">Results</a><span>/ Campaign report</span><button id="theme-toggle" type="button">Light theme</button></header>
 <main id="report"><div class="eyebrow">Robot Observation &amp; Vision Evaluation</div><h1>{escape(spec["name"])}</h1>
 <p class="subtitle">An evidence-backed view of your robotics agent pipeline.</p>
 <div class="meta"><span class="badge">{escape(campaign["status"])}</span><span class="badge">{escape(spec["suite_version"])}</span><span class="badge">Revision {escape(spec["revision"])}</span><span class="badge">{len(task_ids)} cases · {len(strategy_ids)} strategies · {len(spec["seeds"])} repeats</span></div>
@@ -640,4 +642,4 @@ def to_html(data: dict) -> str:
 <section class="section" id="evidence"><h2>Inspect the supporting evidence</h2><p class="section-intro">Recorded outputs and execution states remain inspectable. Trial links open the running ROVE app; the evidence below is embedded in this offline report.</p>{"".join(evidence) or '<div class="empty">No attempt evidence recorded yet. Pending trials remain unknown above.</div>'}
 <details><summary>Assessment revisions used in this report</summary><p>{escape(assessments.get("note", "Metrics reflect the configured verification stage."))}</p><pre>{escape(json.dumps(assessments, indent=2))}</pre></details>
 <details><summary>Configuration identity and provenance</summary><pre>{escape(json.dumps(campaign, indent=2))}</pre></details></section>
-<footer>ROVE · Campaign {escape(campaign["id"])} · {escape(campaign.get("created_at", ""))}<br>Charts, summaries and recorded evidence work offline. <a href="{campaign_url}">Open campaign in ROVE ↗</a> requires the running app.</footer></main><script>{_REPORT_SCRIPT}</script></body></html>'''
+<footer>ROVE · Campaign {escape(campaign["id"])} · {escape(campaign.get("created_at", ""))}<br>Charts, summaries and recorded evidence work offline. <a href="{campaign_url}">Review campaign in ROVE ↗</a> requires the running app.</footer></main><script>{_REPORT_SCRIPT}</script></body></html>'''

@@ -3,29 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROVE · Trial history</title>
+  <title>ROVE · Results · Trials</title>
   <script>
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="stylesheet" href="/static/history.css">
+  <link rel="stylesheet" href="/static/navigation.css">
+  <script src="/static/navigation.js" defer></script>
   <script src="/static/history-traces.js"></script>
-  <script src="/static/history.js?v=trace-lanes-1" defer></script>
+  <script src="/static/history.js?v=journey-1" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
-  <header class="history-header">
-    <a href="/" class="brand" aria-label="ROVE evaluation">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"/><rect x="8" y="8" width="8" height="8" rx="1"/><path d="M8 12H4M20 12h-4M12 16v4"/><circle cx="12" cy="2" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="20" cy="12" r="1"/><circle cx="12" cy="22" r="1"/></svg>
-      <strong>ROVE</strong><span>/</span><span>Trial history</span>
-    </a>
-    <nav aria-label="Main navigation"><a href="/">Evaluate</a><a href="/static/datasets.html">Cases</a><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">History</a></nav>
-    <button type="button" id="themeToggle" class="secondary" aria-label="Toggle light/dark mode">Light mode</button>
-  </header>
+  <header id="roveNav" data-section="results"></header>
   <main id="main">
-    <div class="page-heading"><div><h1>Trial history</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p>
-        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/" class="button">New evaluation</a></div>
+    <div class="page-heading"><div><h1>Results</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p>
+        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="button">New evaluation</a></div>
+    <nav class="workspace-tabs" aria-label="Results"><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">Trials</a></nav>
     <div class="history-layout">
       <section class="history-list-panel" aria-labelledby="trialsHeading">
         <div class="panel-heading"><h2 id="trialsHeading">Saved trials</h2><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>

@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### A coherent evaluation journey
+
+Use consistent Start, Evaluate, Results and Configure navigation across the workspace. Prepare cases, run a campaign and review improvements in connected steps; saved campaigns and their trials share Results, while quick trials and advanced configuration remain available without competing with the main path. *(PR #21)*
+
 ### Complete the local robotics evaluation workflow
 
 Inspect clock-aware SDK/tool traces and preserved recording selections, execute action-dependent synthetic trials, and bind frozen SME annotations to graders. Named baseline revisions, confirmed assistant workflows, campaign targets and relational exchange connect evaluation results to reproducible evidence. Live provider/Azure validation remains specification-only. *(PR #20)*

@@ -209,7 +209,7 @@ if (typeof document !== "undefined") (() => {
     if (trial.source === "legacy") container.append(node("p", "Imported history may lack configuration or live events. Missing provenance remains unknown.", "notice"));
     if (trial.error) container.append(node("p", typeof trial.error === "string" ? trial.error : JSON.stringify(trial.error), "error-text"));
     if (["cancelled", "interrupted"].includes(trial.status)) container.append(node("p", "Execution ended before normal completion. Process cancellation does not confirm that a robot stopped.", "notice"));
-    if (trial.campaign_id) container.append(link("Open campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
+    if (trial.campaign_id) container.append(link("Back to campaign results", `/static/datasets.html?step=review&campaign=${encodeURIComponent(trial.campaign_id)}`), document.createTextNode(" · "), link("Open campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
     if (promotionEligible(trial)) {
       const promotion = section("Use this trial for future evaluations");
       promotion.append(node("p", "Create a reusable case from this input and preserve the existing trial as an exploratory reference. Future campaigns run fresh attempts; this selected result does not enter their reliability denominator.", "muted"));
@@ -365,18 +365,17 @@ if (typeof document !== "undefined") (() => {
       $("inspector").replaceChildren(title, node("p", error.message, "error-text"), retry);
     } finally { if (version === state.detailVersion) $("inspector").setAttribute("aria-busy", "false"); }
   }
-  function themeLabel() { $("themeToggle").textContent = document.documentElement.dataset.theme === "dark" ? "Light mode" : "Dark mode"; }
-  $("themeToggle").addEventListener("click", () => {
-    const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = theme;
-    try { localStorage.setItem("rove-theme", theme); } catch { /* In-page switching remains available. */ }
-    themeLabel();
+  $("sourceFilter").addEventListener("change", () => {
+    state.offset = 0; const url = new URL(location.href);
+    if ($("sourceFilter").value) url.searchParams.set("source", $("sourceFilter").value); else url.searchParams.delete("source");
+    history.pushState({}, "", url); loadList();
   });
-  $("sourceFilter").addEventListener("change", () => { state.offset = 0; loadList(); });
   $("refreshTrials").addEventListener("click", () => { loadList(); if (state.selected) selectTrial(state.selected); });
   $("previousPage").addEventListener("click", () => { state.offset = Math.max(0, state.offset - state.limit); loadList(); });
   $("nextPage").addEventListener("click", () => { state.offset += state.limit; loadList(); });
   window.addEventListener("popstate", () => {
+    const source = new URLSearchParams(location.search).get("source");
+    $("sourceFilter").value = ["quick", "campaign", "legacy"].includes(source) ? source : ""; state.offset = 0; loadList();
     const id = new URLSearchParams(location.search).get("trial");
     if (id) selectTrial(id);
     else {
@@ -399,7 +398,9 @@ if (typeof document !== "undefined") (() => {
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = false; }
   });
-  themeLabel(); loadList();
+  const source = new URLSearchParams(location.search).get("source");
+  if (["quick", "campaign", "legacy"].includes(source)) { $("sourceFilter").value = source; }
+  loadList();
   const selected = new URLSearchParams(location.search).get("trial");
   if (selected) selectTrial(selected);
 })();

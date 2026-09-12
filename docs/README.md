@@ -7,6 +7,8 @@
 | [Product specification](PRODUCT_SPEC.md) | Core vision, founding personas, campaign model and delivery status |
 | [Concepts](product/concepts.md) | Cases, trials, campaigns, strategies, datasets and provenance |
 | [Product workflows](product/evaluation-workflows.md) | Baselines, SME review, frozen datasets, ablations and acceptance criteria |
+| [User journey and navigation](product/user-journey.md) | Start, Evaluate, Results and Configure; staged workspace, routes and accessibility acceptance |
+| [Navigation decision](architecture/ADR-025-workflow-navigation.md) | Why navigation follows the evaluation journey while retaining existing routes |
 | [Success and performance measures](product/metrics-and-success.md) | Define success before a campaign; understand the report and missing evidence |
 | [Traces and measurements](product/traces-and-measurements.md) | Inspect trial timelines, supporting evidence and baseline differences |
 | [Robotics evidence and targets](product/robotics-evidence.md) | Action-dependent fixtures, approved annotation bindings and supplied episode measures |

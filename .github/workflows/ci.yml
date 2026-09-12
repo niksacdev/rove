@@ -31,6 +31,7 @@ jobs:
           uvx ruff==0.16.7 check src tests scripts
           uv run --frozen python -m compileall -q src
           uv run --frozen bandit -q -r src -c pyproject.toml
+          node --check frontend/navigation.js
           node --check frontend/app.js
           node --check frontend/sample-cases.js
           node --check frontend/benchmarks.js

@@ -50,4 +50,4 @@ data/urdf/*/urdf/
 .python-version
 
 # Frontend test dependencies
-node_modules/
+node_modules
