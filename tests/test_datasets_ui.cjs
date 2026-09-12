@@ -152,3 +152,30 @@ test("unavailable or malformed case identities never create a misleading Open ca
   assert.ok(descendants(card).some(element => element.textContent === record.import_error));
   assert.ok(descendants(card).some(element => element.tag === "button"));
 });
+
+test("campaign targets carry explicit units and verifier-only reviewed bindings", () => {
+  const input = {name:"Quality",scope:"plan_quality",evidenceMode:"candidate_output",criteria:"Respect clearance",assessment:"human_review",targetMetric:"task_success",targetOperator:"gte",targetThreshold:"0.9",annotationEndpoint:"grader",annotationKey:"expectations",annotationTarget:"expected_plan"};
+  const contract=buildContract(input);
+  assert.deepEqual(contract.campaign_targets,[{metric:"task_success",operator:"gte",threshold:0.9,unit:"fraction"}]);
+  assert.deepEqual(contract.annotation_bindings,[{endpoint:"grader",annotation_key:"expectations",target_key:"expected_plan"}]);
+  assert.throws(()=>buildContract({...input,targetThreshold:"1.1"}),/threshold/);
+  assert.throws(()=>buildContract({...input,targetThreshold:""}),/threshold/);
+  assert.throws(()=>buildContract({...input,annotationTarget:""}),/binding/);
+  const time=buildContract({...input,targetMetric:"episode_completion_time",targetThreshold:"12",targetOperator:"lte"});
+  assert.equal(time.campaign_targets[0].unit,"s");
+  assert.ok(time.metrics.includes("episode_completion_time"));
+});
+
+test("recording references preserve explicit clock ranges and never invent episode outcome",()=>{
+  const {buildRecordingReference}=require("../frontend/datasets.js");
+  const asset={sha256:"a".repeat(64),size_bytes:100,media_type:"application/json"};
+  const input={id:"recording-1",kind:"trajectory",clock:"robot-clock",frame:"world",units:'{"time":"s","position":"m"}',range:"second",start:"0",end:"2"};
+  const ref=buildRecordingReference(input,asset);
+  assert.deepEqual(ref.selector,{unit:"second",start:0,end:2});assert.equal(ref.clock_id,"robot-clock");assert.equal(ref.task_completed,undefined);assert.equal(ref.quality,undefined);
+  assert.throws(()=>buildRecordingReference({...input,clock:""},asset),/clock/);
+  assert.throws(()=>buildRecordingReference({...input,range:"frame",start:"0.5"},asset),/integer/);
+  assert.throws(()=>buildRecordingReference({...input,range:"byte",end:"101"},asset),/exceeds/);
+  assert.throws(()=>buildRecordingReference(input,{...asset,media_type:"video/mp4"}),/indexed JSON/);
+  const generic=buildRecordingReference({...input,kind:"video",clock:"",frame:"",units:"",range:""},{...asset,media_type:"video/mp4"});
+  assert.equal(generic.selector,undefined);assert.equal(generic.clock_id,undefined);
+});

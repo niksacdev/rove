@@ -1,11 +1,11 @@
 # Define success before running a campaign
 
-**Status: partially implemented.** Configured verification, pass@k/pass^k reports,
-versioned success contracts, expected-metric preview and per-output SME assessment
-are implemented locally. Aggregate campaign targets and general autonomy/recovery
-aggregation remain follow-up work.
+**Status: implemented locally for the supported evidence contract.** Configured
+verification, pass@k/pass^k, frozen success contracts, SME/frozen-label assessment,
+typed episode measures and aggregate targets share the local workflow. Hardware
+and live-provider validation are not implied.
 
-ROVE should let a robotics developer state what counts as a successful task, what
+ROVE lets a robotics developer state what counts as a successful task, what
 evidence will establish it, and what results a campaign should achieve before
 starting trials. These are different decisions: a campaign target must never
 rewrite individual trial verdicts.
@@ -26,7 +26,7 @@ flowchart TD
 | Level | Definition | Example |
 | --- | --- | --- |
 | Task outcome | Configured task evaluator plus required checks, producing pass, fail or unknown | Object is in the target region; measured contact force stays within the declared limit |
-| Campaign target | A declared requirement on an aggregate result and its evidence coverage | The measured repeatability estimate reaches the chosen target with all planned verdicts resolved |
+| Campaign target | A declared requirement on a supported aggregate and its evidence coverage | Task success reaches 60%, with evidence for all planned attempts |
 
 The existing [verification configuration](../VERIFICATION.md) already defines the
 task evaluator, constraint/diagnostic roles, required checks and stage deadlines.
@@ -34,28 +34,36 @@ A required constraint failure vetoes task success. Unresolved required evidence
 remains unknown; diagnostic plausibility does not establish task completion.
 ROVE should reuse this configuration rather than introduce a second grading system.
 
-The proposed campaign target result is **met**, **not met** or **insufficient
-evidence**. A missing required metric or unmet coverage requirement yields
-insufficient evidence. Changing a campaign target produces a new assessment
-revision; it does not turn failed trials into successes. This is an assessment of
-the collected sample, not a deployment certification.
+The campaign target result is **met**, **not met** or **unknown**. A missing metric,
+empty eligible denominator or incomplete planned-trial evidence yields unknown.
+Targets freeze `metric`, `operator` (`gte`/`lte`), `threshold` and `unit`; changing
+one creates a new success-contract revision without rewriting recorded trial
+grades. This assesses the collected sample, not deployment certification. Current
+targets support task success, pipeline latency, episode completion time, autonomous
+completion, recovery and constraint outcomes. Higher-k curves remain reported
+estimates, not an additional target type.
 
 ## Setup in configuration and the UI
 
 The implemented Cases workflow saves a contract with assessment scope, evidence
 mode, required criteria and selected metrics. Automated criteria bind to configured
 verification; human criteria require per-output ratings. Preview marks measures
-available, awaiting review or unavailable, explains k values exceeding repetitions,
+available, conditional, awaiting review or unavailable, explains k values exceeding repetitions,
 and rejects unsupported completion claims from image/model outputs alone.
 
-Static episode records support assessment of existing evidence. They do not
-establish fresh candidate execution. Pipeline latency is measured; general episode
-duration, autonomy and recovery remain unavailable through this contract until
-their evidence and aggregation requirements are implemented. Aggregate targets and
-a dedicated contract-file CLI remain follow-up work. The requirements below extend
-this implemented API/UI contract.
+Static episode records support regrading and never establish fresh candidate
+execution. Versioned recordings require explicit identities, units, frame, source
+clock and available samples/assets. The deterministic synthetic adapter instead
+executes the current candidate trajectory and records its resulting state. The
+configured episode verifier supplies completion, constraint, intervention and
+recovery measurements with synthetic or supplied observed provenance. Explicit
+contract bindings can supply selected frozen SME labels to local graders while
+keeping candidate inputs separate. See [robotics evidence](robotics-evidence.md)
+for exact schemas and supported bindings. The API/UI share these contracts; the
+example runner demonstrates programmatic setup, without adding a dedicated
+contract-file CLI.
 
-Both interfaces should read and write the same validated, versioned contract:
+The API and UI use the same validated, versioned contract:
 
 - Case/dataset revision, task evaluator, required checks and their versions.
 - Selected measures, k values, aggregation and missing-evidence rules.
@@ -96,10 +104,20 @@ plan should not be labeled a completed physical task.
 | Recovery | Did the system recover after a declared perturbation? | Requires trigger, eligible episode count, recovery criterion and time horizon |
 
 Headline task completion, repeatability and constraint outcomes, then show timing,
-autonomy, progress or recovery when the contract supplies their evidence. This
-does not require implementing every measure in the first slice. Stage/tool errors
-and timeouts are diagnostics; cost appears only when metered. Neither missing
-intervention logs nor a generic retry count demonstrates autonomous recovery.
+autonomy and recovery where evidence supports them. Criterion-specific task progress
+is not a supported aggregate in this slice and is never inferred from generated
+steps. Stage/tool errors and timeouts are diagnostics; cost appears only when
+metered. Neither missing intervention logs nor generic retries demonstrates recovery.
+
+Implemented episode completion time is the mean among successful episodes with
+explicit durations. Autonomous completion divides successful zero-intervention
+episodes by the eligible measured episodes. Recovery divides recovered episodes
+by explicit opportunities; zero opportunities yields unavailable. Constraint
+outcomes count episodes with zero recorded violations. Pipeline latency uses p95
+in milliseconds, with its sample count and no ratio numerator. `robotics-metrics-v1`
+results expose units, aggregation, denominator, known/unknown planned trials,
+coverage and evidence quality. Full planned evidence coverage is required before
+returning a target-meeting point value; missing data does not become zero.
 
 Keep evidence origin and assessment method explicit: physical, simulated or
 synthetic evidence must not be confused with measured, estimated, human-reviewed
@@ -110,9 +128,10 @@ observations can evaluate a grader but cannot show improvement from a new policy
 A baseline comparison should lead with changes in the declared customer outcome
 and the affected cases, with component changes and traces supporting that result.
 Each aggregate should drill down to the contributing trials and each measurement
-to its exact grader/check and evidence. Show recorded time series alongside relevant
-events when their clocks can be aligned; expose missing samples and alignment
-uncertainty. Keep scalar summaries linked to their source windows and aggregation
+to its exact grader/check and evidence. The inspector presents bounded recording selections and producer-clock lanes
+alongside events; expose missing samples and alignment uncertainty. Only a shared
+source clock establishes a common timeline origin; separate clock lanes and paired
+traces do not manufacture cross-process synchronization. Keep scalar summaries linked to their source windows and aggregation
 rules. See [traces and measurements](traces-and-measurements.md).
 
 Precision, recall and F1 are outside this feature. Revisit them only for a concrete
@@ -147,11 +166,13 @@ sampling procedure. See [implemented scoring](../BENCHMARKS.md).
 ## Report and acceptance criteria
 
 Keep the summary readable: outcome counts, coverage, pass curves, constraint
-violations and available task measurements. Proposed expandable **How this was
-measured** details should expose definitions/formulas, aggregation, planned and
+violations and available task measurements. Expandable report details expose
+definitions/formulas, aggregation, planned and
 resolved counts, unknown reasons, evidence quality, units/time windows, contract
 and grader versions, selected label/review revisions and links to supporting
-trial records. Details must be keyboard accessible and export with the report.
+trial records. HTML and JSON include aggregate robotics measures and campaign
+targets. CSV stays one row per trial with assessment lineage; campaign aggregates
+are not duplicated into each row. Details must remain keyboard accessible.
 The trial inspector must preserve the difference between model-generated actions,
 dispatched calls and observed execution. Usage is available only when recorded;
 pricing-derived cost needs its rate/version and an estimated label. A timeline

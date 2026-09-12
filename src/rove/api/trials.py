@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse, Response
 
 from rove.trials.store import TrialStore
 
@@ -90,6 +90,106 @@ def create_trial_router(store: Callable[[], TrialStore]) -> APIRouter:
             "limit": limit,
             "offset": offset,
         }
+
+    @router.get("/api/exchange")
+    async def export_exchange():
+        import asyncio
+        import tempfile
+        from pathlib import Path
+
+        from starlette.background import BackgroundTask
+
+        from rove.trials.exchange import export_bundle
+
+        directory = tempfile.TemporaryDirectory(prefix="rove-exchange-")
+        path = Path(directory.name) / "rove-exchange.zip"
+        try:
+            await asyncio.to_thread(export_bundle, store().root, path)
+        except (ValueError, OSError) as error:
+            directory.cleanup()
+            raise HTTPException(409, str(error)) from error
+        return FileResponse(
+            path,
+            media_type="application/zip",
+            filename="rove-exchange.zip",
+            background=BackgroundTask(directory.cleanup),
+        )
+
+    @router.post("/api/evidence-assets", status_code=201)
+    async def upload_evidence(request: Request):
+        from rove.trials.store import MAX_ASSET_BYTES
+
+        media = request.headers.get("content-type", "application/octet-stream").split(";")[0]
+        if media not in {
+            "application/json",
+            "application/octet-stream",
+            "video/mp4",
+            "image/png",
+            "image/jpeg",
+        }:
+            raise HTTPException(415, "Unsupported evidence media type")
+        data = bytearray()
+        async for chunk in request.stream():
+            data.extend(chunk)
+            if len(data) > MAX_ASSET_BYTES:
+                raise HTTPException(
+                    413, "Evidence upload exceeds 64 MiB; upload bounded recording segments"
+                )
+        if not data:
+            raise HTTPException(422, "Evidence asset is empty")
+        return store().save_asset(bytes(data), media)
+
+    @router.get("/api/trials/{trial_id}/trace")
+    async def trace(trial_id: str):
+        from rove.trials.traces import trial_trace
+
+        get(trial_id)
+        return trial_trace(store(), trial_id)
+
+    @router.get("/api/trials/{trial_id}/evidence/{reference_id}")
+    async def evidence_range(trial_id: str, reference_id: str):
+        import json
+
+        from rove.trials.evidence import verified_asset
+
+        get(trial_id)
+        db = store()
+        ref = next((r for r in db.evidence(trial_id) if r["id"] == reference_id), None)
+        if ref is None:
+            raise HTTPException(404, "Evidence reference not found")
+        if ref["availability"] != "available":
+            raise HTTPException(409, "Recorded evidence is unavailable or changed")
+        metadata, data = verified_asset(db, ref["asset_sha256"])
+        selector = ref.get("selector")
+        if selector and selector["unit"] != "byte":
+            document = json.loads(data)
+            records = document["records"]
+            if selector["unit"] == "second":
+                records = [
+                    r
+                    for r in records
+                    if isinstance(r, dict)
+                    and isinstance(r.get("timestamp_s"), float | int)
+                    and selector["start"] <= r["timestamp_s"] < selector["end"]
+                ]
+            else:
+                records = records[int(selector["start"]) : int(selector["end"])]
+            return {"reference": ref, "records": records}
+        if selector:
+            data = data[int(selector["start"]) : int(selector["end"])]
+        if metadata["media_type"] == "application/json" and not selector:
+            try:
+                return {"reference": ref, "content": json.loads(data)}
+            except (ValueError, UnicodeDecodeError):
+                pass
+        return Response(
+            data,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": 'attachment; filename="evidence.bin"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/api/trial-assets/{digest}")
     async def asset(digest: str):

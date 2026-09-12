@@ -24,6 +24,8 @@ jobs:
           enable-cache: true
       - name: Install frozen development and physics dependencies
         run: uv sync --frozen --extra dev --extra data --extra kinematics --extra copilot
+      - name: Install frontend test dependencies
+        run: npm ci --ignore-scripts
       - name: Static checks
         run: |
           uvx ruff==0.16.7 check src tests scripts
@@ -33,8 +35,9 @@ jobs:
           node --check frontend/sample-cases.js
           node --check frontend/benchmarks.js
           node --check frontend/history.js
+          node --check frontend/history-traces.js
           node --check frontend/datasets.js
-          node --test tests/test_history_ui.cjs tests/test_datasets_ui.cjs
+          npm test
       - name: Regression tests and mock report
         run: |
           uv run --frozen pytest -q
@@ -43,6 +46,7 @@ jobs:
           uv run --frozen rove benchmark run examples/verification/campaign.json --config examples/verification/rove.yaml
       - name: Dependency audit
         run: |
+          npm audit --audit-level=high
           uv export --frozen --extra dev --extra data --extra kinematics --extra copilot --no-emit-project --no-hashes --output-file /tmp/rove-requirements.txt
           uvx pip-audit==2.10.1 -r /tmp/rove-requirements.txt --no-deps --disable-pip
       - name: Scan release tree for secrets

@@ -159,17 +159,26 @@ selected runtime if measured limitations prevent the required customer workflow.
 - **Execution:** `copilot_agent` supports perceive, plan and verify. Each stage has
   a fresh child runtime/session/workspace with host-selected candidate or grader
   scope. The shared runtime validates role-scoped tools; the configured adapter
-  exposes no tools and rejects robot `act`. Assistant tools and cross-stage agent
-  memory are not implemented. Existing direct adapters remain directly callable.
+  exposes no tools and rejects robot `act`. Assistant read/preview tools share the
+  runtime while launch confirmation belongs to the host. Cross-stage agent memory
+  is unsupported. Explicit endpoint memory/reset/coverage contracts are frozen;
+  customer reset declarations remain attributed claims. Actual adapter/check/reset
+  calls have stage spans. Existing direct adapters remain directly callable.
 - **Recording:** quick and campaign attempts receive durable IDs and sanitized
   snapshots before dispatch. Available stage and SDK events are retained in a
   shared SQLite journal; initial observations have private managed assets. Legacy
   quick-history import is idempotent and preserves missing provenance. The campaign
   journal remains separate and recovery reconciles known IDs under ownership.
-- **Tracing:** optional ROVE trial spans retain identities; native SDK telemetry
-  settings can be supplied, and ephemeral usage is persisted. No ROVE exporter is
-  configured by default. The standalone controlled correlation proof does not
-  establish complete application-to-collector correlation or real outage handling.
+- **Tracing:** ROVE trial/stage/named-tool spans and structural native SDK spans
+  retain actual trace/parent identities and explicit source clocks. Native traces
+  are captured locally before workspace deletion; ephemeral usage is persisted.
+  A disabled-by-default bounded OTLP/HTTP JSON profile targets an explicit local
+  collector. Real pinned SDK/CLI tests establish application → native runtime →
+  named tool ancestry in the journal and healthy collector; HTTP 503, blackhole
+  and queue-overflow tests preserve local evidence and bounded export shutdown.
+  Hosted monitoring and live providers remain unvalidated. See
+  [runtime observability](runtime-observability.md) and
+  [lifecycle contracts](runtime-lifecycle.md).
 - **Inspection:** local history shows lifecycle, assessment, measurements,
   stage-filtered activity, trace details, configuration and on-demand initial
   observations. Arbitrary remote evidence resolution, parallel trace graphs and

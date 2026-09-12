@@ -89,3 +89,14 @@ Extend [CampaignStore](../../src/rove/benchmarks/store.py),
 - Database constraints and revision checks prevent lost reviews and mixed-version dataset freezes.
 - Optional exports preserve counts, nulls, units and IDs on retry; cloud integration is not
   claimed tested until exercised against an actual supplied workspace.
+
+## Local exchange implementation, September 2026
+
+The [relational exchange](../../src/rove/trials/exchange.py) exports explicit versioned
+table schemas and content hashes alongside verified asset bytes. It preserves SQLite
+as the working database. Import accepts only the installed schema into a fresh
+store and validates relational references before publication. Schema migration of
+older exchange versions and merging into existing stores are intentionally rejected.
+This is the local integration boundary for future Fabric/Delta consumers, not a
+claim of a deployed analytical connector. See [evidence and exchange](../product/evidence-and-exchange.md)
+for diagrams, limits and the round-trip contract.

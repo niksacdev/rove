@@ -51,6 +51,15 @@ annotations are retained. Re-importing preserves user edits and creates no extra
 Reference annotations are unreviewed source material, kept separate from candidate
 inputs and observed episode evidence. Historical runs remain in History.
 
+Name and pin a baseline, inspect clock-aware trace lanes beside a candidate trial,
+and open preserved stage outputs or exact recording selections. Explicit frozen
+annotation bindings can grade later candidates without exposing labels to them.
+Campaign targets report met, not met or unknown alongside robotics evidence coverage.
+Try the [action-dependent synthetic robotics example](examples/robotics/README.md),
+or read [evidence and exchange](docs/product/evidence-and-exchange.md) for portable
+relational exports. The [guided assistant](docs/product/named-baselines-and-assistant.md)
+prepares imports, revisions, freezes and comparisons with host-confirmed mutations.
+
 Missing or disputed assessments stay unknown. An accepted plan is not observed
 robot completion. **Trial history** can promote a finished quick run into a reusable
 case while retaining the original trial as an exploratory reference; new campaigns
@@ -65,7 +74,7 @@ uv run --frozen python scripts/demo.py --output data/output/demo.json
 The demo uses fresh seeded mock adapters and produces a JSON evidence report.
 Latency and timestamps vary; mock actions and judgments repeat for the same seed.
 
-For repeated trials, open **Benchmarks** in the dashboard or run:
+For repeated trials, open **Campaigns** in the dashboard or run:
 
 ```bash
 uv run --frozen rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml

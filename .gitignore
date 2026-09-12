@@ -48,3 +48,6 @@ data/urdf/*/urdf/
 
 # uv
 .python-version
+
+# Frontend test dependencies
+node_modules/

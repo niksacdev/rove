@@ -38,6 +38,10 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
     service = DatasetService(root)
     contract = service.get_contract(request.contract_id)
     ids = request.case_revision_ids
+    dataset = None
+    bindings = contract.get("annotation_bindings", [])
+    if bindings and not request.dataset_revision_id:
+        raise ValueError("Annotation bindings require an exact frozen dataset revision")
     if request.dataset_revision_id:
         dataset = service.get_dataset(request.dataset_revision_id)
         if dataset["contract_id"] != request.contract_id:
@@ -47,13 +51,31 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
     tasks = []
     for case in cases:
         service.validate_case_image(case["id"])
-        # Approved annotations and baseline outputs stay private in review records.
-        # A future automatic grader must explicitly consume them; never add them
-        # to candidate task metadata as if they were ordinary observations.
+        service.validate_case_payload(
+            {
+                key: case.get(key, {})
+                for key in (
+                    "name",
+                    "task",
+                    "candidate_context",
+                    "conditions",
+                    "recorded_evidence",
+                    "reference_data",
+                )
+            }
+        )
         extras = dict(case.get("candidate_context") or {})
         recorded = case.get("recorded_evidence") or {}
         if recorded:
             extras["episode"] = recorded.get("episode", recorded)
+        if bindings:
+            extras["grader_context"] = service.resolve_annotations(dataset, case["id"], bindings)
+        if contract["evidence_mode"] == "synthetic_rollout":
+            environment = case.get("conditions", {}).get("synthetic_environment")
+            if environment is None:
+                raise ValueError("Synthetic rollout cases require conditions.synthetic_environment")
+            extras["synthetic_environment"] = environment
+            extras["case_revision_id"] = case["id"]
         tasks.append(
             {
                 "id": case["id"],
@@ -80,6 +102,14 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
         dataset_revision_id=request.dataset_revision_id,
         case_revision_ids=ids,
         metric_scope="success_contract",
+        annotation_review_ids=sorted(
+            {
+                identity
+                for task in tasks
+                for bound in task["example"]["extras"].get("grader_context", {}).values()
+                for identity in bound["review_ids"]
+            }
+        ),
     )
     blockers = []
     strategies = []
@@ -87,6 +117,12 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
     human = any(c["assessment"] == "human_review" and c["required"] for c in criteria)
     for sid in request.strategies:
         strategy = config.strategies[sid]
+        if contract["evidence_mode"] == "synthetic_rollout" and (
+            not strategy.act
+            or not strategy.sim
+            or config.endpoints[strategy.sim].adapter != "synthetic_sim"
+        ):
+            blockers.append(f"{sid}: synthetic rollout requires an act stage and synthetic_sim")
         from rove.adapters.registry import STAGE_TO_CAPABILITY
 
         for stage in ("perceive", "plan", "act", "verify"):
@@ -122,6 +158,16 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
             verify.endpoint,
             *(c.endpoint for c in verify.checks if c.required and c.role == "constraint"),
         }
+        for binding in contract.get("annotation_bindings", []):
+            endpoint = config.endpoints.get(binding["endpoint"])
+            if (
+                binding["endpoint"] not in bindings
+                or endpoint is None
+                or endpoint.adapter != "local_verifier"
+            ):
+                blockers.append(
+                    f"{sid}: annotation binding requires a participating configured local verifier"
+                )
         for criterion in criteria:
             if (
                 criterion["required"]
@@ -143,14 +189,27 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
         blockers.append(
             "Images and model outputs cannot establish observed episode completion. Choose an output assessment or supply episode evidence."
         )
-    if contract["evidence_mode"] == "synthetic_rollout":
-        blockers.append(
-            "Action-dependent synthetic rollout integration is not configured. Static recordings must use recorded_episode scope."
-        )
     if contract["evidence_mode"] == "recorded_episode" and any(
         not case.get("recorded_evidence") for case in cases
     ):
         blockers.append("Every recorded-episode case needs explicitly supplied evidence")
+    if contract["evidence_mode"] == "recorded_episode":
+        from rove.datasets.robotics import EpisodeRecording
+
+        for case in cases:
+            try:
+                EpisodeRecording.model_validate(case.get("recorded_evidence", {}))
+            except ValueError:
+                blockers.append(
+                    f"{case['id']}: recorded episodes require versioned schema, identities, units, frame and available evidence"
+                )
+    episode_bound = any(
+        config.endpoints.get(c.get("endpoint")) is not None
+        and config.endpoints[c["endpoint"]].config.get("entrypoint")
+        == "rove.evaluators.robotics:episode_outcome"
+        for c in criteria
+        if c.get("assessment") == "configured_verifier"
+    )
     metrics = []
     for metric in contract["metrics"]:
         status, reason = "available", "Recorded by the configured trial workflow"
@@ -160,9 +219,38 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
                 "Required SME ratings are collected per trial; pending or disputed assessments remain unknown",
             )
         if metric in {"episode_completion_time", "autonomous_completion", "recovery"}:
+            if contract["evidence_mode"] == "synthetic_rollout":
+                status, reason = (
+                    "available" if episode_bound else "conditional",
+                    "Synthetic act/sim evidence must be consumed by the configured episode verifier; completion time requires success and recovery needs actual opportunities",
+                )
+            elif (
+                contract["evidence_mode"] == "recorded_episode"
+                and cases
+                and all(
+                    case.get("recorded_evidence", {}).get("schema_version") == 1 for case in cases
+                )
+            ):
+                status, reason = (
+                    "conditional",
+                    "Available only for supplied episode measurements and explicit denominators; archived evidence is regrading",
+                )
+            else:
+                status, reason = (
+                    "unavailable",
+                    "Requires associated episode measurements and explicit denominators; not inferred from model latency or text",
+                )
+        if (
+            metric == "recovery"
+            and contract["evidence_mode"] == "synthetic_rollout"
+            and not any(
+                case.get("conditions", {}).get("synthetic_environment", {}).get("disturbance_step")
+                for case in cases
+            )
+        ):
             status, reason = (
                 "unavailable",
-                "Requires associated episode measurements and explicit denominators; not inferred from model latency or text",
+                "Selected synthetic cases declare no recovery opportunities",
             )
         if metric in {"pass_at_k", "pass_pow_k"} and max(request.ks) > len(request.seeds):
             reason += "; requested k values above the repetition count will be unavailable"
@@ -170,6 +258,8 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
     note = (
         "Recorded episodes assess existing evidence; changing the candidate does not demonstrate new physical performance."
         if contract["evidence_mode"] == "recorded_episode"
+        else "Candidate actions execute in the deterministic synthetic environment; results are synthetic, not physical robot performance."
+        if contract["evidence_mode"] == "synthetic_rollout"
         else "Scores describe the declared output assessment. They do not prove that a robot executed the task."
     )
     return payload, {
@@ -178,6 +268,7 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
         "planned_trials": spec.planned_trials,
         "case_revision_ids": ids,
         "contract": contract,
+        "campaign_targets": contract.get("campaign_targets", []),
         "strategies": strategies,
         "metrics": metrics,
         "evidence_note": note,
@@ -202,7 +293,7 @@ def assessed_trials(root: Path, campaign: dict, trials: list[dict]) -> tuple[lis
     required = [c for c in contract["criteria"] if c["required"]]
     human_ids = {c["id"] for c in required if c["assessment"] == "human_review"}
     service = DatasetService(root)
-    rows, used = [], []
+    rows, used = [], list(campaign.get("annotation_review_ids", []))
     for trial in trials:
         reviews = []
         if human_ids and trial.get("trial_id"):
@@ -317,6 +408,7 @@ def assessed_trials(root: Path, campaign: dict, trials: list[dict]) -> tuple[lis
                 "outcome": outcome,
                 "configured_outcome": trial["outcome"],
                 "assessment_ids": [r["id"] for r in reviews],
+                "annotation_review_ids": campaign.get("annotation_review_ids", []),
             }
         )
     used.sort()

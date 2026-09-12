@@ -1,6 +1,6 @@
 # ADR-021: Campaign success definitions and report explanations
 
-**Status:** Accepted; local success contracts, preflight and assessment comparison implemented. Aggregate target evaluation remains pending.
+**Status:** Accepted; local contracts, explicit frozen-label bindings, synthetic episode measures and aggregate target evaluation implemented. Real provider/robot validation remains separate.
 
 ## Context at proposal
 
@@ -152,3 +152,32 @@ check measurements and trial evidence; dark/light themes match the workspace.
 The presentation consumes existing report data and does not change scoring, treat
 unknown as zero, or reinterpret uncertainty bounds as confidence intervals.
 See [presentation tests](../../tests/test_report_presentation.py).
+
+## Local robotics implementation decision, 12 September 2026
+
+The [robotics evidence specification](../product/robotics-evidence.md) implements
+aggregate targets over evidence-qualified measures. `campaign_targets` freeze
+metric, operator, threshold and units in the success contract. Summary APIs and
+portable reports retain the measured numerator/denominator, planned coverage and
+`met` / `not_met` / `unknown` result. Full planned evidence coverage is required;
+missing interventions or recovery opportunities cannot imply autonomy or recovery.
+
+Action-dependent synthetic episodes reuse the existing simulator reset/step and
+configured local verifier interfaces. A one-dimensional reaching fixture makes
+candidate actions causally observable without adding robot drivers or claiming
+physical realism. Archived episodes remain a separate regrading mode. Managed
+recordings retain explicit clock/frame/units and content identity.
+
+Reusable annotations enter a grader only through a contract binding to selected
+accepted reviews in a frozen dataset. Inputs are scoped to the configured local
+verifier and retain immutable review IDs; candidate stages and unrelated endpoints
+do not receive them. The supplied structured-field annotation grader reports
+estimated rubric correctness. It cannot turn a baseline output rating into a
+label or into observed robot success. This bounded binding implements label use
+without introducing an automatic annotation-to-grader inference system.
+
+The original metric definitions and evidence gates above remain authoritative.
+[Robotics regressions](../../tests/test_robotics_evidence.py) include actual local
+campaign workers, causal action changes, resets, evidence archival, private-label
+isolation and incomplete denominators. These tests do not validate hardware or
+real model providers.

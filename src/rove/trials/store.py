@@ -16,7 +16,7 @@ from pathlib import Path
 
 from rove.trials.snapshots import canonical_json, sanitize, snapshot
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 MAX_EVENT_BYTES = 256 * 1024
 MAX_RECORD_BYTES = 8 * 1024 * 1024
 MAX_ASSET_BYTES = 64 * 1024 * 1024
@@ -42,7 +42,7 @@ class TrialStore:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, 1, SCHEMA_VERSION}:
+            if version not in {0, 1, 2, SCHEMA_VERSION}:
                 raise ValueError(f"Unsupported trial schema version: {version}")
             if version == 0:
                 for statement in (
@@ -72,7 +72,11 @@ class TrialStore:
                 from rove.datasets.schema import migrate_v2
 
                 migrate_v2(db)
-                db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+            if version < 3:
+                from rove.trials.schema import migrate_v3
+
+                migrate_v3(db)
+            db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         self.path.chmod(0o600)
 
     @contextmanager
@@ -132,6 +136,22 @@ class TrialStore:
         if status not in TERMINAL:
             raise ValueError("finish requires a terminal status")
         encoded = _encode(result) if result is not None else None
+        archived = []
+        body = (result or {}).get("result", result or {})
+        if isinstance(body, dict):
+            for index, stage in enumerate(body.get("stages", [])):
+                if isinstance(stage, dict) and stage.get("output") is not None:
+                    asset = self.save_asset(
+                        _encode(stage["output"], MAX_ASSET_BYTES).encode(), "application/json"
+                    )
+                    archived.append(
+                        {
+                            "id": f"rove.stage.{index}",
+                            "asset_sha256": asset["sha256"],
+                            "kind": "tool_output",
+                            "units": {},
+                        }
+                    )
         error = sanitize(error)
         if error is not None and (not isinstance(error, str) or len(error) > 16384):
             raise ValueError("Error must be a bounded string")
@@ -144,6 +164,8 @@ class TrialStore:
                 if (row["status"], row["result"], row["error"]) == (status, encoded, error):
                     return
                 raise ValueError("Completed trial records are immutable")
+            for ref in archived:
+                self._attach_evidence(db, trial_id, ref)
             db.execute(
                 "UPDATE trials SET status=?,result=?,error=?,finished_at=? WHERE id=?",
                 (status, encoded, error, now(), trial_id),
@@ -151,6 +173,25 @@ class TrialStore:
 
     def append_event(self, trial_id: str, event: dict) -> bool:
         """Durably append; repeated producer event IDs are acknowledged without replay."""
+        from rove.trials.evidence import validate_reference
+
+        event = dict(event)
+        if payload := event.pop("evidence_payload", None):
+            payload = dict(payload)
+            content = payload.pop("content")
+            data = _encode(content, MAX_ASSET_BYTES).encode()
+            asset = self.save_asset(data, "application/json")
+            event["evidence_refs"] = [
+                *event.get("evidence_refs", []),
+                {**payload, "asset_sha256": asset["sha256"]},
+            ]
+        if not isinstance(event.get("evidence_refs", []), list):
+            raise ValueError("Event evidence references must be a list")
+        refs = [
+            validate_reference(self, ref)
+            for ref in event.get("evidence_refs", [])
+            if isinstance(ref, dict)
+        ]
         encoded = _encode(event, MAX_EVENT_BYTES)
         source = str(event.get("source", "rove"))
         source_id = event.get("source_event_id")
@@ -177,6 +218,8 @@ class TrialStore:
                 return False
             if row["status"] != "running":
                 raise ValueError("Completed trial records are immutable")
+            for ref in refs:
+                self._attach_evidence(db, trial_id, ref)
             db.execute(
                 """INSERT INTO events
                     (trial_id,event_id,source,source_event_id,recorded_at,payload)
@@ -184,6 +227,44 @@ class TrialStore:
                 (trial_id, uuid.uuid4().hex, source, source_id, now(), encoded),
             )
         return True
+
+    @staticmethod
+    def _attach_evidence(db, trial_id: str, reference: dict) -> None:
+        encoded = _encode(reference)
+        previous = db.execute(
+            "SELECT payload FROM evidence_refs WHERE trial_id=? AND id=?",
+            (trial_id, reference["id"]),
+        ).fetchone()
+        if previous:
+            if previous["payload"] != encoded:
+                raise ValueError("Evidence identity reused with different content")
+            return
+        db.execute(
+            "INSERT INTO evidence_refs VALUES (?,?,?,?)",
+            (trial_id, reference["id"], reference["asset_sha256"], encoded),
+        )
+
+    def attach_evidence(self, trial_id: str, reference: dict) -> None:
+        from rove.trials.evidence import validate_reference
+
+        ref = validate_reference(self, reference)
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            trial = db.execute("SELECT status FROM trials WHERE id=?", (trial_id,)).fetchone()
+            if trial is None:
+                raise KeyError(trial_id)
+            if trial["status"] != "running":
+                raise ValueError("Completed trial records are immutable")
+            self._attach_evidence(db, trial_id, ref)
+
+    def evidence(self, trial_id: str) -> list[dict]:
+        from rove.trials.evidence import inspect_reference
+
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT payload FROM evidence_refs WHERE trial_id=? ORDER BY id", (trial_id,)
+            ).fetchall()
+        return [inspect_reference(self, json.loads(row["payload"])) for row in rows]
 
     @staticmethod
     def _record(row: sqlite3.Row) -> dict:
@@ -203,7 +284,9 @@ class TrialStore:
             ).fetchone()
         if row is None:
             raise KeyError(trial_id)
-        return self._record(row)
+        result = self._record(row)
+        result["evidence_refs"] = self.evidence(trial_id)
+        return result
 
     def list(
         self,

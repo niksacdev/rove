@@ -28,6 +28,7 @@ _VLM_ADAPTERS = {
 }
 
 _VLA_ADAPTERS = {
+    "synthetic_actions": "rove.adapters.synthetic_actions:SyntheticActionAdapter",
     "mock_vla": "rove.adapters.mock_vla:MockVLAAdapter",
     "local_lerobot": "rove.adapters.local_lerobot:LeRobotVLAAdapter",
 }
@@ -39,6 +40,7 @@ _AGENT_ADAPTERS = {
 }
 
 _SIM_ADAPTERS = {
+    "synthetic_sim": "rove.adapters.synthetic_sim:SyntheticSimAdapter",
     "mock_sim": "rove.adapters.mock_sim:MockSimAdapter",
 }
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 
 from rove.models import SceneAnalysis, TaskPlan, VerificationResult
-from rove.orchestrator.recording import record_event
+from rove.orchestrator.recording import record_event, stage_span
 from rove.runtime.copilot import CopilotRuntime, CopilotRuntimeConfig
 
 
@@ -37,6 +37,7 @@ class CopilotAgentAdapter:
             timeout_seconds=self.config.get("timeout_seconds", 60),
             cli_path=self.config.get("cli_path", "copilot"),
             telemetry=self.config.get("telemetry"),
+            native_traces=self.config.get("native_traces", True),
             system_message=(
                 "Evaluate only the supplied robotics evidence. Return a JSON object matching "
                 "this schema. A proposed action or model statement is not observed robot success. "
@@ -60,7 +61,19 @@ class CopilotAgentAdapter:
                     for key in ("constraints", "correction", "eval_category")
                     if key in metadata
                 }
-        return await self._runtime(stage).run_stage(stage, image_base64, task, context)
+        with stage_span(
+            stage,
+            self.model_id,
+            {
+                "memory": "fresh_per_stage",
+                "reset": "fresh_process_session",
+                "telemetry_coverage": "sdk_events_and_native_spans"
+                if self.config.get("native_traces", True)
+                else "sdk_events",
+                "attribution": "rove_implemented",
+            },
+        ):
+            return await self._runtime(stage).run_stage(stage, image_base64, task, context)
 
     async def health_check(self) -> bool:
         try:

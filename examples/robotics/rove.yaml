@@ -1,0 +1,38 @@
+version: "1.0"
+endpoints:
+  toward-target:
+    type: vla
+    adapter: synthetic_actions
+    capabilities: [action_execution]
+    runtime_contract: {memory: stateless, reset: none, telemetry_coverage: stage_only}
+    config:
+      actions: [[0.5], [0.5], [0.5]]
+  away-from-target:
+    type: vla
+    adapter: synthetic_actions
+    capabilities: [action_execution]
+    runtime_contract: {memory: stateless, reset: none, telemetry_coverage: stage_only}
+    config:
+      actions: [[-0.5], [-0.5], [-0.5]]
+  reaching-world:
+    type: sim
+    adapter: synthetic_sim
+    runtime_contract: {memory: fresh_per_trial, reset: fresh_environment, telemetry_coverage: customer_reported}
+  episode-outcome:
+    type: verifier
+    adapter: local_verifier
+    capabilities: [verification]
+    config:
+      entrypoint: rove.evaluators.robotics:episode_outcome
+      revision: synthetic-reaching-v1
+strategies:
+  baseline:
+    display_name: Moves away from the target
+    act: away-from-target
+    sim: reaching-world
+    verify: {endpoint: episode-outcome, mode: precompute}
+  candidate:
+    display_name: Moves toward the target
+    act: toward-target
+    sim: reaching-world
+    verify: {endpoint: episode-outcome, mode: precompute}

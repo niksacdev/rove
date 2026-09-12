@@ -36,6 +36,37 @@ class Criterion(StrictModel):
         return self
 
 
+class AnnotationBinding(StrictModel):
+    endpoint: str = Field(min_length=1, max_length=160)
+    annotation_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
+    target_key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
+
+
+class CampaignTarget(StrictModel):
+    metric: Literal[
+        "task_success",
+        "pipeline_latency",
+        "episode_completion_time",
+        "autonomous_completion",
+        "recovery",
+        "constraint_outcomes",
+    ]
+    operator: Literal["gte", "lte"]
+    threshold: float
+    unit: Literal["fraction", "ms", "s"]
+
+    @model_validator(mode="after")
+    def units_match(self):
+        expected = {"pipeline_latency": "ms", "episode_completion_time": "s"}.get(
+            self.metric, "fraction"
+        )
+        if self.unit != expected or self.threshold < 0:
+            raise ValueError("Campaign target unit/range must match its metric")
+        if expected == "fraction" and self.threshold > 1:
+            raise ValueError("Fraction targets must be between zero and one")
+        return self
+
+
 class SuccessContract(StrictModel):
     name: str = Field(min_length=1, max_length=160)
     scope: Literal["scene_understanding", "plan_quality", "episode_outcome"]
@@ -55,15 +86,24 @@ class SuccessContract(StrictModel):
     ] = Field(
         default=["task_success", "pass_at_k", "pass_pow_k", "pipeline_latency"], max_length=20
     )
+    annotation_bindings: list[AnnotationBinding] = Field(default_factory=list, max_length=30)
+    campaign_targets: list[CampaignTarget] = Field(default_factory=list, max_length=20)
 
     @model_validator(mode="after")
     def unique(self):
+        if self.evidence_mode == "synthetic_rollout" and self.scope != "episode_outcome":
+            raise ValueError("Synthetic rollout contracts must assess episode outcomes")
         if not any(criterion.required for criterion in self.criteria):
             raise ValueError("A success contract needs at least one required acceptance criterion")
         if len({criterion.id for criterion in self.criteria}) != len(self.criteria):
             raise ValueError("Criterion IDs must be unique")
         if len(set(self.metrics)) != len(self.metrics):
             raise ValueError("Metrics must be unique")
+        targets = [(b.endpoint, b.target_key) for b in self.annotation_bindings]
+        if len(targets) != len(set(targets)):
+            raise ValueError("Annotation destination bindings must be unique")
+        if any(t.metric not in self.metrics for t in self.campaign_targets):
+            raise ValueError("Campaign targets require their declared metric")
         return self
 
 

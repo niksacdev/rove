@@ -118,3 +118,27 @@ flowchart LR
 
 See [library import](../../src/rove/datasets/library.py) and
 [regression tests](../../tests/test_sample_library.py).
+
+## Local completion: assistant preparation preserves human authority
+
+The optional assistant can prepare a dataset freeze only from explicitly selected,
+existing finalized review IDs. It has no review-writing tool. The host shows exact
+membership and review revisions, then requires an operation-specific confirmation.
+It revalidates the preview identity immediately before the service transaction.
+Import, case revision and freeze operations atomically store their operation identity
+and result alongside the mutation, so an interrupted response cannot duplicate a write.
+
+```mermaid
+flowchart LR
+    SME[SME creates final review] --> Review[Immutable review revision]
+    Review --> Preview[Assistant prepares exact membership]
+    Preview --> Confirm[Human confirms host preview]
+    Confirm --> Freeze[Atomic dataset freeze + operation result]
+    Freeze --> Binding[Explicit annotation binding]
+    Binding --> Grader[Configured verifier only]
+```
+
+Assistant imports cannot invent recorded episodes or private reference labels; assistant
+case revisions preserve those existing fields. A frozen annotation reaches a grader only
+through an explicit success-contract binding. Candidate context remains separated.
+Provider validation is not implied by the local fake-runtime/service acceptance tests.

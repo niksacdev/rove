@@ -12,6 +12,11 @@ def main():
 
         benchmark_main(sys.argv[2:])
         return
+    if sys.argv[1:2] == ["exchange"]:
+        from rove.trials.exchange_cli import main as exchange_main
+
+        exchange_main(sys.argv[2:])
+        return
     parser = argparse.ArgumentParser(description="ROVE local robotics evaluation workbench")
     parser.add_argument("command", nargs="?", choices=["serve"], default="serve")
     parser.add_argument("--port", type=int, default=5001)

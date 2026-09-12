@@ -158,6 +158,20 @@ def test_preview_is_read_only_and_host_confirmation_is_idempotent(harness):
         "inspect_trial",
         "inspect_campaign",
         "preview_campaign",
+        "preview_import_case",
+        "preview_revise_case",
+        "preview_contract",
+        "preview_freeze",
+        "preview_baseline",
+        "preview_ablation",
+        "list_baselines",
+        "inspect_baseline",
+        "inspect_comparison",
+        "inspect_dataset",
+        "inspect_contract",
+        "inspect_review",
+        "list_reviews",
+        "list_campaigns",
     }
     response = h["client"].post("/api/assistant/confirm", json=confirmation(proposal))
     assert response.status_code == 200, response.text

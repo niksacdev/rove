@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -70,6 +71,7 @@ class Client:
 
 
 def runtime(client=None, sink=None, **kwargs):
+    kwargs.setdefault("native_traces", False)
     client = client or Client()
     options = []
 
@@ -79,6 +81,48 @@ def runtime(client=None, sink=None, **kwargs):
 
     config = CopilotRuntimeConfig("synthetic", {"base_url": "http://127.0.0.1"}, **kwargs)
     return CopilotRuntime(config, client_factory=factory, event_sink=sink), client, options
+
+
+async def test_stuck_graceful_stop_uses_sdk_force_stop_and_never_claims_clean_success():
+    class StuckClient(Client):
+        async def stop(self):
+            self.calls.append("stop")
+            await asyncio.Event().wait()
+
+        async def force_stop(self):
+            self.calls.append("force_stop")
+
+    host, client, _ = runtime(StuckClient(), cleanup_timeout_seconds=0.01)
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        await asyncio.wait_for(host.run_stage("plan", "", "synthetic"), 1)
+    assert client.calls == ["start", "stop", "force_stop"]
+
+
+async def test_sdk_swallowed_named_tool_journal_failure_invalidates_attempt():
+    from rove.orchestrator import recording
+
+    class SwallowingSession(Session):
+        async def send_and_wait(self, *_args, **_kwargs):
+            # SDK presents tool errors to the model, which can continue.
+            with suppress(RuntimeRecordingError):
+                await self.config["tools"][0]["handler"](
+                    SimpleNamespace(arguments={}, tool_call_id="call-1")
+                )
+            return event("assistant.message", {"content": '{"success":true}'})
+
+    def broken_journal(item):
+        if item["event_type"] == "rove.tool.observe.started":
+            raise OSError("disk full private path")
+
+    host, client, _ = runtime(Client(SwallowingSession()))
+    host.tools = (RuntimeTool("observe", "Read", {}, lambda _: {}),)
+    token = recording.event_sink.set(broken_journal)
+    try:
+        with pytest.raises(RuntimeRecordingError, match="incomplete"):
+            await host.run_stage("plan", "", "task")
+    finally:
+        recording.event_sink.reset(token)
+    assert client.calls[-1] == "stop"
 
 
 async def test_fresh_sessions_workspace_roles_and_no_ambient_credentials(monkeypatch):

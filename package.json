@@ -1,0 +1,8 @@
+{
+  "name": "rove-ui-tests",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Development-only DOM regression tests; ROVE frontend has no runtime npm dependencies",
+  "scripts": {"test": "node --test tests/*_ui.cjs"},
+  "devDependencies": {"jsdom": "26.1.0"}
+}

@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.7
+**Version:** 0.8
 **Updated:** 2026-09-12
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -118,10 +118,12 @@ Candidate outputs receive their own grades. Baseline evidence can be regraded un
 
 The local implementation uses revision-checked drafts and immutable final reviews.
 Dataset freezing checks its exact preview and preserves exclusions and disagreement.
-The current fully reviewed badge requires accepted validity and annotation reviews;
-incomplete datasets remain usable. Explicit annotations are stored for inspection,
-not automatically injected into future candidates or graders. Reviewer names are
-local attribution rather than authenticated organizational identities.
+The fully reviewed badge requires accepted validity and annotation reviews with
+no unresolved disagreement; incomplete datasets expose their coverage. An explicit
+contract binding can supply selected accepted frozen annotations to a participating
+local verifier, retaining exact review IDs. Candidate stages and unrelated graders
+receive none. Output ratings never become reusable labels automatically. Reviewer
+names remain local attribution rather than authenticated organizational identities.
 
 ## 6. Success definitions and meaningful measures
 
@@ -138,19 +140,19 @@ Prioritize measures tied to robotics and agent work:
 
 The final report should lead with task outcomes and comparable differences. Collapsible details contain definitions, formulas, denominators, uncertainty assumptions, units, grader versions and links to underlying trials. Precision, recall and F1 are out of this iteration's scope.
 
-The existing reports already calculate pass@k/pass^k, coverage, latency and configured verification measurements. Guided metric setup is implemented; intervention/recovery measures remain unavailable without their measurement and aggregation requirements. See [success and performance measures](product/metrics-and-success.md).
+Reports calculate pass@k/pass^k, coverage, pipeline latency and configured verification measurements. Versioned episode evidence supports completion time, autonomous completion, recovery and constraint aggregates with explicit denominators; missing evidence or zero eligible opportunities stays unavailable. HTML and JSON reports include aggregate measures and campaign targets; CSV remains one row per trial without repeated campaign aggregates. See [success and performance measures](product/metrics-and-success.md) and [robotics evidence](product/robotics-evidence.md).
 
 ### Inspect traces and measurements
 
 Every report should support **outcome → trial → measurement or grade → stage/call → supporting evidence**. A developer must be able to inspect what the system observed, returned, requested and actually executed, including errors and incomplete recording. Measurements carry values, units, source quality and the exact evidence used; timing distinguishes stage work, pipeline wall time and robot task time.
 
-The trial inspector now combines saved configuration, verdicts, measurement details, stage outputs, stage-filtered activity and on-demand initial observations. Supplied role, usage and trace identifiers are inspectable; missing usage stays unknown. Arbitrary remote assets, image/video/trajectory ranges and parallel trace graphs remain follow-up work. Baseline comparison aligns matching cases and assessment scope, exposes changed components and links differences to source records without presenting correlation as a proven cause.
+The trial inspector combines saved configuration, verdicts, measurements, preserved stage outputs, producer-clock trace lanes and on-demand managed assets. Byte ranges and indexed JSON sample/frame/time ranges resolve through trial evidence identities; arbitrary video decoding and remote fetching are unsupported. Paired-trial views place baseline and candidate traces side by side while retaining separate unsynchronized clocks. Comparisons expose matching cases, assessment scope and changed components without presenting correlation as proven causation.
 
-Quick and campaign paths now retain the events exposed by their orchestrator and optional Copilot runtime, alongside final stage results and structured checks. Internal customer-agent calls still require adapter support; no transcript is reconstructed when the source omits it. Initial observations have managed asset references. Full evidence-range resolution, robot clock alignment and baseline trace comparison remain pending. See [Trial history](TRIAL_HISTORY.md), [traces and measurements](product/traces-and-measurements.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
+Quick and campaign paths retain events exposed by their orchestrator and optional Copilot runtime, alongside results and structured checks. Internal customer-agent calls still require adapter support; missing telemetry is not reconstructed. Native SDK spans, ROVE stage/tool ancestry and supplied clock identities remain inspectable locally. Cross-clock synchronization is never inferred from arrival order. See [Trial history](TRIAL_HISTORY.md), [traces and measurements](product/traces-and-measurements.md), [evidence and exchange](product/evidence-and-exchange.md) and [ADR-022](architecture/ADR-022-trial-telemetry.md).
 
 ## 7. Baselines, ablations and evidence
 
-The initial campaign can be a baseline reference even while SME review is pending. A scored comparison identifies the exact baseline strategy, cases, grades and coverage. Candidate campaigns retain the selected baseline campaign and strategy reference.
+A completed initial campaign can be named and pinned as a baseline even while SME review is pending. Each immutable baseline revision captures its campaign/strategy, cases, contract, assessment revision set and outcomes, including unknowns. Renaming, unpinning or replacing a baseline creates a revision; later ratings do not rewrite a captured baseline. Candidate comparisons retain the selected revision. See [named baselines and confirmed assistance](product/named-baselines-and-assistant.md).
 
 An ablation copies cases, repetitions and grading conditions and exposes both the intended component change and incidental differences. Renaming a strategy should not sever its relationship to a baseline. A changed evaluator, dataset or environment may require regrading or new matching trials; do not silently call it model improvement.
 
@@ -158,9 +160,9 @@ Robotics episode evidence must identify the producing configuration and attempt.
 
 ## 8. Storage and integration direction
 
-Use SQLite for the local product. The implemented shared journal stores trial identities, snapshots, events and asset metadata with constraints, schema-version checks and indexed history. Initial observations are separate content-addressed files. Schema version 2 also stores case revisions, reviews, frozen dataset membership and quick-promotion references. General recording ranges remain proposed. A complete backup must preserve the journal, assets and separate campaign database together. Consider PostgreSQL only if shared deployment needs justify it; large video and sensor/trajectory recordings should remain separate referenced assets.
+Use SQLite for the local product. The shared journal stores trials, snapshots, events, cases, reviews, frozen datasets, named baseline revisions, evidence references and operation identities with schema migrations and integrity checks. Observations, stage outputs and bounded auxiliary recordings are separate content-addressed assets. A complete backup preserves the journal, assets and separate campaign database together. The versioned exchange exports a validated relational manifest and assets and restores only into a fresh destination. It is a portable local format; PostgreSQL and cloud analytical connectors remain demand-driven.
 
-Keep schemas and IDs portable for future Fabric/Databricks integration. Parquet or Delta export is optional when needed; neither is required to record local trials. Configuration snapshots identify accessible artifacts and declared model versions, but do not automatically archive remote weights or recreate a physical environment.
+The exchange manifest preserves schemas, identities, lineage and asset hashes for downstream transforms. Its JSONL tables are an interchange representation; SQLite remains the live store. Parquet and Delta/Fabric/Databricks connectors require justified workloads and target-specific validation. Configuration snapshots identify accessible artifacts and declared model versions, but do not archive remote weights or recreate a physical environment.
 
 ### Evaluation harness and agent runtime
 
@@ -168,17 +170,20 @@ ROVE already has the core evaluation services: configured trials, execution orch
 
 ROVE owns these evaluation contracts and execution services while reusing Copilot's agent loop, tool and telemetry capabilities. A customer's agent remains the system under test: its runtime, tools, prompts and action interface become versioned components of a strategy. Direct customer agents, VLMs and VLAs remain evaluable through supported adapters. Adding Copilot planning or recovery around one creates a different combined strategy and must be compared explicitly. See the [target architecture](architecture/target-architecture.md), [ADR-023](architecture/ADR-023-evaluation-and-execution-harnesses.md), [ADR-024](architecture/ADR-024-copilot-runtime-and-observability.md) and the [dated model assessment](product/model-landscape-2026-09.md).
 
-SDK session events feed ROVE's durable trial timeline; native OpenTelemetry and
-optional ROVE spans provide the correlation foundation. The configured Copilot
-adapter now hosts perceive, plan and verify with fresh candidate/grader scopes;
-robot action tools remain pending. The optional assistant reads evidence and
-prepares campaign previews with a separate host confirmation for launch. The real pinned
-SDK/CLI passed a controlled synthetic transport probe; live model/Azure and complete
-external collector validation remain open gates. No ROVE exporter is configured by
-default. Session persistence and sampled monitoring data do not replace trial
-records or robotics evidence. Azure Monitor,
-Application Insights, Log Analytics and Grafana are future optional destinations.
-Versioned Fabric/Delta export remains a separate analytical integration.
+SDK session events and captured native spans feed the durable trial record. The
+configured Copilot adapter hosts perceive, plan and verify in fresh role-scoped
+sessions; action stages use explicit integrations. Endpoint runtime contracts
+describe memory, reset and telemetry coverage without attesting a customer reset.
+The assistant prepares case import/revision, contracts, dataset freezing, named
+baselines and campaign/ablation operations through validated services. Each write
+requires its exact host confirmation; the assistant cannot manufacture SME reviews
+or labels. Local telemetry copies can use a bounded loopback OTLP exporter, disabled
+by default. Controlled real-SDK/CLI tests establish local infrastructure behavior,
+not live-provider quality or a deployed cloud monitoring profile. Live provider,
+Azure and hosted analytics validation remain specification-only in this delivery.
+See [runtime lifecycle](architecture/runtime-lifecycle.md),
+[local observability](architecture/runtime-observability.md) and the
+[live-provider validation specification](product/live-provider-validation.md).
 
 ## 9. Capability and delivery status
 
@@ -188,18 +193,18 @@ Versioned Fabric/Delta export remains a separate analytical integration.
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
 | Durable shared quick/campaign trial recording and initial observation assets | Implemented; frozen snapshots, interrupted-work recovery and idempotent legacy quick-history import |
-| Durable activity, measurement drill-down and history inspector | Implemented for events exposed by the orchestrator/SDK; remote recording ranges and aligned trace comparison pending |
-| Copilot runtime for hosted perception, planning and verification | Implemented as an optional pinned dependency; fresh role scopes and controlled real-CLI proof; live-provider validation pending |
-| ROVE trial spans and optional native SDK telemetry settings | Correlation foundation implemented; no default ROVE exporter or validated Azure/Grafana deployment |
-| Evaluation assistant | Optional read/evidence/preview tools and host-confirmed campaign launch implemented; import/review/freeze mutation tools remain pending |
-| Robot action tools | Pending; existing direct customer action adapters remain supported |
-| Customer PNG/JPEG intake, case revisions and expected-metric preview | Implemented locally; general recording ingestion and action-dependent rollout pending |
-| SME review, reusable annotations and frozen datasets | Implemented with optimistic drafts, immutable final reviews, explicit annotation separation and atomic freezing |
-| Baseline/ablation references, component diffs and quick promotion | Implemented locally; richer campaign timeline and aligned trace comparison pending |
-| PostgreSQL backend or Delta Lake integration | Future, demand-driven |
+| Durable activity, evidence ranges and paired trace inspector | Implemented for supplied events and managed assets; separate source clocks, indexed JSON ranges and explicit missing coverage; no arbitrary remote fetch or video decoding |
+| Copilot runtime for hosted perception, planning and verification | Optional pinned runtime with fresh role scopes, lifecycle contracts and controlled real-CLI validation; live-provider validation is specification-only |
+| ROVE/native spans and optional monitoring | Local stage/tool correlation, native capture and bounded loopback OTLP export implemented; exporter disabled by default; no validated Azure/Grafana deployment |
+| Evaluation assistant | Typed reads and host-confirmed case, contract, freeze, baseline and campaign/ablation operations implemented; no SME judgment or label-writing tools |
+| Robot action integrations | Direct customer action adapters and the synthetic test world are supported; no Copilot hardware-action tools or hardware drivers |
+| Customer intake, case revisions and expected-metric preview | Managed images and bounded auxiliary evidence, typed episode validation, deterministic action-dependent synthetic rollout and aggregate targets implemented |
+| SME review, reusable annotations and frozen datasets | Optimistic drafts, immutable final reviews, atomic freezing and explicit frozen annotation-to-local-verifier bindings implemented |
+| Baseline/ablation references, component diffs and quick promotion | Named/pinned immutable baseline revisions, captured assessments, paired traces and exploratory quick promotion implemented |
+| Relational exchange; PostgreSQL or Delta Lake integration | Validated local exchange/restore implemented; PostgreSQL and cloud connectors remain demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-The local product now connects inspectable durable trials to customer case contracts, success setup, SME review, dataset freezing and baseline comparisons. Remaining work includes runtime/telemetry validation gates, broader assistant workflow tools and richer robotics evidence integration. Full acceptance remains completion of the local import → baseline → review → freeze → candidate → comparison journey, with restart recovery, preserved versions and truthful missing-evidence handling. The [sequenced delivery plan](product/implementation-plan.md) distinguishes delivered work from remaining gates.
+The local product connects durable trials to case contracts, approved labels, synthetic/recorded evidence, frozen datasets, named baselines and inspectable comparisons. The import → baseline → review → freeze → candidate → comparison journey preserves versions, restart recovery and missing evidence. The [sequenced delivery plan](product/implementation-plan.md) records current validation and separates local delivery from live-provider/cloud specifications, hardware drivers and demand-driven analytical integrations.
 
 ## 10. Related specifications and decisions
 
@@ -207,6 +212,10 @@ The local product now connects inspectable durable trials to customer case contr
 - [Customer workflows](product/evaluation-workflows.md): persona stories, onboarding, SME review and acceptance criteria.
 - [Metrics and success](product/metrics-and-success.md): configuration/UI contract and report explanations.
 - [Traces and measurements](product/traces-and-measurements.md): trial timelines, evidence inspection and baseline diagnosis.
+- [Robotics evidence](product/robotics-evidence.md): action-dependent synthetic trials, typed recordings, frozen annotation bindings and aggregate targets.
+- [Evidence and exchange](product/evidence-and-exchange.md): preserved ranges, clock-aware trace lanes and validated relational transfer.
+- [Named baselines and assistance](product/named-baselines-and-assistant.md): immutable baseline assessments and confirmed workflow operations.
+- [Runtime lifecycle](architecture/runtime-lifecycle.md) and [observability](architecture/runtime-observability.md): implemented role/reset boundaries and local telemetry.
 - [Model and harness assessment](product/model-landscape-2026-09.md): dated research informing architecture, not a ROVE benchmark.
 - [Current implementation](architecture/current-implementation.md): actual code paths, APIs, storage and tests.
 - [Trial history and optional Copilot stages](TRIAL_HISTORY.md): local setup, inspector usage, privacy and complete backups.

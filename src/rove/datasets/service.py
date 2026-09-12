@@ -106,22 +106,126 @@ class DatasetService:
 
         if contains_labels(validated["candidate_context"]):
             raise ValueError("Private labels and recorded outcomes cannot be candidate context")
+        from rove.datasets.robotics import EpisodeRecording, SyntheticEnvironment
+
+        recorded = validated["recorded_evidence"]
+        if recorded.get("schema_version") is not None:
+            validated["recorded_evidence"] = EpisodeRecording.model_validate(recorded).model_dump(
+                mode="json"
+            )
+        environment = validated["conditions"].get("synthetic_environment")
+        if environment is not None:
+            validated["conditions"]["synthetic_environment"] = SyntheticEnvironment.model_validate(
+                environment
+            ).model_dump(mode="json")
         return json.loads(_document(validated))
 
-    def import_case(self, payload: dict, image_sha256: str) -> dict:
-        payload = self._case_payload(payload)
+    def validate_case_payload(self, payload: dict) -> dict:
+        """Validate drafts without creating a case or interpreting old outcomes."""
+        validated = self._case_payload(payload)
+        recorded = validated.get("recorded_evidence") or {}
+        for reference in recorded.get("evidence_refs", []):
+            from rove.trials.evidence import validate_reference
+
+            verified = validate_reference(self.trials, reference)
+            if verified["kind"] in {"trajectory", "state"}:
+                if (
+                    verified.get("clock_id") != recorded.get("source_clock_id")
+                    or verified.get("frame") != recorded.get("frame")
+                    or verified.get("units") != recorded.get("units")
+                ):
+                    raise ValueError(
+                        "Episode evidence reference clock/frame/units must match the recording"
+                    )
+                metadata = self.trials.asset_metadata(verified["asset_sha256"])
+                if metadata["media_type"] != "application/json":
+                    raise ValueError(
+                        "Episode state/trajectory evidence requires a structured JSON recording"
+                    )
+                content = json.loads(self.trials.asset_path(verified["asset_sha256"]).read_bytes())
+                if (
+                    not isinstance(content, dict)
+                    or content.get("source_clock_id") != recorded["source_clock_id"]
+                    or content.get("frame") != recorded["frame"]
+                    or content.get("units") != recorded["units"]
+                    or not isinstance(content.get("records"), list)
+                ):
+                    raise ValueError(
+                        "Managed recording schema/clock/frame/units do not match the episode"
+                    )
+        return validated
+
+    def resolve_annotations(
+        self, dataset: dict, case_revision_id: str, bindings: list[dict]
+    ) -> dict:
+        """Resolve exact frozen accepted review identities into endpoint-scoped inputs."""
+        member = next(
+            (
+                m
+                for m in dataset["members"]
+                if m["case_revision_id"] == case_revision_id and m["disposition"] == "included"
+            ),
+            None,
+        )
+        if member is None:
+            raise ValueError("Annotation binding requires included frozen case membership")
+        if any(
+            issue.get("case_revision_id") == case_revision_id
+            and issue.get("code") == "case_annotation_disagreement"
+            for issue in dataset.get("issues", [])
+        ):
+            raise ValueError("Frozen dataset contains unresolved annotation disagreement")
+        reviews = [self.get_review(identity) for identity in member["review_ids"]]
+        reviews = [
+            r
+            for r in reviews
+            if r["target_type"] == "case_annotation"
+            and r["status"] == "final"
+            and r["decision"] == "accepted"
+            and r["contract_id"] == dataset["contract_id"]
+            and r["case_revision_id"] == case_revision_id
+        ]
+        result = {}
+        for binding in bindings:
+            values = [
+                (r["annotations"][binding["annotation_key"]], r["id"])
+                for r in reviews
+                if binding["annotation_key"] in r["annotations"]
+            ]
+            if not values or len({canonical_json(v) for v, _ in values}) != 1:
+                raise ValueError(
+                    f"Missing or conflicting frozen annotation: {binding['annotation_key']}"
+                )
+            target = result.setdefault(binding["endpoint"], {"annotations": {}, "review_ids": []})
+            target["annotations"][binding["target_key"]] = values[0][0]
+            target["review_ids"] = sorted(
+                set(target["review_ids"] + [identity for _, identity in values])
+            )
+        return result
+
+    def import_case(
+        self, payload: dict, image_sha256: str, *, operation_id: str | None = None
+    ) -> dict:
+        from rove.datasets.mutations import lookup, record
+
+        request = {"payload": payload, "image_sha256": image_sha256}
+        payload = self.validate_case_payload(payload)
         self._image(image_sha256)
         case_id, revision_id = uuid.uuid4().hex, uuid.uuid4().hex
         created = now()
         identity = content_hash({**payload, "image_sha256": image_sha256})
         with self.trials.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            reused = lookup(db, operation_id, "import_case", request)
+            if reused:
+                return self.get_case_revision(reused)
             db.execute("INSERT INTO cases VALUES (?,NULL,?)", (case_id, created))
             db.execute(
                 "INSERT INTO case_revisions VALUES (?,?,1,NULL,?,?,?,?)",
                 (revision_id, case_id, image_sha256, identity, _document(payload), created),
             )
             db.execute("UPDATE cases SET head_revision_id=? WHERE id=?", (revision_id, case_id))
+            record(db, operation_id, "import_case", request, revision_id)
         return self.get_case_revision(revision_id)
 
     def revise_case(
@@ -131,9 +235,22 @@ class DatasetService:
         *,
         expected_head_revision_id: str,
         image_sha256: str | None = None,
+        operation_id: str | None = None,
     ) -> dict:
+        from rove.datasets.mutations import lookup, record
+
+        request = {
+            "case_id": case_id,
+            "payload": payload,
+            "expected_head_revision_id": expected_head_revision_id,
+            "image_sha256": image_sha256,
+        }
+        with self.trials.connect() as db:
+            reused = lookup(db, operation_id, "revise_case", request)
+        if reused:
+            return self.get_case_revision(reused)
         previous = self.get_case(case_id)
-        payload = self._case_payload(
+        payload = self.validate_case_payload(
             {"reference_data": previous.get("reference_data", {}), **payload}
         )
         digest = image_sha256 or previous["image_asset"]["sha256"]
@@ -141,6 +258,9 @@ class DatasetService:
         revision_id = uuid.uuid4().hex
         with self.trials.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            reused = lookup(db, operation_id, "revise_case", request)
+            if reused:
+                return self.get_case_revision(reused)
             case = _required(db, "cases", case_id)
             if case["head_revision_id"] != expected_head_revision_id:
                 raise ConflictError("Case changed; refresh before saving a revision")
@@ -162,6 +282,7 @@ class DatasetService:
                 ),
             )
             db.execute("UPDATE cases SET head_revision_id=? WHERE id=?", (revision_id, case_id))
+            record(db, operation_id, "revise_case", request, revision_id)
         return self.get_case_revision(revision_id)
 
     def get_case(self, case_id: str) -> dict:
@@ -504,12 +625,24 @@ class DatasetService:
             db.execute("BEGIN")
             return self._preview(db, payload)
 
-    def freeze(self, payload: dict, *, expected_preview_hash: str | None = None) -> dict:
+    def freeze(
+        self,
+        payload: dict,
+        *,
+        expected_preview_hash: str | None = None,
+        operation_id: str | None = None,
+    ) -> dict:
+        from rove.datasets.mutations import lookup, record
+
+        request = {"payload": payload, "expected_preview_hash": expected_preview_hash}
         payload = FreezeInput.model_validate(payload).model_dump(mode="json")
         _document(payload)
         identity = uuid.uuid4().hex
         with self.trials.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            reused = lookup(db, operation_id, "freeze_dataset", request)
+            if reused:
+                return self.get_dataset(reused)
             preview = self._preview(db, payload)
             if (
                 expected_preview_hash is not None
@@ -540,6 +673,7 @@ class DatasetService:
                         "INSERT INTO dataset_member_reviews VALUES (?,?,?)",
                         (identity, member["case_revision_id"], review_id),
                     )
+            record(db, operation_id, "freeze_dataset", request, identity)
         return self.get_dataset(identity)
 
     def get_dataset(self, identity: str) -> dict:

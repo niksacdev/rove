@@ -65,6 +65,7 @@ class CopilotRuntimeConfig:
     max_event_bytes: int = 256_000
     system_message: str = "Return a JSON object describing the requested robotics pipeline stage."
     telemetry: dict[str, Any] | None = None
+    native_traces: bool = True
 
     def __post_init__(self) -> None:
         if self.role not in {"candidate", "grader", "assistant"}:
@@ -76,6 +77,8 @@ class CopilotRuntimeConfig:
                 raise ValueError("Runtime deadlines must be positive finite seconds")
         if self.max_events < 1 or self.max_event_bytes < 256:
             raise ValueError("Runtime evidence limits are too small")
+        if type(self.native_traces) is not bool:
+            raise ValueError("native_traces must be a boolean")
 
 
 def _plain(value: Any) -> Any:
@@ -259,14 +262,22 @@ class _Recorder:
                 "stage": self.stage,
                 "event_type": kind,
                 "timestamp": raw.get("timestamp"),
+                "source_clock_id": raw.get("source_clock_id", "copilot:" + self.session_id),
+                "source_timestamp": raw.get("source_timestamp", raw.get("timestamp")),
+                "time_unit": raw.get("time_unit", "iso8601" if raw.get("timestamp") else None),
+                "clock_alignment": raw.get("clock_alignment", "unverified"),
                 "received_at": datetime.now(UTC).isoformat(),
                 "agent_id": raw.get("agent_id", raw.get("agentId")),
                 "ephemeral": raw.get("ephemeral"),
                 "data": data,
             }
+            if kind.startswith("rove."):
+                from rove.orchestrator.recording import source_clock
+
+                record.update(source_clock())
             # Parent event IDs express sequence, never span parentage. Only use
             # span IDs explicitly supplied by a producer (our tool callbacks).
-            for key in ("trace_id", "span_id"):
+            for key in ("trace_id", "span_id", "parent_span_id"):
                 if raw.get(key):
                     record[key] = raw[key]
             if len(json.dumps(record, allow_nan=False).encode()) > self.config.max_event_bytes:
@@ -349,6 +360,12 @@ class CopilotRuntime:
                 **self.config.telemetry,
                 "capture_content": self.config.capture_content,
             }
+        elif self.config.native_traces:
+            options["telemetry"] = {
+                "exporter_type": "file",
+                "file_path": str(Path(workspace) / "runtime-traces.jsonl"),
+                "capture_content": False,
+            }
         if self._factory:
             return self._factory(**options)
         try:
@@ -404,19 +421,59 @@ class CopilotRuntime:
             return False
 
     def _sdk_tools(self, recorder: _Recorder) -> list[Any]:
+        from rove.orchestrator.recording import capture_recording_context, event_sink
+
+        recording_context = capture_recording_context()
+        durable_sink = recording_context[event_sink]
+        if durable_sink is not None:
+
+            def guarded_sink(event):
+                try:
+                    pending = durable_sink(event)
+                    if inspect.isawaitable(pending):
+                        if inspect.iscoroutine(pending):
+                            pending.close()
+                        raise RuntimeRecordingError("Runtime event sink must record synchronously")
+                except Exception as error:
+                    # SDK tool dispatch may convert callback errors into model
+                    # observations. Wake supervision so journal loss cannot be
+                    # mistaken for a recoverable tool failure and successful run.
+                    recorder.failure = error
+                    recorder.failed.set()
+                    raise RuntimeRecordingError("Tool span recording failed") from error
+
+            recording_context[event_sink] = guarded_sink
         prepared = []
         for definition in self.tools:
 
             async def invoke(call: Any, tool: RuntimeTool = definition) -> Any:
+                from rove.orchestrator.recording import tool_span, use_recording_context
+
+                call_id = getattr(call, "tool_call_id", None)
+                with (
+                    use_recording_context(recording_context),
+                    tool_span(tool.name, self.config.role, recorder.stage, call_id),
+                ):
+                    return await invoke_scoped(call, tool)
+
+            async def invoke_scoped(call: Any, tool: RuntimeTool) -> Any:
                 args = call.arguments if hasattr(call, "arguments") else call.get("arguments")
                 if not isinstance(args, dict):
                     raise ValueError("ROVE tool arguments must be an object")
                 call_id = getattr(call, "tool_call_id", None)
+                try:
+                    from opentelemetry import trace
+
+                    parent = getattr(trace.get_current_span(), "parent", None)
+                except ImportError:
+                    parent = None
+                parent_identity = {"parent_span_id": f"{parent.span_id:016x}"} if parent else {}
                 recorder.emit(
                     {
                         "id": str(uuid4()),
                         "type": "rove.tool.started",
                         **trace_identity(),
+                        **parent_identity,
                         "data": {"tool_name": tool.name, "tool_call_id": call_id},
                     }
                 )
@@ -431,6 +488,7 @@ class CopilotRuntime:
                             "id": str(uuid4()),
                             "type": "rove.tool.failed",
                             **trace_identity(),
+                            **parent_identity,
                             "data": {
                                 "tool_name": tool.name,
                                 "tool_call_id": call_id,
@@ -444,6 +502,7 @@ class CopilotRuntime:
                         "id": str(uuid4()),
                         "type": "rove.tool.completed",
                         **trace_identity(),
+                        **parent_identity,
                         "data": {"tool_name": tool.name, "tool_call_id": call_id},
                     }
                 )
@@ -464,6 +523,57 @@ class CopilotRuntime:
 
                 prepared.append(Tool(**values))
         return prepared
+
+    def _capture_native(self, path: Path, recorder: _Recorder) -> int:
+        from rove.orchestrator.recording import current_exporter
+        from rove.runtime.telemetry import native_span
+
+        if not path.exists():
+            return 0
+        count = 0
+        with path.open("rb") as stream:
+            for _ in range(self.config.max_events + 1):
+                line = stream.readline(self.config.max_event_bytes + 1)
+                if not line:
+                    break
+                if len(line) > self.config.max_event_bytes:
+                    raise RuntimeRecordingError("Native trace record exceeds capture limit")
+                raw = json.loads(line)
+                if raw.get("type") != "span":
+                    continue
+                event, payload = native_span(raw)
+                event.update(
+                    session_id=recorder.session_id,
+                    stage=recorder.stage,
+                    role=self.config.role,
+                    source_clock_id="copilot:" + recorder.session_id,
+                    received_at=datetime.now(UTC).isoformat(),
+                )
+                # Native span IDs have a distinct namespace from SDK event IDs.
+                source_id = event["source_event_id"]
+                fingerprint = hashlib.sha256(
+                    json.dumps(raw, sort_keys=True, allow_nan=False).encode()
+                ).hexdigest()
+                if source_id in recorder.seen:
+                    if recorder.seen[source_id] != fingerprint:
+                        raise RuntimeRecordingError("Conflicting native span identity")
+                    continue
+                if recorder.count >= self.config.max_events:
+                    raise RuntimeRecordingError("Native trace capture limit exceeded")
+                if recorder.sink:
+                    pending = recorder.sink(event)
+                    if inspect.isawaitable(pending):
+                        if inspect.iscoroutine(pending):
+                            pending.close()
+                        raise RuntimeRecordingError("Runtime event sink must record synchronously")
+                recorder.seen[source_id] = fingerprint
+                recorder.count += 1
+                count += 1
+                if exporter := current_exporter():
+                    exporter.submit(payload)
+            else:
+                raise RuntimeRecordingError("Native trace file exceeds event limit")
+        return count
 
     async def run_stage(
         self, stage: str, image_base64: str, task: str, context: dict | None = None
@@ -496,6 +606,8 @@ class CopilotRuntime:
         failure_wait = operation = None
         cleanup_errors: list[str] = []
         result: dict | None = None
+        ready_at = finished_at = None
+        native_count = 0
         with tempfile.TemporaryDirectory(prefix="rove-agent-") as workspace:
             try:
                 async with asyncio.timeout(self.config.timeout_seconds):
@@ -518,6 +630,7 @@ class CopilotRuntime:
                         enable_session_store=False,
                     )
                     recorder.check()
+                    ready_at = time.monotonic()
                     operation = asyncio.create_task(
                         session.send_and_wait(
                             prompt,
@@ -540,6 +653,7 @@ class CopilotRuntime:
                     result = json.loads(output)
                     if not isinstance(result, dict):
                         raise ValueError("Copilot stage output must be a JSON object")
+                    finished_at = time.monotonic()
             finally:
                 for pending in (operation, failure_wait):
                     if pending is not None and not pending.done():
@@ -568,6 +682,14 @@ class CopilotRuntime:
                                     "data": {"error_type": type(exc).__name__, "kind": method},
                                 }
                             )
+                            if method == "stop" and hasattr(client, "force_stop"):
+                                await asyncio.wait_for(
+                                    client.force_stop(), self.config.cleanup_timeout_seconds
+                                )
+                if self.config.native_traces:
+                    native_count = self._capture_native(
+                        Path(workspace) / "runtime-traces.jsonl", recorder
+                    )
         recorder.check()
         if cleanup_errors:
             raise RuntimeError("Copilot runtime cleanup failed: " + ", ".join(cleanup_errors))
@@ -581,10 +703,20 @@ class CopilotRuntime:
             "role": self.config.role,
             "session_id": session_id,
             "memory": "fresh_per_stage",
+            "reset": "fresh_process_session",
             "event_count": recorder.count,
             "usage": recorder.usage or None,
             "elapsed_ms": (time.monotonic() - started) * 1000,
-            "telemetry_coverage": "sdk_events",
+            "telemetry_coverage": "sdk_events_and_native_spans" if native_count else "sdk_events",
+            "native_span_count": native_count,
+            "native_capture": "captured"
+            if native_count
+            else "not_observed"
+            if self.config.native_traces
+            else "disabled",
+            "startup_ms": (ready_at - started) * 1000 if ready_at else None,
+            "inference_ms": (finished_at - ready_at) * 1000 if finished_at and ready_at else None,
+            "cleanup_ms": (time.monotonic() - finished_at) * 1000 if finished_at else None,
             "content_captured": self.config.capture_content,
         }
         return result
