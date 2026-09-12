@@ -54,7 +54,7 @@ test("final reviews require attribution and rationale; drafts preserve unfinishe
 test("campaign repetitions remain bounded integers and unavailable inputs cannot launch", () => {
   for (const repeats of [0, 2.5, 1001, NaN]) assert.throws(() => buildCampaign(campaign({repeats})), /Repeats/);
   assert.throws(() => buildCampaign(campaign({caseIds: []})), /Select/);
-  assert.throws(() => buildCampaign(campaign({contractId: ""})), /contract/);
+  assert.throws(() => buildCampaign(campaign({contractId: ""})), /scoring rules/);
   assert.throws(() => buildCampaign(campaign({timeout: Infinity})), /timeout/);
   assert.deepEqual(buildCampaign(campaign()).seeds, [0, 1, 2]);
   assert.deepEqual(buildCampaign(campaign()).ks, [1, 3]);
@@ -127,30 +127,27 @@ class TestElement {
 const testDocument = {createElement: tag => new TestElement(tag)};
 const descendants = element => [element, ...element.children.flatMap(descendants)];
 
-test("sample cards keep quick run and versioned case navigation as independent sibling controls", () => {
+test("sample cards select a case in the campaign builder without launching a standalone run", () => {
   const example = {task: "Pick the part", filename: "sample.png", case_id: "case", case_revision_id: "revision-1", import_status: "imported", source: {dataset: "Sample source"}};
-  let selected;
-  const card = createSampleCaseCard(example, value => { selected = value; }, "http://local", testDocument);
+  const card = createSampleCaseCard(example, "http://local", testDocument);
   assert.equal(card.tag, "article");
   const controls = descendants(card).filter(element => ["button", "a"].includes(element.tag));
-  assert.equal(controls.length, 2);
-  const quick = controls.find(element => element.tag === "button"), open = controls.find(element => element.tag === "a");
-  assert.equal(descendants(quick).filter(element => element.tag === "a").length, 0);
-  assert.equal(quick.type, "button");
-  quick.listeners.click();
-  assert.equal(selected, example);
-  assert.equal(open.href, "/static/datasets.html?case=revision-1");
-  assert.match(open.attributes["aria-label"], /versioned case/);
+  assert.equal(controls.length, 1);
+  const open = controls[0];
+  assert.equal(open.tag, "a");
+  assert.equal(open.href, "/static/datasets.html?step=cases&pick=existing&case=revision-1");
+  assert.match(open.attributes["aria-label"], /Select case/);
+  assert.equal(descendants(card).filter(element => element.listeners.click).length, 0);
 });
 
 test("unavailable or malformed case identities never create a misleading Open case link", () => {
   for (const record of [{case_revision_id: "good"}, {case_revision_id: "good", import_status: "unavailable"}, {case_revision_id: "../../other", import_status: "imported"}, {case_revision_id: "javascript:alert(1)", import_status: "imported"}]) assert.equal(sampleCaseHref(record), null);
   const record = {task: "<script>unsafe</script>", filename: "a.png", import_status: "unavailable", import_error: "<img src=x onerror=alert(1)>"};
-  const card = createSampleCaseCard(record, () => {}, "", testDocument);
+  const card = createSampleCaseCard(record, "", testDocument);
   assert.equal(descendants(card).filter(element => element.tag === "a").length, 0);
   assert.equal(descendants(card).find(element => element.tag === "p").textContent, record.task);
   assert.ok(descendants(card).some(element => element.textContent === record.import_error));
-  assert.ok(descendants(card).some(element => element.tag === "button"));
+  assert.equal(descendants(card).some(element => element.tag === "button"), false);
 });
 
 test("campaign targets carry explicit units and verifier-only reviewed bindings", () => {

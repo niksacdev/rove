@@ -38,6 +38,10 @@ jobs:
           node --check frontend/history.js
           node --check frontend/history-traces.js
           node --check frontend/datasets.js
+          node --check frontend/stage-renderers.js
+          node --check frontend/trial-output.js
+          node --check frontend/strategy-revisions.js
+          node --check frontend/case-import.js
           npm test
       - name: Regression tests and mock report
         run: |

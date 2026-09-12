@@ -9,6 +9,7 @@ let hasActiveCampaigns = false;
 let pollTimer = null;
 let focusedRequestedCampaign = false;
 const campaignCards = new Map();
+let savedBaselines = null;
 const parameters = new URLSearchParams(window.location.search);
 const requestedCampaign = parameters.get("campaign");
 async function request(url, options) {
@@ -65,28 +66,47 @@ function campaignCard(campaign) {
   if (!entry) {
     const card = document.createElement("article");
     card.className = "campaign"; card.dataset.campaignId = id; card.tabIndex = -1;
+    const heading = document.createElement("div"); heading.className = "campaign-title";
     const title = document.createElement("h3"), detail = document.createElement("small");
+    const baselineBadge = document.createElement("span"); baselineBadge.className = "baseline-badge"; baselineBadge.textContent = "Baseline"; baselineBadge.hidden = true;
+    const baselineDetails = document.createElement("div"); baselineDetails.className = "campaign-baselines"; baselineDetails.hidden = true;
+    heading.append(title, baselineBadge);
     const progress = document.createElement("p"); progress.className = "progress";
     progress.textContent = "Loading trial counts…";
     const actions = document.createElement("div"); actions.className = "campaign-actions";
     const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "Review results", "primary-link");
     const report = campaignLink(`/api/campaigns/${encoded}/report?format=html`, "Open report", "report-link");
     report.target = "_blank"; report.rel = "noopener";
-    actions.append(review, report);
+    const setBaseline = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}&baseline=setup`, "Set as baseline", "baseline-action");
+    actions.append(review, report, setBaseline);
     const exports = document.createElement("div"); exports.className = "campaign-exports";
     const exportLabel = document.createElement("span"); exportLabel.textContent = "Export:";
     exports.append(exportLabel);
     for (const format of ["json", "csv"]) exports.append(campaignLink(`/api/campaigns/${encoded}/report?format=${format}`, format.toUpperCase()));
     const control = document.createElement("button"); control.className = "secondary"; control.type = "button";
     actions.append(control);
-    card.append(title, detail, progress, actions, exports);
-    entry = {card, title, detail, progress, control, summaryLoaded: false};
+    card.append(heading, detail, progress, baselineDetails, actions, exports);
+    entry = {card, title, detail, progress, control, baselineBadge, baselineDetails, setBaseline, summaryLoaded: false};
     campaignCards.set(id, entry);
     $("history").append(card);
   }
   entry.title.textContent = campaign.name || "Untitled campaign";
   const created = new Date(campaign.created_at);
-  entry.detail.textContent = `${campaign.revision || "Revision unavailable"} · ${campaign.status} · ${Number.isNaN(created.getTime()) ? "Date unavailable" : created.toLocaleString()}`;
+  const status = String(campaign.status || "Status unavailable");
+  entry.detail.textContent = `${status.charAt(0).toUpperCase() + status.slice(1)} · ${Number.isNaN(created.getTime()) ? "Date unavailable" : created.toLocaleString()}`;
+  const baselines = savedBaselines?.filter(b => b && b.campaign_id === id && typeof b.id === "string" && b.id && typeof b.strategy_id === "string" && b.strategy_id) || [];
+  entry.baselineBadge.hidden = baselines.length === 0;
+  entry.card.classList.toggle("is-baseline", baselines.length > 0);
+  entry.baselineDetails.replaceChildren();
+  entry.baselineDetails.hidden = baselines.length === 0;
+  for (const baseline of baselines) {
+    const row = document.createElement("p");
+    const name = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}&baseline=${encodeURIComponent(baseline.id)}`, baseline.name || "Saved baseline", "baseline-name");
+    name.setAttribute("aria-label", `Baseline: ${baseline.name || "Saved baseline"}`);
+    const strategy = document.createElement("span"); strategy.textContent = `Strategy: ${baseline.strategy_id}`;
+    row.append(name, strategy); entry.baselineDetails.append(row);
+  }
+  entry.setBaseline.hidden = campaign.status !== "completed" || baselines.length > 0;
   entry.control.hidden = campaign.status === "completed";
   const action = ["running", "pending"].includes(campaign.status) ? "cancel" : "resume";
   entry.control.textContent = action === "cancel" ? "Cancel campaign" : "Resume remaining trials";
@@ -111,7 +131,10 @@ async function history(refreshAll = false) {
   $("refreshHistory").disabled = true;
   historyLoading = (async () => {
     try {
-      const campaigns = await request("/api/campaigns");
+      const [campaignResponse, baselineResponse] = await Promise.allSettled([request("/api/campaigns"), request("/api/baselines")]);
+      if (campaignResponse.status === "rejected") throw campaignResponse.reason;
+      const campaigns = campaignResponse.value;
+      savedBaselines = baselineResponse.status === "fulfilled" && Array.isArray(baselineResponse.value?.baselines) ? baselineResponse.value.baselines : null;
       if (!Array.isArray(campaigns)) throw new Error("Unexpected campaign response.");
       const ids = new Set(campaigns.map(c => String(c.id)));
       for (const [id, entry] of campaignCards) if (!ids.has(id)) {
@@ -120,7 +143,7 @@ async function history(refreshAll = false) {
       $("historyEmpty")?.remove();
       if (!campaigns.length) {
         const empty = document.createElement("p"); empty.id = "historyEmpty"; empty.className = "empty-state";
-        empty.textContent = "No campaigns yet. Start a new evaluation to build a baseline and compare results here.";
+        empty.textContent = "No campaigns yet. Create a campaign to build a baseline and compare results here.";
         $("history").append(empty);
       }
       hasActiveCampaigns = campaigns.some(c => ["running", "pending"].includes(c.status));
@@ -148,6 +171,7 @@ async function history(refreshAll = false) {
         }
       }
       $("historyStatus").textContent = `${campaigns.length} saved campaign${campaigns.length === 1 ? "" : "s"}${hasActiveCampaigns ? " · Active campaigns update while this tab is visible." : "."}`;
+      if (savedBaselines === null) $("historyStatus").textContent += " Baseline status unavailable. Refresh results to retry.";
       await Promise.all(summaries);
     } catch (error) {
       $("historyStatus").textContent = `Could not load saved campaigns. Use Refresh results to retry. ${error.message || error}`;

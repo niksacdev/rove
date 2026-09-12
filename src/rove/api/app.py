@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import fcntl
+import hashlib
 import json
 import logging
 import tempfile
@@ -21,6 +22,7 @@ from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
 from rove.api.local_only import LocalOnlyMiddleware
+from rove.api.strategy_revisions import create_strategy_revision_router
 from rove.api.trials import create_trial_router
 from rove.benchmarks.api import create_router
 from rove.models import EvaluationProvenance, ExampleData, PipelineStage, StageStatus
@@ -86,8 +88,9 @@ app = FastAPI(
 app.add_middleware(LocalOnlyMiddleware)
 app.include_router(create_router(Path(__file__).resolve().parents[3] / ".rove" / "benchmarks"))
 app.include_router(create_trial_router(trial_store))
+app.include_router(create_strategy_revision_router())
 
-# Global state (no database for demo)
+# In-process streaming state; trials and campaign results persist in SQLite.
 _data_dir = Path(__file__).parent.parent.parent.parent / "data"
 _output_dir = _data_dir / "output"
 _legacy_history_path = _output_dir / "history.jsonl"
@@ -430,7 +433,17 @@ def _background_finished(background, trial_ids, urdf_path):
 async def list_strategies():
     """Return all strategies with their model assignments."""
     strategies = get_strategies()
-    return {"strategies": [s.model_dump() for s in strategies.values()]}
+    from rove.models.config import active_config_path
+    from rove.strategies.revisions import list_revisions
+
+    provenance = {
+        row["strategy_id"]: row for row in list_revisions(active_config_path(), load_config())
+    }
+    return {
+        "strategies": [
+            {**s.model_dump(), "revision": provenance.get(s.id)} for s in strategies.values()
+        ]
+    }
 
 
 @app.post("/api/evaluate", status_code=202)
@@ -444,6 +457,7 @@ async def create_evaluation(
     verify_model_id: str = Form(default="mock-vlm"),
     sim_id: str = Form(default="mock-sim"),
     example_filename: str = Form(default=""),
+    case_revision_id: str | None = Form(default=None),
     urdf: UploadFile | None = File(default=None),
     seed: int | None = Form(default=None),
 ):
@@ -460,6 +474,42 @@ async def create_evaluation(
     if any(sid not in config.strategies for sid in ids):
         raise HTTPException(422, "Unknown strategy")
 
+    case = None
+    if case_revision_id:
+        from rove.datasets.service import DatasetService
+
+        if example_filename:
+            raise HTTPException(422, "Use either a saved case or a legacy sample reference")
+        try:
+            service = DatasetService(_trial_root)
+            case = service.get_case_revision(case_revision_id)
+            service.validate_case_image(case_revision_id)
+            service.validate_case_payload(
+                {
+                    key: case[key]
+                    for key in (
+                        "name",
+                        "task",
+                        "candidate_context",
+                        "conditions",
+                        "recorded_evidence",
+                        "reference_data",
+                    )
+                }
+            )
+        except (KeyError, FileNotFoundError) as error:
+            raise HTTPException(404, "The saved case revision is unavailable") from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        if (
+            task != case["task"]
+            or hashlib.sha256(image_bytes).hexdigest() != case["image_asset"]["sha256"]
+        ):
+            raise HTTPException(
+                422,
+                "The image or task differs from the saved case. Save a new case revision or run without the case association.",
+            )
+
     # Save URDF to temp file if provided
     urdf_path: str | None = None
     if urdf is not None:
@@ -475,7 +525,13 @@ async def create_evaluation(
             urdf_path = tmp.name
 
     # Load example data (ground truth, proprioception, etc.) from manifest
-    example = _load_example_data(example_filename) if example_filename else None
+    example = (
+        ExampleData(extras=case["candidate_context"])
+        if case
+        else _load_example_data(example_filename)
+        if example_filename
+        else None
+    )
 
     # Each selected system gets one durable identity before any model can be called.
     from rove.benchmarks.runner import local_evaluator_versions, runtime_fingerprint
@@ -487,6 +543,10 @@ async def create_evaluation(
         "image_asset": asset,
         "example": example.model_dump() if example else None,
     }
+    if case:
+        task_snapshot.update(
+            case_id=case["case_id"], case_revision_id=case["id"], case_sha256=case["sha256"]
+        )
     selected = {sid: config.strategies[sid].model_dump(mode="json") for sid in ids}
     if not selected:
         selected = {

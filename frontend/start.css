@@ -1,19 +1,19 @@
 .start-page { max-width: 1160px; margin: 28px auto 40px; padding: 16px 12px; }
-.start-eyebrow { color: #b9a2f7; letter-spacing: .14em; font-size: 10px; font-weight: 600; margin-bottom: 22px; }
+.start-eyebrow { color: #81c9bf; letter-spacing: .14em; font-size: 10px; font-weight: 600; margin-bottom: 22px; }
 .start-page h1 { font-size: clamp(30px,4vw,48px); font-weight: 600; line-height: 1.18; letter-spacing: -.04em; margin: 0 0 20px; color: var(--f-text); }
 .start-intro { max-width: 640px; color: var(--f-text-secondary); font-size: 16px; line-height: 1.7; }
 .start-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 16px; }
 .start-primary, .start-secondary { display: inline-flex; gap: 18px; align-items: center; padding: 12px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; text-decoration: none; border: 1px solid var(--f-border-strong); }
-.start-primary { color: #fff; background: #7c3aed; border-color: #7c3aed; }
-.start-primary:hover { background: #6d28d9; }
+.start-primary { color: #fff; background: #0f766e; border-color: #0f766e; }
+.start-primary:hover { background: #0d665f; }
 .start-secondary { color: var(--f-text); background: var(--f-surface); }
 .start-caption { color: var(--f-text-muted); font-size: 12px; line-height: 1.7; }
-.start-page a:not(.start-primary):not(.start-secondary), .quick-welcome a, .quick-links a { color: #b9a2f7; }
-[data-theme="light"] .start-page a:not(.start-primary):not(.start-secondary), [data-theme="light"] .quick-welcome a, [data-theme="light"] .quick-links a, [data-theme="light"] .start-eyebrow { color: #6d28d9; }
+.start-page a:not(.start-primary):not(.start-secondary), .quick-welcome a, .quick-links a { color: #81c9bf; }
+[data-theme="light"] .start-page a:not(.start-primary):not(.start-secondary), [data-theme="light"] .quick-welcome a, [data-theme="light"] .quick-links a, [data-theme="light"] .start-eyebrow { color: #0d665f; }
 .start-journey { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0; margin: 40px 0 28px; border: 1px solid var(--f-border); border-radius: 10px; list-style: none; padding: 0; background: var(--f-surface); }
 .start-journey li { padding: 24px; display: flex; flex-direction: column; }
 .start-journey li + li { border-left: 1px solid var(--f-border); }
-.step-number { color: #b9a2f7; font-size: 12px; letter-spacing: .12em; margin-bottom: 22px; }
+.step-number { color: #81c9bf; font-size: 12px; letter-spacing: .12em; margin-bottom: 22px; }
 .start-page h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; color: var(--f-text); line-height: 1.5; }
 .start-journey p, .start-support p { color: var(--f-text-muted); font-size: 13px; line-height: 1.7; margin: 0 0 18px; }
 .start-journey a { font-size: 12px; margin-top: auto; }

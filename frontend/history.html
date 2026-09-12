@@ -8,19 +8,19 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/history.css">
-  <link rel="stylesheet" href="/static/navigation.css">
-  <script src="/static/navigation.js" defer></script>
-  <script src="/static/history-traces.js"></script>
-  <script src="/static/history.js?v=journey-1" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-6">
+  <link rel="stylesheet" href="/static/history.css?v=campaign-workspace-6">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-6">
+  <script src="/static/navigation.js?v=campaign-workspace-6" defer></script>
+  <script src="/static/history-traces.js?v=campaign-workspace-6"></script>
+  <script src="/static/history.js?v=campaign-workspace-6" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <header id="roveNav" data-section="results"></header>
   <main id="main">
     <div class="page-heading"><div><h1>Results</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p>
-        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="button">New evaluation</a></div>
+        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="button">Create a campaign</a></div>
     <nav class="workspace-tabs" aria-label="Results"><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">Trials</a></nav>
     <div class="history-layout">
       <section class="history-list-panel" aria-labelledby="trialsHeading">

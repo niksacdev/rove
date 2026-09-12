@@ -1,0 +1,155 @@
+{
+  "description": "Structural projection of an isolated mock parallel strategy with an agent-loop verifier. Perceive and reset spans are internal adapter work, not pipeline stages. Task, timestamps, trace identities and output contents omitted.",
+  "trial": {
+    "status": "completed",
+    "strategy": {
+      "id": "mock",
+      "pipeline_mode": "parallel",
+      "verify_mode": "agent_loop",
+      "perceive": "mock-vlm",
+      "plan": null,
+      "act": "mock-vla",
+      "verify": "mock-vlm",
+      "sim": "mock-sim"
+    },
+    "result": {
+      "stages": [
+        {
+          "stage": "act",
+          "phase": "execution",
+          "status": "completed",
+          "model_id": "mock-vla"
+        },
+        {
+          "stage": "verify",
+          "phase": "evaluation",
+          "status": "completed",
+          "model_id": "mock-vlm"
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "event_type": "rove.stage.started",
+      "stage": "reset",
+      "endpoint_id": "mock-sim",
+      "role": "candidate"
+    },
+    {
+      "event_type": "rove.stage.ended",
+      "stage": "reset",
+      "endpoint_id": "mock-sim",
+      "role": "candidate"
+    },
+    {
+      "event_type": "stage",
+      "stage": "act",
+      "data": {
+        "stage": "act",
+        "phase": "execution",
+        "status": "running",
+        "model_id": "mock-vla"
+      }
+    },
+    {
+      "event_type": "rove.stage.started",
+      "stage": "act",
+      "endpoint_id": "mock-vla",
+      "role": "candidate"
+    },
+    {
+      "event_type": "rove.stage.ended",
+      "stage": "act",
+      "endpoint_id": "mock-vla",
+      "role": "candidate"
+    },
+    {
+      "event_type": "stage",
+      "stage": "act",
+      "data": {
+        "stage": "act",
+        "phase": "execution",
+        "status": "completed",
+        "model_id": "mock-vla"
+      }
+    },
+    {
+      "event_type": "stage",
+      "stage": "verify",
+      "data": {
+        "stage": "verify",
+        "phase": "evaluation",
+        "status": "running",
+        "model_id": "mock-vlm"
+      }
+    },
+    {
+      "event_type": "stage",
+      "stage": "verify",
+      "data": {
+        "stage": "verify",
+        "phase": "evaluation",
+        "status": "running",
+        "model_id": "mock-vlm",
+        "output": {
+          "substep": "turn",
+          "tools_requested": [
+            "perceive",
+            "compute_dynamics"
+          ]
+        }
+      }
+    },
+    {
+      "event_type": "rove.stage.started",
+      "stage": "perceive",
+      "endpoint_id": "mock-vlm",
+      "role": "candidate"
+    },
+    {
+      "event_type": "rove.stage.ended",
+      "stage": "perceive",
+      "endpoint_id": "mock-vlm",
+      "role": "candidate"
+    },
+    {
+      "event_type": "stage",
+      "stage": "verify",
+      "data": {
+        "stage": "verify",
+        "phase": "evaluation",
+        "status": "running",
+        "model_id": "mock-vlm",
+        "output": {
+          "substep": "tool",
+          "tool": "perceive"
+        }
+      }
+    },
+    {
+      "event_type": "stage",
+      "stage": "verify",
+      "data": {
+        "stage": "verify",
+        "phase": "evaluation",
+        "status": "running",
+        "model_id": "mock-vlm",
+        "output": {
+          "substep": "tool",
+          "tool": "compute_dynamics"
+        }
+      }
+    },
+    {
+      "event_type": "stage",
+      "stage": "verify",
+      "data": {
+        "stage": "verify",
+        "phase": "evaluation",
+        "status": "completed",
+        "model_id": "mock-vlm"
+      }
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -72,6 +72,10 @@ class SuccessContract(StrictModel):
     scope: Literal["scene_understanding", "plan_quality", "episode_outcome"]
     evidence_mode: Literal["candidate_output", "recorded_episode", "synthetic_rollout"]
     criteria: list[Criterion] = Field(min_length=1, max_length=30)
+    case_expectations: dict[
+        Annotated[str, Field(min_length=1, max_length=128)],
+        Annotated[str, Field(min_length=1, max_length=8000)],
+    ] = Field(default_factory=dict, max_length=1000)
     metrics: list[
         Literal[
             "task_success",

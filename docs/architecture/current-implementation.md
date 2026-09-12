@@ -18,19 +18,64 @@ target, including capabilities not yet implemented.
 
 ## Workflow navigation
 
-The shared navigation maps the existing pages to **Start, Evaluate, Results and
-Configure**. Start becomes the root overview; Evaluate is the datasets workspace
-with Cases, Run and Review & improve steps. Results is the benchmarks hub with
-Trials beneath it. Configure uses the root strategy/model/settings views;
-Quick trial and the manifest builder remain secondary paths.
+The existing shared navigation and saved campaign/trial deep links were delivered in
+PR #21. User feedback found that route consistency left the workflow unclear: case
+selection, contracts, chat, datasets and execution still competed for attention.
 
-Local step changes retain evaluation context. A Results action returns to
-`/static/datasets.html?step=review&campaign=ID`; direct trial/evidence links retain
-their existing identifiers. This reorganizes UI ownership without changing API,
-recording or scoring contracts. Local DOM regressions and browser inspection cover
-route identity, back/forward, both themes and narrow navigation; the
-[user journey](../product/user-journey.md) and [ADR-025](ADR-025-workflow-navigation.md)
-record the implementation and its validation limits.
+The accepted amendment is **Start, Evaluate, Results**, with **Settings** separately
+on the right. Evaluate becomes **Cases → Configure → Run → Review results**. It
+uses an image/task gallery dialog and selected-case cards, existing strategies from
+configuration, plain-language success criteria with draft suggestions, and an optional
+assistant in Configure. Run exposes the planned trial count and each recorded trial's
+case, strategy and attempt identity. Dataset actions use case-collection wording;
+adding to a collection requires a new revision retaining its earlier membership.
+
+The amendment is implemented locally with DOM behavior regression coverage. Run
+confirms the selected strategy and exact scoring criteria. Case expectations are keyed
+by immutable case revision in the saved contract; scoring edits and late save responses
+cannot silently activate an outdated preview. Saved collection cards load their actual
+members, and adding cases preserves the old revision and its review references.
+
+Active campaign progress polls every two seconds while the Run page is visible. Inline
+pipeline details fetch recorded stages/output on expansion and manual refresh, showing
+up to 200 events with a full-inspector link. They do not stream tokens. Tests cover these
+paths alongside draft preservation, search/selection, deep links and no execution from
+navigation. Browser verification completed the desktop dark-theme journey with three
+isolated mock trials, plus narrow-shell checks in both themes. A stale Review summary
+found during that run now refreshes on entry and has a regression test. Saved Run
+links show recorded configuration, and campaign refresh retains expanded trial details.
+The 390px case gallery was verified in both themes; mock execution does not
+establish model quality or physical robot performance.
+The [campaign workspace](../product/user-journey.md) and
+[ADR-025](ADR-025-workflow-navigation.md) define the requirements and evidence checklist.
+Existing API, recording and scoring contracts remain authoritative below.
+
+Creation uses **Create a campaign**, and **Run campaign** is an execution action on that
+record. **Review results** loads recorded evidence. Baseline creation names a completed
+campaign strategy and preserves its assessment snapshot; it is not another execution.
+The primary **Set as baseline** action and Results **Baseline** badge expose that role,
+while pinning and revision history remain secondary. The badge must derive from saved
+baseline references. Comparison preparation is read-only until **Start comparison
+campaign** explicitly dispatches fresh candidate trials.
+
+## Strategy selection and saved revisions
+
+The campaign engine accepts multiple strategies under the same cases, success contract
+and repetition plan. The restored Configure selection exposes that capability: each
+case/strategy/repetition slot remains a separate trial, with per-strategy reporting.
+A comparison campaign instead evaluates a candidate against one selected baseline
+strategy and its captured assessment conditions.
+
+The accepted strategy-revision implementation adds a configuration-specific local
+SQLite catalog over YAML-defined strategies. A UI edit saves a new immutable selectable
+ID, with exact-preview checks on the source strategy, referenced endpoint definitions
+and defaults. YAML is unchanged. Endpoints resolve when a campaign is created, and the
+existing campaign snapshot freezes the full resolved configuration. The editor starts
+from the current selected strategy, so a changed source is not silently treated as the
+archived baseline. [ADR-026](ADR-026-versioned-strategy-catalog.md) records this boundary;
+the implemented shared loader, API and local regression evidence are linked there.
+The revision editor adds new saved candidates without rewriting YAML or starting trials;
+its browser integration remains pending.
 
 ## Two Entry Paths, One Pipeline
 
@@ -244,7 +289,8 @@ validated. See [compatibility evidence](copilot-compatibility.md) and
 
 The [evaluation assistant API](../../src/rove/api/assistant.py) is enabled by
 `ROVE_ASSISTANT_ENDPOINT`, which must name an explicitly configured `copilot_agent`
-endpoint. Cases exposes its optional assistant panel. Tools read bounded case,
+endpoint. The campaign-workspace amendment places its optional assistant in Configure;
+the existing API is unchanged. Tools read bounded case,
 dataset, strategy and trial records and prepare typed case imports/revisions,
 contracts, dataset freezes, baseline changes, launches and comparisons. Only the
 host confirms mutations using an expiring token and exact-preview revalidation.

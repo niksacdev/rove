@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.8
+**Version:** 0.9
 **Updated:** 2026-09-12
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -36,7 +36,7 @@ Builds a product such as bin picking, assembly or kitting, with requirements for
 
 **Need:** Assess the team's models or agents on a customer's data, including customers who have images and tasks but no labeled evaluation dataset.
 
-**ROVE journey:** Onboard the data, define success, run an initial baseline, ask a subject-matter expert (SME) to review cases and outputs, freeze the resulting dataset, and compare a candidate against the same requirements. The local review/freeze workflow is implemented.
+**ROVE journey:** Onboard the data, define success, run an initial baseline, ask a subject-matter expert (SME) to review cases and outputs, save a versioned case collection, and compare a candidate against the same requirements. The local review and immutable dataset services are implemented; the revised campaign workspace is implemented locally with regression coverage.
 
 **Value:** A reusable customer evaluation set and an evidence-backed explanation of which tasks improve, fail or still need assessment.
 
@@ -58,17 +58,19 @@ Use [Anthropic's evaluation terminology](https://www.anthropic.com/engineering/d
 
 | Concept | Meaning |
 | --- | --- |
-| Task / test case | A concrete test with defined inputs and success criteria. ROVE calls it a **Case** in the UI; the task instruction describes the robotics goal. |
-| Trial | One attempt at one case using one strategy. Running three strategies creates three trials. Regrading the same output does not create a new attempt. |
+| Task | The robotics objective or instruction, retained as a field of a case rather than another persisted container. |
+| Case / test case | A concrete observation, task, relevant environment/robot conditions and expected outcome. Several cases can test the same task under different conditions. |
+| Trial | One attempt at one case using one strategy. For one case, running three strategies once creates three trials. Pipeline stages belong to the same trial; regrading an output does not create a new attempt. |
 | Grader | Logic or human review that assesses a declared aspect of the result. ROVE's configured verify stage hosts task evaluators, required constraints and diagnostics. |
 | Trace | The recorded outputs, calls, observations and intermediate results available for an attempt. A predicted action trajectory is not proof that actions executed. |
 | Outcome | The resulting state or artifact being assessed. Plan quality, an agent decision and observed robot completion have different evidence requirements. |
 | Suite / dataset revision | A selected collection of case versions. A frozen reviewed dataset also pins annotations, rubrics and reference-output links. |
 | Strategy | A reusable named configuration of stages and endpoints. Its mutable name is not sufficient identity for old results. |
-| Campaign | A named evaluation of cases, strategies and repetitions. Explicit references connect baseline and candidate campaigns. |
+| Campaign | A named evaluation of cases, strategies and repetitions. **Run campaign** executes its trials; **Review results** reads their saved evidence. |
+| Baseline | A saved reference to one completed campaign strategy and its frozen assessment snapshot, used for a later comparison. This is a role for an existing result, not a separate execution. |
 | Provenance | Configuration, input, version and evidence identity attached to records; not another navigation level. |
 
-Keep Cases, Trials, Campaigns and History as the working vocabulary. Dataset revisions are managed with cases. Do not introduce overlapping Experiment or Session entities. Existing evaluation IDs remain compatibility/grouping identifiers where needed.
+Keep Cases, Trials and Campaigns as the working vocabulary. Saved history belongs under Results. Dataset revisions appear as versioned case collections managed with cases. Do not introduce overlapping Experiment or Session entities. Existing evaluation IDs remain compatibility/grouping identifiers where needed.
 
 ```mermaid
 flowchart TD
@@ -94,7 +96,7 @@ flowchart TD
     O --> S[Connect supported strategy]
     S --> B[Small baseline campaign]
     B --> H[SME review when needed]
-    H --> D[Freeze dataset]
+    H --> D[Save reviewed case collection]
     D --> A[Change a component and compare]
 ```
 
@@ -102,25 +104,58 @@ This local workflow is designed to deliver a useful first report before requirin
 
 The first report shows accepted/completed, failed and unknown cases; representative failures link to evidence. It shows what is unreviewed or unmeasured. A configurable pilot checks data and grading before the full campaign, with attempt count and available budget information shown before launch.
 
-Quick evaluations remain easy. Durable recording now captures their inputs and configuration before dispatch and preserves interruption. Users can reopen a saved trial without running it again. Promotion preserves an existing quick trial as an exploratory reference and creates a reusable input case; a later campaign schedules fresh repetitions separately.
+The primary UI starts a campaign, including the smallest useful evaluation of one
+case, one strategy and one attempt. Existing independent runs retain durable inputs,
+configuration, interruption state and saved trial evidence. Their compatibility routes
+remain usable. Promotion preserves an existing trial as an exploratory reference and
+creates a reusable case; later campaigns schedule fresh attempts separately.
 
 ### Navigation and workspace design
 
-The accepted navigation direction is **Start · Evaluate · Results · Configure**.
-Start explains the workflow: cases and success → strategy and repetitions → results
-and traces → baseline and improvement. Evaluate owns the Cases → Run → Review &
-improve workspace, with one visible step and retained selections. Results owns
-campaign reports/comparisons and subordinate trial inspection. Configure groups
-strategies, models and settings. Quick run and manifest-based campaigns remain
-secondary paths with their existing recording semantics.
+Primary navigation is **Start · Evaluate · Results**, with **Settings** separately
+on the right. Settings maintains reusable strategies, models/connections and preferences.
+Evaluate is a single campaign workspace: **Cases → Configure → Run → Review results**.
 
-Results returns to the exact campaign's review step through an explicit deep link.
-Moving between steps never launches a trial or changes a frozen record. Existing
-routes remain usable; navigation must preserve keyboard access, visible focus,
-responsive layouts and both themes. This consolidation is being implemented;
-browser acceptance is not yet claimed. See the [user journey](product/user-journey.md)
-and [ADR-025](architecture/ADR-025-workflow-navigation.md) for route ownership,
-compatibility and persona acceptance.
+Cases offers **Add new**, **Select existing** and **Import cases**. Add new opens a
+single-case dialog. The existing library groups Cases and Datasets in one bounded
+picker; a dataset loads exact case versions into Cases for inspection before choosing
+strategies. JSONL metadata import pairs records with explicitly selected PNG/JPEG
+images. Selected cases appear as compact editable cards with expandable expectations. Expected outcomes and expert-review material may be prefilled from
+available metadata or an explicit assistant, but remain labelled drafts. Suggested
+content cannot create a human judgment or turn an initial image into completion evidence.
+
+Configure selects one or several available strategies and presents editable,
+plain-language success criteria. Advanced contract JSON stays in collapsed details.
+Existing strategies can be compared within one campaign on the same case set. A
+component ablation saves a new revision of a baseline strategy and compares that
+candidate under the same recorded assessment conditions. The optional assistant's
+chat helps configure the same evaluation here. The manual path
+works without it; both use the same validated preview and explicit launch boundary.
+
+Run confirms case count, strategy selection, repetitions, criteria and execution limits.
+It explains the total: **cases × strategies × repetitions = planned trials**. During
+execution, each recorded trial shows its case, strategy and attempt identity. Campaign
+progress polls every two seconds while visible; expanding pipeline details or pressing
+Refresh fetches recorded stage events and output. This does not imply token streaming.
+Review reads saved report measures, trials, traces and expert assessments. **Set as
+baseline** names and saves one completed campaign strategy as the reference; Results
+shows a **Baseline** badge only for persisted references. Versioning and pinning stay
+secondary. **Compare a strategy change** prepares a matching candidate; only **Start
+comparison campaign** runs new trials. Neither review nor setting a baseline reruns
+the original campaign.
+
+Use **Save case collection** and **Add to an existing collection** for dataset actions.
+Adding creates a new immutable revision retaining old members; old revisions remain
+unchanged. Reviewed collections retain exact annotations and review identities.
+Opaque freeze/reuse terminology should not be a prerequisite for the main workflow.
+
+Results returns to the exact campaign or trial through saved identities. Local stage
+changes retain draft selections and never execute work. Legacy URLs remain usable.
+Use warm neutral/slate surfaces with restrained teal accents, readable controls,
+keyboard focus and a connection status that never obscures the task input. This
+redesign is implemented locally with revised behavior tests, a desktop three-trial mock
+journey and narrow-shell checks in both themes. The 390px case gallery was also verified in both themes. See the [campaign workspace](product/user-journey.md) and
+[ADR-025](architecture/ADR-025-workflow-navigation.md) for requirements and validation.
 
 ## 5. Create datasets and validate cases
 
@@ -130,7 +165,7 @@ A customer without labels can run the initial campaign and have an SME review th
 2. **Reusable annotation:** expected properties, constraints, acceptable alternatives or corrected reference labels.
 3. **Output rating:** assessment of one trial output under a versioned rubric, with rationale and evidence.
 
-Freeze exact case membership, annotations and rubric revisions with links to reference outputs/reviews. Failed outputs remain useful examples; dataset membership is not limited to successes. Exclusions retain reasons and history. A reference answer is not automatically ground truth or the only acceptable solution.
+Save a collection as an immutable dataset revision, preserving exact case membership, annotations and rubric revisions with links to reference outputs/reviews. Failed outputs remain useful examples; dataset membership is not limited to successes. Exclusions retain reasons and history. A reference answer is not automatically ground truth or the only acceptable solution.
 
 Candidate outputs receive their own grades. Baseline evidence can be regraded under the same rubric without increasing trial counts; original grades remain available. New task inputs require new case versions. Missing evidence remains unknown. Private grading material and baseline answers are excluded from candidate inputs unless that use is explicitly part of the evaluation.
 
@@ -222,7 +257,7 @@ See [runtime lifecycle](architecture/runtime-lifecycle.md),
 | Relational exchange; PostgreSQL or Delta Lake integration | Validated local exchange/restore implemented; PostgreSQL and cloud connectors remain demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 
-The local product connects durable trials to case contracts, approved labels, synthetic/recorded evidence, frozen datasets, named baselines and inspectable comparisons. The import → baseline → review → freeze → candidate → comparison journey preserves versions, restart recovery and missing evidence. The [sequenced delivery plan](product/implementation-plan.md) records current validation and separates local delivery from live-provider/cloud specifications, hardware drivers and demand-driven analytical integrations.
+The local product connects durable trials to case contracts, approved labels, synthetic/recorded evidence, frozen datasets, named baselines and inspectable comparisons. The import → baseline → review → save collection → candidate → comparison journey preserves versions, restart recovery and missing evidence. The [sequenced delivery plan](product/implementation-plan.md) records current validation and separates local delivery from live-provider/cloud specifications, hardware drivers and demand-driven analytical integrations.
 
 ## 10. Related specifications and decisions
 
@@ -240,7 +275,7 @@ The local product connects durable trials to case contracts, approved labels, sy
 - [Trial history and optional Copilot stages](TRIAL_HISTORY.md): local setup, inspector usage, privacy and complete backups.
 - [Target architecture](architecture/target-architecture.md) and [system diagram](architecture/system-diagram.md): logical responsibilities, processes, data and optional integrations.
 - [Implementation plan](product/implementation-plan.md): sequenced tasks, dependencies and milestone acceptance.
-- [Architecture decisions](architecture/README.md): ADRs 017–024 with diagrams and implementation status.
+- [Architecture decisions](architecture/README.md): evaluation, navigation and strategy-revision decisions with diagrams and implementation status.
 - [Campaign usage](BENCHMARKS.md) and [configured verification](VERIFICATION.md): supported configuration today.
 
 Earlier versions of this file remain in Git history. The core vision and personas are retained; historical claims about unimplemented commands, full simulation, universal reproducibility or future integrations are not release guarantees.

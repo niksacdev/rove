@@ -16,7 +16,8 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable event and inspector foundation implemented; aligned traces and complete external export pending |
 | [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline and shared recording retained; complete robot lifecycle contracts pending |
 | [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime and controlled transport proof implemented; live provider/collector validation pending |
-| [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted direction | Shared primary destinations and staged workspace in progress; browser acceptance pending |
+| [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted | Campaign workspace, local mock journey and responsive gallery verified |
+| [026: Versioned strategy catalog](ADR-026-versioned-strategy-catalog.md) | Accepted | Immutable local strategy catalog and multi-strategy execution tested; editor browser integration pending |
 
 ## How the decisions connect
 
@@ -34,6 +35,8 @@ flowchart TD
     E[023: ROVE evaluation responsibilities] --> T
     R[024: Copilot runtime and observability] --> T
     E --> R
+    C --> K[026: Immutable strategy revisions]
+    K --> M
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.
