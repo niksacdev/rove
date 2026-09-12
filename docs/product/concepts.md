@@ -12,7 +12,7 @@ for example, whether a planning agent produces an acceptable placement plan. It
 does not require a VLA or a complete robot recording to be useful.
 
 This page defines the product vocabulary and distinguishes it from the current
-implementation. Current behavior was checked against commit `776b393` on
+implementation. Current behavior was checked against commit `3bfd485` on
 12 September 2026. The versioned case, review and campaign workflows below are
 **proposed**, not existing API or UI capabilities.
 
@@ -67,12 +67,14 @@ planning rubric; it should not be forced to supply URDF or joint state. A modele
 trajectory check or a physical completion assessment needs the additional geometry,
 state or outcome evidence required by that check.
 
-The **evaluation harness** runs and assesses trials. The **execution harness**
-operates the system under test through its configured adapters. ROVE develops both
-layers from its existing pipeline. A customer's agent may manage its own tools,
-memory and recovery; those remain part of the system being evaluated. Record the
-relevant versions and settings in the system snapshot without introducing another
-Cases/Trials/Campaigns container. See the [harness decision](../architecture/ADR-023-evaluation-and-execution-harnesses.md).
+ROVE's **evaluation services** run and assess trials; its **execution services**
+dispatch the configured system through supported adapters. Copilot SDK supplies
+the shared agent runtime for behavior ROVE hosts. A customer's agent may keep its
+own tools, memory and recovery; those remain part of the system being evaluated.
+Record the relevant versions and settings in the system snapshot without adding
+another Cases/Trials/Campaigns container. See the
+[evaluation boundary](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
+and [runtime decision](../architecture/ADR-024-copilot-runtime-and-observability.md).
 
 A **trace** links recorded events and outputs for a trial. A **measurement** is a
 value with its unit, source quality, scope and evidence reference. Some current

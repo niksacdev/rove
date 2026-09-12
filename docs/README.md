@@ -11,17 +11,26 @@
 | [Traces and measurements](product/traces-and-measurements.md) | Inspect trial timelines, supporting evidence and baseline differences |
 | [Model assessment](product/model-landscape-2026-09.md) | September 2026 evidence on frontier agents, VLAs and evaluation scope |
 | [Current implementation](architecture/current-implementation.md) | Diagrams of the code that exists today, with source and test links |
+| [Target architecture](architecture/target-architecture.md) | Logical roles for ROVE services, Copilot-hosted agents and direct customer systems |
+| [System diagram](architecture/system-diagram.md) | Processes, storage, trial sequence and optional observability integrations |
+| [Implementation plan](product/implementation-plan.md) | Sequenced delivery tasks, dependencies and acceptance gates |
 | [Architecture decisions](architecture/README.md) | Decisions, alternatives, consequences and implementation status |
 | [Run campaigns](BENCHMARKS.md) | Supported campaign configuration, CLI/API and metric behavior |
 | [Configure verification](VERIFICATION.md) | Supported task evaluators, constraints, diagnostics and measurements |
 
-The current implementation pages describe the code verified at commit `776b393` (PRs [#13](https://github.com/niksacdev/rove/pull/13) and [#14](https://github.com/niksacdev/rove/pull/14)). Product specifications include proposed follow-up work and label it explicitly. An accepted architectural direction does not mean its implementation has shipped.
+The current implementation pages describe the code verified through commit `3bfd485`
+(PRs [#13](https://github.com/niksacdev/rove/pull/13),
+[#14](https://github.com/niksacdev/rove/pull/14) and
+[#15](https://github.com/niksacdev/rove/pull/15)). Product specifications include
+proposed follow-up work and label it explicitly. An accepted architectural direction
+does not mean its implementation has shipped.
 
 ## Explain ROVE in three diagrams
 
 1. Use the concepts diagram to explain the units being evaluated.
 2. Use the current implementation diagram to explain how ROVE runs and records them today.
-3. Use the workflow and ADR diagrams to explain the next capability and why it is designed that way.
+3. Use the target architecture and system diagrams to explain the accepted direction.
+4. Use the implementation plan and ADR diagrams to explain delivery order and rationale.
 
 ## Historical design material
 

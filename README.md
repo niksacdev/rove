@@ -114,6 +114,11 @@ Use the [documentation guide](docs/README.md) to explain ROVE's
 [concepts](docs/product/concepts.md), [customer workflows](docs/product/evaluation-workflows.md),
 [success measures](docs/product/metrics-and-success.md), and
 [current implementation](docs/architecture/current-implementation.md).
+The [target architecture](docs/architecture/target-architecture.md),
+[system diagram](docs/architecture/system-diagram.md) and
+[implementation plan](docs/product/implementation-plan.md) show how ROVE will use
+Copilot SDK for ROVE-owned agents while preserving direct evaluation of customer
+agents, VLMs and VLAs.
 The linked [architecture decisions](docs/architecture/README.md) include diagrams,
 trade-offs and implementation status. Proposed SME review, frozen datasets and
 baseline/ablation workflows are labeled separately from available features.

@@ -40,6 +40,14 @@ activity: a verification tool call is not evidence that the candidate agent used
 that tool. The inspector does not promise hidden reasoning or internal traces
 that an external runtime does not provide.
 
+For ROVE-owned agents, Copilot SDK session events provide message, tool, error and
+usage activity for the product timeline. ROVE persists the events needed for trial
+history, including essential events the SDK does not replay when a session resumes.
+The SDK's OpenTelemetry export and ROVE spans can share trace context for optional
+operational monitoring. Trace/span IDs link the views; sampled external telemetry
+never becomes the source of truth for outcomes or metric denominators. See
+[ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md).
+
 The proposed trial page has three connected views:
 
 - **Outcome and measurements:** declared criteria, raw and combined verdicts,

@@ -1,6 +1,10 @@
 # Architecture decisions
 
-Use [current implementation](current-implementation.md) to explain the shipped code and [the product specification](../PRODUCT_SPEC.md) to explain its purpose. An accepted direction can still have pending implementation. Each new decision includes a diagram, alternatives, consequences and validation criteria.
+Use [current implementation](current-implementation.md) to explain the shipped code,
+the [target architecture](target-architecture.md) and [system diagram](system-diagram.md)
+to explain the accepted direction, and [the product specification](../PRODUCT_SPEC.md)
+to explain its purpose. An accepted direction can still have pending implementation.
+Each new decision includes a diagram, alternatives, consequences and validation criteria.
 
 | ADR | Decision status | Implementation |
 | --- | --- | --- |
@@ -10,7 +14,8 @@ Use [current implementation](current-implementation.md) to explain the shipped c
 | [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Proposed | Review records, UI and dataset freezing pending |
 | [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Proposed | Current pass metrics retained; setup/report extensions pending |
 | [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable events, evidence navigation and aligned inspection pending |
-| [023: ROVE's evaluation and execution harness](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction | Existing pipeline retained; recording and lifecycle extensions pending |
+| [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline retained; recording and lifecycle extensions pending |
+| [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Compatibility validation and implementation pending |
 
 ## How the decisions connect
 
@@ -25,7 +30,9 @@ flowchart TD
     C --> T[022: Trial telemetry]
     S --> T
     T --> M
-    E[023: ROVE harness responsibilities] --> T
+    E[023: ROVE evaluation responsibilities] --> T
+    R[024: Copilot runtime and observability] --> T
+    E --> R
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

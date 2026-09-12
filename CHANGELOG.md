@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Copilot runtime and evaluation-system architecture
+
+Define Copilot SDK as the shared runtime for ROVE-owned agents while preserving direct evaluation of customer systems. New architecture, system and delivery diagrams connect durable trial evidence to optional Azure Monitor, Grafana and future Fabric integrations; all runtime work remains explicitly pending. *(PR #16)*
+
 ### Product concepts and evaluation architecture
 
 Update the product specification around the robotics agent-pipeline vision, cases, trials, campaigns and customer-data onboarding, with a provider-neutral platform persona. Linked specifications and architecture decisions explain SME-reviewed datasets, robotics measures, inspectable telemetry and ROVE's own evaluation/execution harness, with diagrams and a dated model assessment. Proposed capabilities remain separate from shipped behavior. *(PR #15)*

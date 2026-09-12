@@ -58,10 +58,11 @@ integration example alongside local and other hosted environments.
 
 ## ROVE's Architecture Direction
 
-ROVE develops its own evaluation and execution harness around the configured
-pipeline. The architecture separates customer agent behavior from trial recording,
-grading and comparison so each can evolve under explicit contracts. See
-[ADR-023](../architecture/ADR-023-evaluation-and-execution-harnesses.md) for the
+ROVE owns the evaluation semantics and execution services around the configured
+pipeline, and uses Copilot SDK for agent behavior it hosts. The architecture
+separates customer-system behavior from trial recording, grading and comparison so
+each can evolve under explicit contracts. See [ADR-023](../architecture/ADR-023-evaluation-and-execution-harnesses.md)
+and [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md) for the
 accepted direction and pending implementation work.
 
 Prioritize customer onboarding, success definitions, SME review, frozen datasets,
