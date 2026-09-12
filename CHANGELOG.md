@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Configured verification stages
 
-Extend stage configuration with local task evaluators, required constraints, optional FK diagnostics, execution deadlines and versioned measurement evidence.
+Extend stage configuration with local task evaluators, required constraints, optional FK diagnostics, execution deadlines and versioned measurement evidence. *(PR #14)*
 
 ### Repeated trials and portable benchmark reports
 

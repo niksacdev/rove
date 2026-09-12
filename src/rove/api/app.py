@@ -238,7 +238,13 @@ async def _run_evaluation(
             if verify_stage and verify_stage.get("output")
             else False
         )
+        verdict_valid = bool(
+            verify_stage and (verify_stage.get("output") or {}).get("verdict_valid", False)
+        ) and not any(s["status"] == "error" for s in stages)
+        outcome = ("pass" if success else "fail") if verdict_valid else "unknown"
         failure_stage, failure_category = attribute_failure(stages, success)
+        if not verdict_valid:
+            failure_category = "unknown"
 
         provenance = EvaluationProvenance.build(
             image_base64=image_base64,
@@ -258,6 +264,8 @@ async def _run_evaluation(
             "strategy_id": eval_id,
             "display_name": "single",
             "success": success,
+            "verdict_valid": verdict_valid,
+            "outcome": outcome,
             "total_latency_ms": round(total_latency, 1),
             "failure_stage": failure_stage,
             "failure_category": failure_category,
@@ -279,6 +287,8 @@ async def _run_evaluation(
             "models": single_result["models"],
             "stages": stages,
             "success": success,
+            "verdict_valid": verdict_valid,
+            "outcome": outcome,
             "failure_stage": failure_stage,
             "failure_category": failure_category,
             "total_latency_ms": round(total_latency, 1),

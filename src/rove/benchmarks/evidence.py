@@ -17,8 +17,8 @@ def summarize_evidence(campaign, trials):
                 "role": check.role,
                 "required": check.required,
                 "planned": planned,
-                "pass": 0,
-                "fail": 0,
+                "passed": 0,
+                "failed": 0,
                 "unknown": planned,
             }
     measurements = defaultdict(list)
@@ -36,7 +36,7 @@ def summarize_evidence(campaign, trials):
             result = check["result"]
             verdict = result["verdict"]
             if key in checks and verdict in {"pass", "fail"} and check["execution"] == "completed":
-                checks[key][verdict] += 1
+                checks[key]["passed" if verdict == "pass" else "failed"] += 1
                 checks[key]["unknown"] -= 1
             entries.append((check["endpoint"], result))
         for endpoint, result in entries:

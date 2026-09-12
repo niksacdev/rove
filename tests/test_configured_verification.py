@@ -223,7 +223,7 @@ async def test_campaign_freezes_checks_and_reports_evidence(raw_config):
     trial = {**first, "strategy_id": "recorded-outcome", "task_id": spec.tasks[1].id, "seed": 0}
     summary = summarize_evidence(campaign, [trial])
     force = next(c for c in summary["checks"] if c["endpoint"] == "contact-force")
-    assert (force["fail"], force["unknown"], force["planned"]) == (1, 8, 9)
+    assert (force["failed"], force["unknown"], force["planned"]) == (1, 8, 9)
     duration = next(m for m in summary["measurements"] if m["name"] == "episode_completion_time")
     assert (duration["p95"], duration["unit"], duration["quality"], duration["measured"]) == (
         2.5,
@@ -288,3 +288,37 @@ def test_forged_model_evidence_is_not_authoritative(raw_config, tmp_path, mock_i
     assert result.evaluator_result is None
     assert result.evaluator_version == ""
     assert not result.verdict_valid
+
+
+async def test_legacy_api_retains_unknown_verdict(
+    raw_config, tmp_path, mock_image_base64, monkeypatch
+):
+    from rove.api import app as api
+
+    raw_config["endpoints"]["context"] = {
+        "type": "vlm",
+        "adapter": "mock_vlm",
+        "capabilities": ["scene_analysis", "task_planning"],
+        "config": {"mock_latency_ms": [0, 0]},
+    }
+    pipeline_for(raw_config, tmp_path)
+    monkeypatch.setattr(api, "registry", AdapterRegistry())
+    monkeypatch.setattr(api, "_eval_queues", {"legacy": asyncio.Queue()})
+    monkeypatch.setattr(api, "_evaluations", {})
+    monkeypatch.setattr(api, "_output_dir", tmp_path)
+    monkeypatch.setattr(api, "_history_path", tmp_path / "history.jsonl")
+    await api._run_evaluation(
+        "legacy",
+        "place",
+        mock_image_base64,
+        "context",
+        "context",
+        "mock-policy",
+        "object-in-target",
+        "",
+    )
+    result = api._evaluations["legacy"]
+    assert result["status"] == "completed"
+    assert result["verdict_valid"] is False
+    assert result["outcome"] == "unknown"
+    assert "unresolved evidence" in result["insights"]["top_finding"]

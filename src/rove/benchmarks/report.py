@@ -238,7 +238,7 @@ def to_html(data: dict) -> str:
     verification = data.get("verification", {})
     checks_table = evidence_table(
         verification.get("checks", []),
-        ("strategy", "endpoint", "role", "required", "pass", "fail", "unknown", "planned"),
+        ("strategy", "endpoint", "role", "required", "passed", "failed", "unknown", "planned"),
     )
     measurements_table = evidence_table(
         verification.get("measurements", []),
