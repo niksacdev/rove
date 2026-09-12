@@ -64,9 +64,14 @@ def create_dataset_router(root: Path, launch) -> APIRouter:
             )
 
     @router.get("/api/cases")
-    async def cases(limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
+    async def cases(
+        limit: int = Query(50, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+        q: str = Query("", max_length=200),
+        category: str = Query("", max_length=160),
+    ):
         with errors():
-            return {"cases": service().list_cases(limit, offset), "limit": limit, "offset": offset}
+            return service().search_cases(limit, offset, q=q, category=category)
 
     @router.post("/api/cases", status_code=201)
     async def import_case(image: UploadFile = File(...), metadata: str = Form(...)):

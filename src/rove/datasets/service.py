@@ -9,6 +9,7 @@ import sqlite3
 import uuid
 
 from rove.datasets.models import CaseInput, FreezeInput, ReviewInput, SuccessContract
+from rove.datasets.suggestions import suggest_success
 from rove.trials.snapshots import canonical_json, content_hash, sanitize
 from rove.trials.store import TrialStore, now
 
@@ -311,8 +312,10 @@ class DatasetService:
             available = asset_path.stat().st_size == asset["size_bytes"]
         except (KeyError, FileNotFoundError, ValueError):
             available = False
+        payload = json.loads(row["payload"])
         return {
-            **json.loads(row["payload"]),
+            **payload,
+            "suggested_success": suggest_success(payload),
             "id": row["id"],
             "case_id": row["case_id"],
             "case_revision_id": row["id"],
@@ -339,11 +342,69 @@ class DatasetService:
             ).fetchall()
         return [self.get_case_revision(row["head_revision_id"]) for row in rows]
 
+    def search_cases(
+        self, limit: int = 50, offset: int = 0, *, q: str = "", category: str = ""
+    ) -> dict:
+        """Search all current case revisions; facet counts precede the category filter."""
+        self.trials._page(limit, offset)
+        q, category = q.strip(), category.strip()
+        if len(q) > 200 or len(category) > 160:
+            raise ValueError("Case search or category is too long")
+        with self.trials.connect() as db:
+            categories = db.execute(
+                """WITH heads AS (
+                    SELECT CASE
+                        WHEN json_type(r.payload,'$.candidate_context.eval_category')='text'
+                            AND trim(json_extract(r.payload,'$.candidate_context.eval_category'))!=''
+                        THEN trim(json_extract(r.payload,'$.candidate_context.eval_category'))
+                        WHEN json_type(r.payload,'$.conditions.eval_category')='text'
+                            AND trim(json_extract(r.payload,'$.conditions.eval_category'))!=''
+                        THEN trim(json_extract(r.payload,'$.conditions.eval_category'))
+                        ELSE 'uncategorized' END AS category
+                    FROM cases c JOIN case_revisions r ON r.id=c.head_revision_id
+                    WHERE instr(lower(json_extract(r.payload,'$.name') || ' ' ||
+                                      json_extract(r.payload,'$.task')), lower(?)) > 0
+                )
+                SELECT category AS name,count(*) AS count FROM heads
+                GROUP BY category ORDER BY category""",
+                (q,),
+            ).fetchall()
+            total = sum(
+                row["count"] for row in categories if not category or row["name"] == category
+            )
+            rows = db.execute(
+                """WITH heads AS (
+                    SELECT r.id,r.created_at,
+                        CASE WHEN json_type(r.payload,'$.candidate_context.eval_category')='text'
+                            AND trim(json_extract(r.payload,'$.candidate_context.eval_category'))!=''
+                        THEN trim(json_extract(r.payload,'$.candidate_context.eval_category'))
+                        WHEN json_type(r.payload,'$.conditions.eval_category')='text'
+                            AND trim(json_extract(r.payload,'$.conditions.eval_category'))!=''
+                        THEN trim(json_extract(r.payload,'$.conditions.eval_category'))
+                        ELSE 'uncategorized' END AS category
+                    FROM cases c JOIN case_revisions r ON r.id=c.head_revision_id
+                    WHERE instr(lower(json_extract(r.payload,'$.name') || ' ' ||
+                                      json_extract(r.payload,'$.task')), lower(?)) > 0
+                )
+                SELECT id FROM heads WHERE (?='' OR category=?)
+                ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?""",
+                (q, category, category, limit, offset),
+            ).fetchall()
+        return {
+            "cases": [self.get_case_revision(row["id"]) for row in rows],
+            "total": total,
+            "categories": [dict(row) for row in categories],
+            "limit": limit,
+            "offset": offset,
+        }
+
     def create_contract(self, payload: dict) -> dict:
         payload = SuccessContract.model_validate(payload).model_dump(mode="json")
         payload = json.loads(_document(payload))
         identity = content_hash(payload)
         with self.trials.connect() as db:
+            for revision_id in payload["case_expectations"]:
+                _required(db, "case_revisions", revision_id)
             db.execute(
                 "INSERT OR IGNORE INTO success_contracts VALUES (?,?,?,?)",
                 (identity, identity, _document(payload), now()),

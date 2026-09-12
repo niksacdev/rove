@@ -1,86 +1,118 @@
 # ADR-025: Organize navigation around the evaluation journey
 
-**Status:** Accepted and implemented; local navigation tests and browser inspection passed.
+**Status:** Accepted and implemented locally; desktop mock journey verified, 390px gallery verified in light and dark themes.
 **Date:** 2026-09-12
-**Product contract:** [User journey and navigation](../product/user-journey.md).
+**Product contract:** [Campaign workspace](../product/user-journey.md).
 
 ## Context
 
-ROVE grew from a quick-run dashboard into a workbench with cases, campaigns, reviews,
-frozen datasets, baselines and traces. Exposing each addition as a peer navigation
-item makes the user assemble the workflow. The root page also starts with an older
-execution/configuration model while the customer workflow lives elsewhere.
+The first implementation consolidated navigation but retained disconnected case,
+contract, dataset and execution forms. User feedback found an unbounded case dropdown,
+unclear campaign actions, competing quick evaluation, unexplained trial identity and
+configuration without a clear place in the journey. Route correctness did not resolve
+these usability problems. This amendment supersedes the earlier four-primary-tab and
+three-workspace-step presentation; existing durable records and API meanings remain.
 
-A researcher needs a path from selected cases to a controlled comparison. A
-manipulation engineer needs customer intake, success setup and review. A platform
-engineer needs endpoint configuration without making that the first step for everyone.
-The founding vision remains: **ROVE evaluates robotics agent pipelines on your task.**
+A researcher needs repeated trials and controlled comparisons. A manipulation engineer
+needs to turn customer images and tasks into a useful assessment. A platform engineer
+needs reusable strategy and endpoint configuration. The shared goal remains:
+**ROVE evaluates robotics agent pipelines on your task.**
 
 ## Decision
 
-Use one shared primary navigation: **Start, Evaluate, Results, Configure**. Existing
-pages own those destinations. Keep Trials subordinate to Results and strategies,
-models and settings subordinate to Configure. Keep Quick run and the manifest-based
-campaign builder available as secondary paths.
+Use **Start, Evaluate, Results** as primary destinations, with **Settings** visually
+separate on the right. Evaluate is one campaign workspace with **Cases → Configure →
+Run → Review & improve**. Settings maintains reusable strategies/connections; Configure
+selects those strategies and defines the current campaign's success criteria.
 
 ```mermaid
 flowchart TD
-    N["Shared primary navigation"] --> S["Start / root overview"]
-    N --> E["Evaluate / datasets workspace"]
-    N --> R["Results / benchmarks hub"]
-    N --> C["Configure / root local tabs"]
-    E --> EC["Cases"]
-    EC --> ER["Run"]
-    ER --> EV["Review and improve"]
-    R --> RT["Trial history and paired traces"]
-    R -. Campaign identity .-> EV
-    C --> CT["Strategies, models, settings"]
-    S -. Secondary .-> Q["Quick run"]
-    R -. Advanced .-> M["Manifest builder"]
+    N["Shared navigation"] --> S["Start"]
+    N --> E["Evaluate: campaign workspace"]
+    N --> R["Results"]
+    N -. Right utility .-> U["Settings"]
+    E --> C["Cases: add new / select existing"]
+    C --> F["Configure: strategies, success, optional chat"]
+    F --> L["Run: confirmation and live trials"]
+    L --> V["Review and improve"]
+    R --> T["Saved trial evidence"]
+    R -. Exact campaign ID .-> V
+    U -. Available strategies .-> F
 ```
 
-Evaluate shows one workspace step at a time: Cases → Run → Review & improve.
-Selections and in-progress context survive local step changes; explicit save/launch
-operations remain the boundary for durable changes. Results links to
-`/static/datasets.html?step=review&campaign=ID` when the next task is review or
-improvement. The URL identifies the requested destination and saved record, not a
-permission to execute or modify it.
+Use the existing gallery interaction in a bounded case-selection dialog. Selected
+image/task cards remain in the campaign workspace. Success suggestions are editable
+drafts with explicit source and evidence limits. Plain-language success controls map
+to versioned contracts; advanced JSON remains available in details. The optional
+assistant helps configure this same evaluation, using existing host validation and
+confirmation boundaries. It cannot create expert judgments or silently start work.
 
-The root URL becomes Start. Existing configuration views use
-`?view=strategies`, `?view=models` and `?view=settings`; Quick run uses `?view=quick`.
-Existing static page URLs, sample links, identifiers, reports, CLI and API contracts
-remain compatible. This decision changes information architecture; it does not add
-an Experiment/Session entity or change trial counts, grading or baseline semantics.
+Run shows the configuration and planned count before launch. A trial is one attempt
+at one case with one strategy; pipeline stages are nested execution evidence. Show
+that identity during execution and preserve it through results and trace inspection.
+Use **Save case collection** and **Add to an existing collection** for dataset actions.
+Adding creates a new immutable revision retaining prior membership. The UI wording
+changes; snapshot and review integrity do not.
+
+```mermaid
+flowchart LR
+    D["Browser campaign draft"] --> P["Validated exact preview"]
+    P --> C["Explicit confirmation"]
+    C --> F["Frozen campaign configuration"]
+    F --> T["Durable trial identities"]
+    T --> E["Traces and evidence"]
+    E --> R["Report and expert review"]
+    R --> V["New collection or baseline revision"]
+```
+
+Use warm neutral/slate surfaces and restrained teal accents across the workspace.
+Shared navigation styles establish consistent spacing, focus and active state. Theme
+changes do not alter semantics or substitute color for labels and status text.
+
+## Compatibility and state
+
+Retain existing pages, API routes and saved case/campaign/trial IDs. Add a Configure
+stage route within the existing workspace. Results returns to
+`/static/datasets.html?step=review&campaign=ID`. Settings uses the existing root
+strategy/model/settings views. Legacy quick-run and sample-library URLs remain usable,
+but new case browse actions stay within the campaign. No new Experiment/Session entity
+or scoring denominator is introduced.
+
+Stage changes and browser Back/Forward retain in-memory selections without execution.
+Explicit saves and launches establish durability. Missing saved identities are visible
+errors; navigation must not substitute another campaign. Unsaved full-reload recovery
+is a separate capability and must not be claimed without implementation.
 
 ## Alternatives and consequences
 
 | Option | Trade-off |
 | --- | --- |
-| Add another dashboard above the existing peer menus | Leaves duplicate navigation and unclear ownership of the next action |
-| Make every entity a top-level item | Mirrors storage but fragments the customer's evaluation journey |
-| Rewrite routing and pages around a new framework | Adds migration risk without being necessary for this navigation problem |
-| Shared destinations and staged existing workspace | Chosen: clear ownership, retained services/URLs and a bounded compatibility surface |
+| Only restyle the prior menus | Does not explain campaign creation, trial identity or the relationship between forms |
+| Expose every storage entity as a primary menu | Forces customers to reconstruct the evaluation workflow |
+| Keep quick evaluation as a competing first action | Splits onboarding and obscures the reusable campaign path |
+| Rewrite the engine and routing framework | Adds migration risk without addressing the central interaction problem |
+| One staged campaign workspace over existing services | Chosen: coherent task flow while retaining recording, validation and compatibility |
 
-Configuration and advanced inputs remain reachable, but receive less visual priority.
-The staged workspace must retain form/context state and keep hidden panels out of
-focus order. Shared navigation must have the same labels, ordering and active state
-across every page. Results-to-review links must carry exact identity; missing records
-must be visible rather than silently replaced. Browser history and old deep links
-are part of the compatibility contract.
+The workspace must synchronize manual controls and assistant proposals without stale
+previews. Collection extension needs explicit identity and membership checks. Gallery
+selection must scale without unbounded page growth and must support keyboard use.
+The design adds interaction responsibility to the existing pages; shared components
+and end-to-end regression checks are needed to prevent future divergence.
 
-The [older dashboard journey](../ux/dashboard-user-journey.md) remains historical
-design material. This decision supersedes its root-page and navigation priority,
-not its underlying configuration, quick evaluation or comparison capabilities.
+## Acceptance and evidence
 
-## Acceptance and implementation evidence
+Require the [journey acceptance checks](../product/user-journey.md#acceptance-and-delivery-evidence),
+including selected-case cards, collection revisions, success-draft boundaries, configured
+strategy selection, identifiable live trials and exact result-to-trace return paths.
+Use isolated mocks; live provider validation remains excluded by user direction.
 
-Require navigation and DOM regression checks for route selection, invalid-parameter
-fallback, hidden-panel semantics, retained selection, review deep links and unchanged
-quick/advanced entry points. No navigation test may need to launch a paid model.
+The earlier PR #21 tests establish its route behavior only. New DOM regression tests
+cover the amended case-selection workflow, immutable collection reuse, exact criteria,
+configuration staleness and trial evidence inspection. The
+[journey specification](../product/user-journey.md#acceptance-and-delivery-evidence)
+records that coverage and the desktop three-trial mock journey. The 390px case gallery was checked in light and dark themes: bounded scrolling, visible search and category controls, image cards and a fixed selection footer.
 
-Browser acceptance covers all three persona journeys, direct and back/forward entry,
-keyboard operation, narrow-screen layouts and both themes. Existing regression suites
-must keep quick execution, campaign recording, review and comparison behavior intact.
-A successful DOM assertion alone does not establish that the interaction is usable.
-
-Delivery evidence is recorded in the [journey specification](../product/user-journey.md#delivery-evidence): 52 UI tests and browser checks across desktop, narrow screens and both themes. Required repository checks remain merge gates.
+Campaign progress polls every two seconds while active and visible. Inline stage events
+and recorded output load on disclosure expansion or explicit refresh, with a bounded
+200-event view and a route to the full inspector. This does not claim token streaming.
+The [older dashboard journey](../ux/dashboard-user-journey.md) remains historical.

@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### A campaign workspace with visible cases and trials
+
+The revised workflow connects case selection, configured strategies, success criteria, trial execution and evidence review in one campaign. A searchable image gallery and selected-case cards replace the case dropdown; Settings moves to the right, with warm neutral and teal styling. Exact case expectations are saved with scoring rules, collection revisions retain prior members, and Run connects each trial to its recorded stages and output. The [journey specification](docs/product/user-journey.md) records validation and its limits.
+
 ### A coherent evaluation journey
 
 Use consistent Start, Evaluate, Results and Configure navigation across the workspace. Prepare cases, run a campaign and review improvements in connected steps; saved campaigns and their trials share Results, while quick trials and advanced configuration remain available without competing with the main path. *(PR #21)*

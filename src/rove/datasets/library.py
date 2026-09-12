@@ -159,6 +159,7 @@ def sync_library(root: Path, data_dir: Path) -> dict:
                     "case_id": case["case_id"],
                     "case_revision_id": case["id"],
                     "import_status": "imported",
+                    "suggested_success": case["suggested_success"],
                 }
             )
         except (ValueError, OSError) as error:

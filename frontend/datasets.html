@@ -8,25 +8,26 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/history.css">
-  <link rel="stylesheet" href="/static/datasets.css">
-  <link rel="stylesheet" href="/static/navigation.css">
-  <script src="/static/navigation.js" defer></script>
-  <script src="/static/datasets.js" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-2">
+  <link rel="stylesheet" href="/static/history.css?v=campaign-workspace-2">
+  <link rel="stylesheet" href="/static/datasets.css?v=campaign-workspace-2">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-2">
+  <script src="/static/navigation.js?v=campaign-workspace-2" defer></script>
+  <script src="/static/datasets.js?v=campaign-workspace-2" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <header id="roveNav" data-section="evaluate"></header>
   <main id="main">
-    <div class="page-heading"><div><h1 id="workspaceTitle">Evaluate on your tasks</h1><p class="intro">Prepare cases, run a controlled evaluation, then review outcomes and compare improvements.</p></div><a href="/?view=quick" class="journey-link">Quick trial</a></div>
-    <nav class="journey" aria-label="Evaluation steps"><a href="?step=cases" data-journey-step="cases"><span>1</span>Cases</a><a href="?step=run" data-journey-step="run"><span>2</span>Run</a><a href="?step=review" data-journey-step="review"><span>3</span>Review &amp; improve</a></nav>
+    <div class="page-heading"><div><h1 id="workspaceTitle">Create an evaluation</h1><p class="intro">Build a campaign: your cases, your strategies, and clear evidence of what works.</p></div></div>
+    <nav class="journey" aria-label="Evaluation steps"><a href="?step=cases" data-journey-step="cases"><span>1</span><div>Cases<small>Choose what to test</small></div></a><a href="?step=configure" data-journey-step="configure"><span>2</span><div>Configure<small>Strategy &amp; success</small></div></a><a href="?step=run" data-journey-step="run"><span>3</span><div>Run<small>Follow each trial</small></div></a><a href="?step=review" data-journey-step="review"><span>4</span><div>Review &amp; improve<small>Evidence &amp; comparisons</small></div></a></nav>
     <div class="step-heading"><h2 id="stepHeading" tabindex="-1">Prepare your cases</h2><p id="stepDescription" class="muted">Choose observations and instructions for a repeatable evaluation.</p></div>
     <p id="message" role="status" aria-live="polite"></p>
     <section id="casesStep" data-workflow-panel="cases" aria-label="Prepare cases">
-    <div class="step-actions"><button type="button" id="showImport">Add cases</button><button type="button" class="secondary" data-go-step="run">Continue to run →</button></div>
+    <div class="step-actions"><button type="button" id="showImport">＋ Add new case</button><button type="button" class="secondary" id="selectExisting">Select existing cases</button><button type="button" class="secondary" id="showDatasets">Use a saved dataset</button></div>
+    <section id="selectedCasesPanel" class="workspace-panel"><div class="panel-heading"><h2>Cases in this campaign</h2><span id="selectedCaseCount" class="badge">0 cases</span></div><div id="selectedCases"></div><div class="form-actions"><button type="button" id="continueConfigure" data-go-step="configure">Continue to configuration →</button></div></section>
     <details id="importPanel" class="workspace-panel import-panel">
-      <summary>Add a robotics case</summary>
+      <summary>New case · observation and task</summary>
       <p class="muted">Start with a scene image and instruction. You can assess a plan before you have robot execution evidence.</p>
       <form id="caseForm">
         <p id="caseEditStatus" class="muted">New case. Saved inputs receive an immutable revision.</p>
@@ -35,6 +36,7 @@
           <label>Observation image<input id="caseImage" type="file" accept="image/png,image/jpeg" required></label>
           <label class="full-width">Task instruction<textarea id="caseTask" rows="2" required placeholder="Pick the red part and place it in bin A without disturbing the adjacent part."></textarea></label>
         </div>
+        <label>Expected outcome for expert review<textarea id="newCaseExpectation" rows="3" placeholder="Describe what a good output must show. You can refine this with the image after saving."></textarea></label>
         <p class="notice">Images and tasks can support output assessment. Recorded robot completion needs episode evidence with its producing configuration and units.</p>
         <details><summary>Advanced: context and episode evidence</summary>
           <details><summary>Attach a recording, trajectory or supporting file</summary><p class="muted">Upload up to 64 MiB. This creates a managed evidence reference; it does not establish completion or measured quality. Video is retained for inspection, without automatic decoding.</p><label>Evidence file<input id="recordingFile" type="file" accept=".json,.mp4,.bin,image/png,image/jpeg,application/octet-stream"></label><p id="recordingUploadStatus" class="muted" role="status">Choose a file to upload it.</p><div class="form-grid"><label>Reference ID<input id="recordingId" value="recording-1" maxlength="128"></label><label>Evidence kind<select id="recordingKind"><option value="other">Other supporting evidence</option value="trajectory">Trajectory</option><option value="state">State observations</option><option value="video">Video</option><option value="image">Image</option></select></label><label>Source clock ID<input id="recordingClock" maxlength="160" placeholder="Unknown until supplied"></label><label>Coordinate frame<input id="recordingFrame" maxlength="160" placeholder="Unknown until supplied"></label><label>Range unit<select id="recordingRange"><option value="">Whole file</option><option value="byte">Bytes</option><option value="sample">Indexed samples</option><option value="frame">Indexed frames</option><option value="second">Source-clock seconds</option></select></label><label>Range start (inclusive)<input id="recordingStart" type="number" min="0" step="any"></label><label>Range end (exclusive)<input id="recordingEnd" type="number" min="0" step="any"></label></div><label>Units by field (JSON)<textarea id="recordingUnits" rows="2" spellcheck="false" placeholder='{"time":"s","position":"m"}'></textarea></label><p class="muted">Frame/sample/time selections require an indexed JSON recording. Trajectory/state clock, frame and units must match the recording envelope and file. Complete the episode JSON below with actual producer/reset identity and measured outcomes when available.</p><button type="button" id="attachRecording" class="secondary" disabled>Add reference to case evidence</button><pre id="recordingSnippet" hidden></pre></details>
@@ -51,48 +53,44 @@
     </details>
     <div id="casesWorkspaceSlot"></div>
     <div id="caseWorkspace" class="case-workspace">
-      <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">
-        <div class="panel-heading"><h2 id="casesHeading">Cases</h2><button id="refreshCases" type="button" class="secondary">Refresh</button></div>
-        <p class="muted">Select cases for a baseline or frozen dataset. Open a case to inspect and review it.</p>
-        <p class="muted"><a href="/?view=examples">Browse sample cases by category →</a> Bundled inputs retain their source and immutable revision; campaigns are created separately.</p>
-        <div class="selection-bar"><label><input id="selectPage" type="checkbox"> Select this page</label><span id="selectionCount" class="muted">0 selected</span></div>
-        <p id="caseListStatus" class="muted" role="status" aria-live="polite">Loading cases…</p>
-        <ul id="caseList" class="case-list"></ul>
-        <div class="pagination"><button id="previousCases" class="secondary" type="button" disabled>Previous</button><span id="casePageLabel" class="muted"></span><button id="nextCases" class="secondary" type="button" disabled>Next</button></div>
-      </section>
-      <section id="caseInspector" class="workspace-panel" aria-labelledby="caseDetailHeading"><div class="empty-state"><h2 id="caseDetailHeading" tabindex="-1">Inspect a case</h2><p>See its success contract, available measures, baseline outputs and expert reviews.</p></div></section>
+      <details id="caseInspection"><summary>Expert review, prior outputs and evidence</summary><section id="caseInspector" class="workspace-panel" aria-labelledby="caseDetailHeading"><div class="empty-state"><h2 id="caseDetailHeading" tabindex="-1">Inspect a case</h2><p>See its success contract, available measures, baseline outputs and expert reviews.</p></div></section></details>
     </div>
     <div id="caseReuseSlot"></div>
     </section>
-    <section id="runStep" data-workflow-panel="run" aria-label="Configure and run" hidden>
-    <div class="step-actions"><button type="button" class="secondary" data-go-step="cases">← Edit cases</button><button type="button" class="secondary" data-go-step="review">Review existing outcomes →</button></div>
-    <section class="workspace-panel" aria-labelledby="runContextHeading"><h2 id="runContextHeading">Evaluation inputs</h2><div id="runContext"></div></section>
+    <section id="configureStep" data-workflow-panel="configure" aria-label="Configure strategy and success" hidden>
+    <div class="step-actions"><button type="button" class="secondary" data-go-step="cases">← Edit cases</button></div>
+    <section class="workspace-panel" aria-labelledby="runContextHeading"><h2 id="runContextHeading">Your campaign</h2><div id="runContext"></div></section>
+    <div id="assistantConfigureSlot"></div>
     <section id="baselinePanel" class="workspace-panel" aria-labelledby="baselineHeading">
-      <h2 id="baselineHeading">Run a baseline on selected cases</h2>
-      <p class="muted">Start with a small pilot. The campaign freezes selected cases and strategy settings before any attempt runs.</p>
+      <h2 id="baselineHeading">Choose how to evaluate</h2>
+      <p class="muted">Choose an existing strategy: ROVE runs its configured pipeline once for each case and repetition. The chat assistant can help prepare this same configuration.</p>
       <details id="contractPanel">
-        <summary>Define a reusable success contract</summary>
-        <form id="contractForm">
-          <div class="form-grid"><label>Contract name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>Assessment scope<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Grading method<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">Required acceptance criterion<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
-          <label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
+        <summary>What does success look like?</summary><p class="muted">Start from the expected outcomes on your case cards. Edit the criteria, then confirm them before running. These become the saved scoring rules for this campaign.</p>
+        <form id="contractForm"><p class="notice">Expert review is selected. ROVE records outputs, latency and reliability measures; acceptance stays pending until an expert rates the trials.</p>
+          <div class="form-grid"><label>Scoring rules name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>What are you assessing?<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Grading method<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">What must a successful output demonstrate?<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
+          <details id="scoringAdvanced"><summary>Change assessment method or use recorded robot evidence</summary></details><label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
           <p id="scopeHint" class="notice">Output acceptance does not establish observed robot task success.</p>
           <details><summary>Campaign target and reviewed annotation binding</summary><p class="muted">Targets judge a campaign against a business requirement. An annotation binding sends a selected frozen review field only to its configured verifier.</p><div class="form-grid"><label>Target measure<select id="targetMetric"><option value="">No aggregate target</option><option value="task_success">Task acceptance fraction</option><option value="pipeline_latency">Pipeline latency (ms)</option><option value="episode_completion_time">Episode completion time (s)</option><option value="autonomous_completion">Autonomous completion fraction</option><option value="recovery">Recovery fraction</option><option value="constraint_outcomes">Constraint acceptance fraction</option></select></label><label>Target comparison<select id="targetOperator"><option value="gte">At least</option><option value="lte">At most</option></select></label><label>Threshold<input id="targetThreshold" type="number" min="0" step="any" placeholder="For example: 0.9"></label><label>Verifier endpoint for labels<input id="annotationEndpoint" placeholder="Optional configured endpoint"></label><label>Reviewed annotation field<input id="annotationKey" placeholder="For example: expectations"></label><label>Verifier reference field<input id="annotationTarget" placeholder="For example: expected_plan"></label></div></details>
           <details><summary>Advanced: exact success contract (JSON)</summary><label>Override the fields above with a versioned contract<textarea id="contractJson" rows="4" spellcheck="false" placeholder="Optional complete success contract with named criteria and metrics"></textarea></label></details>
-          <button type="submit" id="saveContract">Save success contract</button>
+          <button type="submit" id="saveContract">Confirm scoring rules</button>
         </form>
       </details>
       <form id="baselineForm">
-        <label>Success contract<select id="campaignContract" required><option value="">Choose a saved contract</option></select></label>
-        <div class="form-grid"><label>Campaign name<input id="campaignName" value="Customer baseline" required maxlength="160"></label><label>Strategy<select id="campaignStrategy" required><option value="">Loading strategies…</option></select></label><label>Repeats per case<input id="campaignRepeats" type="number" min="1" max="1000" value="3" required></label><label>Attempt timeout (seconds)<input id="campaignTimeout" type="number" min="1" max="3600" value="120" required></label></div>
+        <label>Saved scoring rules<select id="campaignContract" required><option value="">Choose saved scoring rules</option></select></label>
+        <div class="form-grid"><label>Campaign name<input id="campaignName" value="Customer baseline" required maxlength="160"></label><label>Strategy from your configuration<select id="campaignStrategy" required><option value="">Loading strategies…</option></select></label><label>Repeats per case<input id="campaignRepeats" type="number" min="1" max="1000" value="3" required></label></div>
+        <div id="strategySummary" class="strategy-summary"></div><details><summary>Advanced run settings</summary><label>Trial timeout (seconds)<input id="campaignTimeout" type="number" min="1" max="3600" value="120" required></label></details>
         <p id="campaignBudget" class="notice">Select cases and a strategy to preview your campaign.</p>
-        <div id="campaignMeasures" class="metric-preview"></div>
-        <div class="form-actions"><button id="previewCampaign" type="button" class="secondary">Preview success and measures</button><button id="startBaseline" type="submit" disabled>Run this baseline</button></div>
-        <p id="campaignStatus" role="status" aria-live="polite"></p>
+        <div class="form-actions"><button id="prepareRun" type="button">Review and run →</button></div>
       </form>
     </section>
     </section>
+    <section id="runStep" data-workflow-panel="run" aria-label="Run campaign trials" hidden>
+      <div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Edit configuration</button></div>
+      <section class="workspace-panel"><h2 id="runConfirmationHeading">Ready to run?</h2><p class="intro">A trial is one complete strategy execution on one case. Perceive, plan, act and verify are stages within that trial.</p><div id="runSummary" class="run-summary"></div><div id="campaignMeasures" class="metric-preview"></div><div id="runLaunchActions" class="form-actions"><button id="previewCampaign" type="button" class="secondary">Check configuration</button><button id="startBaseline" type="submit" form="baselineForm" disabled>Start campaign</button></div><p id="campaignStatus" role="status" aria-live="polite"></p></section>
+      <section id="liveTrialsPanel" class="workspace-panel" hidden><div class="panel-heading"><h2>Campaign trials</h2><button id="refreshLiveTrials" class="secondary" type="button">Refresh</button></div><p id="liveTrialStatus" role="status"></p><div id="liveTrials"></div><div class="form-actions"><button class="secondary" data-go-step="review" type="button">Review results &amp; improve →</button></div></section>
+    </section>
     <section id="reviewStep" data-workflow-panel="review" aria-label="Review and improve" hidden>
-    <div class="step-actions"><button type="button" class="secondary" data-go-step="run">← Configure another run</button><a href="/static/benchmarks.html">All results →</a></div>
+    <div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Configure another run</button><a href="/static/benchmarks.html">All results →</a></div>
     <section id="resultsPanel" class="workspace-panel" aria-labelledby="resultsHeading">
       <div class="panel-heading"><h2 id="resultsHeading">Campaign results and improvements</h2><button id="refreshCampaigns" type="button" class="secondary">Refresh results</button></div>
       <details id="namedBaselinePanel"><summary>Named baselines · pinned references and revision history</summary><p class="muted">A baseline freezes one completed campaign strategy and its current assessment projection. New SME reviews do not rewrite a saved baseline.</p><label>Named baseline<select id="namedBaseline"><option value="">Choose a saved baseline</option></select></label><div id="namedBaselineDetails"></div><form id="namedBaselineForm"><div class="form-grid"><label>Baseline name<input id="namedBaselineName" maxlength="160" placeholder="For example: Warehouse release baseline" required></label><label class="checkbox-label"><input id="namedBaselinePinned" type="checkbox" checked>Pin for future comparisons</label></div><div class="form-actions"><button type="submit" id="saveNamedBaseline">Save selected campaign as baseline</button><button type="button" id="newNamedBaseline" class="secondary">Create a different named baseline</button></div><p id="namedBaselineStatus" role="status" class="muted">Select a completed campaign and baseline strategy below before saving.</p></form></details>
@@ -106,24 +104,33 @@
       <div id="comparisonResults"></div>
     </section>
     <div id="reviewWorkspaceSlot"></div>
-    <div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Reuse reviewed cases as a dataset →</button></div>
+    <div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Save reviewed cases to a dataset →</button></div>
     </section>
-    <details id="caseReusePanel" class="workspace-panel"><summary>Reuse and freeze reviewed datasets</summary>
+    <details id="caseReusePanel" class="workspace-panel"><summary>Saved datasets · reuse a case collection</summary>
     <section id="freezePanel" class="workspace-panel" aria-labelledby="freezeHeading">
-      <h2 id="freezeHeading">Freeze a reviewed dataset</h2>
-      <p class="muted">Keep exact case and review revisions for future evaluations. Failed baseline outputs can still belong to a useful dataset; output ratings are not reusable ground truth.</p>
-      <label>Dataset success contract<select id="freezeContract"><option value="">Choose a success contract</option></select></label><p class="muted">The same contract is used for your next run. <button type="button" class="secondary" id="defineFreezeContract">Define a contract in Run</button></p>
-      <form id="freezeForm"><div class="form-grid"><label>Dataset name<input id="datasetName" value="Customer evaluation set" required maxlength="160"></label><label>Previous revision (optional)<select id="datasetParent"><option value="">First revision</option></select></label></div><div id="freezePreview" class="notice">Select cases, review them, then preview the exact revisions to freeze.</div><div class="form-actions"><button id="previewFreeze" class="secondary" type="button">Preview selected revisions</button><button id="freezeDataset" type="submit" disabled>Freeze this revision</button></div></form>
-      <div class="inspector-section"><h3>Frozen datasets</h3><div id="datasetList"><p class="muted">Loading frozen datasets…</p></div></div>
+      <h2 id="freezeHeading">Save a case collection</h2>
+      <p class="muted">A dataset is a reusable collection of cases and their reviews. Create one or add your selected cases to an existing dataset. Saving creates a new version; previous evaluations keep their original inputs.</p>
+      <label>Scoring rules<select id="freezeContract"><option value="">Choose a success contract</option></select></label><p class="muted">The same contract is used for your next run. <button type="button" class="secondary" id="defineFreezeContract">Edit scoring rules in Configure</button></p>
+      <form id="freezeForm"><div class="form-grid"><label>Dataset name<input id="datasetName" value="Customer evaluation set" required maxlength="160"></label><label>Add to existing dataset (optional)<select id="datasetParent"><option value="">Create a new dataset</option></select></label></div><div id="freezePreview" class="notice">Select cases, review them, then preview the exact revisions to freeze.</div><div class="form-actions"><button id="previewFreeze" class="secondary" type="button">Preview selected revisions</button><button id="freezeDataset" type="submit" disabled>Save dataset version</button></div></form>
+      <div class="inspector-section"><h3>Saved datasets</h3><div id="datasetList"><p class="muted">Loading frozen datasets…</p></div></div>
     </section>
     </details>
     <details id="assistantPanel" class="workspace-panel assistant-panel">
-      <summary>Evaluation assistant <span class="muted">Optional Copilot guidance</span></summary>
+      <summary>Configure with the assistant <span class="muted">Optional</span></summary>
       <p id="assistantStatus" class="muted" role="status">Checking assistant availability…</p>
       <label>Attach an observation for assistant-prepared case import<input id="assistantAsset" type="file" accept="image/png,image/jpeg"></label><p id="assistantAssetStatus" class="muted" role="status">Images are uploaded only when you select a file. Metadata changes require a separate confirmation.</p>
-      <form id="assistantForm"><label>Ask about your selected cases or campaign<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="What can we assess on these cases, and what evidence is missing?" required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Ask assistant</button></form>
+      <form id="assistantForm"><label>Describe the evaluation you want<textarea id="assistantQuestion" rows="2" maxlength="8000" placeholder="Use my selected cases to compare a planning strategy. Help me set success criteria and repetitions." required disabled></textarea></label><button id="askAssistant" type="submit" disabled>Prepare configuration</button></form>
       <div id="assistantResponse" aria-live="polite"></div>
     </details>
+    <dialog id="casePicker" aria-labelledby="casesHeading"><div class="dialog-top"><span class="eyebrow">CASE LIBRARY</span><button id="closeCasePicker" type="button" class="secondary" aria-label="Close case library">Close</button></div>      <section class="workspace-panel case-list-panel" aria-labelledby="casesHeading">
+        <div class="panel-heading"><h2 id="casesHeading">Select existing cases</h2><button id="refreshCases" type="button" class="secondary">Refresh</button></div>
+        <p class="muted">Browse the image gallery by task category, or search your saved cases. Select cases to add them to this campaign.</p><div class="library-filters"><label>Search cases<input id="caseSearch" type="search" placeholder="Task, object or case name"></label><label>Task category<select id="caseCategory"><option value="">All categories</option></select></label></div>
+        <div class="selection-bar"><label><input id="selectPage" type="checkbox"> Select this page</label><span id="selectionCount" class="muted">0 selected</span></div>
+        <p id="caseListStatus" class="muted" role="status" aria-live="polite">Loading cases…</p>
+        <ul id="caseList" class="case-list"></ul>
+        <div class="pagination"><button id="previousCases" class="secondary" type="button" disabled>Previous</button><span id="casePageLabel" class="muted"></span><button id="nextCases" class="secondary" type="button" disabled>Next</button></div>
+      </section>
+<div class="dialog-bottom"><span id="pickerSelection" role="status">0 cases selected</span><button type="button" id="confirmCasePicker">Add selected cases</button></div></dialog>
   </main>
 </body>
 </html>

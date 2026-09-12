@@ -2,7 +2,7 @@
 <html lang="en" class="h-full">
 <script>
   // Apply saved theme immediately to prevent flash
-  (function(){var t=localStorage.getItem("rove-theme")||"dark";document.documentElement.setAttribute("data-theme",t);})();
+  (function(){var t="dark";try{t=localStorage.getItem("rove-theme")||"dark";}catch(e){}document.documentElement.setAttribute("data-theme",t);})();
 </script>
 <head>
   <meta charset="UTF-8" />
@@ -13,10 +13,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/navigation.css">
-  <link rel="stylesheet" href="/static/start.css">
-  <script src="/static/navigation.js" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-2">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-2">
+  <link rel="stylesheet" href="/static/start.css?v=campaign-workspace-2">
+  <script src="/static/navigation.js?v=campaign-workspace-2" defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -30,8 +30,8 @@
             'f-elevated': 'var(--f-elevated)',
             'f-border':   'var(--f-border)',
             'f-border-strong': 'var(--f-border-strong)',
-            'f-purple':   '#7c3aed',
-            'f-purple-hover': '#6d28d9',
+            'f-purple':   '#0f766e',
+            'f-purple-hover': '#0f766e',
           }
         }
       }
@@ -49,14 +49,14 @@
   <header id="roveNav"></header>
 
   <!-- ============ MAIN LAYOUT ============ -->
-  <div class="flex flex-1 min-h-0">
+  <div class="root-layout flex flex-1 min-h-0">
 
     <!-- ---- Left Sidebar: History + Navigation ---- -->
-    <aside id="quickSidebar" hidden class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg" aria-label="Recent quick runs">
+    <aside id="quickSidebar" hidden class="w-[200px] shrink-0 border-r border-f-border flex flex-col bg-f-bg" aria-label="Recent standalone trials">
 
       <!-- History section -->
       <div class="flex-1 overflow-y-auto pt-4">
-        <span class="text-[11px] text-gray-500 font-semibold px-4 mb-2 block">Recent quick runs</span>
+        <span class="text-[11px] text-gray-500 font-semibold px-4 mb-2 block">Recent standalone trials</span>
         <div id="historyList" class="flex flex-col px-2 gap-0.5">
           <div class="px-3 py-2 text-[11px] text-gray-600 italic">No evaluations yet</div>
         </div>
@@ -69,9 +69,9 @@
     </aside>
 
     <!-- ---- Content Main Area ---- -->
-    <main class="flex-1 flex flex-col min-h-0 min-w-0">
-      <div id="configureHeading" class="root-page-heading" hidden><h1>Configure</h1><p>Define the systems your evaluations will compare.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a><a href="/?view=settings" data-root-view="settings">Settings</a></nav></div>
-      <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>Quick trial</h1><p>Try one observation and task. Every attempt is saved in Results.</p></div><a href="/static/datasets.html" class="journey-link">Create a campaign →</a></div></div>
+    <main class="root-main flex-1 flex flex-col min-h-0 min-w-0">
+      <div id="configureHeading" class="root-page-heading" hidden><h1>Settings</h1><p>Manage reusable strategies and model connections. Select strategies when configuring a campaign.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a><a href="/?view=settings" data-root-view="settings">Settings</a></nav></div>
+      <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>Standalone trial</h1><p>One attempt of a strategy on a task. Saved in Results → Trials.</p></div><a href="/static/datasets.html" class="start-secondary">Evaluate cases in a campaign →</a></div></div>
 
       <!-- Sub-tab bar (hidden until evaluation runs) -->
       <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist"></div>
@@ -83,17 +83,17 @@
           <p class="start-eyebrow">ROBOT OBSERVATION &amp; VISION EVALUATION</p>
           <h1>Does your robotics agent<br>work on your tasks?</h1>
           <p class="start-intro">Bring your cases, define what success means, and compare agent pipelines with evidence you can inspect.</p>
-          <div class="start-actions"><a class="start-primary" href="/static/datasets.html">Create an evaluation <span aria-hidden="true">→</span></a><a class="start-secondary" href="/?view=quick" data-root-view="quick">Try a quick trial</a></div>
-          <p class="start-caption">Have results already? <a href="/static/benchmarks.html">Review your evaluations →</a></p>
+          <div class="start-actions"><a class="start-primary" href="/static/datasets.html">Create a campaign <span aria-hidden="true">→</span></a><a class="start-secondary" href="/static/datasets.html?step=cases&amp;pick=existing">Select sample cases</a></div>
+          <p class="start-caption">A campaign runs selected strategies on your cases and collects each attempt as a trial.<br>Have results already? <a href="/static/benchmarks.html">Review your evaluations →</a></p>
           <ol class="start-journey" aria-label="Your evaluation journey">
-            <li><span class="step-number">01</span><h2>Bring your tasks</h2><p>Add observations and instructions, or begin with a sample case.</p><a href="/static/datasets.html">Prepare cases →</a></li>
-            <li><span class="step-number">02</span><h2>Define and run</h2><p>Choose success criteria, a strategy and repeated trials. ROVE freezes the configuration.</p><a href="/static/datasets.html?step=run">Set up a campaign →</a></li>
-            <li><span class="step-number">03</span><h2>Understand the result</h2><p>See success and reliability. Follow a failed trial into measurements, recordings and traces.</p><a href="/static/benchmarks.html">Open results →</a></li>
-            <li><span class="step-number">04</span><h2>Make a measured improvement</h2><p>Save a baseline, change a strategy and compare under the same evaluation conditions.</p><a href="/static/datasets.html?step=review">Compare improvements →</a></li>
+            <li><span class="step-number">01</span><h2>Add cases</h2><p>Select existing cases or add an image and task. Review what the correct outcome should be.</p></li>
+            <li><span class="step-number">02</span><h2>Configure</h2><p>Choose saved strategies, confirm how success is measured and set repeat attempts.</p></li>
+            <li><span class="step-number">03</span><h2>Run trials</h2><p>Follow each strategy’s pipeline. One attempt on one case is one trial.</p></li>
+            <li><span class="step-number">04</span><h2>Review and improve</h2><p>Inspect evidence, compare outcomes and save a baseline for your next campaign.</p></li>
           </ol>
-          <div class="start-support"><div><h2>Start with what you have</h2><p>A scene image and task can assess an agent’s output. Robot completion claims need execution evidence.</p><a href="/?view=examples" data-root-view="examples">Browse robotics samples →</a></div><div><h2>Bring your pipeline</h2><p>A strategy can use a VLM, a VLA or an agent. Configure its endpoints once, then compare it on your cases.</p><a href="/?view=strategies" data-root-view="strategies">Manage strategies →</a></div></div>
+          <div class="start-support"><div><h2>Start with what you have</h2><p>A scene image and task can assess an agent’s output. Robot completion claims need execution evidence.</p><a href="/static/datasets.html?step=cases&amp;pick=existing">Browse robotics samples →</a></div><div><h2>Bring your pipeline</h2><p>A strategy can use a VLM, a VLA or an agent. Configure its endpoints once, then compare it on your cases.</p><a href="/?view=strategies" data-root-view="strategies">Manage strategies →</a></div></div>
         </section>
-        <section id="quickWelcome" class="quick-welcome" hidden><h2>One task. A first look.</h2><p>Attach an observation, describe the task and choose your strategies below.</p><p><a href="/?view=examples" data-root-view="examples">Use a sample case</a> or <a href="/static/history.html?source=quick">reopen a saved trial</a>.</p><p class="start-caption">A quick trial helps you explore. Use a campaign for repeated trials, success criteria and baseline comparisons.</p></section>
+        <section id="quickWelcome" class="quick-welcome" hidden><h2>One task. A first look.</h2><p>Attach an observation, describe the task and choose your strategies below.</p><p><a href="/?view=examples" data-root-view="examples">Use a sample case</a> or <a href="/static/history.html?source=quick">reopen a saved trial</a>.</p><p class="start-caption">This standalone runner is for inspecting one pipeline attempt. Create a campaign to evaluate selected cases with repeated trials and compare results.</p></section>
 
         <!-- Strategies view (hidden by default) -->
         <div id="strategiesView" class="hidden"></div>
@@ -146,7 +146,7 @@
         </div>
 
         <!-- Input row -->
-        <div class="flex items-center gap-2">
+        <div class="composer-input-row flex items-center gap-2">
           <div class="relative shrink-0">
             <button id="plusBtn" class="w-10 h-10 rounded-lg bg-f-surface border border-f-border-strong flex items-center justify-center hover:border-f-purple transition-colors" title="Attach files" aria-label="Attach files">
               <i data-lucide="plus" class="w-5 h-5 text-gray-400" aria-hidden="true"></i>
@@ -165,25 +165,25 @@
               </label>
             </div>
           </div>
-          <div class="flex-1 relative">
+          <div class="composer-task-field flex-1 relative">
             <textarea id="taskInput" rows="1" placeholder="Describe the manipulation task..."
-              class="w-full bg-f-surface border border-f-border-strong rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-2 focus:outline-purple-500 focus:outline-offset-1 focus:border-f-purple placeholder-gray-600 transition-colors"
+              class="w-full bg-f-surface border border-f-border-strong rounded-lg text-sm text-gray-100 pl-3 pr-3 py-2.5 resize-none focus:outline-2 focus:outline-teal-500 focus:outline-offset-1 focus:border-f-purple placeholder-gray-600 transition-colors"
               style="max-height:120px"></textarea>
           </div>
           <button id="evalBtn" class="shrink-0 w-10 h-10 rounded-lg bg-gradient-to-r from-f-purple to-f-purple-hover hover:opacity-90 disabled:bg-gray-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center transition-all" title="Run evaluation" aria-label="Run evaluation">
             <i data-lucide="send" class="w-5 h-5" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="quick-connection"><span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span><span id="connectionLabel">Disconnected</span></div>
+        <div class="composer-footer"><div class="quick-connection" role="status"><span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span><span id="connectionLabel">Disconnected</span></div>
         <!-- Keyboard hint -->
-        <div class="text-[10px] text-gray-500 mt-1.5 ml-12">Tab to fill sample &middot; Enter to send</div>
+        <div class="composer-hint">Enter to run &middot; Shift + Enter for a new line</div></div>
       </div>
 
     </main>
   </div>
 
-  <script src="/static/sample-cases.js"></script>
-  <script src="/static/app.js?v=journey-1"></script>
+  <script src="/static/sample-cases.js?v=campaign-workspace-2"></script>
+  <script src="/static/app.js?v=campaign-workspace-2"></script>
 
 </body>
 </html>

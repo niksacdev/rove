@@ -212,8 +212,8 @@ const STAGES = {
 };
 
 const STAGE_COLORS = {
-  perceive: { bg: "bg-purple-500/15", text: "text-purple-300" },
-  plan:     { bg: "bg-purple-500/15", text: "text-purple-300" },
+  perceive: { bg: "bg-teal-500/15", text: "text-teal-300" },
+  plan:     { bg: "bg-teal-500/15", text: "text-teal-300" },
   act:      { bg: "bg-sky-500/15",     text: "text-sky-300"     },
   dynamics: { bg: "bg-blue-500/15",   text: "text-blue-300"    },
   verify:   { bg: "bg-amber-500/15", text: "text-amber-300" },
@@ -221,7 +221,7 @@ const STAGE_COLORS = {
 
 // Distinct colors for strategy tabs (up to 8 strategies)
 const STRATEGY_COLORS = [
-  "#7c3aed", // purple
+  "#0f766e", // teal
   "#3b82f6", // blue
   "#10b981", // emerald
   "#f59e0b", // amber
@@ -333,7 +333,7 @@ function renderInsightsCard(insights, parentEl) {
   // Top Finding banner
   if (insights.top_finding) {
     var banner = document.createElement("div");
-    banner.className = "px-3 py-2 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20";
+    banner.className = "px-3 py-2 rounded-lg text-xs font-medium bg-teal-500/10 text-teal-300 border border-teal-500/20";
     banner.textContent = insights.top_finding;
     card.appendChild(banner);
   }
@@ -423,7 +423,7 @@ function renderInsightsCard(insights, parentEl) {
         var planSection = document.createElement("div");
         planSection.className = "space-y-1";
         var planLabel = document.createElement("span");
-        planLabel.className = "text-[10px] font-semibold text-purple-400 uppercase";
+        planLabel.className = "text-[10px] font-semibold text-teal-400 uppercase";
         planLabel.textContent = "Plan";
         planSection.appendChild(planLabel);
         var planBody = document.createElement("div");
@@ -983,7 +983,7 @@ async function renderExamplesView() {
     "multi_stage":          { label: "Multi-Stage",  icon: "layers",      color: "text-blue-400",   badgeCls: "bg-blue-500/10 text-blue-300 border-blue-500/20",    desc: "Sequential tasks requiring ordered subtask decomposition. Tests whether the pipeline breaks complex instructions into correctly ordered steps." },
     "situated_correction":  { label: "Correction",   icon: "message-circle", color: "text-amber-400", badgeCls: "bg-amber-500/10 text-amber-300 border-amber-500/20", desc: "Mid-task human feedback that changes the plan. Tests whether the pipeline adapts to corrections like \"not that one\" or \"use the other hand.\"" },
     "constrained":          { label: "Constrained",  icon: "shield-alert", color: "text-red-400",    badgeCls: "bg-red-500/10 text-red-300 border-red-500/20",      desc: "Tasks with safety or preference constraints. Tests whether the pipeline acknowledges and respects rules like \"keep it flat\" or \"don't close the door.\"" },
-    "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-purple-400", badgeCls: "bg-purple-500/10 text-purple-300 border-purple-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
+    "open_ended":           { label: "Open-Ended",   icon: "sparkles",    color: "text-teal-400", badgeCls: "bg-teal-500/10 text-teal-300 border-teal-500/20", desc: "Ambiguous or semantic instructions. Tests whether the pipeline produces a reasonable interpretation of vague prompts like \"tidy up\" or \"get ready for dinner.\"" },
     "negative":             { label: "Negative",     icon: "filter",      color: "text-orange-400", badgeCls: "bg-orange-500/10 text-orange-300 border-orange-500/20", desc: "Tasks requiring exclusion filtering. Tests whether the pipeline correctly skips objects or actions when told \"except\", \"not\", or \"don't touch.\"" },
     "uncategorized":        { label: "Other cases",  icon: "folder",      color: "text-gray-400", desc: "Additional sample inputs and cases with unavailable imports. Open import details when a versioned case is unavailable." }
   };
@@ -1119,7 +1119,7 @@ async function renderExamplesView() {
       });
 
       groups[sceneType].forEach(function(ex) {
-        grid.appendChild(createSampleCaseCard(ex, loadExample, API_BASE));
+        grid.appendChild(createSampleCaseCard(ex, API_BASE));
       });
 
       section.appendChild(header);
@@ -1520,7 +1520,7 @@ function renderHistoryItems() {
 
     // Status dot
     var dot = document.createElement("span");
-    var dotColor = entry.status === "running" ? "bg-purple-500 pulse-purple" :
+    var dotColor = entry.status === "running" ? "bg-teal-500 pulse-purple" :
                    entry.status === "completed" ? "bg-green-500" : "bg-red-500";
     dot.className = "w-2 h-2 rounded-full shrink-0 " + dotColor;
     dot.setAttribute("aria-hidden", "true");
@@ -2028,7 +2028,7 @@ function renderStrategyCards() {
       row.className = "flex items-center gap-2";
       var dot = document.createElement("span");
       dot.className = "w-1.5 h-1.5 rounded-full shrink-0";
-      if (stage === "perceive" || stage === "plan") dot.style.background = "#a855f7";
+      if (stage === "perceive" || stage === "plan") dot.style.background = "#439c92";
       else if (stage === "act") dot.style.background = "#10b981";
       else dot.style.background = "#f59e0b";
       row.appendChild(dot);
@@ -2188,7 +2188,7 @@ evalBtn.addEventListener("click", async function() {
   if (selectedStrategyIds.size === 0) {
     setConfigCollapsed(false);
     announce("Please select at least one strategy before evaluating");
-    strategyGrid.style.outline = "2px solid #7c3aed";
+    strategyGrid.style.outline = "2px solid #0f766e";
     setTimeout(function() { strategyGrid.style.outline = ""; }, 1500);
     return;
   }
@@ -2325,7 +2325,7 @@ function setupTabs(strategyIds) {
 
   // Strategy tabs
   strategyIds.forEach(function(sid) {
-    var color = strategyColorMap[sid] || "#7c3aed";
+    var color = strategyColorMap[sid] || "#0f766e";
     var tab = document.createElement("button");
     tab.className = "strategy-tab px-4 py-2.5 text-[13px] text-gray-400 whitespace-nowrap flex items-center";
     tab.setAttribute("data-tab-id", sid);
@@ -2481,7 +2481,7 @@ function updateSummaryTable(strategyIds) {
     var displayName = strat ? strat.display_name : sid;
 
     var row = document.createElement("div");
-    var rowColor = strategyColorMap[sid] || "#7c3aed";
+    var rowColor = strategyColorMap[sid] || "#0f766e";
     row.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
     row.style.borderLeft = "3px solid " + rowColor;
     row.addEventListener("click", function() { switchTab(sid); });
@@ -2513,8 +2513,8 @@ function updateSummaryTable(strategyIds) {
       statusText.className += " text-red-400";
       statusText.textContent = "error";
     } else {
-      statusDot.className = "w-2 h-2 rounded-full bg-purple-500 pulse-purple shrink-0";
-      statusText.className += " text-purple-300";
+      statusDot.className = "w-2 h-2 rounded-full bg-teal-500 pulse-purple shrink-0";
+      statusText.className += " text-teal-300";
       statusText.textContent = sr.currentStage ? sr.currentStage + "..." : "waiting";
     }
     statusCell.appendChild(statusDot);
@@ -2593,7 +2593,7 @@ function updateSummaryTable(strategyIds) {
     }
     compareWrap.textContent = "";
     var compareBtn = document.createElement("button");
-    compareBtn.className = "flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-f-purple hover:bg-f-purple-hover rounded-lg transition-colors shadow-sm";
+    compareBtn.className = "flex items-center gap-2 px-4 py-2 text-xs font-medium text-white bg-f-purple hover:bg-f-teal-hover rounded-lg transition-colors shadow-sm";
     var cIcon = document.createElement("i");
     cIcon.setAttribute("data-lucide", "columns-2");
     cIcon.className = "w-4 h-4";
@@ -2623,7 +2623,7 @@ function enterCompareSelectionMode(completedIds, container) {
   completedIds.forEach(function(sid) {
     var strat = strategies.find(function(s) { return s.id === sid; });
     var displayName = strat ? strat.display_name : sid;
-    var color = strategyColorMap[sid] || "#7c3aed";
+    var color = strategyColorMap[sid] || "#0f766e";
 
     var chip = document.createElement("button");
     chip.className = "compare-chip flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-f-border rounded-lg transition-all cursor-pointer";
@@ -2721,7 +2721,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
   var stratB = strategies.find(function(s) { return s.id === sidB; });
   var nameA = stratA ? stratA.display_name : sidA;
   var nameB = stratB ? stratB.display_name : sidB;
-  var colorA = strategyColorMap[sidA] || "#7c3aed";
+  var colorA = strategyColorMap[sidA] || "#0f766e";
   var colorB = strategyColorMap[sidB] || "#3b82f6";
 
   // Summary badges
@@ -2790,7 +2790,7 @@ function buildCompareContent(el, sidA, sidB, resultsA, resultsB) {
     hdr.className = "flex items-center gap-2 px-4 py-3 border-b border-f-border bg-f-elevated/50";
     var icon = document.createElement("i");
     icon.setAttribute("data-lucide", STAGE_ICONS[stageName]);
-    icon.className = "w-4 h-4 text-purple-400";
+    icon.className = "w-4 h-4 text-teal-400";
     hdr.appendChild(icon);
     var hdrText = document.createElement("span");
     hdrText.className = "text-sm font-semibold text-gray-200";
@@ -2983,7 +2983,7 @@ function cmpStringListDiff(parent, label, myList, otherList) {
     var tag = document.createElement("span");
     tag.className = "text-[11px] px-2 py-0.5 rounded ";
     if (other.has(item)) {
-      tag.className += "bg-purple-500/15 text-purple-300";
+      tag.className += "bg-teal-500/15 text-teal-300";
     } else {
       tag.className += "bg-emerald-500/15 text-emerald-300";
       wrap.classList.add("diff-unique");
@@ -3083,7 +3083,7 @@ function cmpRenderPerceive(col, output, otherOutput) {
       row.className = "flex items-center gap-2 text-sm py-0.5";
       var tag = document.createElement("span");
       tag.className = "text-[11px] px-2 py-0.5 rounded ";
-      tag.className += matched ? "bg-purple-500/15 text-purple-300" : "bg-emerald-500/15 text-emerald-300";
+      tag.className += matched ? "bg-teal-500/15 text-teal-300" : "bg-emerald-500/15 text-emerald-300";
       tag.textContent = name;
       row.appendChild(tag);
       if (conf != null) {
@@ -3346,7 +3346,7 @@ function connectSSE(evalId) {
           subItem.appendChild(turnLabel);
           (output.tools_requested || []).forEach(function(t) {
             var badge = document.createElement("span");
-            badge.className = "px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px]";
+            badge.className = "px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[10px]";
             badge.textContent = t;
             subItem.appendChild(badge);
           });
@@ -3615,7 +3615,7 @@ function addUserCard(imgSrc, task, strategyIds) {
   strategyIds.forEach(function(sid) {
     var strat = strategies.find(function(s) { return s.id === sid; });
     var badge = document.createElement("span");
-    badge.className = "text-[10px] bg-f-purple/15 text-purple-300 px-2 py-0.5 rounded";
+    badge.className = "text-[10px] bg-f-purple/15 text-teal-300 px-2 py-0.5 rounded";
     badge.textContent = strat ? strat.display_name : sid;
     badges.appendChild(badge);
   });
@@ -3642,16 +3642,16 @@ function addTypingIndicator(stage, container, sid) {
   header.className = "flex items-center gap-2 mb-2";
   var icon = document.createElement("i");
   icon.setAttribute("data-lucide", meta.icon);
-  icon.className = "w-4 h-4 text-purple-400";
+  icon.className = "w-4 h-4 text-teal-400";
   header.appendChild(icon);
   var label = document.createElement("span");
-  label.className = "text-xs font-semibold text-purple-400";
+  label.className = "text-xs font-semibold text-teal-400";
   var strat = sid ? strategies.find(function(s) { return s.id === sid; }) : null;
   var prefix = (strat && Object.keys(tabData).length > 1) ? strat.display_name + " \u2014 " : "";
   label.textContent = prefix + meta.label;
   header.appendChild(label);
   var chip = document.createElement("span");
-  chip.className = "text-[10px] bg-f-purple/20 text-purple-300 px-1.5 py-0.5 rounded ml-auto";
+  chip.className = "text-[10px] bg-f-purple/20 text-teal-300 px-1.5 py-0.5 rounded ml-auto";
   chip.textContent = "running";
   header.appendChild(chip);
   card.appendChild(header);
@@ -3660,7 +3660,7 @@ function addTypingIndicator(stage, container, sid) {
   dots.className = "flex items-center gap-1.5 py-1";
   for (var i = 0; i < 3; i++) {
     var dot = document.createElement("div");
-    dot.className = "w-2 h-2 bg-purple-400 rounded-full typing-dot";
+    dot.className = "w-2 h-2 bg-teal-400 rounded-full typing-dot";
     dots.appendChild(dot);
   }
   card.appendChild(dots);
@@ -3676,9 +3676,9 @@ function addPhaseHeader(phase, stage, container, strategyId) {
   var headerId = "phase-header-" + (strategyId || "") + "-" + phase;
   if (container.querySelector("#" + CSS.escape(headerId))) return;
 
-  // Colors: execution = sky (object under test), evaluation = purple
-  var colorText = phase === "execution" ? "text-sky-400" : "text-purple-400";
-  var colorBorder = phase === "execution" ? "border-sky-500/30" : "border-purple-500/30";
+  // Colors: execution = sky (object under test), evaluation = teal
+  var colorText = phase === "execution" ? "text-sky-400" : "text-teal-400";
+  var colorBorder = phase === "execution" ? "border-sky-500/30" : "border-teal-500/30";
 
   // Collapsible wrapper — contains header + content area
   var wrapper = document.createElement("div");
@@ -3830,7 +3830,7 @@ function addStageCard(stage, status, latencyMs, output, error, modelId, containe
   }
   if (modelId) {
     var modBadge = document.createElement("span");
-    modBadge.className = "text-[10px] bg-f-purple/15 text-purple-300 px-2 py-0.5 rounded";
+    modBadge.className = "text-[10px] bg-f-purple/15 text-teal-300 px-2 py-0.5 rounded";
     modBadge.textContent = modelId;
     headerRight.appendChild(modBadge);
   }
@@ -4001,7 +4001,7 @@ function renderPerceive(container, o) {
       var name = typeof obj === "string" ? obj : (obj.label || obj.name || JSON.stringify(obj));
       var conf = (typeof obj === "object" && obj.confidence != null) ? " (" + (obj.confidence * 100).toFixed(0) + "%)" : "";
       var tag = document.createElement("span");
-      tag.className = "text-xs bg-f-purple/10 text-purple-300 border border-f-purple/20 px-2 py-0.5 rounded";
+      tag.className = "text-xs bg-f-purple/10 text-teal-300 border border-f-purple/20 px-2 py-0.5 rounded";
       tag.textContent = name + conf;
       tagWrap.appendChild(tag);
     });
@@ -4663,12 +4663,12 @@ function renderVerify(container, o) {
         evidenceToggle.type = "button";
         evidenceToggle.className = "flex items-center gap-1.5 group cursor-pointer bg-transparent border-0 p-0 mb-0";
         var evidenceArrow = document.createElement("span");
-        evidenceArrow.className = "text-purple-400 text-[11px] transition-transform duration-200";
+        evidenceArrow.className = "text-teal-400 text-[11px] transition-transform duration-200";
         evidenceArrow.style.transform = "rotate(90deg)";
         evidenceArrow.textContent = "\u203a";
         evidenceToggle.appendChild(evidenceArrow);
         var evidenceLabel = document.createElement("span");
-        evidenceLabel.className = "text-[10px] font-semibold text-purple-400 group-hover:text-purple-300 transition-colors uppercase tracking-wider";
+        evidenceLabel.className = "text-[10px] font-semibold text-teal-400 group-hover:text-teal-300 transition-colors uppercase tracking-wider";
         evidenceLabel.textContent = "Reasoning Trajectory";
         evidenceToggle.appendChild(evidenceLabel);
         var evidenceCount = document.createElement("span");
@@ -4726,7 +4726,7 @@ function renderVerify(container, o) {
   // Verify turns indicator (agent loop mode)
   if (o.verify_turns && o.verify_turns > 1) {
     var turnsBadge = document.createElement("span");
-    turnsBadge.className = "text-[10px] bg-purple-500/15 text-purple-300 px-1.5 py-0.5 rounded mt-1 inline-block";
+    turnsBadge.className = "text-[10px] bg-teal-500/15 text-teal-300 px-1.5 py-0.5 rounded mt-1 inline-block";
     turnsBadge.textContent = o.verify_turns + " verify turns";
     container.appendChild(turnsBadge);
   }

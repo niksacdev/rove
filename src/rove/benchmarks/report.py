@@ -118,9 +118,9 @@ def to_csv(data: dict) -> str:
 
 
 _REPORT_STYLE = """
-:root{--f-bg:#1a1a1a;--f-surface:#252525;--f-elevated:#2d2d2d;--f-border:#383838;--f-text:#fff;--f-text-secondary:#d1d5db;--f-text-muted:#9ca3af;--accent:#b9a2f7;--pass:#4ade80;--fail:#fb7185;--unknown:#a1a1aa;color-scheme:dark}
+:root{--f-bg:#181c1c;--f-surface:#212727;--f-elevated:#2a3131;--f-border:#343d3c;--f-text:#fff;--f-text-secondary:#d1d5db;--f-text-muted:#9ca3af;--accent:#81c9bf;--pass:#4ade80;--fail:#fb7185;--unknown:#a1a1aa;color-scheme:dark}
 
-[data-theme=light]{--f-bg:#f8f9fa;--f-surface:#fff;--f-elevated:#f0f1f3;--f-border:#e2e4e8;--f-text:#1a1b1e;--f-text-secondary:#374151;--f-text-muted:#626a76;--accent:#6d28d9;--pass:#15803d;--fail:#be123c;--unknown:#71717a;color-scheme:light}
+[data-theme=light]{--f-bg:#f7f7f2;--f-surface:#fff;--f-elevated:#eef1eb;--f-border:#e2e4e8;--f-text:#1a1b1e;--f-text-secondary:#374151;--f-text-muted:#626a76;--accent:#0d665f;--pass:#15803d;--fail:#be123c;--unknown:#71717a;color-scheme:light}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--f-bg);color:var(--f-text);font:14px Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.6}
@@ -161,7 +161,7 @@ p{color:var(--f-text-secondary)}
 .coverage{margin-top:20px}
 .coverage-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}
 .coverage-track{height:7px;border-radius:9px;background:var(--f-elevated);overflow:hidden;margin-top:8px}
-.coverage-fill{height:100%;background:#8b5cf6}
+.coverage-fill{height:100%;background:#289488}
 .context-line{font-size:12px;color:var(--f-text-muted);margin:16px 0 0}
 .section{margin-top:36px;scroll-margin-top:20px}
 .section-intro{font-size:13px;max-width:860px}
@@ -208,7 +208,7 @@ footer{border-top:1px solid var(--f-border);margin-top:36px;padding-top:20px;fon
 .chart-panel{padding:18px 4px 0}
 .evidence-heading{display:block}
 }
-@media print{body{--f-bg:#fff;--f-surface:#fff;--f-elevated:#f0f1f3;--f-border:#ccc;--f-text:#111;--f-text-secondary:#333;--f-text-muted:#555;--accent:#6d28d9;color-scheme:light}
+@media print{body{--f-bg:#fff;--f-surface:#fff;--f-elevated:#eef1eb;--f-border:#ccc;--f-text:#111;--f-text-secondary:#333;--f-text-muted:#555;--accent:#0d665f;color-scheme:light}
 .topbar button,.jump-links{display:none}
 main{padding:20px}
 .panel,.hero,.stat{break-inside:avoid}
@@ -246,7 +246,7 @@ def to_html(data: dict) -> str:
     def escape(value):
         return html.escape(str(value))
 
-    palette = ["#a78bfa", "#38bdf8", "#fbbf24", "#fb7185", "#2dd4bf", "#c084fc"]
+    palette = ["#70bdb4", "#38bdf8", "#fbbf24", "#fb7185", "#2dd4bf", "#afba99"]
     assessments = data.get("assessments", {})
     contract = campaign.get("contract") or {}
     scope = contract.get("scope", "configured_verification")
@@ -300,14 +300,14 @@ def to_html(data: dict) -> str:
             margin={"l": 62, "r": 24, "t": 24, "b": 70},
             height=height,
             legend={"orientation": "h", "y": -0.28, "x": 0},
-            hoverlabel={"bgcolor": "#252525", "font_color": "#fff"},
+            hoverlabel={"bgcolor": "#212727", "font_color": "#fff"},
             meta={
                 "assessment_scope": scope,
                 "metric_scope": assessments.get("scope", "configured_verification"),
             },
         )
-        figure.update_xaxes(gridcolor="#383838", zerolinecolor="#383838", automargin=True)
-        figure.update_yaxes(gridcolor="#383838", zerolinecolor="#383838", automargin=True)
+        figure.update_xaxes(gridcolor="#343d3c", zerolinecolor="#343d3c", automargin=True)
+        figure.update_yaxes(gridcolor="#343d3c", zerolinecolor="#343d3c", automargin=True)
         markup = figure.to_html(
             full_html=False,
             include_plotlyjs=False,
@@ -488,7 +488,7 @@ def to_html(data: dict) -> str:
             ],
             zmin=0,
             zmax=1,
-            colorscale=[[0, "#493c69"], [1, "#a78bfa"]],
+            colorscale=[[0, "#24433f"], [1, "#70bdb4"]],
             colorbar={"tickformat": ".0%", "thickness": 10},
             hoverongaps=False,
             hovertemplate="%{y}<br>%{x}<br>Pass rate: %{z:.0%}<extra></extra>",
