@@ -18,10 +18,16 @@ complete robot reset contracts and general recording ingestion remain future wor
 
 ## One Attempt Has One Identity
 
-A **case** describes a concrete task, its inputs, conditions and success criteria.
+A **task** is the robotics objective or instruction. A **case** combines that task with
+a specific observation, relevant robot/environment conditions and expected outcome.
+Several cases can test the same task under different conditions. Task is a case field,
+not an additional persisted container.
 A **trial** is one strategy attempting that case once. A **campaign** organizes
 trials across selected cases, strategies and repetitions. Selecting three
-strategies for one case produces three trials, even if the user clicks Run once.
+strategies for one case produces three trials, even if the user selects **Run campaign**
+once. **Create a campaign** prepares this work; **Run campaign** executes its trials;
+**Review results** reads their saved evidence. Evaluation and run describe activities,
+not additional persisted containers.
 
 ```mermaid
 flowchart TD
@@ -47,10 +53,12 @@ An Experiment or Session container is not needed alongside Campaign.
 | Case | A task with specific starting inputs, conditions and criteria | Place the red block in the bin, starting from this camera view and reset state |
 | Task instruction | What the agent is asked to do; part of a case | “Place the red block in the bin” |
 | Strategy | Reusable system configuration built from supported adapters and pipeline stages | Models, agent runtime, tools and action components for the relevant stages, with declared grading |
+| Strategy revision | Immutable saved variation of a source strategy, selectable for later trials | A new planning model or stage setting with a distinct recorded ID |
 | System snapshot | Frozen record of the strategy and component versions used | Policy checkpoint, prompt, action convention and controller revision |
 | Trial | One strategy attempting one case once | One placement attempt, including any actions within that attempt |
 | Campaign | A named evaluation across cases, configurations and repetitions | Ten placement cases evaluated five times per strategy |
-| Baseline / ablation | Roles and links between exact campaign versions and system snapshots | Compare a changed policy with the baseline under the same grading criteria |
+| Baseline | Saved reference to one completed campaign strategy and its frozen assessment snapshot | Set the current planning strategy results as the reference for future comparisons |
+| Comparison campaign / ablation | Fresh candidate trials linked to a reference under matching conditions | Change the planning model and compare it with the saved baseline |
 | Dataset revision | Frozen case selection, annotations and grading revisions; managed under Cases | SME-approved placement cases and labels, including difficult or failed examples |
 | Provenance | Identity and origin metadata attached to records, not another container | Input hash, evaluator revision, producing system and evidence origin |
 | History | A view of saved work | Quick trials, campaign attempts and their later reviews |
@@ -58,6 +66,31 @@ An Experiment or Session container is not needed alongside Campaign.
 A dataset revision defines **what to evaluate**. A campaign defines **which systems
 to evaluate and how many attempts to make**. Case membership can be reused without
 copying the recordings or treating a dataset as an execution.
+
+A campaign can compare several existing strategies together. Four cases, three
+strategies and two repetitions produce 24 trials, grouped under one campaign. The
+report keeps strategy results separate while using the same case and scoring cohort.
+A component ablation answers a different question: did a specific change to the
+baseline strategy improve the result? Save the changed strategy as a distinct revision
+and compare its fresh trials under matching conditions. Both use the existing Case,
+Strategy, Trial, Campaign and Baseline concepts; neither needs another container.
+
+A saved strategy revision preserves its definition, while endpoints resolve from the
+current configuration at campaign creation. The campaign freezes that complete resolved
+configuration. Revising a strategy does not rewrite the source YAML or old campaign
+snapshots. The editor begins with the current source, which may differ from a saved
+baseline; preview must expose that drift. See [ADR-026](../architecture/ADR-026-versioned-strategy-catalog.md).
+
+**Set as baseline** preserves a completed campaign strategy as a named reference.
+This explicit save establishes its baseline role; the first campaign is not automatically
+a baseline. Results derives its **Baseline** badge from saved references, not names.
+The captured assessment may contain unknowns, and later expert ratings do not rewrite
+it. Revision and pinning controls manage the saved reference in secondary details.
+
+Opening results, recording expert judgments and saving a baseline do not rerun the
+agent. **Compare a strategy change** prepares and previews a candidate. Only **Start
+comparison campaign** executes the new candidate trials after validation; the reference
+trial identities and outputs remain unchanged.
 
 The strategy is the system under test. Current optional stages and the generic
 agent adapter allow different system shapes; integration still requires an adapter

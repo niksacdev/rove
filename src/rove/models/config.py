@@ -10,6 +10,7 @@ __all__ = [
     "RoveConfig",
     "RuntimeContract",
     "StrategyConfig",
+    "active_config_path",
     "effective_runtime_contract",
     "find_model_config",
     "get_all_models",
@@ -295,6 +296,8 @@ class RoveConfig(BaseModel):
 # =============================================================================
 
 _config_cache: RoveConfig | None = None
+_config_path: Path | None = None
+_config_cache_key: tuple | None = None
 
 
 def _find_config_path() -> Path:
@@ -312,25 +315,43 @@ def _find_config_path() -> Path:
     )
 
 
+def active_config_path() -> Path:
+    """Current process configuration, including an explicitly selected worker snapshot."""
+    return _config_path or _find_config_path().resolve()
+
+
 def load_config(config_path: str | Path | None = None) -> RoveConfig:
     """Load and validate rove.yaml. Returns a RoveConfig instance."""
-    global _config_cache
-    if _config_cache is not None:
-        return _config_cache
+    global _config_cache, _config_path, _config_cache_key
+    from rove.strategies.revisions import catalog_path, overlay
 
-    path = Path(config_path) if config_path else _find_config_path()
+    path = Path(config_path).resolve() if config_path else active_config_path()
+    catalog = catalog_path(path)
+    yaml_stat = path.stat()
+    catalog_stat = catalog.stat() if catalog.exists() else None
+    key = (
+        path,
+        yaml_stat.st_mtime_ns,
+        yaml_stat.st_size,
+        (catalog_stat.st_mtime_ns, catalog_stat.st_size) if catalog_stat else None,
+    )
+    if _config_cache is not None and key == _config_cache_key:
+        return _config_cache
 
     with open(path) as f:
         raw = yaml.safe_load(f)
 
-    _config_cache = RoveConfig.model_validate(raw)
+    _config_cache = overlay(RoveConfig.model_validate(raw), path)
+    _config_path, _config_cache_key = path, key
     return _config_cache
 
 
 def reset_config_cache() -> None:
     """Reset the config cache (for testing)."""
-    global _config_cache
+    global _config_cache, _config_path, _config_cache_key
     _config_cache = None
+    _config_path = None
+    _config_cache_key = None
 
 
 # =============================================================================

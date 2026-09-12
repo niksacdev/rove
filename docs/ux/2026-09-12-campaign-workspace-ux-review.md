@@ -13,12 +13,15 @@ identity and connected evidence review. Restyling the previous forms alone is in
 
 | Decision | User need |
 | --- | --- |
-| Cases → Configure → Run → Review & improve | Follow the work rather than assemble storage entities |
+| Cases → Configure → Run → Review results | Follow the work rather than assemble storage entities |
 | Gallery dialog with image/task cards | Recognize cases and select many without an unbounded dropdown |
 | Draft expected outcome with source and missing-evidence notice | Help prepare assessment without manufacturing expert labels |
 | Settings on the right; assistant inside Configure | Separate reusable setup from the current evaluation |
 | Show case × strategy × repetition and live trial identities | Explain how pipeline activity contributes to the report |
 | Save case collection; new revision on extension | Make reuse understandable while preserving provenance |
+| Create a campaign / Run campaign / Review results | Separate creating, executing and reading without introducing another entity |
+| Set as baseline; badge from saved reference only | Make the comparison role explicit and trustworthy |
+| Start comparison campaign after preview | Make new execution deliberate; reading or saving results never reruns the agent |
 | Neutral/slate/teal palette and generous controls | Improve hierarchy and remove the rejected visual treatment |
 
 ## Accessibility and verification status

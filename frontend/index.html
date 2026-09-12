@@ -13,10 +13,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-3">
-  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-3">
-  <link rel="stylesheet" href="/static/start.css?v=campaign-workspace-3">
-  <script src="/static/navigation.js?v=campaign-workspace-3" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=campaign-workspace-6">
+  <link rel="stylesheet" href="/static/stage-renderers.css?v=campaign-workspace-6">
+  <link rel="stylesheet" href="/static/navigation.css?v=campaign-workspace-6">
+  <link rel="stylesheet" href="/static/start.css?v=campaign-workspace-6">
+  <script src="/static/navigation.js?v=campaign-workspace-6" defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -83,7 +84,7 @@
           <p class="start-eyebrow">ROBOT OBSERVATION &amp; VISION EVALUATION</p>
           <h1>Does your robotics agent<br>work on your tasks?</h1>
           <p class="start-intro">Bring your cases, define what success means, and compare agent pipelines with evidence you can inspect.</p>
-          <div class="start-actions"><a class="start-primary" href="/static/datasets.html">Create a campaign <span aria-hidden="true">→</span></a><a class="start-secondary" href="/static/datasets.html?step=cases&amp;pick=existing">Select sample cases</a></div>
+          <div class="start-actions"><a class="start-primary" href="/static/datasets.html">Create a campaign <span aria-hidden="true">→</span></a><a class="start-secondary" href="/?view=quick" data-root-view="quick">Run a trial</a></div>
           <p class="start-caption">A campaign runs selected strategies on your cases and collects each attempt as a trial.<br>Have results already? <a href="/static/benchmarks.html">Review your evaluations →</a></p>
           <ol class="start-journey" aria-label="Your evaluation journey">
             <li><span class="step-number">01</span><h2>Add cases</h2><p>Select existing cases or add an image and task. Review what the correct outcome should be.</p></li>
@@ -182,8 +183,9 @@
     </main>
   </div>
 
-  <script src="/static/sample-cases.js?v=campaign-workspace-3"></script>
-  <script src="/static/app.js?v=campaign-workspace-3"></script>
+  <script src="/static/sample-cases.js?v=campaign-workspace-6"></script>
+  <script src="/static/stage-renderers.js?v=campaign-workspace-6"></script>
+  <script src="/static/app.js?v=campaign-workspace-6"></script>
 
 </body>
 </html>

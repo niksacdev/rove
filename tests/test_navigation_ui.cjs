@@ -33,13 +33,13 @@ test("root journey routes configuration and quick runs without losing an in-prog
   w.HTMLElement.prototype.scrollIntoView=()=>{};
   w.fetch=async(url,options={})=>{calls.push({url,method:options.method||"GET"});return {ok:true,json:async()=>url.includes("history")?[]:url.includes("strategies")?{strategies:[]}:url.includes("endpoints")?{endpoints:[]}:url.includes("models")?{models:[]}:{defaults:{},endpoints:{},strategies:{}}};};
   try {
-    w.eval(read("navigation.js"));w.eval(read("app.js") + ";window.testRoot={setupTabs,setRunning,restoreEvaluation,switchView};"); await pause();
+    w.eval(read("navigation.js"));w.eval(read("stage-renderers.js"));w.eval(read("app.js") + ";window.testRoot={setupTabs,setRunning,restoreEvaluation,switchView};"); await pause();
     const el=id=>w.document.getElementById(id);
     assert.equal(el("quickComposer").hidden,true);
     assert.equal(el("quickSidebar").hidden,true);
-    // The legacy runner remains deep-linkable, without competing with campaigns on the landing page.
-    assert.equal(w.document.querySelector('.start-actions [data-root-view="quick"]'),null);
-    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/static/datasets.html?step=cases&pick=existing");
+    // The original runner stays discoverable alongside repeatable campaigns.
+    assert.match(w.document.querySelector('.start-actions [data-root-view="quick"]').textContent, /Run a trial/);
+    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/?view=quick");
     w.testRoot.switchView("quick");
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);

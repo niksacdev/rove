@@ -58,14 +58,16 @@ Use [Anthropic's evaluation terminology](https://www.anthropic.com/engineering/d
 
 | Concept | Meaning |
 | --- | --- |
-| Task / test case | A concrete test with defined inputs and success criteria. ROVE calls it a **Case** in the UI; the task instruction describes the robotics goal. |
+| Task | The robotics objective or instruction, retained as a field of a case rather than another persisted container. |
+| Case / test case | A concrete observation, task, relevant environment/robot conditions and expected outcome. Several cases can test the same task under different conditions. |
 | Trial | One attempt at one case using one strategy. For one case, running three strategies once creates three trials. Pipeline stages belong to the same trial; regrading an output does not create a new attempt. |
 | Grader | Logic or human review that assesses a declared aspect of the result. ROVE's configured verify stage hosts task evaluators, required constraints and diagnostics. |
 | Trace | The recorded outputs, calls, observations and intermediate results available for an attempt. A predicted action trajectory is not proof that actions executed. |
 | Outcome | The resulting state or artifact being assessed. Plan quality, an agent decision and observed robot completion have different evidence requirements. |
 | Suite / dataset revision | A selected collection of case versions. A frozen reviewed dataset also pins annotations, rubrics and reference-output links. |
 | Strategy | A reusable named configuration of stages and endpoints. Its mutable name is not sufficient identity for old results. |
-| Campaign | A named evaluation of cases, strategies and repetitions. Explicit references connect baseline and candidate campaigns. |
+| Campaign | A named evaluation of cases, strategies and repetitions. **Run campaign** executes its trials; **Review results** reads their saved evidence. |
+| Baseline | A saved reference to one completed campaign strategy and its frozen assessment snapshot, used for a later comparison. This is a role for an existing result, not a separate execution. |
 | Provenance | Configuration, input, version and evidence identity attached to records; not another navigation level. |
 
 Keep Cases, Trials and Campaigns as the working vocabulary. Saved history belongs under Results. Dataset revisions appear as versioned case collections managed with cases. Do not introduce overlapping Experiment or Session entities. Existing evaluation IDs remain compatibility/grouping identifiers where needed.
@@ -112,17 +114,22 @@ creates a reusable case; later campaigns schedule fresh attempts separately.
 
 Primary navigation is **Start · Evaluate · Results**, with **Settings** separately
 on the right. Settings maintains reusable strategies, models/connections and preferences.
-Evaluate is a single campaign workspace: **Cases → Configure → Run → Review & improve**.
+Evaluate is a single campaign workspace: **Cases → Configure → Run → Review results**.
 
-Cases offers **Add new** and **Select existing**. Existing cases use a bounded image/task
-gallery dialog with search and categories; selected cases appear as editable cards in
-the workspace. Expected outcomes and expert-review material may be prefilled from
+Cases offers **Add new**, **Select existing** and **Import cases**. Add new opens a
+single-case dialog. The existing library groups Cases and Datasets in one bounded
+picker; a dataset loads exact case versions into Cases for inspection before choosing
+strategies. JSONL metadata import pairs records with explicitly selected PNG/JPEG
+images. Selected cases appear as compact editable cards with expandable expectations. Expected outcomes and expert-review material may be prefilled from
 available metadata or an explicit assistant, but remain labelled drafts. Suggested
 content cannot create a human judgment or turn an initial image into completion evidence.
 
-Configure selects strategies already defined in `rove.yaml` and presents editable,
+Configure selects one or several available strategies and presents editable,
 plain-language success criteria. Advanced contract JSON stays in collapsed details.
-The optional assistant's chat helps configure the same evaluation here. The manual path
+Existing strategies can be compared within one campaign on the same case set. A
+component ablation saves a new revision of a baseline strategy and compares that
+candidate under the same recorded assessment conditions. The optional assistant's
+chat helps configure the same evaluation here. The manual path
 works without it; both use the same validated preview and explicit launch boundary.
 
 Run confirms case count, strategy selection, repetitions, criteria and execution limits.
@@ -130,8 +137,12 @@ It explains the total: **cases × strategies × repetitions = planned trials**. 
 execution, each recorded trial shows its case, strategy and attempt identity. Campaign
 progress polls every two seconds while visible; expanding pipeline details or pressing
 Refresh fetches recorded stage events and output. This does not imply token streaming.
-Review connects report measures to those trials and their traces, expert assessments,
-case collections and baseline comparisons.
+Review reads saved report measures, trials, traces and expert assessments. **Set as
+baseline** names and saves one completed campaign strategy as the reference; Results
+shows a **Baseline** badge only for persisted references. Versioning and pinning stay
+secondary. **Compare a strategy change** prepares a matching candidate; only **Start
+comparison campaign** runs new trials. Neither review nor setting a baseline reruns
+the original campaign.
 
 Use **Save case collection** and **Add to an existing collection** for dataset actions.
 Adding creates a new immutable revision retaining old members; old revisions remain
@@ -264,7 +275,7 @@ The local product connects durable trials to case contracts, approved labels, sy
 - [Trial history and optional Copilot stages](TRIAL_HISTORY.md): local setup, inspector usage, privacy and complete backups.
 - [Target architecture](architecture/target-architecture.md) and [system diagram](architecture/system-diagram.md): logical responsibilities, processes, data and optional integrations.
 - [Implementation plan](product/implementation-plan.md): sequenced tasks, dependencies and milestone acceptance.
-- [Architecture decisions](architecture/README.md): ADRs 017–024 with diagrams and implementation status.
+- [Architecture decisions](architecture/README.md): evaluation, navigation and strategy-revision decisions with diagrams and implementation status.
 - [Campaign usage](BENCHMARKS.md) and [configured verification](VERIFICATION.md): supported configuration today.
 
 Earlier versions of this file remain in Git history. The core vision and personas are retained; historical claims about unimplemented commands, full simulation, universal reproducibility or future integrations are not release guarantees.

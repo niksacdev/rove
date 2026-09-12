@@ -23,7 +23,7 @@ PR #21. User feedback found that route consistency left the workflow unclear: ca
 selection, contracts, chat, datasets and execution still competed for attention.
 
 The accepted amendment is **Start, Evaluate, Results**, with **Settings** separately
-on the right. Evaluate becomes **Cases → Configure → Run → Review & improve**. It
+on the right. Evaluate becomes **Cases → Configure → Run → Review results**. It
 uses an image/task gallery dialog and selected-case cards, existing strategies from
 configuration, plain-language success criteria with draft suggestions, and an optional
 assistant in Configure. Run exposes the planned trial count and each recorded trial's
@@ -49,6 +49,33 @@ establish model quality or physical robot performance.
 The [campaign workspace](../product/user-journey.md) and
 [ADR-025](ADR-025-workflow-navigation.md) define the requirements and evidence checklist.
 Existing API, recording and scoring contracts remain authoritative below.
+
+Creation uses **Create a campaign**, and **Run campaign** is an execution action on that
+record. **Review results** loads recorded evidence. Baseline creation names a completed
+campaign strategy and preserves its assessment snapshot; it is not another execution.
+The primary **Set as baseline** action and Results **Baseline** badge expose that role,
+while pinning and revision history remain secondary. The badge must derive from saved
+baseline references. Comparison preparation is read-only until **Start comparison
+campaign** explicitly dispatches fresh candidate trials.
+
+## Strategy selection and saved revisions
+
+The campaign engine accepts multiple strategies under the same cases, success contract
+and repetition plan. The restored Configure selection exposes that capability: each
+case/strategy/repetition slot remains a separate trial, with per-strategy reporting.
+A comparison campaign instead evaluates a candidate against one selected baseline
+strategy and its captured assessment conditions.
+
+The accepted strategy-revision implementation adds a configuration-specific local
+SQLite catalog over YAML-defined strategies. A UI edit saves a new immutable selectable
+ID, with exact-preview checks on the source strategy, referenced endpoint definitions
+and defaults. YAML is unchanged. Endpoints resolve when a campaign is created, and the
+existing campaign snapshot freezes the full resolved configuration. The editor starts
+from the current selected strategy, so a changed source is not silently treated as the
+archived baseline. [ADR-026](ADR-026-versioned-strategy-catalog.md) records this boundary;
+the implemented shared loader, API and local regression evidence are linked there.
+The revision editor adds new saved candidates without rewriting YAML or starting trials;
+its browser integration remains pending.
 
 ## Two Entry Paths, One Pipeline
 

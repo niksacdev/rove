@@ -129,3 +129,98 @@ input:focus-visible, textarea:focus-visible { outline-color: var(--f-purple); }
  .case-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
  .case-link .case-thumbnail { height: 100px; }
 }
+
+.next-action { margin-top: 28px; padding: 22px; border: 1px solid var(--f-border); border-radius: 10px; background: var(--f-bg); }
+.next-action h3 { font-size: 18px; }
+.baseline-reference { border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin: 20px 0; background: var(--surface, var(--bg-secondary)); }
+.baseline-reference-heading { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.baseline-reference-heading h3 { margin: 0; }
+.baseline-reference .baseline-saved { color: var(--text); border: 1px solid var(--accent, #a78bfa); background: var(--accent-bg, rgba(139,92,246,.14)); }
+.baseline-identity { display: flex; flex-direction: column; gap: 7px; padding: 14px 0; overflow-wrap: anywhere; }
+.baseline-reference #baselineOptions { margin-top: 18px; }
+.baseline-reference #baselineOptions > summary { padding: 10px 0; }
+.baseline-reference #saveNamedBaseline { min-height: 44px; padding-inline: 22px; }
+
+.strategy-selection { min-width: 0; margin: 22px 0 8px; padding: 0; border: 0; }
+.strategy-selection legend { padding: 0; font-size: 16px; font-weight: 600; }
+.strategy-selection-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 14px; }
+.strategy-selection-heading p { margin: 6px 0; color: var(--f-text-muted); font-size: 13px; }
+#strategySelectionCount { color: var(--f-accent-text); font-size: 12px; }
+.strategy-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; max-height: 570px; overflow-y: auto; padding: 2px; }
+.campaign-strategy-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 18px; border: 1px solid var(--f-border); border-radius: 10px; background: var(--f-surface); cursor: pointer; }
+.campaign-strategy-card:hover { border-color: var(--f-border-strong); }
+.campaign-strategy-card.selected { border-color: var(--f-accent-text); background: var(--f-bg); box-shadow: inset 3px 0 0 var(--f-accent-text); }
+.campaign-strategy-card:focus-within { outline: 2px solid var(--f-accent-text); outline-offset: 1px; }
+.strategy-card-heading { display: flex; align-items: flex-start; gap: 10px; color: var(--f-text); }
+.strategy-card-heading input { flex: 0 0 auto; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--f-accent); }
+.strategy-card-heading strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.strategy-card-description { display: block; color: var(--f-text-muted); font-size: 12px; line-height: 1.6; }
+.strategy-stage-grid { display: grid; gap: 7px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--f-border); }
+.strategy-stage { display: grid; grid-template-columns: 65px minmax(0,1fr); gap: 12px; font-size: 11px; }
+.strategy-stage > span:first-child { color: var(--f-text-muted); }
+.strategy-endpoint { color: var(--f-text-secondary); overflow-wrap: anywhere; }
+.strategy-card-meta { color: var(--f-text-muted); font-size: 11px; }
+
+/* Keep one visible task per step; details stay available on demand. */
+.page-heading { margin-bottom: 24px; }
+.page-heading .intro { max-width: 640px; }
+.journey { background: transparent; border: 0; gap: 8px; margin-bottom: 40px; }
+.journey a { border: 0; border-radius: 10px; min-height: 56px; padding: 14px 18px; }
+.journey a[aria-current="step"] { background: var(--f-surface); box-shadow: inset 0 0 0 1px var(--f-border); }
+.journey small { display: none; }
+.step-heading h2 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -.025em; }
+.step-heading p { max-width: 650px; }
+#message:empty { display: none; }
+#configureStep > .step-actions, #runStep > .step-actions { display: none; }
+#selectedCasesPanel { padding: 24px 0; border: 0; background: transparent; }
+#selectedCasesPanel > .panel-heading h2 { font-size: 16px; font-weight: 500; }
+.selected-case-card { padding: 20px; border-radius: 14px; margin-bottom: 14px; }
+.selected-case-body .detail-instruction { margin-bottom: 12px; }
+.case-expectation { margin: 0 0 10px; }
+.case-expectation > summary { padding: 7px 0; color: var(--f-text-secondary); font-size: 13px; }
+.case-expectation textarea { margin-top: 10px; }
+#caseReusePanel { border: 0; margin-top: 24px; background: transparent; }
+#caseInspection:not([open]) { border: 0; padding: 0; margin-top: 20px; }
+#newCaseDialog, #bulkCaseDialog { width: min(740px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 0; color: var(--f-text); background: var(--f-bg); border: 1px solid var(--f-border); border-radius: 16px; box-shadow: 0 24px 100px #0007; }
+#newCaseDialog::backdrop, #bulkCaseDialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
+#newCaseDialog .dialog-top, #bulkCaseDialog .dialog-top { position: sticky; top: 0; z-index: 2; }
+#newCaseDialog h2, #bulkCaseDialog h2 { margin: 0; font-size: 22px; }
+#newCaseDialog #importPanel { margin: 0; border: 0; background: transparent; }
+#newCaseDialog #importPanel > summary { display: none; }
+#newCaseDialog #caseEditStatus { font-size: 12px; }
+.import-content { padding: 24px; }
+#bulkImportPreview { max-height: 230px; overflow-y: auto; padding-left: 24px; }
+#bulkImportPreview li { margin: 10px 0; }
+.picker-tabs { display: flex; gap: 4px; padding: 12px 26px; background: var(--f-bg); border-bottom: 1px solid var(--f-border); }
+.picker-tabs button { background: transparent; color: var(--f-text-muted); border: 0; min-height: 38px; padding: 8px 20px; }
+.picker-tabs button[aria-pressed="true"] { background: var(--f-surface); color: var(--f-text); box-shadow: inset 0 0 0 1px var(--f-border); }
+#datasetLibrary { overflow-y: auto; padding: 24px; min-height: 200px; }
+#datasetLibrary h2 { font-size: 22px; }
+#datasetList { display: grid; gap: 12px; }
+#datasetList .dataset-card { border: 1px solid var(--f-border); border-radius: 12px; padding: 18px; }
+#datasetList .dataset-card h3 { margin: 0; font-size: 17px; }
+#datasetList .dataset-card p { font-size: 13px; }
+#casePicker [hidden] { display: none !important; }
+#runContextHeading { font-size: 16px; }
+#configureStep > .workspace-panel:first-of-type { border: 0; background: transparent; padding: 0; }
+#baselinePanel { border: 0; background: transparent; padding: 0; }
+#baselineHeading, #baselineHeading + p { display: none; }
+#contractPanel { background: var(--f-surface); border: 1px solid var(--f-border); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+#contractPanel > summary { font-size: 17px; }
+#assistantPanel { border: 0; background: transparent; padding: 0; }
+#assistantPanel > summary { font-size: 14px; font-weight: 400; }
+#configureStep .form-actions:has(#prepareRun) { margin-top: 26px; }
+.baseline-reference .baseline-saved { border-color: var(--f-accent); background: var(--f-surface); }
+@media (max-width: 700px) {
+ .journey { display: flex; gap: 2px; margin-bottom: 28px; }
+ .journey a { flex: 1; justify-content: center; padding: 9px 4px; min-height: 50px; font-size: 11px; }
+ .journey a > span { display: none; }
+ .selected-case-card { padding: 16px; }
+ .picker-tabs { padding-inline: 14px; }
+ #newCaseDialog, #bulkCaseDialog { max-height: calc(100dvh - 20px); }
+}
+#casePicker .dialog-top h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+#casePicker .case-list-panel { padding-top: 16px; }
+#casePicker .library-filters label { margin-bottom: 10px; }
+#casePicker .selection-bar { padding-block: 8px; }
+#caseListStatus { font-size: 12px; margin: 8px 0 12px; }

@@ -8,7 +8,7 @@ const frontend = path.join(__dirname, "..", "frontend");
 const campaign = {id: "campaign-a", name: "Baseline reaching", revision: "v1", status: "completed", created_at: "2026-09-12T10:00:00Z"};
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
 
-function setup(t, {search = "", campaigns = [campaign], respond} = {}) {
+function setup(t, {search = "", campaigns = [campaign], baselines = [], respond} = {}) {
   const dom = new JSDOM(fs.readFileSync(path.join(frontend, "benchmarks.html"), "utf8"), {
     url: `http://localhost/static/benchmarks.html${search}`, runScripts: "outside-only", pretendToBeVisual: true,
   });
@@ -28,6 +28,7 @@ function setup(t, {search = "", campaigns = [campaign], respond} = {}) {
     }
     let payload;
     if (url === "/api/campaigns" && !options?.method) payload = campaigns;
+    else if (url === "/api/baselines") payload = {baselines};
     else if (url.startsWith("/api/campaigns/") && !options?.method) payload = {summary: {completed_trials: 3, planned_trials: 3}};
     else if (url === "/api/strategies") payload = {strategies: [{id: "mock", display_name: "Mock"}]};
     else if (url === "/api/examples") payload = {examples: [{task: "Pick the cube", filename: "images/cube.png", eval_qa: {expected: "cube"}}]};
@@ -57,9 +58,9 @@ test("Results opens history first with shared navigation, explicit review routes
   assert.equal(document.querySelector(".workspace-tabs a:last-child").getAttribute("href"), "/static/history.html");
   assert.equal(document.querySelector(".page-heading a").getAttribute("href"), "/static/datasets.html");
   assert.equal(document.getElementById("advancedConfiguration").open, false);
-  assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/campaigns/campaign-a"]);
+  assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];
-  assert.deepEqual(links.map(a => a.textContent), ["Review results", "Open report", "JSON", "CSV"]);
+  assert.deepEqual(links.map(a => a.textContent), ["Review results", "Open report", "Set as baseline", "JSON", "CSV"]);
   assert.equal(links[0].getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
   assert.match(links[1].getAttribute("href"), /report\?format=html$/);
   assert.equal(links[1].rel, "noopener");
@@ -88,7 +89,7 @@ test("missing campaign links report absence instead of opening configuration or 
   assert.match(document.getElementById("requestedCampaignMessage").textContent, /not found/);
   assert.match(document.getElementById("historyEmpty").textContent, /No campaigns yet/);
   assert.equal(document.getElementById("advancedConfiguration").open, false);
-  assert.deepEqual(calls.map(c => c.url), ["/api/campaigns"]);
+  assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines"]);
 });
 
 test("advanced initialization is lazy, retryable and does not duplicate choices", async t => {
@@ -158,7 +159,7 @@ test("history and per-card failures preserve useful result links and recover wit
   await flush();
   const card = page.document.querySelector(".campaign");
   assert.match(card.querySelector(".progress").textContent, /Trial counts unavailable/);
-  assert.equal(card.querySelectorAll("a").length, 4);
+  assert.equal(card.querySelectorAll("a").length, 5);
   failList = true;
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);
@@ -194,4 +195,71 @@ test("campaign cancellation and resume are explicit actions, never consequences 
   control.click(); await flush();
   assert.equal(page.calls.filter(c => c.options?.method === "POST").length, 1);
   assert.equal(page.calls.find(c => c.options?.method === "POST").url, "/api/campaigns/campaign-a/resume");
+});
+
+
+test("only saved baseline records badge matching campaigns with their actual strategy", async t => {
+  const baseline = {id: "baseline-1", name: "Production grasping", campaign_id: "campaign-a", strategy_id: "grasp-v2"};
+  const page = setup(t, {campaigns: [campaign, {...campaign, id: "campaign-b", name: "Another baseline experiment"}], baselines: [baseline]});
+  await flush();
+  const [saved, ordinary] = page.document.querySelectorAll(".campaign");
+  assert.equal(saved.querySelector(".baseline-badge").hidden, false);
+  assert.equal(saved.querySelector(".campaign-baselines .baseline-name").textContent, "Production grasping");
+  assert.equal(saved.querySelector(".campaign-baselines span").textContent, "Strategy: grasp-v2");
+  assert.equal(saved.querySelector(".baseline-action").hidden, true);
+  assert.equal(saved.querySelector(".baseline-name").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a&baseline=baseline-1");
+  assert.equal(ordinary.querySelector(".baseline-badge").hidden, true);
+  assert.equal(ordinary.querySelector(".baseline-action").textContent, "Set as baseline");
+  assert.equal(ordinary.querySelector(".baseline-action").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-b&baseline=setup");
+  assert.equal(page.calls.some(call => call.options?.method), false);
+});
+
+test("baseline setup is offered only after completion and saved badges update on refresh", async t => {
+  const row = {...campaign, status: "running"};
+  const baselines = [];
+  const page = setup(t, {campaigns: [row], baselines});
+  await flush();
+  const card = page.document.querySelector(".campaign");
+  assert.equal(card.querySelector(".baseline-action").hidden, true);
+  row.status = "completed";
+  baselines.push({id: "saved", campaign_id: row.id, strategy_id: "mock", name: "<img src=x onerror=alert(1)>"});
+  page.document.getElementById("refreshHistory").click(); await flush();
+  assert.equal(page.document.querySelector(".campaign"), card);
+  assert.equal(card.querySelector(".baseline-action").hidden, true);
+  assert.equal(card.querySelector(".baseline-badge").hidden, false);
+  assert.equal(card.querySelector(".campaign-baselines .baseline-name").textContent, baselines[0].name);
+  assert.equal(card.querySelector("img"), null);
+  assert.equal(page.timers.size, 0);
+  assert.equal(page.calls.some(call => call.options?.method), false);
+});
+
+test("unavailable baseline service preserves campaign results and exposes retry status", async t => {
+  let failed = true;
+  const page = setup(t, {respond: async url => {
+    if (url === "/api/baselines" && failed) return {ok: false, text: async () => "Offline"};
+  }});
+  await flush();
+  const card = page.document.querySelector(".campaign");
+  assert.ok(card);
+  assert.equal(card.querySelector(".baseline-badge").hidden, true);
+  assert.match(page.document.getElementById("historyStatus").textContent, /Baseline status unavailable/);
+  assert.match(card.querySelector(".progress").textContent, /3 \/ 3 trials/);
+  failed = false; page.document.getElementById("refreshHistory").click(); await flush();
+  assert.doesNotMatch(page.document.getElementById("historyStatus").textContent, /unavailable/);
+});
+
+
+test("multiple saved strategies keep separate exact baseline links without mislabeling other campaigns", async t => {
+  const page = setup(t, {baselines: [
+    {id: "reference-a", campaign_id: campaign.id, strategy_id: "agent-a", name: "Agent A"},
+    {id: "reference-b", campaign_id: campaign.id, strategy_id: "agent-b", name: "Agent B"},
+    {id: "unrelated", campaign_id: "elsewhere", strategy_id: "agent-c", name: "Other campaign"},
+  ]});
+  await flush();
+  const links = [...page.document.querySelectorAll(".baseline-name")];
+  assert.deepEqual(links.map(link => link.textContent), ["Agent A", "Agent B"]);
+  assert.deepEqual(links.map(link => new URL(link.href).searchParams.get("baseline")), ["reference-a", "reference-b"]);
+  assert.equal(page.document.querySelector(".campaign small").textContent.includes("v1"), false);
+  assert.match(page.document.querySelector(".campaign small").textContent, /^Completed/);
+  assert.equal(page.calls.some(call => call.options?.method), false);
 });

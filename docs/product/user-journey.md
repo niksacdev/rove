@@ -34,8 +34,8 @@ test did not establish that a customer could understand or complete an evaluatio
 ```mermaid
 flowchart LR
     C["Cases<br/>Add new or select existing"] --> F["Configure<br/>Strategies and success criteria"]
-    F --> R["Run<br/>Confirm and watch trials"]
-    R --> V["Review and improve<br/>Evidence, expert review, baseline"]
+    F --> R["Run campaign<br/>Confirm and watch trials"]
+    R --> V["Review results<br/>Evidence, expert review, baseline"]
     V --> C
     S["Settings<br/>Strategies and connections"] -. Available strategies .-> F
 ```
@@ -46,7 +46,13 @@ Configure is a stage within an evaluation: it chooses from those existing strate
 and defines the assessment. Settings maintains the reusable configurations themselves.
 
 The creation action and destination title both say **Create a campaign**.
-“Evaluate” is an activity label; a campaign is the saved record containing trials.
+“Evaluate” describes the work; **Run campaign** executes the configured campaign.
+Neither creates another object called an evaluation or a run. The saved records are
+campaigns and trials.
+A trial executes one strategy on one case for one repetition. Opening **Review results**
+reads saved evidence. **Compare a strategy change** previews differences; only
+**Start comparison campaign** executes new trials. ROVE measures improvement rather
+than modifying an agent automatically.
 
 Start explains what a campaign produces and offers a clear **Create a campaign**
 action. A campaign is a named evaluation of selected cases against selected strategies,
@@ -56,32 +62,68 @@ the smallest form of the same journey; users need not learn a separate quick wor
 
 ### 1. Cases: assemble the work to evaluate
 
-Provide two obvious actions: **Add new** and **Select existing**. Select existing
-opens a bounded, scrollable gallery dialog with image previews, task instructions,
-search and categories. Reuse the sample-library interaction rather than an endlessly
-growing select control. Confirming a selection adds cards to the campaign; it does
-not navigate away or execute anything.
+A **task** is the robotics objective or instruction. A **case** is one concrete test:
+an observation, that task, relevant environment/robot conditions, and an expected
+outcome. Several cases can assess the same task under different observations or
+conditions. There is no additional persisted Task container. Optional robot geometry
+belongs only where the evaluation needs it; the current case intake does not claim a
+dedicated URDF upload or validated embodiment contract.
 
-Add new captures an image, instruction and case name. Show the observation and task
-together, plus an editable expected outcome and expert-review draft. Suggestions
-must identify their source: supplied sample annotations, task-derived draft, or an
-explicitly configured image-capable assistant. Do not claim image understanding from
-text extraction alone. Each added case appears below as a card, with clear remove
-and edit actions. The user can add multiple cases through either path.
+Provide **Add new**, **Select existing** and **Import cases**. Add new opens a dialog
+for one image, instruction, name and expected outcome. Select existing opens one
+bounded library dialog with **Cases** and **Datasets** tabs. Individual cases use image
+previews, search and categories. Datasets are saved case collections, not a competing
+execution path. Selecting a dataset loads its exact case versions and scoring rules
+into Cases for inspection; the user then chooses **Choose strategies** explicitly.
 
-**Save case collection** preserves selected cases as a versioned dataset. Offer
-**Create a collection** and **Add to an existing collection**. Adding creates a new
-revision containing the prior members plus the new case revisions; it never rewrites
-an earlier dataset or silently drops its existing cases. Show the resulting member
-count and revision. Reviews remain explicitly incomplete until a person supplies them.
-The storage term "freeze" belongs in technical details, not the primary action label.
+Selections become image/task cards in the campaign. Expected-outcome and expert-review
+details can be expanded per case, keeping the primary list compact. Source annotations
+or suggestions remain editable drafts, with their origin made clear. Do not claim
+image understanding from a task-derived suggestion alone or create a human review
+from populated draft text. Removing or editing a case retains the other selections.
+
+Import cases accepts a JSONL metadata file plus explicitly selected PNG/JPEG images,
+matched by filename. Each line describes one case; optional object fields retain
+candidate context, conditions, recorded evidence and private reference material. Preview
+validates the batch before upload. The current UI accepts 1–100 cases, a JSONL file up
+to 1 MiB and images up to 16 MiB each. Images are separate assets, not embedded in
+JSONL. Completed imports remain saved if a later import fails; uncertain responses
+require checking the library before retrying rather than blindly duplicating cases.
+
+**Save case collection** belongs in Review results after inspecting the selected work.
+Offer a new collection or **Add to an existing collection**. Adding creates a new
+revision retaining previous members and their exact review choices; it does not rewrite
+an earlier dataset. Show resulting membership and review coverage. A collection can
+still contain unreviewed cases, but that gap must remain visible. The storage term
+"freeze" belongs in technical details rather than the primary action label.
 
 ### 2. Configure: choose the systems and define success
 
-Show the named strategies already available from `rove.yaml`, with enough stage and
-model information to make the selection meaningful. Do not make the user recreate
-existing strategies in a second form. A link to Settings supports changes to the
-underlying configuration, with a clear route back to the campaign.
+Select one or several strategy cards from the available configuration. A strategy
+supplies the pipeline stages, models and endpoints for a trial. The same selected
+cases and scoring rules apply to every chosen strategy. For example, **4 cases × 3
+strategies × 2 repetitions = 24 trials** in one campaign. Show the selected strategy
+names and total before launch; do not make users create separate campaigns to compare
+three existing systems on the same data.
+
+Use two clear paths:
+
+| Intent | Setup | Result |
+| --- | --- | --- |
+| Compare existing strategies | Select several strategies in Configure and run one campaign | Per-strategy results on the same cases, with individual trial evidence |
+| Test a component change | Start from a baseline strategy, save a changed strategy revision, then preview a comparison campaign | Candidate results against the preserved baseline under matching assessment conditions |
+
+Strategy editing creates a new reusable revision; it does not rewrite `rove.yaml`
+or mutate a strategy used by earlier campaigns. Show its source strategy, changed
+components and saved identity. The configuration catalog supplies selectable strategies;
+Settings maintains reusable setup, while Configure selects what this campaign runs.
+Changing a model or prompt is a candidate change. Changing the cases, grading rules
+or required evidence changes the assessment conditions and must be visible before
+claiming comparability. A saved revision uses current endpoint settings at campaign creation; the campaign
+freezes the complete resolved configuration. The editor starts from the current source
+definition, so drift from a saved baseline must be shown. See
+[ADR-026](../architecture/ADR-026-versioned-strategy-catalog.md) for the storage and
+snapshot boundary.
 
 Use plain-language **Success criteria**: what is being assessed, what evidence will
 be used, and which constraints or measurements matter. Prefill editable criteria
@@ -95,12 +137,12 @@ controls use the same host-validated campaign draft; provider availability must 
 block the manual workflow. Saving criteria, selecting strategies and assistant replies
 do not execute trials. Host confirmation and exact-preview validation remain required.
 
-### 3. Run: confirm the evaluation and inspect its attempts
+### 3. Run campaign: confirm the configuration and inspect its trials
 
 Show a readable confirmation: campaign name, selected cases, strategy names, success
 criteria, repetitions, total planned trials and available execution limits. Explain
 unavailable cost estimates rather than rendering them as zero. Keep advanced limits
-out of the primary path unless needed. A visible run action starts the evaluation
+out of the primary path unless needed. The **Run campaign** action starts the configured trials
 only after validation; navigation never starts or resumes work.
 
 ```mermaid
@@ -120,19 +162,46 @@ this trial** fetches them again. This is recorded-event inspection, not token st
 The inline view reads up to 200 events and directs longer traces to the full inspector.
 Completion of execution does not imply that the assessment passed.
 
-### 4. Review and improve: explain the result and the next change
+### 4. Review results: inspect evidence, then choose a comparison
 
-Open the exact completed or in-progress campaign. Connect summary measures to case
-outcomes and contributing trials. Show success, failure, unknown assessments and
-execution errors distinctly. Let the user inspect traces, measurements and evidence,
-record attributed expert judgments, save the reviewed case collection, and establish
-a named baseline before comparing a changed strategy.
+Open the exact completed or in-progress campaign. **Review results** reads recorded
+outcomes and their supporting traces; it does not execute the pipeline again. Entering
+Review refreshes the saved assessments so it reflects trials completed since launch.
+Show success, failure, unknown assessments and execution errors distinctly. Attributed
+expert review assesses existing outputs and does not add attempts to the denominator.
 
-Use explicit action labels such as **Save reviewed collection**, **Use this collection
-in a campaign** and **Set as baseline**. Explain what each action preserves or changes.
-Reusable annotations, case-validity reviews and ratings of one trial output remain
-different records; an accepted output is not automatically a label for future trials.
-Reassessing an existing output must not increase the trial count.
+**Set as baseline** is a primary action for a completed campaign. A baseline gives one
+campaign strategy the role of a comparison reference, preserving its configuration,
+cases, scoring criteria and assessment snapshot. If the campaign contains several
+strategies, select the reference strategy explicitly. Name the baseline and save it;
+opening its form does not mark the campaign as a baseline or execute trials.
+
+Results shows a **Baseline** badge only when an actual saved baseline references that
+campaign. A campaign name containing “baseline,” being the first campaign, or merely
+opening the setup form is not sufficient. Pending expert assessments remain unknown
+in the saved reference; later ratings do not silently rewrite it. Revision history and
+pinning belong in secondary details, after the main reference has been established.
+
+```mermaid
+flowchart LR
+    C["Completed campaign strategy"] --> S["Set as baseline<br/>Name and confirm"]
+    S --> B["Saved baseline reference<br/>Frozen assessment snapshot"]
+    B --> R["Results: Baseline badge"]
+    B --> P["Compare a strategy change<br/>Preview matching conditions"]
+    P --> X["Start comparison campaign<br/>Execute new trials"]
+    X --> V["Review results<br/>Read evidence and compare"]
+```
+
+**Compare a strategy change** accepts an existing candidate strategy or helps save a
+new revision of the baseline strategy. It shows component differences against the
+reference and preserves the baseline's recorded strategy and assessment snapshot. Only **Start comparison campaign**
+executes those new trials after preview validation. The reference campaign is not
+rerun. ROVE reports improvement or regression; it does not modify the agent itself.
+
+Use explicit collection actions such as **Save reviewed collection** and **Use this
+collection in a campaign**. Reusable annotations, case-validity reviews and ratings of
+one trial output remain separate. An accepted output is not automatically a reusable
+label. Saving a collection or baseline preserves evidence without rerunning it.
 
 ## Visual and interaction requirements
 
@@ -156,7 +225,7 @@ labels, usable image cards and the primary action without horizontal page scroll
 | `/static/datasets.html` | Evaluate, Cases stage |
 | `/static/datasets.html?step=configure` | Evaluate, Configure stage |
 | `/static/datasets.html?step=run` | Evaluate, Run stage |
-| `/static/datasets.html?step=review&campaign=ID` | Review and improve for that campaign; Results context |
+| `/static/datasets.html?step=review&campaign=ID` | Review results for that campaign; Results context |
 | `/static/benchmarks.html` | Results, campaign reports and comparisons |
 | `/static/history.html` and trial parameters | Results, saved trial evidence |
 | `/?view=strategies`, `/?view=models`, `/?view=settings` | Settings and its local views |
@@ -169,9 +238,11 @@ case and trial IDs retain their meaning. Missing IDs show a recovery route rathe
 silently opening another record. Browser drafts are not durable records unless saved;
 full-page reload recovery must not be implied unless implemented and verified.
 
-Legacy single-input runs retain their saved trials and promotion behavior. Keeping
-these APIs and old links compatible does not require advertising a competing quick
-workflow. The advanced manifest builder remains a secondary tool for existing users.
+The original single-input pipeline runner remains available for inspecting a standalone
+trial, including its configured strategies and existing pipeline output. It retains
+saved trials and promotion behavior. This is an optional inspection path; the campaign
+workspace remains the primary path for selected cases, repetitions and comparisons.
+The advanced manifest builder remains a secondary tool for existing users.
 
 ## Acceptance and delivery evidence
 
@@ -188,12 +259,20 @@ The following are the continuing acceptance contract:
   material writes an SME judgment or reports physical success from an initial image.
 - Select configured strategies, inspect success criteria and use the manual path with
   the optional assistant unavailable. Chat changes must follow the same validation.
+- Select three existing strategies for the same case set and confirm the full planned
+  trial count; each strategy must contribute its own identifiable trials and report row.
+- Save a changed strategy revision without altering its source, restart the application,
+  then select that exact revision for a baseline comparison. Historical evidence must
+  remain readable without resolving the current YAML source again.
 - Confirm the case × strategy × repetition count, run an isolated mock campaign, inspect
   identifiable live trials and follow one to its trace and back to the same campaign.
 - Add cases to an existing collection and verify the new revision retains prior members
   while old revisions and review identities are unchanged.
-- Review a result, save the relevant collection and establish a baseline without rerunning
-  old trials or counting a review as another attempt.
+- Review a result, save the relevant collection and set a completed campaign strategy
+  as baseline without rerunning old trials. Results must show a baseline badge only
+  after its reference is saved; opening review or comparison preparation creates no trials.
+- Preview a changed strategy against the saved baseline. Only explicit **Start comparison
+  campaign** executes new trials; expert reassessment does not increase attempt counts.
 - Inspect the complete flow on desktop and narrow screens in both themes, including
   input/status alignment, readable controls, validation errors and browser Back/Forward.
 
@@ -224,3 +303,16 @@ creating a new revision. Loading a saved collection displays its actual case car
 adding a case changes the current selection without rewriting that saved collection.
 The [workflow specification](evaluation-workflows.md), [success criteria model](metrics-and-success.md)
 and [evidence inspector](traces-and-measurements.md) remain authoritative for semantics.
+
+The final integration check created two immutable mock strategy revisions in the UI,
+selected both alongside the original, and executed the same case across all three.
+All three trials were persisted. Sequential output includes Perceive, Plan, Act and
+Verify; parallel agent-loop output follows its actual recorded stages. Internal
+perception calls and simulator resets remain telemetry and are not extra pipeline
+stages. The original observation/task composer remains available through **Run a
+trial**, including an exact saved-case handoff from case details.
+
+SQLite remains the local transactional store. The existing interactive runner
+executes selected strategies concurrently; campaign trial slots remain dispatched
+serially, while each strategy retains its configured sequential or parallel pipeline
+mode. This change does not introduce a new campaign scheduling engine.

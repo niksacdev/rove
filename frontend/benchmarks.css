@@ -57,3 +57,12 @@ summary { cursor: pointer; font-size: 13px; }
 a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid #70bdb4; outline-offset: 3px; }
 @media (max-width: 850px) { .pair { grid-template-columns: 1fr; } main { margin-top: 24px; } section, .advanced-configuration { padding: 18px; } }
 @media (max-width: 540px) { main { padding: 0 14px; } .page-heading { align-items: flex-start; flex-direction: column; gap: 8px; margin-bottom: 22px; } .section-heading { gap: 12px; } .campaign-actions button { margin-left: 0; } }
+
+.campaign-title { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.campaign-title h3 { margin: 0; }
+.baseline-badge { display: inline-flex; align-items: center; padding: 4px 8px; border: 1px solid var(--f-accent-text); border-radius: 5px; color: var(--f-accent-text); font-size: 11px; font-weight: 600; }
+.campaign.is-baseline { border-left: 3px solid var(--f-accent-text); }
+.campaign-baselines { display: grid; gap: 8px; margin-top: 14px; padding: 12px; background: var(--f-bg); border-radius: 6px; }
+.campaign-baselines p { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.campaign-baselines .baseline-name { color: var(--f-accent-text); font-weight: 500; font-size: 12px; }
+.campaign-baselines span { color: var(--f-text-muted); }

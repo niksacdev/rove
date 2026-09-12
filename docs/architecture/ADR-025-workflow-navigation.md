@@ -22,7 +22,7 @@ needs reusable strategy and endpoint configuration. The shared goal remains:
 
 Use **Start, Evaluate, Results** as primary destinations, with **Settings** visually
 separate on the right. Evaluate is one campaign workspace with **Cases → Configure →
-Run → Review & improve**. Settings maintains reusable strategies/connections; Configure
+Run → Review results**. Settings maintains reusable strategies/connections; Configure
 selects those strategies and defines the current campaign's success criteria.
 
 ```mermaid
@@ -33,17 +33,30 @@ flowchart TD
     N -. Right utility .-> U["Settings"]
     E --> C["Cases: add new / select existing"]
     C --> F["Configure: strategies, success, optional chat"]
-    F --> L["Run: confirmation and live trials"]
-    L --> V["Review and improve"]
+    F --> L["Run campaign: confirmation and trials"]
+    L --> V["Review results"]
     R --> T["Saved trial evidence"]
     R -. Exact campaign ID .-> V
     U -. Available strategies .-> F
 ```
 
+Use **Create a campaign** consistently for creation and **Run campaign** for execution.
+The latter is an action on the campaign, not a third entity alongside campaign and
+trial. **Review results** reads retained evidence. Comparison setup previews a changed
+strategy; only **Start comparison campaign** dispatches new trials.
+
+Expose **Set as baseline** as a primary action for a completed campaign strategy.
+Saving captures the existing immutable reference and assessment model; it does not
+reclassify every first campaign automatically or rerun the pipeline. Results derives
+its **Baseline** badge from actual persisted references, never from campaign naming or
+an open draft. Pinning and revision history remain secondary management details.
+
 Use the existing gallery interaction in a bounded case-selection dialog. Selected
 image/task cards remain in the campaign workspace. Success suggestions are editable
 drafts with explicit source and evidence limits. Plain-language success controls map
-to versioned contracts; advanced JSON remains available in details. The optional
+to versioned contracts; advanced JSON remains available in details. Configure supports multiple selected strategy cards for the same cases. Creating a
+changed strategy revision is a configuration operation governed by
+[ADR-026](ADR-026-versioned-strategy-catalog.md). The optional
 assistant helps configure this same evaluation, using existing host validation and
 confirmation boundaries. It cannot create expert judgments or silently start work.
 

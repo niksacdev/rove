@@ -24,11 +24,11 @@ async function workspace(query = "", options = {}) {
     else if (url.startsWith("/api/reviews?")) value = {reviews: []};
     else if (url.startsWith("/api/trials?")) value = {trials: []};
     else if (url === "/api/trials/trial") value = {id: "trial", status: "completed", result: {plan: "Approach the red part from above", task_success: null}};
-    else if (url === "/api/trials/trial/events?limit=200") value = {events: [{event_type: "rove.stage.started", stage: "perceive", endpoint_id: "mock-vision"}, {event_type: "rove.stage.completed", stage: "perceive", endpoint_id: "mock-vision"}, {event_type: "rove.stage.completed", stage: "plan", endpoint_id: "mock-planner"}], total: 3};
+    else if (url === "/api/trials/trial/events?limit=200") value = {events: [{event_type: "rove.stage.started", stage: "perceive", endpoint_id: "mock-vision"}, {event_type: "stage", data: {stage: "perceive", status: "completed", model_id: "mock-vision"}}, {event_type: "rove.stage.completed", stage: "plan", endpoint_id: "mock-planner"}], total: 3};
     else if (url === "/api/success-contracts" && method === "POST") { if (options.contractWait) await options.contractWait; value = {...body, id: `new-contract-${contracts.length}`}; contracts.push(value); }
     else if (url === "/api/success-contracts") value = {contracts};
     else if (url.startsWith("/api/datasets?")) value = {datasets: [{id: "dataset-r1", name: "Reviewed set", contract_id: "contract", members: [{case_revision_id: "case-r1", disposition: "included"}]}]};
-    else if (url === "/api/datasets/dataset-r1") value = {id: "dataset-r1", name: "Reviewed set", contract_id: "contract", members: [{case_revision_id: "case-r1", disposition: "included"}]};
+    else if (url === "/api/datasets/dataset-r1") { if (options.datasetWait) await options.datasetWait; value = {id: "dataset-r1", name: "Reviewed set", contract_id: "contract", members: [{case_revision_id: "case-r1", disposition: "included"}]}; }
     else if (url === "/api/strategies") value = {strategies: [{id: "strategy", display_name: "Mock strategy", perceive: "mock-vision", plan: "mock-planner"}]};
     else if (url === "/api/baselines") value = {baselines: []};
     else if (url === "/api/campaigns") value = [{id: "campaign", name: "Baseline", status: "completed"}];
@@ -41,6 +41,8 @@ async function workspace(query = "", options = {}) {
   };
   const nav = path.join(root, "frontend/navigation.js");
   w.eval(fs.readFileSync(nav, "utf8"));
+  w.eval(fs.readFileSync(path.join(root, "frontend/stage-renderers.js"), "utf8"));
+  w.eval(fs.readFileSync(path.join(root, "frontend/trial-output.js"), "utf8"));
   w.eval(fs.readFileSync(path.join(root, "frontend/datasets.js"), "utf8")); await pause();
   const el = id => w.document.getElementById(id), step = name => w.document.querySelector(`[data-journey-step="${name}"]`).click();
   const set = (id, value, type = "input") => { el(id).value = value; el(id).dispatchEvent(new w.Event(type, {bubbles: true})); };
@@ -93,13 +95,13 @@ test("campaign and legacy case deep links restore context and history clears sta
   } finally { dom.window.close(); }
 });
 
-test("saved dataset reuse moves to Configure and Run retains exact revision and accessible scoring controls", async () => {
+test("saved dataset reuse stays in Cases and Run retains exact revision and accessible scoring controls", async () => {
   const {dom, w, el, pause, set, step} = await workspace("", {empty: true});
   try {
-    assert.equal(el("importPanel").open, false); el("showImport").click(); assert.equal(el("importPanel").open, true); assert.equal(el("caseReusePanel").closest("[data-workflow-panel]").id, "casesStep");
+    assert.equal(el("importPanel").open, false); el("showImport").click(); assert.equal(el("importPanel").open, true); assert.equal(el("caseReusePanel").closest("[data-workflow-panel]").id, "reviewStep");
     set("freezeContract", "contract", "change"); assert.equal(el("campaignContract").value, "contract");
     [...el("datasetList").querySelectorAll("button")].find(b => b.textContent === "Use these cases").click(); await pause();
-    assert.equal(el("configureStep").hidden, false); assert.match(el("runContext").textContent, /Reviewed set.*dataset-r1/);
+    assert.equal(el("casesStep").hidden, false); assert.match(el("runContext").textContent, /Reviewed set.*dataset-r1/);
     step("run");
     set("campaignStrategy", "strategy"); el("previewCampaign").click(); await pause(); assert.equal(el("startBaseline").disabled, false);
     step("cases"); step("run"); assert.equal(el("startBaseline").disabled, false); assert.match(w.location.search, /step=run/);
@@ -153,7 +155,8 @@ test("case gallery paginates and searches, preserves staged selections, then add
     assert.match(el("selectedCases").textContent, /Red part 0/); assert.match(el("selectedCases").textContent, /Blue bowl/);
     assert.equal(w.location.pathname, originalPath); assert.doesNotMatch(w.location.search, /view=quick/);
     assert.equal(calls.filter(call => call.method !== "GET").length, 0);
-    assert.equal([...w.document.querySelectorAll('a[href]')].some(a => /view=quick/.test(a.href)), false);
+    assert.equal([...el("caseList").querySelectorAll('a[href]')].some(a => /view=quick/.test(a.href)), false);
+    assert.match(el("caseInspector").querySelector('a[href*="view=quick"]').href, /case=revision-0/);
   } finally { dom.window.close(); }
 });
 
@@ -178,7 +181,7 @@ test("edited expected outcomes survive gallery refresh and stage changes without
     assert.equal(el("selectedCases").querySelector("textarea").value, expectation.value);
     step("configure"); assert.match(el("successCriteria").value, /case-specific expected outcome/);
     step("cases"); assert.equal(el("selectedCases").querySelector("textarea").value, expectation.value);
-    assert.match(el("selectedCases").textContent, /draft for expert review/i);
+    assert.match(el("selectedCases").textContent, /Draft criteria/i);
     assert.equal(calls.filter(call => call.method !== "GET").length, 0);
     step("configure"); el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
     const saved = calls.find(call => call.method === "POST" && call.url === "/api/success-contracts");
@@ -194,9 +197,9 @@ test("Configure owns optional assistant and displays existing strategy stages wh
     assert.equal(el("assistantPanel").closest("[data-workflow-panel]").id, "configureStep");
     assert.equal(el("assistantQuestion").disabled, true);
     step("configure"); set("campaignStrategy", "strategy", "change");
-    assert.match(el("strategySummary").textContent, /Mock strategy/);
-    assert.match(el("strategySummary").textContent, /perceive.*mock-vision/);
-    assert.match(el("strategySummary").textContent, /plan.*mock-planner/);
+    assert.match(el("strategyCards").textContent, /Mock strategy/);
+    assert.match(el("strategyCards").textContent, /Perceive.*mock-vision/);
+    assert.match(el("strategyCards").textContent, /Plan.*mock-planner/);
     set("campaignContract", "contract", "change"); el("prepareRun").click(); await pause();
     assert.equal(el("runStep").hidden, false); assert.equal(el("startBaseline").disabled, false);
     assert.match(el("runSummary").textContent, /3.*trial/i);
@@ -278,7 +281,7 @@ test("using a saved collection shows its actual cases and adding a gallery case 
   const {dom, el, step, pick, pause, set, calls} = await workspace("", {cases: [base, ...libraryCases(1)]});
   try {
     el("datasetList").querySelector("button").click(); await pause();
-    assert.equal(el("configureStep").hidden, false);
+    assert.equal(el("casesStep").hidden, false);
     step("cases");
     assert.match(el("selectedCases").textContent, /Saved collection case/);
     assert.equal(el("selectedCases").querySelectorAll("article").length, 1);
@@ -356,7 +359,7 @@ test("Run confirms strategy and exact scoring rules, then lazily exposes recorde
     assert.doesNotMatch(progress.textContent, /perceive · started/, "latest stage event supersedes its earlier start");
     assert.match(progress.textContent, /plan · completed · mock-planner/);
     assert.match(progress.textContent, /Stage execution and task acceptance are separate measures/);
-    const output = progress.querySelector("details"); assert.equal(output.querySelector("summary").textContent, "Recorded output");
+    const output = [...progress.querySelectorAll("details")].find(item => item.querySelector("summary").textContent === "Recorded output"); assert.equal(output.open, false);
     output.open = true; assert.match(output.textContent, /Approach the red part from above/);
     progress.querySelector("button").click(); await pause();
     assert.equal(calls.filter(call => call.url === "/api/trials/trial/events?limit=200").length, 2);
@@ -394,4 +397,41 @@ test("refreshing active campaign cards preserves expanded trial progress", async
     assert.match(refreshed.textContent, /perceive · completed/);
     assert.equal(calls.filter(call => call.method !== "GET").length, 0);
   } finally { dom.window.close(); }
+});
+
+
+test("case library contains datasets and selecting a collection closes the picker without skipping case inspection", async () => {
+  const {dom, el, pause, calls} = await workspace();
+  try {
+    assert.equal(el("showDatasets"), null);
+    el("selectExisting").click(); await pause();
+    el("browseCollections").click();
+    assert.equal(el("datasetLibrary").hidden, false);
+    assert.equal(el("individualCaseLibrary").hidden, true);
+    assert.equal(el("casePickerActions").hidden, true);
+    el("datasetList").querySelector("button").click(); await pause();
+    assert.equal(el("casePicker").open, false);
+    assert.equal(el("casesStep").hidden, false);
+    assert.equal(el("selectedCases").querySelectorAll("article").length, 1);
+    assert.equal(calls.filter(call => call.method === "POST").length, 0);
+    el("selectExisting").click(); await pause();
+    assert.equal(el("individualCaseLibrary").hidden, false);
+  } finally { dom.window.close(); }
+});
+
+
+test("dismissing a dataset picker cancels its late selection response", async () => {
+  let release;
+  const datasetWait = new Promise(resolve => { release = resolve; });
+  const {dom, el, pause, pick} = await workspace("", {datasetWait});
+  try {
+    await pick();
+    const before = el("selectedCases").textContent;
+    el("selectExisting").click(); await pause(); el("browseCollections").click();
+    el("datasetList").querySelector("button").click(); await pause();
+    el("closeCasePicker").click(); release(); await pause();
+    assert.equal(el("casePicker").open, false);
+    assert.equal(el("selectedCases").textContent, before);
+    assert.equal(el("campaignContract").value, "");
+  } finally { release(); dom.window.close(); }
 });

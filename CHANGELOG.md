@@ -8,9 +8,13 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Compare strategies and preserve candidate revisions
+
+The campaign workflow supports selecting several strategies for the same cases, with a separate result for every strategy. The strategy-revision addition preserves a changed candidate under a distinct identity for baseline comparisons; [ADR-026](docs/architecture/ADR-026-versioned-strategy-catalog.md) records its configuration boundary and current verification status.
+
 ### A campaign workspace with visible cases and trials
 
-The revised workflow connects case selection, configured strategies, success criteria, trial execution and evidence review in one campaign. A searchable image gallery and selected-case cards replace the case dropdown; Settings moves to the right, with warm neutral and teal styling. Exact case expectations are saved with scoring rules, collection revisions retain prior members, and Run connects each trial to its recorded stages and output. The [journey specification](docs/product/user-journey.md) records validation and its limits.
+The revised workflow connects case selection, configured strategies, success criteria, trial execution and evidence review in one campaign. A searchable image gallery and selected-case cards replace the case dropdown; Settings moves to the right, with warm neutral and teal styling. Exact case expectations are saved with scoring rules, collection revisions retain prior members, and Run connects each trial to its recorded stages and output. Review reads saved evidence; Set as baseline establishes a comparison reference, with a Baseline badge shown only after saving it. The [journey specification](docs/product/user-journey.md) records validation and its limits.
 
 ### A coherent evaluation journey
 

@@ -19,15 +19,20 @@ The user reported confusion and frustration rather than confidence in the evalua
 ```mermaid
 flowchart LR
     A[Add customer case or choose gallery cases] --> C[Select strategies and explain success]
-    C --> R[Confirm budget and run identified trials]
-    R --> V[Inspect evidence and record expert review]
-    V --> B[Save collection and compare with baseline]
+    C --> R[Run campaign: execute identified trials]
+    R --> V[Review results: inspect saved evidence]
+    V --> B[Set as baseline: save comparison reference]
+    B --> P[Preview changed strategy]
+    P --> X[Start comparison campaign: new trials]
 ```
 
 Reduce friction by reusing the gallery, retaining selected cards and drafts, placing
 assistant configuration after case intake, and naming the case/strategy/attempt during
 execution. Keep Settings as a separate utility. Preserve a single route from each
-summary to the exact supporting trial and back.
+summary to the exact supporting trial and back. Use **Create a campaign** for creation,
+**Run campaign** for execution and **Review results** for reading evidence. Make **Set
+as baseline** a primary result action, with a badge only after saving the reference.
+Keep version management in details and new execution behind **Start comparison campaign**.
 
 ## Acceptance
 
