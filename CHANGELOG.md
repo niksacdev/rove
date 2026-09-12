@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Repeated trials and portable benchmark reports
 
-Saved task suites can now run repeatedly across configured pipelines, with pass@k, pass^k, cross-model coverage and comparable history. The dashboard, CLI and local API share durable campaign records and offline reports; missing verdicts remain unknown and mock results remain explicitly synthetic.
+Saved task suites can now run repeatedly across configured pipelines, with pass@k, pass^k, cross-model coverage and comparable history. The dashboard, CLI and local API share durable campaign records and offline reports; missing verdicts remain unknown and mock results remain explicitly synthetic. *(PR #13)*
 
 ### OSS evidence workbench and safer local defaults
 
