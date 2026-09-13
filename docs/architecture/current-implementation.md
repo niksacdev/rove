@@ -16,6 +16,32 @@ baseline comparisons extend that foundation. The linked [product concepts](../pr
 [trace specification](../product/traces-and-measurements.md) describe the fuller
 target, including capabilities not yet implemented.
 
+## Trial-to-campaign handoff and guided improvement
+
+The implemented refinement connects chat trial results to **Add to campaign**, then
+editable criteria, explicit execution, automatic Results and a guided **Improve** path.
+`/api/trials/{id}/campaign-draft` and `/api/campaigns/{id}/improvement-draft` prepare exact
+source cases and strategy selections. Promotion compares actual public inputs including
+managed robot-asset presence/absence; the worker validates and uses retained URDF bytes.
+Missing strategy IDs become immutable snapshot aliases only when components still match.
+Changed historical configuration requires explicit candidate selection or repair.
+
+Launch validates typed source lineage without adding historical attempts. Improve can
+bind an exact baseline revision and previews each candidate against its frozen outcomes;
+recommendations instead use current reviews. Added cases or altered scoring expose
+changed conditions. Bootstrap guards preserve intervening edits/navigation, and automatic
+Results applies to the foreground campaign launched from this workspace. These behaviors
+have local regression coverage. The complete browser loop was verified from saved
+mock chat trial `edaad514826b4169a6b018fcc242fe69` with a Panda URDF to campaign
+`a868c340bdf15b57ac6d5fa4810d506e`, saved baseline, and Improve candidate
+`9e772a205b4550a4a2a40400ac758a5b`. Three template criteria remained editable; each
+campaign automatically opened Results. The comparison retained the exact reference
+and reported matching conditions, zero component changes and pending expert outcomes.
+Cases and criterion editing had no horizontal overflow at 390px. This checks local
+mock behavior and no-change comparison, not live AI, model improvement or hardware.
+[ADR-027](ADR-027-trial-to-campaign-improvement.md) links implementation and tests.
+Earlier campaign-only browser evidence below has its original narrower scope.
+
 ## Workflow navigation
 
 The existing shared navigation and saved campaign/trial deep links were delivered in
@@ -407,6 +433,30 @@ resolve mutable provider aliases or recreate a physical scene. Model revisions a
 declared metadata. Reports omit frozen endpoint configuration, but task text and
 model outputs remain in exported evidence. The local server has Host/Origin
 restrictions and no authentication; it is intended for local use.
+
+## Evaluation trajectory and command workflows
+
+The [supported CLI surface](../product/cli-ui-parity.md) covers immediate multi-strategy
+trials, case/contract/review/dataset management, immutable strategy variants, campaigns,
+baselines, ablations, assessed reports and evidence. Commands use shared services;
+assistant confirmations and recent dashboard history contact the owning local server.
+Existing benchmark and exchange commands remain supported.
+
+[`trajectory.py`](../../src/rove/benchmarks/trajectory.py) derives connected iterations
+from validated source hashes and exact baseline references. Its read-only API is
+`GET /api/campaigns/{id}/timeline`; the command is `rove campaign timeline ID`.
+Cases/dataset identities, scoring, strategy components and environment changes are
+classified explicitly. Nodes show current assessments with an as-of timestamp; frozen
+baseline edges retain their saved outcomes. Unrelated names or inputs never form a
+lineage edge. The bounded service errors above 2,000 stored campaigns or 200 connected
+iterations rather than hiding omitted history.
+
+Results renders chronological cards and per-strategy outcome/latency bars, with
+comparison evidence under collapsed details. Desktop and 390px browser checks verified
+two linked mock iterations, synthetic labels and no overflow. No improvement was
+asserted for their unassessed outcomes. The [ADR](ADR-027-trial-to-campaign-improvement.md)
+and [manual CI example](../../examples/ci/README.md) explain shared services, report
+gates and restoring an explicitly selected exchange artifact on a fresh worker.
 
 ## Existing Interfaces and Verification
 

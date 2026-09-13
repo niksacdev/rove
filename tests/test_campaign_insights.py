@@ -458,3 +458,21 @@ def test_old_cached_summary_is_enriched_with_configured_status(h):
     cached = summary(h, cid)
     assert cached.status_code == 200, cached.text
     assert cached.json()["cached"] and cached.json()["assistant_configured"]
+
+
+@pytest.mark.parametrize("shape", ["one", "six", "long"])
+def test_draft_returns_three_to_five_short_individual_criteria(h, shape):
+    generated = output_for(h)
+    if shape == "one":
+        generated["contract"]["criteria"] = generated["contract"]["criteria"][:1]
+    elif shape == "six":
+        generated["contract"]["criteria"] = [
+            {"id": f"criterion_{i}", "description": "Check target"} for i in range(6)
+        ]
+    else:
+        generated["contract"]["criteria"][0]["description"] = "x" * 401
+    h["runtime"].output = generated
+    data = draft(h).json()
+    assert data["source"] == "template"
+    assert 3 <= len(data["contract"]["criteria"]) <= 5
+    assert all(len(c["description"]) <= 400 for c in data["contract"]["criteria"])

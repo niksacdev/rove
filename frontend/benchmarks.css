@@ -66,3 +66,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visibl
 .campaign-baselines p { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .campaign-baselines .baseline-name { color: var(--f-accent-text); font-weight: 500; font-size: 12px; }
 .campaign-baselines span { color: var(--f-text-muted); }
+
+.campaign-actions .improve-link { display:inline-flex; align-items:center; min-height:40px; padding:8px 14px; border:1px solid var(--f-border); border-radius:7px; color:var(--f-text); font-weight:600; text-decoration:none; }
+.campaign-actions .improve-link:focus-visible { outline:2px solid var(--f-accent-text); outline-offset:3px; }
+.campaign-actions .improve-link[hidden] { display:none; }

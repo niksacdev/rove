@@ -18,6 +18,7 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime and controlled transport proof implemented; live provider/collector validation pending |
 | [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted | Campaign workspace, local mock journey and responsive gallery verified |
 | [026: Versioned strategy catalog](ADR-026-versioned-strategy-catalog.md) | Accepted | Immutable local strategy catalog and multi-strategy execution tested; editor browser integration pending |
+| [027: Versioned evaluation iterations](ADR-027-trial-to-campaign-improvement.md) | Accepted | Shared CLI, managed trial handoff and validated iteration timeline implemented; full mock browser loop and narrow timeline verified |
 
 ## How the decisions connect
 
@@ -37,6 +38,9 @@ flowchart TD
     E --> R
     C --> K[026: Immutable strategy revisions]
     K --> M
+    C --> J[027: Versioned evaluation iterations]
+    K --> J
+    M --> J
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

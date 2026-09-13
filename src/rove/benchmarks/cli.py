@@ -10,10 +10,10 @@ from pathlib import Path
 import yaml
 
 from rove.benchmarks.models import CampaignSpec
-from rove.benchmarks.report import report_data, to_csv, to_html
+from rove.benchmarks.report import saved_report, to_csv, to_html
 from rove.benchmarks.runner import prepare, run_campaign
 from rove.benchmarks.store import CampaignStore
-from rove.models.config import RoveConfig
+from rove.models.config import load_config
 
 
 def main(argv: list[str]) -> None:
@@ -38,7 +38,7 @@ def main(argv: list[str]) -> None:
     try:
         if args.action == "run":
             spec = CampaignSpec.model_validate(yaml.safe_load(Path(args.target).read_text()))
-            config = RoveConfig.model_validate(yaml.safe_load(args.config.read_text()))
+            config = load_config(args.config)
             campaign_id = store.create(prepare(spec, config))
             print(f"Campaign {campaign_id}: {spec.planned_trials} planned attempts", flush=True)
         else:
@@ -53,10 +53,7 @@ def main(argv: list[str]) -> None:
 
         if args.action != "report":
             asyncio.run(run_campaign(store, campaign_id, progress))
-        campaign = store.get(campaign_id)
-        data = report_data(
-            campaign, store.trials(campaign_id), [(c, store.trials(c["id"])) for c in store.list()]
-        )
+        data = saved_report(args.store, campaign_id)
         args.output.mkdir(parents=True, exist_ok=True)
         for extension, content in (
             ("html", to_html(data)),

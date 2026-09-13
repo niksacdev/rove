@@ -22,6 +22,9 @@ _PUBLIC_EXTRAS = frozenset(
         "action_space_desc",
         "initial_joint_positions",
         "constraints",
+        "correction",
+        "eval_category",
+        "robot_asset",
     }
 )
 _PRIVATE_FIELDS = frozenset(
@@ -48,6 +51,25 @@ def _public_context(value):
     if isinstance(value, list):
         return [_public_context(item) for item in value]
     return value
+
+
+def public_trial_context(trial, service):
+    """Copy actual public trial inputs and the robot description actually executed."""
+    task = trial["task"]
+    extras = (task.get("example") or {}).get("extras") or {}
+    public = (
+        dict(extras)
+        if task.get("case_revision_id")
+        else {key: value for key, value in extras.items() if key in _PUBLIC_EXTRAS}
+    )
+    public.update(task.get("candidate_context") or {})
+    public.pop("robot_asset", None)
+    if robot_asset := (trial.get("snapshot") or {}).get("config", {}).get("robot_asset"):
+        from rove.datasets.robot_assets import robot_asset_path
+
+        robot_asset_path(service.trials, robot_asset)
+        public["robot_asset"] = robot_asset
+    return _public_context(public)
 
 
 def _result(service: DatasetService, row, *, reused: bool) -> dict:
@@ -93,9 +115,7 @@ def promote_quick_trial(root, trial_id: str, *, operation_id: str, name: str | N
     digest = asset.get("sha256")
     if not isinstance(digest, str):
         raise ValueError("This trial does not retain a managed image reference")
-    extras = (task.get("example") or {}).get("extras") or {}
-    public = {key: value for key, value in extras.items() if key in _PUBLIC_EXTRAS}
-    public.update(task.get("candidate_context") or {})
+    public = public_trial_context(trial, service)
     payload = service._case_payload(
         {
             "name": name if name is not None else instruction[:120],

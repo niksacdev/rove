@@ -643,3 +643,19 @@ def to_html(data: dict) -> str:
 <details><summary>Assessment revisions used in this report</summary><p>{escape(assessments.get("note", "Metrics reflect the configured verification stage."))}</p><pre>{escape(json.dumps(assessments, indent=2))}</pre></details>
 <details><summary>Configuration identity and provenance</summary><pre>{escape(json.dumps(campaign, indent=2))}</pre></details></section>
 <footer>ROVE · Campaign {escape(campaign["id"])} · {escape(campaign.get("created_at", ""))}<br>Charts, summaries and recorded evidence work offline. <a href="{campaign_url}">Review campaign in ROVE ↗</a> requires the running app.</footer></main><script>{_REPORT_SCRIPT}</script></body></html>'''
+
+
+def saved_report(root, campaign_id):
+    """Project saved assessments identically for CLI and dashboard reports."""
+    from rove.benchmarks.store import CampaignStore
+    from rove.benchmarks.workflow import assessed_trials
+
+    store = CampaignStore(root)
+    campaign = store.get(campaign_id)
+    history = [
+        (item, assessed_trials(root, item, store.trials(item["id"]))[0]) for item in store.list()
+    ]
+    trials, assessments = assessed_trials(root, campaign, store.trials(campaign_id))
+    result = report_data(campaign, trials, history)
+    result["assessments"] = assessments
+    return result

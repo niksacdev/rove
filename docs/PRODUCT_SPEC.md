@@ -1,7 +1,7 @@
 # ROVE Product Specification
 
 **Version:** 0.9
-**Updated:** 2026-09-12
+**Updated:** 2026-09-13
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
 ## 1. Core vision
@@ -10,7 +10,7 @@
 
 **ROVE evaluates robotics agent pipelines on your task.**
 
-Bring your task and data, configure the models and agents in your pipeline, and assess the outcomes that matter to your application. ROVE should make it quick to establish a baseline, inspect failed or uncertain cases, and compare a change under consistent conditions.
+Compare the same task, image and robot description across a chosen set of strategies to get useful direction on model, agent and pipeline choices. Start with an immediate side-by-side evaluation, then use durable campaigns to repeat trials, establish a baseline and measure improvement under consistent conditions. Inspect failed or uncertain outputs before deciding what to change.
 
 The unit being assessed is a configured robotics agent pipeline: its models, prompts, stage settings, tools and applicable action components. A strategy can combine vision-language reasoning, tool-using agents and action policies such as VLAs through supported adapters. An agent is a running system, while VLM and VLA describe model capabilities; these are not mutually exclusive choices. Perception or planning assessments do not require every action or simulation stage. The evaluation stays anchored to the customer's robotics task and business outcome.
 
@@ -109,6 +109,61 @@ case, one strategy and one attempt. Existing independent runs retain durable inp
 configuration, interruption state and saved trial evidence. Their compatibility routes
 remain usable. Promotion preserves an existing trial as an exploratory reference and
 creates a reusable case; later campaigns schedule fresh attempts separately.
+
+### Trial-first entry and guided improvement
+
+The latest journey starts in chat with a task, image, optional URDF and a selected
+set of strategies. Each strategy produces its own saved trial, giving the robotics
+team an immediate comparison before repeated campaign evaluation. **Add to campaign** carries its case,
+robot input and selected strategy into the campaign workflow. Customers can add cases
+and strategies, review three to five editable suggested criteria, then **Review and
+run**. Completion opens Results automatically. Saved exploratory trials retain lineage
+but are not inserted into fresh campaign reliability denominators.
+
+From Results, **Set as baseline** preserves a selected campaign strategy's assessment
+snapshot. From the campaign browser, **Improve** opens the populated workflow with
+recommendations grounded in recorded low or unresolved outcomes. A component ablation
+keeps cases and scoring fixed; expanding cases changes assessment conditions and must
+not be presented as a controlled improvement. The entry/handoff/refinement is implemented with local regression coverage for
+source inputs, managed robot assets, snapshot strategies and exact baseline comparison.
+Browser verification completed the chat-to-improvement loop with a retained Panda
+URDF, three edited/template criteria, two three-trial mock campaigns and an exact
+baseline comparison. Conditions matched with zero component changes and outcomes
+still pending review; this was a lineage check, not evidence of improvement. Cases
+and criterion editing were usable at 390px. Live providers and hardware were excluded. See
+[ADR-027](architecture/ADR-027-trial-to-campaign-improvement.md).
+
+### Scripted comparison and iteration history
+
+The same meaningful evaluation operations are available through supported commands:
+immediate multi-strategy trials; case, criteria and review management; campaigns,
+baselines, ablations, reports and timeline; strategy/configuration discovery and
+optional confirmed assistance. These commands share the existing engine and assessed
+records. See the [capability table and tested boundaries](product/cli-ui-parity.md).
+
+An **evaluation timeline** connects campaigns through validated source snapshots or
+exact baseline references. Each iteration shows its cases, strategy versions, success
+metrics, outcome coverage and latency. Case or scoring changes remain useful history
+but do not establish a controlled improvement. Timeline scores reflect current
+assessments as of viewing; exact baseline comparisons retain the frozen assessment.
+Mock evidence is labelled. Separate studies are not grouped by similar names.
+
+```mermaid
+flowchart LR
+    A[Compare task + image + robot across strategies] --> B[Save campaign recipe]
+    B --> C[Repeated trials and evidence]
+    C --> D[Freeze chosen baseline assessment]
+    D --> E[Revise strategies, cases or criteria]
+    E --> F[Run next linked campaign]
+    F --> G[Timeline: changes, outcomes and comparability]
+    G --> E
+```
+
+The [CI example](../examples/ci/README.md) restores approved study state, records a
+commit label, emits HTML/JSON/CSV and enforces declared targets. State and reports are
+separate artifacts; history never depends on an assumed persistent runner. Local mock
+CLI tests and a two-iteration desktop/390px browser timeline verify these paths. They
+do not establish live-provider, GitHub-hosted workflow or hardware performance.
 
 ### Navigation and workspace design
 

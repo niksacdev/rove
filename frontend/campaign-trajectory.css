@@ -1,0 +1,15 @@
+.campaign-trajectory{list-style:none;padding:0 0 0 24px;margin:24px 0;display:grid;gap:20px;border-left:2px solid var(--f-border)}
+.trajectory-iteration{position:relative;border:1px solid var(--f-border);border-radius:12px;padding:20px;min-width:0;background:var(--f-surface);color:var(--f-text)}
+.trajectory-iteration::before{content:"";position:absolute;width:12px;height:12px;border-radius:50%;background:var(--f-text-muted);border:3px solid var(--f-bg);left:-34px;top:28px}
+.trajectory-current{border-color:#438f86}.trajectory-current::before{background:#438f86}
+.trajectory-heading,.trajectory-badges,.trajectory-actions,.trajectory-outcome-heading{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.trajectory-heading,.trajectory-outcome-heading{justify-content:space-between}.trajectory-heading h3{margin:5px 0 0;font-size:17px}.trajectory-date,.trajectory-meta,.trajectory-counts,.trajectory-timing{font-size:12px;color:var(--f-text-muted)}
+.trajectory-meta{margin:10px 0 14px;overflow-wrap:anywhere}.trajectory-badges{margin:12px 0}.trajectory-condition{border-style:dashed}
+.trajectory-outcome{margin:16px 0}.trajectory-outcome-heading{font-size:13px}.trajectory-outcome-bar{display:flex;overflow:hidden;height:7px;border-radius:5px;background:var(--f-border);margin:9px 0 5px}
+.trajectory-passed{background:#438f86}.trajectory-failed{background:#b46f63}.trajectory-unknown{background:#939591}.trajectory-counts{margin:0}
+.trajectory-details{margin-top:16px;border-top:1px solid var(--f-border);padding-top:12px;font-size:12px;color:var(--f-text-secondary)}
+.trajectory-details summary{cursor:pointer;color:var(--f-text-muted);min-height:30px;line-height:30px}.trajectory-change{margin:12px 0;padding-bottom:8px;border-bottom:1px solid var(--f-border)}
+.trajectory-reference,.trajectory-pairs{overflow-wrap:anywhere}.trajectory-actions{margin-top:12px}
+.trajectory-actions .trajectory-action{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:42px;padding:8px 16px;border:1px solid var(--f-border);border-radius:8px;color:var(--f-text);font-size:13px;text-decoration:none;background:var(--f-bg)}
+.trajectory-actions .trajectory-action:hover{border-color:var(--f-text-muted);background:var(--f-surface)}.trajectory-action:focus-visible,.trajectory-details summary:focus-visible{outline:2px solid #438f86;outline-offset:3px}
+@media(max-width:600px){.campaign-trajectory{padding-left:17px}.trajectory-iteration{padding:14px}.trajectory-iteration::before{left:-27px}.trajectory-heading{align-items:flex-start}.trajectory-heading h3{overflow-wrap:anywhere}.trajectory-actions{gap:8px}.trajectory-actions .trajectory-action{flex:1;padding:8px 10px}.trajectory-outcome-heading{gap:4px}}

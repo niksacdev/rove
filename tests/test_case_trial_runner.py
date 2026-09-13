@@ -112,3 +112,35 @@ async def test_mismatched_case_input_is_rejected_before_any_trial_or_execution(
     assert response.status_code == (404 if changed == "missing" else 422)
     assert service.trials.count() == 0
     assert calls == []
+
+
+async def test_saved_case_robot_asset_is_executed_and_managed_asset_survives_cleanup(linked_case):
+    app, service, case, data, calls = linked_case
+    xml = b'<robot name="managed"><link name="base"/></robot>'
+    robot = service.trials.save_asset(xml, "application/xml")
+    managed = service.import_case(
+        {
+            "name": "Robot case",
+            "task": case["task"],
+            "candidate_context": {**case["candidate_context"], "robot_asset": robot},
+        },
+        case["image_asset"]["sha256"],
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app.app), base_url="http://localhost"
+    ) as client:
+        response = await client.post(
+            "/api/evaluate",
+            data={
+                "task": managed["task"],
+                "strategy_ids": "mock",
+                "case_revision_id": managed["id"],
+            },
+            files={"image": ("image.png", data, "image/png")},
+        )
+        assert response.status_code == 202, response.text
+        identity = response.json()["trial_ids"]["mock"]
+        assert service.trials.get(identity)["snapshot"]["config"]["robot_asset"] == robot
+        await asyncio.gather(*list(app._background_tasks))
+        assert calls[0][1]["urdf_path"] != str(service.trials.asset_path(robot["sha256"]))
+        assert service.trials.asset_path(robot["sha256"]).read_bytes() == xml

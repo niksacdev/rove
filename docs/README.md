@@ -21,6 +21,9 @@
 | [System diagram](architecture/system-diagram.md) | Processes, storage, trial sequence and optional observability integrations |
 | [Implementation plan](product/implementation-plan.md) | Sequenced delivery tasks, dependencies and acceptance gates |
 | [Architecture decisions](architecture/README.md) | Decisions, alternatives, consequences and implementation status |
+| [CLI capability guide](product/cli-ui-parity.md) | Compare strategies, manage cases/reviews, run campaigns and inspect saved evidence headlessly |
+| [Versioned iterations](architecture/ADR-027-trial-to-campaign-improvement.md) | Timeline changes, exact baseline semantics and shared CLI/service architecture |
+| [GitHub Actions example](../examples/ci/README.md) | Explicit study restoration, report artifacts and evaluation gates; not enabled automatically |
 | [Run campaigns](BENCHMARKS.md) | Supported campaign configuration, CLI/API and metric behavior |
 | [Configure verification](VERIFICATION.md) | Supported task evaluators, constraints, diagnostics and measurements |
 

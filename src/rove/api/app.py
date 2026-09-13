@@ -510,19 +510,27 @@ async def create_evaluation(
                 "The image or task differs from the saved case. Save a new case revision or run without the case association.",
             )
 
-    # Save URDF to temp file if provided
+    # Copy either the explicit upload or the selected case's managed robot
+    # description into a disposable runner file; never unlink a managed asset.
     urdf_path: str | None = None
+    urdf_bytes = None
     if urdf is not None:
         urdf_bytes = await urdf.read(4 * 1024 * 1024 + 1)
         if len(urdf_bytes) > 4 * 1024 * 1024:
             raise HTTPException(413, "Robot description exceeds 4 MiB")
-        if urdf_bytes:
-            suffix = Path(urdf.filename or "robot.urdf").suffix or ".urdf"
-            with tempfile.NamedTemporaryFile(
-                delete=False, suffix=suffix, prefix="rove_urdf_"
-            ) as tmp:
-                tmp.write(urdf_bytes)
-            urdf_path = tmp.name
+    elif case and (robot := case.get("candidate_context", {}).get("robot_asset")):
+        from rove.datasets.robot_assets import robot_asset_path
+
+        try:
+            urdf_bytes = robot_asset_path(trial_store(), robot).read_bytes()
+        except (ValueError, KeyError, FileNotFoundError) as error:
+            raise HTTPException(
+                422, "Saved case robot description is unavailable or invalid"
+            ) from error
+    if urdf_bytes:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".urdf", prefix="rove_urdf_") as tmp:
+            tmp.write(urdf_bytes)
+        urdf_path = tmp.name
 
     # Load example data (ground truth, proprioception, etc.) from manifest
     example = (

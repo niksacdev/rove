@@ -52,18 +52,19 @@ function setup(t, {search = "", campaigns = [campaign], baselines = [], respond}
 test("Results opens history first with shared navigation, explicit review routes and no builder fetches", async t => {
   const {document, calls} = setup(t);
   await flush();
-  assert.equal(document.querySelector("h1").textContent, "Results");
-  assert.equal(document.querySelector("#roveNav [aria-current]").textContent, "Results");
+  assert.equal(document.querySelector("h1").textContent, "Campaigns");
+  assert.equal(document.querySelector("#roveNav [aria-current]").textContent, "Campaigns");
   assert.equal(document.querySelector(".workspace-tabs [aria-current]").textContent, "Campaigns");
   assert.equal(document.querySelector(".workspace-tabs a:last-child").getAttribute("href"), "/static/history.html");
   assert.equal(document.querySelector(".page-heading a").getAttribute("href"), "/static/datasets.html");
   assert.equal(document.getElementById("advancedConfiguration").open, false);
   assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];
-  assert.deepEqual(links.map(a => a.textContent), ["Review results", "Open report", "Set as baseline", "JSON", "CSV"]);
+  assert.deepEqual(links.map(a => a.textContent), ["Review results", "Improve", "Open report", "Set as baseline", "JSON", "CSV"]);
   assert.equal(links[0].getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.match(links[1].getAttribute("href"), /report\?format=html$/);
-  assert.equal(links[1].rel, "noopener");
+  assert.equal(links[1].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
+  assert.match(links[2].getAttribute("href"), /report\?format=html$/);
+  assert.equal(links[2].rel, "noopener");
   assert.equal(calls.filter(c => c.options?.method === "POST").length, 0);
 });
 
@@ -159,7 +160,7 @@ test("history and per-card failures preserve useful result links and recover wit
   await flush();
   const card = page.document.querySelector(".campaign");
   assert.match(card.querySelector(".progress").textContent, /Trial counts unavailable/);
-  assert.equal(card.querySelectorAll("a").length, 5);
+  assert.equal(card.querySelectorAll("a").length, 6);
   failList = true;
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);
@@ -262,4 +263,17 @@ test("multiple saved strategies keep separate exact baseline links without misla
   assert.equal(page.document.querySelector(".campaign small").textContent.includes("v1"), false);
   assert.match(page.document.querySelector(".campaign small").textContent, /^Completed/);
   assert.equal(page.calls.some(call => call.options?.method), false);
+});
+
+test("campaign Improve action retains exact source and is offered only after execution completes", async t => {
+  const rows = [{...campaign, id: "saved/a?b", name: "Warehouse candidate"}, {...campaign, id: "running", status: "running"}];
+  const {document, calls, timers} = setup(t, {campaigns: rows}); await flush();
+  let cards = [...document.querySelectorAll(".campaign")];
+  assert.equal(cards[0].querySelector(".improve-link").getAttribute("href"), "/static/datasets.html?improve=saved%2Fa%3Fb");
+  assert.equal(cards[0].querySelector(".improve-link").hidden, false);
+  assert.equal(cards[0].querySelector(".improve-link").getAttribute("aria-label"), "Improve Warehouse candidate");
+  assert.equal(cards[1].querySelector(".improve-link").hidden, true);
+  rows[1].status = "completed"; const timer = [...timers.values()][0]; timer.callback(); await flush();
+  cards = [...document.querySelectorAll(".campaign")]; assert.equal(cards[1].querySelector(".improve-link").hidden, false);
+  assert.equal(calls.filter(call => call.options?.method).length, 0);
 });

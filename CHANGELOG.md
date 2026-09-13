@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Compare robotics strategies and track evaluation iterations
+
+Start with a task, image and robot description, compare strategies, then reuse a saved trial in a campaign with editable criteria, automatic results and a preserved baseline. Connected timelines show how cases, scoring and strategies change across iterations, while the CLI supports the same evaluation, curation and reporting operations. A GitHub Actions example restores selected history and publishes reports with explicit quality gates. *(PR #24)*
+
 ### Success metrics and outcome-first results
 
 The accepted campaign refinement separates Cases, Configure, Success metrics, Run and Results. Reviewable assistant drafts help define assessment; each strategy has its own progress, and charts precede an optional outcome explanation and expandable trial evidence. Existing campaign execution and scoring stay authoritative. An isolated six-trial mock campaign and narrow Results layout verified the new journey; AI generation is tested with a fake runtime. The [journey specification](docs/product/user-journey.md) records evidence and limits.

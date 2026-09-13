@@ -420,3 +420,54 @@ def compare_campaigns(
         # Malformed or old records must not accidentally earn a comparison claim.
         reasons.append(f"Campaign conditions could not be validated: {type(exc).__name__}")
     return result
+
+
+def saved_comparison(root, candidate_id: str, candidate_strategy_id: str | None = None):
+    """Read the same pinned assessment comparison from CLI, API, or library."""
+    from rove.benchmarks.baselines import BaselineStore
+    from rove.benchmarks.store import CampaignStore
+    from rove.benchmarks.workflow import assessed_trials
+
+    store = CampaignStore(root)
+    candidate = store.get(candidate_id)
+    selected_strategy = candidate_strategy_id or candidate["spec"]["strategies"][0]
+    if selected_strategy not in candidate["spec"]["strategies"]:
+        raise ValueError("Selected candidate strategy does not belong to this campaign")
+    reference = candidate.get("baseline")
+    if not reference:
+        raise ValueError("This campaign has no baseline reference")
+    baseline = store.get(reference["campaign_id"])
+    base_trials, base_assessments = assessed_trials(root, baseline, store.trials(baseline["id"]))
+    if reference.get("revision_id"):
+        named = BaselineStore(root).get(reference["revision_id"])
+        from rove.trials.snapshots import content_hash
+
+        if (
+            named["revision_id"] != reference["revision_id"]
+            or named["campaign_id"] != reference["campaign_id"]
+            or named["strategy_id"] != reference["strategy_id"]
+            or named["campaign_hash"] != content_hash(baseline)
+        ):
+            raise ValueError("Saved baseline does not match the recorded campaign reference")
+        base_trials = named["trial_outcomes"]
+        base_assessments = named["assessments"]
+    candidate_trials, candidate_assessments = assessed_trials(
+        root, candidate, store.trials(candidate_id)
+    )
+    result = compare_campaigns(
+        baseline,
+        base_trials,
+        candidate,
+        candidate_trials,
+        reference["strategy_id"],
+        selected_strategy,
+    )
+    return {
+        **result,
+        "candidate_strategy_id": selected_strategy,
+        "baseline_reference": reference,
+        "baseline_trials": base_trials,
+        "candidate_trials": candidate_trials,
+        "baseline_assessments": base_assessments,
+        "candidate_assessments": candidate_assessments,
+    }

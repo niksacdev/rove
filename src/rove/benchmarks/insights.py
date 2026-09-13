@@ -295,10 +295,17 @@ class CampaignInsights:
                     "id": "task_acceptance",
                     "description": (
                         "Assess the output against this case's instruction and saved expected outcome. "
-                        "Check observation grounding, constraints and uncertainty. "
-                        "A plan or generated action is not evidence of physical task completion."
+                        "The proposed output addresses the requested target and intended result."
                     ),
-                }
+                },
+                {
+                    "id": "observation_grounding",
+                    "description": "Relevant objects, locations and state claims agree with the case observation. Do not invent unseen details.",
+                },
+                {
+                    "id": "constraints_and_uncertainty",
+                    "description": "Respect the case constraints and acknowledge ambiguity or missing evidence. A proposed plan or action does not prove physical completion.",
+                },
             ],
             case_expectations=expectations,
             metrics=BASE_METRICS,
@@ -313,7 +320,7 @@ class CampaignInsights:
         purpose = (
             "Draft case-specific robotics output acceptance criteria from all selected tasks and annotations. "
             "Images have not been inspected; do not invent objects or assume source annotations are correct. "
-            "Return contract and rationale. Contract must have scope plan_quality or scene_understanding, "
+            "Return contract and rationale. Provide 3 to 5 short, individually editable acceptance criteria, each description at most 400 characters. Contract must have scope plan_quality or scene_understanding, "
             "evidence_mode candidate_output, only human_review criteria, no annotation_bindings or campaign_targets. "
             "Metrics must be task_success, pass_at_k, pass_pow_k, pipeline_latency. "
             "Include a nonempty case_expectations entry for every selected revision ID. "
@@ -329,7 +336,9 @@ class CampaignInsights:
                 )
                 candidate = generated.contract
                 if (
-                    set(candidate.case_expectations) != set(ids)
+                    not 3 <= len(candidate.criteria) <= 5
+                    or any(len(c.description) > 400 for c in candidate.criteria)
+                    or set(candidate.case_expectations) != set(ids)
                     or candidate.scope == "episode_outcome"
                     or candidate.evidence_mode != "candidate_output"
                     or any(c.assessment != "human_review" for c in candidate.criteria)

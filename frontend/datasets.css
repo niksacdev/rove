@@ -231,3 +231,36 @@ input:focus-visible, textarea:focus-visible { outline-color: var(--f-purple); }
 #metricsStep #contractPanel{border:0;padding:0;background:transparent;}#metricsStep #contractPanel>summary{font-size:20px;}#metricsStep #contractForm>.notice{font-size:12px;background:transparent;padding-inline:0;}#metricsStep #savedMetricsSlot{margin:24px 0;}
 #generatedCriteria:empty{display:none;}#metricsStep .form-grid:has(#successCriteria[hidden]){display:none;}
 @media(max-width:700px){.metrics-assistance{flex-direction:column;gap:8px;}.journey a{font-size:10px;}.journey{gap:0;}.suggested-measures{grid-template-columns:1fr 1fr;}}
+
+/* Trial-first campaign flow: criteria first, implementation settings on demand. */
+#metricsStep {max-width:900px;}
+#metricsStep #contractPanel {display:block;padding:0;margin:24px 0;}
+#metricsStep #contractPanel>summary,#metricsStep .criteria-intro {display:none;}
+.criterion-row {display:flex;align-items:flex-start;gap:16px;}
+.criterion-number {display:grid;place-items:center;flex:0 0 28px;height:28px;border-radius:50%;background:var(--f-surface);color:var(--f-text-muted);font-size:13px;}
+.criterion-copy {flex:1;margin:0;line-height:1.6;font-size:16px;}
+.criterion-row button {flex:0 0 auto;min-height:36px;padding:6px 14px;}
+#generatedCriteria .suggested-criterion {padding:20px 0;border:0;border-bottom:1px solid var(--f-border);border-radius:0;background:transparent;}
+.suggested-criterion>small {display:block;margin:8px 0 0 44px;font-size:11px;}
+.criterion-editor textarea {width:100%;margin-bottom:12px;}.criterion-editor button {margin-right:10px;}
+#reportMeasures,#moreScoringOptions {margin:16px 0;color:var(--f-text-secondary);font-size:13px;}
+#moreScoringOptions>details,#moreScoringOptions>button {margin-top:18px;}
+#metricsStep .metrics-assistance {margin-bottom:0;padding:0;border:0;}
+#metricsContext {margin-top:12px;font-size:12px;color:var(--f-text-muted);}
+#gradingNotice {background:transparent;border:0;padding:12px 0;font-size:12px;}
+.result-primary-actions {display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:20px 0;}
+#baselineDialog {width:min(640px,94vw);max-height:90vh;overflow:auto;padding:22px;border:1px solid var(--f-border);border-radius:18px;background:var(--f-bg);color:var(--f-text);}
+#baselineDialog::backdrop {background:rgba(0,0,0,.5);}#baselineDialog #namedBaselinePanel {margin:0;border:0;}
+#baselineDialog .record-id {display:none;}
+.improvement-intro {margin:0 0 32px;padding:24px;border:1px solid var(--f-border);border-radius:14px;background:var(--f-surface);}
+.improvement-intro h2 {margin:8px 0 12px;font-size:25px;}.improvement-intro p {line-height:1.6;max-width:850px;}
+.improvement-suggestion {padding:12px 0;border-bottom:1px solid var(--f-border);}.improvement-intro details{margin-top:16px;}
+.comparison-context {font-size:12px;color:var(--f-text-muted);}
+@media(max-width:650px){.criterion-copy{font-size:14px;}.criterion-row{gap:10px;}.improvement-intro{padding:18px;}}
+.criterion-row[hidden], .criterion-editor[hidden], .improvement-intro[hidden] {display:none !important;}
+
+body[data-seeded="true"] .page-heading{display:none;}
+.trial-seed-note {display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px;padding:12px 18px;margin-bottom:20px;font-size:13px;}
+.trial-seed-note p,.trial-seed-note details{margin:0;}.trial-seed-note details[open]{flex-basis:100%;}.trial-seed-note details[open] p{margin-top:8px;}
+#liveTrialDetails,#advancedComparisons{margin:20px 0;}#liveTrialDetails>summary,#advancedComparisons>summary{font-size:14px;}
+.improvement-suggestion a{display:inline-block;margin:8px 16px 0 0;font-size:13px;}
