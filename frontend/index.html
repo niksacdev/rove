@@ -35,13 +35,13 @@
       }
     }
   </script>
-  <link rel="stylesheet" href="/static/strategy-table.css">
+  <link rel="stylesheet" href="/static/strategy-table.css?v=workspace-8">
   <link rel="stylesheet" href="/static/fluent.css?v=workspace-8">
 </head>
 <body class="h-full bg-f-bg text-white flex flex-col overflow-hidden">
 
   <!-- Skip navigation link (M1) -->
-  <a href="#chatArea" class="skip-link">Skip to main content</a>
+  <a href="#main" class="skip-link">Skip to main content</a>
 
   <!-- Live announcer for screen readers (M3) -->
   <div id="liveAnnouncer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
@@ -72,7 +72,7 @@
     </aside>
 
     <!-- ---- Content Main Area ---- -->
-    <main class="root-main flex-1 flex flex-col min-h-0 min-w-0">
+    <main id="main" tabindex="-1" class="root-main flex-1 flex flex-col min-h-0 min-w-0">
       <div id="configureHeading" class="root-page-heading" hidden><h1>Settings</h1><p>Manage reusable strategies and model connections. Select these strategies in a trial or campaign.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a><a href="/?view=settings" data-root-view="settings">Settings</a></nav></div>
       <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>New trial</h1><p>Give your agent an observation and a task. Inspect what it does.</p></div><a href="/static/history.html" class="start-secondary">Back to trials</a></div></div>
 
@@ -95,7 +95,7 @@
           <h1>Does your robotics agent<br>work on your tasks?</h1>
           <p class="start-intro">Bring your cases, define what success means, and compare agent pipelines with evidence you can inspect.</p>
           <div class="start-actions"><a class="start-primary" href="/?view=quick" data-root-view="quick">New trial <span aria-hidden="true">→</span></a><a class="start-secondary" href="/static/datasets.html">New campaign</a></div>
-          <p class="start-caption">Start with one observation and task. Every trial is saved.<br>Ready to compare repeated attempts? <a href="/static/datasets.html">New campaign →</a></p>
+          <p class="start-caption">Start with one observation and task. Every trial is saved.</p>
           <ol class="start-journey" aria-label="Your evaluation journey">
             <li><span class="step-number">01</span><h2>Bring a task</h2><p>Attach an image, describe the task and choose your strategy.</p></li>
             <li><span class="step-number">02</span><h2>Run a trial</h2><p>Watch the pipeline and inspect its observations, actions and evidence.</p></li>
@@ -196,7 +196,7 @@
   <script src="/static/sample-cases.js?v=workspace-8"></script>
   <script src="/static/stage-renderers.js?v=workspace-8"></script>
   <script src="/static/tooltips.js"></script>
-  <script src="/static/strategy-table.js"></script>
+  <script src="/static/strategy-table.js?v=workspace-8"></script>
   <script src="/static/app.js?v=workspace-8"></script>
 
 </body>

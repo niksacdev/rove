@@ -122,6 +122,7 @@ test("shared quick journey runs one case against two strategies through existing
   const step=name=>w.document.querySelector(`#quickJourney [data-quick-step="${name}"]`).click();
   try{
     assert.equal(el("quickCasePanel").hidden,false);assert.equal(el("quickComposer").parentElement.id,"quickCaseComposer");
+    const skipTarget=w.document.querySelector(w.document.querySelector(".skip-link").getAttribute("href"));assert.equal(skipTarget.tagName,"MAIN");assert.equal(skipTarget.hidden,false);assert.equal(skipTarget.contains(el("quickWorkspace")),true);
     step("configure");assert.equal(el("quickConfigurePanel").hidden,false);assert.equal(el("quickComposer").hidden,true);
     assert.match(el("strategyGrid").querySelector('[data-strategy-id="vla"]').textContent,/policy.*grader.*collision.*Required constraint/);
     for(const id of ["mock","vla"])el("strategyGrid").querySelector(`input[value="${id}"]`).click();
