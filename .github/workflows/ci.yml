@@ -26,6 +26,10 @@ jobs:
         run: uv sync --frozen --extra dev --extra data --extra kinematics --extra copilot
       - name: Install frontend test dependencies
         run: npm ci --ignore-scripts
+      - name: Install ABC video inspection tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
       - name: Static checks
         run: |
           uvx ruff==0.16.7 check src tests scripts
@@ -45,6 +49,7 @@ jobs:
           node --check frontend/trial-output.js
           node --check frontend/strategy-revisions.js
           node --check frontend/case-import.js
+          node --check frontend/abc-import.js
           npm test
       - name: Regression tests and mock report
         run: |
