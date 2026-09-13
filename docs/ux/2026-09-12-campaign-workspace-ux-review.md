@@ -13,11 +13,12 @@ identity and connected evidence review. Restyling the previous forms alone is in
 
 | Decision | User need |
 | --- | --- |
-| Cases → Configure → Run → Review results | Follow the work rather than assemble storage entities |
+| Cases → Configure → Success metrics → Run → Results | Separate choosing systems, agreeing evidence and interpreting results |
 | Gallery dialog with image/task cards | Recognize cases and select many without an unbounded dropdown |
 | Draft expected outcome with source and missing-evidence notice | Help prepare assessment without manufacturing expert labels |
-| Settings on the right; assistant inside Configure | Separate reusable setup from the current evaluation |
-| Show case × strategy × repetition and live trial identities | Explain how pipeline activity contributes to the report |
+| Settings on the right; assistance tied to the current stage | Keep reusable setup separate and make draft/explanation context clear |
+| Show case × strategy × repetition and progress for each strategy | Explain how pipeline activity contributes to the report |
+| Charts, optional AI summary, then Inspect trials | Answer outcome questions before exposing the detailed evidence ledger |
 | Save case collection; new revision on extension | Make reuse understandable while preserving provenance |
 | Create a campaign / Run campaign / Review results | Separate creating, executing and reading without introducing another entity |
 | Set as baseline; badge from saved reference only | Make the comparison role explicit and trustworthy |
@@ -42,3 +43,16 @@ case gallery was checked in both themes. Detailed evidence is maintained
 in the [campaign workspace specification](../product/user-journey.md#acceptance-and-delivery-evidence).
 Review sample-derived success suggestions separately from actual image analysis, and
 keep physical outcome evidence and attributed expert judgments explicit.
+
+## 13 September refinement
+
+The user found the assessment controls and results still too dense. A separate Success
+metrics stage and graph-first Results are accepted corrections. Retain count labels,
+unknown outcomes and evidence scope in every comparison; concise AI prose must not
+replace the recorded assessment. The refinement was verified with one case, two mock
+strategies and three repetitions: all six executions were persisted and remained
+unassessed in Results until expert review. Recorded stages appeared per strategy;
+trial inspection began collapsed. The 390px Results view had no horizontal overflow.
+Fake-runtime tests exercise draft/summary boundaries, and focused UI checks cover
+saved-rule edits and honest fallback labels. Live AI or hardware validation is not
+claimed. The earlier gallery checks above remain separate evidence.

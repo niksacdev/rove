@@ -224,3 +224,10 @@ input:focus-visible, textarea:focus-visible { outline-color: var(--f-purple); }
 #casePicker .library-filters label { margin-bottom: 10px; }
 #casePicker .selection-bar { padding-block: 8px; }
 #caseListStatus { font-size: 12px; margin: 8px 0 12px; }
+.journey {grid-template-columns:repeat(5,minmax(0,1fr));}
+.metrics-assistance {display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin:24px 0;}.metrics-assistance p{max-width:750px;margin:10px 0;line-height:1.6;}.metrics-assistance button{flex:none;}
+.suggested-measures {display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;}.suggested-measure {padding:18px;border:1px solid var(--f-border);border-radius:12px;}.suggested-measure strong{display:block;font-size:14px;}.suggested-measure span{display:block;font-size:12px;color:var(--f-text-muted);margin-top:8px;}
+#metricsContext{font-size:12px;color:var(--f-text-muted);margin:18px 0;}.suggested-criterion{padding:16px 0;border-bottom:1px solid var(--f-border);}.suggested-criterion label{text-transform:none;}.suggested-criterion textarea{margin-top:10px;line-height:1.6;}
+#metricsStep #contractPanel{border:0;padding:0;background:transparent;}#metricsStep #contractPanel>summary{font-size:20px;}#metricsStep #contractForm>.notice{font-size:12px;background:transparent;padding-inline:0;}#metricsStep #savedMetricsSlot{margin:24px 0;}
+#generatedCriteria:empty{display:none;}#metricsStep .form-grid:has(#successCriteria[hidden]){display:none;}
+@media(max-width:700px){.metrics-assistance{flex-direction:column;gap:8px;}.journey a{font-size:10px;}.journey{gap:0;}.suggested-measures{grid-template-columns:1fr 1fr;}}

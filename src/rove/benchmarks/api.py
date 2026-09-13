@@ -135,6 +135,7 @@ def create_router(root: Path) -> APIRouter:
 
     from rove.api.assistant import create_assistant_router
     from rove.api.datasets import create_dataset_router
+    from rove.api.insights import create_insights_router
 
     combined = APIRouter(lifespan=lifespan)
 
@@ -144,5 +145,6 @@ def create_router(root: Path) -> APIRouter:
 
     combined.include_router(create_dataset_router(root, ensure_launched))
     combined.include_router(create_assistant_router(root, ensure_launched))
+    combined.include_router(create_insights_router(root))
     combined.include_router(router)
     return combined

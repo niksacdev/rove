@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Success metrics and outcome-first results
+
+The accepted campaign refinement separates Cases, Configure, Success metrics, Run and Results. Reviewable assistant drafts help define assessment; each strategy has its own progress, and charts precede an optional outcome explanation and expandable trial evidence. Existing campaign execution and scoring stay authoritative. An isolated six-trial mock campaign and narrow Results layout verified the new journey; AI generation is tested with a fake runtime. The [journey specification](docs/product/user-journey.md) records evidence and limits.
+
 ### Compare strategies and preserve candidate revisions
 
 The campaign workflow supports selecting several strategies for the same cases, with a separate result for every strategy. The strategy-revision addition preserves a changed candidate under a distinct identity for baseline comparisons; [ADR-026](docs/architecture/ADR-026-versioned-strategy-catalog.md) records its configuration boundary and current verification status.
