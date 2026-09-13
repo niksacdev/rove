@@ -629,9 +629,19 @@ test("trial and campaign seeds prepopulate immutable inputs and retain source, s
         assert.doesNotMatch(el("improvementIntro").textContent, /Investigate the recorded plan failure/);
         assert.equal(el("improvementIntro").querySelector("h2"), null);
       } else {
+        assert.match(el("stepHeading").textContent, /^Improve /);
+        assert.equal(w.document.querySelector('[data-journey-step="cases"] > div').textContent, "Improve");
+        assert.equal(el("casesStep").hidden, true);
+        assert.equal(el("improvementIntro").querySelector("h2"), null);
+        const editCases=[...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Edit cases");
+        assert.equal(editCases.getAttribute("aria-expanded"), "false"); editCases.click();
+        assert.equal(el("casesStep").hidden,false);assert.equal(editCases.getAttribute("aria-expanded"),"true");
+        assert.equal(el("showImport").closest('[data-workflow-panel]').hidden,false);
+        editCases.click();assert.equal(el("casesStep").hidden,true);
+        assert.match(el("improvementIntro").textContent, /Cases retained \(1\)/);
         assert.match(el("improvementIntro").textContent, /Investigate the recorded plan failure/);
         let revisionSource; el("createCampaignStrategyRevision").addEventListener("click",()=>{revisionSource=el("campaignStrategy").value;});
-        [...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Test a plan change").click();
+        [...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Review a plan change").click();
         assert.equal(revisionSource,"strategy","source-stage recommendation maps to its restored strategy definition");
       }
       assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases" || call.url === "/api/evaluate"), false);

@@ -13,10 +13,18 @@
     return ["strategies", "models", "settings"].includes(view) ? "configure" : view === "home" ? "start" : "evaluate";
   }
   function setActive(section) {
+    placeSettings();
     document.querySelectorAll("#roveNav [data-nav-section], #roveFooter [data-nav-section]").forEach(link => {
       if (link.dataset.navSection === section) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
+  }
+  function placeSettings() {
+    const footer = document.getElementById("roveFooter"), sidebar = document.getElementById("quickSidebar");
+    if (!footer) return;
+    const wide = !window.matchMedia || window.matchMedia("(min-width: 641px)").matches;
+    const destination = sidebar && !sidebar.hidden && wide ? sidebar : document.body;
+    if (footer.parentElement !== destination) destination.appendChild(footer);
   }
   function themeLabel() {
     const button = document.getElementById("themeToggle");
@@ -43,6 +51,7 @@
     utilities.append(theme);
     const footer = document.createElement("footer"); footer.id = "roveFooter"; footer.className = "rove-footer"; footer.setAttribute("aria-label", "Workspace settings"); footer.append(settings);
     document.body.classList.add("rove-shell"); document.body.appendChild(footer);
+    window.matchMedia?.("(min-width: 641px)").addEventListener("change", placeSettings);
     host.replaceChildren(brand, nav, utilities);
     setActive(host.dataset.section || sectionForView(rootView(location.search))); themeLabel();
   }

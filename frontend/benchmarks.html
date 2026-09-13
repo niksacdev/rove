@@ -8,28 +8,26 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=trial-first-4">
-  <link rel="stylesheet" href="/static/benchmarks.css?v=trial-first-4">
-  <link rel="stylesheet" href="/static/navigation.css?v=trial-first-4">
-  <script src="/static/navigation.js?v=trial-first-4" defer></script>
-  <script src="/static/benchmarks.js?v=trial-first-4" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=workspace-polish-4">
+  <link rel="stylesheet" href="/static/benchmarks.css?v=workspace-polish-4">
+  <link rel="stylesheet" href="/static/navigation.css?v=workspace-polish-4">
+  <script src="/static/navigation.js?v=workspace-polish-4" defer></script>
+  <script src="/static/benchmarks.js?v=workspace-polish-4" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <header id="roveNav" data-section="results"></header>
   <main id="main">
     <div class="page-heading">
-      <div><h1>Campaigns</h1><p class="intro">Review your evaluations. Improve a strategy and compare it with the same tasks and baseline.</p></div>
+      <div><h1>Campaigns</h1></div>
       <a class="primary-link" href="/static/datasets.html">Create a campaign</a>
     </div>
     <nav class="workspace-tabs" aria-label="Saved evaluations">
       <a href="/static/benchmarks.html" aria-current="page">Campaigns</a>
       <a href="/static/history.html">Saved trials</a>
     </nav>
-    <section class="results-section" aria-labelledby="campaignHeading">
-      <div class="section-heading"><h2 id="campaignHeading">Campaigns</h2><button id="refreshHistory" class="secondary" type="button">Refresh results</button></div>
-      <p class="muted">Reports show the declared success criteria, pass@k, pass^k, and available measurements. Missing evidence remains unknown.</p>
-      <p id="historyStatus" role="status" aria-live="polite">Loading saved campaigns…</p>
+    <section class="results-section" aria-label="Saved campaigns">
+      <div class="section-heading"><p id="historyStatus" role="status" aria-live="polite">Loading saved campaigns…</p><button id="refreshHistory" class="secondary" type="button">Refresh results</button></div>
       <p id="requestedCampaignMessage" class="notice" role="status" hidden></p>
       <div id="history"></div>
     </section>

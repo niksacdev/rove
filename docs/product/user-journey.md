@@ -9,6 +9,11 @@ compare their outputs immediately, then repeat campaigns to measure improvement.
 
 ## Latest entry: try a task, then build a campaign
 
+In the desktop trial sidebar, **Settings** follows **Sample cases**, separated by
+a divider. It uses the same button treatment as the other sidebar destinations.
+On views and narrow screens without this sidebar, the existing workspace Settings
+control remains available. Changing views preserves the in-progress trial draft.
+
 The customer's first action is the familiar chat runner: enter the task, provide an
 image and optional URDF, and choose the set of strategies to compare. Execution
 produces one saved trial per strategy, with outputs and stages available together.
@@ -514,3 +519,43 @@ same-configuration and synthetic-evidence badges, and usable report/results butt
 Comparison details started collapsed. At 390px the timeline remained readable with
 no horizontal overflow (384px document width). This confirms navigation and evidence
 presentation; all outcomes were still awaiting review.
+
+## Workspace clarity and approved improvements
+
+Robotics developers start with an observation, task and robot description, compare
+strategies, then use campaigns to track repeated evaluations. Navigation supports
+that work through consistent action controls and readable observations.
+
+- **Campaigns:** one compact row per campaign with status, trial counts, and
+  View results, Export and Improve. Export contains HTML, JSON and CSV.
+- **Improve:** three recorded recommendations at most, with supporting trials and
+  comparison details expandable. Recorded failures can open a focused strategy
+  stage editor. The user chooses a compatible alternative, previews the exact
+  change and explicitly saves it into the campaign draft before running.
+- **Baseline:** saved results selected as the comparison reference. The Results
+  view retains baseline selection and details; the browser shows a compact badge.
+- **Trial workspace:** Settings follows Sample cases with a divider. Neutral
+  charcoal surfaces and a restrained action accent distinguish controls from
+  connection and outcome status. Sample cases emphasizes observation previews.
+
+```mermaid
+flowchart LR
+  A[Campaign list] --> B[View results]
+  A --> C[Export report]
+  A --> D[Improve]
+  D --> E[Recorded finding and supporting trials]
+  E --> F[Choose compatible stage alternative]
+  F --> G[Preview exact changes]
+  G --> H[Human approval: Save and use revision]
+  H --> I[Review campaign draft]
+  I --> J[Explicitly run campaign]
+  J --> B
+```
+
+Recommendations identify what to investigate; they do not assert that a different
+endpoint will improve performance. Original strategies and saved baselines remain
+unchanged. Model-authored outcome interpretation is labelled separately from
+recorded findings. Optional local VLA compatibility is documented in the
+[local inference guide](../research/vla_local_inference_guide.md).
+
+See [ADR-029](../architecture/ADR-029-workspace-interaction-consistency.md).

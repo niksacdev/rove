@@ -165,6 +165,9 @@ if (typeof document !== "undefined") (() => {
   function goStep(step, push = true, focus = true) {
     if (state.step !== step) { tell(""); state.datasetUseVersion = (state.datasetUseVersion || 0) + 1; }
     state.step = Object.hasOwn(stepCopy, step) ? step : "cases"; document.body.dataset.workflowStep = state.step;
+    const improving = state.seedDraft?.source.type === "campaign" && !state.campaignId;
+    document.body.dataset.improving = String(improving);
+    const firstStep = document.querySelector('[data-journey-step="cases"] > div'); if(firstStep)firstStep.textContent = improving ? "Improve" : "Cases";
     $("workspaceTitle").textContent = state.step === "review" ? "Review results" : state.step === "run" && state.campaignId && !state.preparingRun ? "Campaign trials" : "Create a campaign";
     document.title = state.step === "review" ? "ROVE · Results · Review" : "ROVE · Evaluate";
     window.RoveNavigation?.setActive(state.step === "review" ? "results" : "evaluate");
@@ -175,7 +178,10 @@ if (typeof document !== "undefined") (() => {
     }
     const slot = $(state.step === "review" ? "reviewWorkspaceSlot" : "casesWorkspaceSlot");
     if ($("caseWorkspace").parentElement !== slot) slot.append($("caseWorkspace"));
-    $("stepHeading").textContent = stepCopy[state.step][0]; $("stepDescription").textContent = stepCopy[state.step][1];
+    const sourceName = improving ? state.campaigns.find(item => item.id === state.seedDraft.source.id)?.name : null;
+    $("stepHeading").textContent = improving && state.step === "cases" ? (sourceName ? `Improve ${sourceName}` : "Improve your campaign") : stepCopy[state.step][0];
+    $("stepDescription").textContent = improving && state.step === "cases" ? "Review findings, then test a change." : stepCopy[state.step][1];
+    if(improving && state.step === "cases") $("casesStep").hidden = !state.improvementCasesEditing;
     $("improvementIntro").hidden = (!state.seedDraft && !state.seedCancelled) || state.step !== "cases";
     if (state.step === "configure") prepareCriteriaDraft();
     if (state.step === "metrics") { prepareCriteriaDraft(); draftMetrics(); }
@@ -895,6 +901,7 @@ if (typeof document !== "undefined") (() => {
     return item.suggested_success?.contract?.criteria?.map(criterion => criterion.description).join("\n") || `Address the instruction: ${item.task}\nGround the response in the supplied observation. Identify missing or ambiguous evidence instead of claiming the robot completed the task.`;
   }
   function renderSelectedCases() {
+    const retainedCount=document.querySelector(".retained-case-count"); if(retainedCount)retainedCount.textContent=`Cases retained (${state.selected.size})`;
     const container = $("selectedCases"); container.replaceChildren(); $("selectedCaseCount").textContent = `${state.selected.size} cases`;
     if (!state.selected.size) { const empty = node("div", null, "case-empty"); empty.append(node("h3", "Start with a scene and a task"), node("p", "Add your own observation, or select robotics samples from the case library. Your selected cases will appear here.", "muted")); container.append(empty); return; }
     for (const [id, item] of state.selected) {
@@ -1009,6 +1016,7 @@ if (typeof document !== "undefined") (() => {
     $("candidateStrategy").value = selectCandidateOnly && newId && ids.has(newId) ? newId : ids.has(candidate) ? candidate : "";
     invalidateCampaign(); invalidateAblation(); renderStrategy(); renderBaselineReference();
     window.dispatchEvent(new CustomEvent("rove:strategy-catalog-updated"));
+    if(newId && (!ids.has(newId) || (!selectCandidateOnly && !state.selectedStrategyIds.includes(newId)))) throw new Error("The saved revision was not added to the draft. Select it from the strategy list after making room.");
   }
   function metricsContextPayload() {
     const repeats = Number($("campaignRepeats").value);
@@ -1224,25 +1232,32 @@ if (typeof document !== "undefined") (() => {
       if(seed.warnings?.length){const details=node("details");details.append(node("summary","Saved input details"));for(const warning of seed.warnings)details.append(node("p",warning));panel.append(details);}
       for(const blocker of seed.blockers || [])panel.append(node("p",blocker,"error-text"));return;
     }
-    panel.append(node("span",seed.source.type==="trial"?"FROM YOUR TRIAL":"IMPROVE A CAMPAIGN","ai-source"),node("h2",seed.source.type==="trial"?"Build on this trial":"Where to improve"));
-    panel.append(node("p",seed.source.type==="trial"?"Your case, robot and strategy are ready. Add cases or strategies, then choose success criteria.":"Start from the same cases and settings. Test one change at a time to see what helped.","muted"));
+
     const advice=node("div"); advice.id="improvementAdvice";
     for(const item of (seed.recommendations || []).slice(0,3)) {
       const card=node("article",null,"improvement-suggestion");card.append(node("p",item.text));
       const sourceStrategy=seed.source_strategies?.find(row=>row.id===item.strategy_id);const selectedStrategy=sourceStrategy?.selected_id || (seed.strategies.includes(item.strategy_id)?item.strategy_id:null);
-      if(item.source==="recorded_failure" && selectedStrategy && ["perceive","plan","act","verify"].includes(item.stage)) card.append(button(`Test a ${item.stage} change`,()=>{goStep("configure");$("campaignStrategy").value=selectedStrategy;$("createCampaignStrategyRevision").click();}));
-      for(const trial of (item.trial_ids || []).slice(0,2))card.append(link(item.source==="missing_assessment"?"Review trial evidence":"Inspect trial",`/static/history.html?trial=${encodeURIComponent(trial)}`));
+      if(item.source==="recorded_failure" && selectedStrategy && ["perceive","plan","act","verify","sim"].includes(item.stage)) card.append(button(`Review a ${item.stage} change`,()=>{
+        goStep("configure");$("campaignStrategy").value=selectedStrategy;
+        const opener=$("createCampaignStrategyRevision");opener.dataset.recommendedStage=item.stage;opener.click();delete opener.dataset.recommendedStage;
+      }));
+      const evidence=node("details",null,"improvement-evidence"); evidence.append(node("summary","Supporting trials"));
+      for(const trial of (item.trial_ids || []).slice(0,2)) evidence.append(link(item.source==="missing_assessment"?"Review trial evidence":"Inspect trial",`/static/history.html?trial=${encodeURIComponent(trial)}`));
+      if(item.trial_ids?.length)card.append(evidence);
       advice.append(card);
     }
     panel.append(advice);
     if(seed.source.type==="campaign") {
+      const comparisonSettings=node("details",null,"improvement-context"); comparisonSettings.append(node("summary","Comparison settings"));
+      comparisonSettings.open=Boolean(seed.baselines?.length>1 && !state.seedBaselineRevision); panel.append(comparisonSettings);
       if(seed.baselines?.length) {
         const chosen=select("improvementBaseline",[["","No saved reference"],...seed.baselines.map(item=>[item.revision_id,`${item.name} · revision ${item.revision || 1}`])],state.seedBaselineRevision || "");
-        chosen.addEventListener("change",()=>{state.seedBaselineRevision=chosen.value || null;invalidateCampaign();});panel.append(label("Compare against baseline",chosen),node("p","Recommendations use current reviews. Comparisons use the saved baseline assessments.","comparison-context"));
-      } else panel.append(node("p","No baseline is saved yet. This campaign will be a new result you can compare later.","muted"));
-      const comparison=node("p","Keep cases, scoring and repetitions fixed for a controlled ablation. Adding cases measures expanded coverage.","comparison-context");comparison.id="improvementComparisonNote";panel.append(comparison);
+        chosen.addEventListener("change",()=>{state.seedBaselineRevision=chosen.value || null;invalidateCampaign();});comparisonSettings.append(label("Compare against baseline",chosen),node("p","Recommendations use current reviews. Comparisons use the saved baseline assessments.","comparison-context"));
+      } else comparisonSettings.append(node("p","No baseline is saved yet. This campaign will be a new result you can compare later.","muted"));
+      const comparison=node("p","Keep cases, scoring and repetitions fixed for a controlled ablation. Adding cases measures expanded coverage.","comparison-context");comparison.id="improvementComparisonNote";comparisonSettings.append(comparison);
       panel.append(link("View original results",`/static/datasets.html?step=review&campaign=${encodeURIComponent(seed.source.id)}`));
-      const contents=node("section",null,"improvement-ai");contents.append(node("p","Preparing an interpretation of the recorded outcomes…","muted"));panel.append(contents);
+      const interpretation=node("details",null,"improvement-interpretation"); interpretation.append(node("summary","Outcome analysis"));
+      const contents=node("div",null,"improvement-ai");contents.append(node("p","Preparing an interpretation of the recorded outcomes…","muted"));interpretation.append(contents);panel.append(interpretation);
       post(`/api/campaigns/${encodeURIComponent(seed.source.id)}/outcome-summary`,{}).then(result=>{
         if(!contents.isConnected)return;
         contents.replaceChildren(node("span",result.source==="ai"?"AI recommendations":"Recorded findings","ai-source"),node("h3",result.headline));
@@ -1251,8 +1266,11 @@ if (typeof document !== "undefined") (() => {
         else contents.append(node("p","AI interpretation is unavailable; these findings use saved measurements.","muted"));
       }).catch(()=>{if(contents.isConnected)contents.replaceChildren(node("p","Interpretation could not load. The recorded suggestions above remain available."));});
     }
-    for(const warning of seed.warnings || [])panel.append(node("p",warning,"muted"));
+    if(seed.warnings?.length) { const notes=node("details",null,"improvement-context"); notes.append(node("summary","Input notes")); for(const warning of seed.warnings)notes.append(node("p",warning)); panel.append(notes); }
     for(const blocker of seed.blockers || [])panel.append(node("p",blocker,"error-text"));
+    const retained=node("div",null,"improvement-retained"); retained.append(node("strong",`Cases retained (${state.selected.size})`,"retained-case-count"));
+    const edit=button("Edit cases",()=>{state.improvementCasesEditing=!state.improvementCasesEditing;$("casesStep").hidden=!state.improvementCasesEditing;edit.textContent=state.improvementCasesEditing?"Done editing cases":"Edit cases";edit.setAttribute("aria-expanded",String(state.improvementCasesEditing));if(state.improvementCasesEditing)$("showImport").focus();});
+    edit.setAttribute("aria-expanded","false");edit.setAttribute("aria-controls","casesStep");retained.append(edit,button("Continue to configure →",()=>goStep("configure"),"primary"));panel.append(retained);
   }
   async function loadSeedDraft(type,id) {
     const panel=$("improvementIntro"); panel.hidden=false;panel.replaceChildren(node("h2","Preparing your campaign…"));
@@ -1265,7 +1283,7 @@ if (typeof document !== "undefined") (() => {
       if(loadVersion!==state.seedLoadVersion || route!==location.href || version!==(state.draftVersion || 0))throw new Error("Your draft or navigation changed while loading. Retry when ready to replace it with the saved inputs.");
       const beforeRefresh=state.draftVersion || 0; await refreshStrategyCatalog();
       if(loadVersion!==state.seedLoadVersion || route!==location.href || (state.draftVersion || 0)!==beforeRefresh+1)throw new Error("Your draft changed while loading. Retry to use the saved configuration.");
-      document.body.dataset.seeded="true";state.seedDraft=seed;state.seedBaselineRevision=seed.baselines?.length===1?seed.baselines[0].revision_id:null;state.seedSelectionReviewed=false;state.seedCancelled=false;state.campaignId=null;state.confirmedMetricContext=null;state.metricDraftContract=null;state.appliedContractId=null;state.metricsEdited=false;state.selected=new Map(cases.map(item=>[caseId(item),item]));state.expectations=new Map();
+      document.body.dataset.seeded="true";state.improvementCasesEditing=false;state.seedDraft=seed;state.seedBaselineRevision=seed.baselines?.length===1?seed.baselines[0].revision_id:null;state.seedSelectionReviewed=false;state.seedCancelled=false;state.campaignId=null;state.confirmedMetricContext=null;state.metricDraftContract=null;state.appliedContractId=null;state.metricsEdited=false;state.selected=new Map(cases.map(item=>[caseId(item),item]));state.expectations=new Map();
       state.selectedStrategyIds=[...seed.strategies];$("campaignStrategy").value=seed.strategies[0] || "";
       $("campaignName").value=seed.defaults.name;$("campaignRepeats").value=seed.defaults.seeds.length;$("campaignTimeout").value=seed.defaults.timeout_s;
       state.frozenDataset=dataset;

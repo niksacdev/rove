@@ -15,6 +15,8 @@ from rove.models import ActionPrediction, ActionSpace, RobotEmbodiment, TaskPlan
 
 logger = logging.getLogger(__name__)
 
+_LEROBOT_IMPORT_ERROR: ImportError | None = None
+
 try:
     import torch
     from lerobot.policies.factory import get_policy_class
@@ -22,9 +24,9 @@ try:
     from PIL import Image
 
     HAS_LEROBOT = True
-except ImportError:
+except ImportError as exc:
     HAS_LEROBOT = False
-
+    _LEROBOT_IMPORT_ERROR = exc
 
 
 class LeRobotVLAAdapter:
@@ -37,9 +39,17 @@ class LeRobotVLAAdapter:
     def __init__(self, model_id: str, config: dict[str, Any] | None = None):
         if not HAS_LEROBOT:
             raise ImportError(
-                "lerobot is required for LeRobotVLAAdapter. "
-                "Install with: uv pip install rove-eval[smolvla]"
-            )
+                f"The local LeRobot runtime could not import: {_LEROBOT_IMPORT_ERROR}. "
+                "It requires Python 3.12 or newer and the optional smolvla dependencies "
+                "(also used for pi0.5). From a ROVE checkout: "
+                "uv sync --frozen --extra smolvla --inexact. "
+                "For a packaged installation: uv pip install 'rove-eval[smolvla]'. "
+                "Restart ROVE after installing. If already installed, check the import "
+                "error above for an incompatible or missing dependency. "
+                "The optional runtime is experimental; installing the extra alone may "
+                "not resolve upstream version conflicts. See "
+                "docs/research/vla_local_inference_guide.md for compatibility limitations."
+            ) from _LEROBOT_IMPORT_ERROR
 
         self.model_id = model_id
         cfg = config or {}

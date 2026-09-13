@@ -41,6 +41,34 @@ class TestLeRobotRegistryEntry:
 
         assert "local_lerobot" in _VLA_ADAPTERS
 
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            ModuleNotFoundError("No module named 'torch'", name="torch"),
+            ImportError("cannot import name 'PreTrainedConfig' from 'lerobot.policies.pretrained'"),
+            ImportError(
+                "'av' is required but not installed. Install it with: pip install 'lerobot[dataset]'"
+            ),
+        ],
+    )
+    def test_unavailable_runtime_preserves_actual_import_failure(self, monkeypatch, failure):
+        from rove.adapters import local_lerobot
+
+        monkeypatch.setattr(local_lerobot, "HAS_LEROBOT", False)
+        monkeypatch.setattr(local_lerobot, "_LEROBOT_IMPORT_ERROR", failure)
+
+        with pytest.raises(ImportError) as caught:
+            local_lerobot.LeRobotVLAAdapter("pi05", {"device": "cpu"})
+
+        assert caught.value.__cause__ is failure
+        message = str(caught.value)
+        assert str(failure) in message
+        assert "Python 3.12" in message
+        assert "uv sync --frozen --extra smolvla --inexact" in message
+        assert "Restart ROVE" in message
+        assert "upstream version conflicts" in message
+        assert "vla_local_inference_guide.md" in message
+
 
 @requires_lerobot
 class TestLeRobotAdapter:
@@ -56,10 +84,11 @@ class TestLeRobotAdapter:
         )
         assert isinstance(adapter, VLAAdapter)
 
-    def test_instantiation_without_lerobot_raises(self):
-        """If lerobot IS available, adapter should instantiate fine."""
+    def test_instantiation_does_not_load_weights(self):
+        """An available runtime can be configured without model downloads."""
         from rove.adapters.local_lerobot import LeRobotVLAAdapter
 
         adapter = LeRobotVLAAdapter(model_id="test", config={"device": "cpu"})
         assert adapter.model_id == "test"
         assert adapter._hf_repo == "lerobot/smolvla_base"
+        assert adapter._policy is None

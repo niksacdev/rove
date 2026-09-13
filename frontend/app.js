@@ -509,9 +509,10 @@ async function loadSavedCase(id) {
 }
 
 function setRootChrome(view) {
+  window.RoveTooltips?.hide();
   var quick = view === "quick" || view === "evaluation";
   document.getElementById("quickComposer").hidden = !quick;
-  document.getElementById("quickSidebar").hidden = !quick;
+  document.getElementById("quickSidebar").hidden = !quick && view !== "examples";
   document.getElementById("quickHeading").hidden = !quick;
   document.getElementById("quickWelcome").hidden = view !== "quick";
   document.getElementById("configureHeading").hidden = !["strategies", "models", "settings"].includes(view);
@@ -956,30 +957,27 @@ async function renderExamplesView() {
 
   // Layout: left menu + right content
   var layout = document.createElement("div");
-  layout.className = "flex gap-6 max-w-4xl mx-auto";
+  layout.className = "sample-library-layout";
 
   // Left menu
   var menu = document.createElement("nav");
-  menu.className = "shrink-0 w-52 pt-1";
+  menu.className = "sample-library-menu";
+  menu.setAttribute("aria-label", "Sample categories");
 
   var menuTitle = document.createElement("h2");
   menuTitle.className = "text-lg font-semibold text-gray-100 mb-1";
   menuTitle.textContent = "Sample cases";
-  menu.appendChild(menuTitle);
+  var library = document.createElement("section");
+  library.className = "sample-library";
+  var libraryHeading = document.createElement("header");
+  libraryHeading.className = "sample-library-heading";
+  libraryHeading.appendChild(menuTitle);
 
   var menuSubtitle = document.createElement("p");
   menuSubtitle.className = "text-[10px] text-gray-500 mb-4";
   menuSubtitle.textContent = "Choose an observation and task for your first trial.";
-  menu.appendChild(menuSubtitle);
-  var workspaceLink = document.createElement("a");
-  workspaceLink.href = "/static/datasets.html";
-  workspaceLink.className = "block text-xs text-f-purple mb-4";
-  workspaceLink.textContent = "Create a campaign from cases →";
-  menu.appendChild(workspaceLink);
-  var scopeNote = document.createElement("p");
-  scopeNote.className = "text-[10px] text-gray-500 mb-4";
-  scopeNote.textContent = "These are task inputs. A campaign records repeated trials against a success contract. Sample annotations are unreviewed references, not observed robot outcomes.";
-  menu.appendChild(scopeNote);
+  libraryHeading.appendChild(menuSubtitle);
+  library.appendChild(libraryHeading);
 
   // Right content area
   var content = document.createElement("div");
@@ -1065,7 +1063,7 @@ async function renderExamplesView() {
       header.appendChild(countSpan);
 
       var grid = document.createElement("div");
-      grid.className = "grid grid-cols-1 sm:grid-cols-2 gap-2 ml-5";
+      grid.className = "grid grid-cols-1 sm:grid-cols-2 gap-4";
 
       header.addEventListener("click", function() {
         var isHidden = grid.style.display === "none";
@@ -1098,6 +1096,7 @@ async function renderExamplesView() {
     activeCatKeys.forEach(function(k) {
       if (panels[k]) panels[k].style.display = k === cat ? "" : "none";
       if (menuButtons[k]) {
+        menuButtons[k].setAttribute("aria-current", String(k === cat));
         menuButtons[k].className = "flex items-center gap-2.5 w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors mb-1 "
           + (k === cat
             ? "bg-f-surface border border-f-purple/50 text-white"
@@ -1119,7 +1118,8 @@ async function renderExamplesView() {
 
   layout.appendChild(menu);
   layout.appendChild(content);
-  examplesView.appendChild(layout);
+  library.appendChild(layout);
+  examplesView.appendChild(library);
   if (typeof lucide !== "undefined") lucide.createIcons();
 }
 
@@ -1930,6 +1930,7 @@ async function loadStrategies() {
 }
 
 function renderStrategyCards() {
+  window.RoveTooltips?.hide();
   strategyGrid.textContent = "";
   strategies.forEach(function(s) {
     var chip = document.createElement("div");
@@ -1938,7 +1939,7 @@ function renderStrategyCards() {
     chip.setAttribute("role", "checkbox");
     chip.setAttribute("tabindex", "0");
     chip.setAttribute("aria-checked", "false");
-    chip.setAttribute("title", s.description || s.display_name);
+    chip.setAttribute("aria-label", s.display_name);
 
     // Checkmark (hidden when not selected)
     var checkWrap = document.createElement("span");
@@ -1977,6 +1978,7 @@ function renderStrategyCards() {
     // Hover popover with stage->model detail
     var popover = document.createElement("div");
     popover.className = "chip-popover";
+    popover.setAttribute("aria-hidden", "true");
 
     var popName = document.createElement("div");
     popName.className = "text-[11px] font-semibold text-gray-200 mb-1";

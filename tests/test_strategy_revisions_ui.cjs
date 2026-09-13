@@ -12,7 +12,7 @@ async function setup(options = {}) {
   w.fetch = async (url, opts = {}) => {
     const body = opts.body ? JSON.parse(opts.body) : null; calls.push({url, method: opts.method || "GET", body}); let result;
     if (url === "/api/strategies") result = {strategies: [{id: "original", display_name: "Original"}, {id: "baseline-source", display_name: "Baseline source"}]};
-    else if (url.startsWith("/api/strategy-revisions/parents/")) result = {strategy_id: url.split("/").at(-1), fingerprint: "a".repeat(64), definition, endpoints};
+    else if (url.startsWith("/api/strategy-revisions/parents/")) result = {strategy_id: url.split("/").at(-1), fingerprint: "a".repeat(64), definition: options.definition || definition, endpoints};
     else if (url === "/api/strategy-revisions/preview") { if (options.previewWait && !previews++) await options.previewWait; result = {strategy_id: "revision_123", preview_hash: "b".repeat(64), differences: [{path: "perceive.endpoint", before: "vision", after: body.definition.perceive?.endpoint || body.definition.perceive}], definition: body.definition}; }
     else if (url === "/api/strategy-revisions") result = {strategy_id: "revision_123", definition: body.definition};
     else throw Error(`Unexpected request ${url}`);
@@ -92,4 +92,41 @@ test("successful save followed by catalog refresh failure cannot create a duplic
     assert.equal(calls.filter(x => x.url === "/api/strategy-revisions").length, 1);
     assert.equal(el("closeStrategyRevision").disabled, false);
   } finally { dom.window.close(); }
+});
+
+test("failure recommendation reviews one compatible component and requires approval before adding a revision", async () => {
+  const {dom, el, calls, selections, set, open, preview, save} = await setup();
+  try {
+    el("createCampaignStrategyRevision").dataset.recommendedStage = "perceive";
+    await open(false);
+    assert.equal(el("strategyRevisionHeading").textContent, "Review perceive change");
+    assert.equal(el("revisionStage_plan").closest("label").hidden, true);
+    assert.equal(el("revisionStage_perceive").closest("label").hidden, false);
+    assert.match(el("strategyRecommendation").textContent, /Current endpoint: vision/);
+    assert.equal(el("saveStrategyRevision").textContent, "Save & use revision");
+    await preview();
+    assert.match(el("strategyRevisionStatus").textContent, /Choose a different compatible endpoint/);
+    assert.equal(calls.some(call => call.method === "POST"), false);
+    set("revisionStage_perceive", "new-vision", "change"); await preview();
+    assert.equal(calls.some(call => call.url === "/api/strategy-revisions"), false);
+    assert.match(el("strategyRevisionDiff").textContent, /vision.*new-vision/);
+    await save();
+    assert.deepEqual(selections, [["revision_123", false]]);
+    const saved = calls.find(call => call.url === "/api/strategy-revisions").body;
+    assert.equal(saved.definition.plan, definition.plan);
+    assert.deepEqual(saved.definition.verify, definition.verify);
+    assert.equal(calls.some(call => /campaigns|evaluate|baselines/.test(call.url)), false);
+    delete el("createCampaignStrategyRevision").dataset.recommendedStage; await open(false);
+    assert.equal(el("revisionStage_plan").closest("label").hidden, false);
+  } finally { dom.window.close(); }
+});
+
+test("focused revision leaves absent and null unrelated configuration fields unchanged", async () => {
+  const original = {display_name:"Sparse pipeline", perceive:{endpoint:"vision", timeout_ms:4000}, act:null, verify:{endpoint:"grader",checks:[]}};
+  const {dom, el, calls, open, set, preview} = await setup({definition:original});
+  try {
+    el("createCampaignStrategyRevision").dataset.recommendedStage="perceive";await open(false);
+    set("revisionStage_perceive","new-vision","change");await preview();
+    assert.deepEqual(calls.find(call=>call.url.endsWith("/preview")).body.definition,{...original,display_name:"Sparse pipeline revision",perceive:{endpoint:"new-vision",timeout_ms:4000}});
+  } finally {dom.window.close();}
 });

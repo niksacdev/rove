@@ -60,11 +60,16 @@ test("Results opens history first with shared navigation, explicit review routes
   assert.equal(document.getElementById("advancedConfiguration").open, false);
   assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];
-  assert.deepEqual(links.map(a => a.textContent), ["Review results", "Improve", "Open report", "Set as baseline", "JSON", "CSV"]);
+  assert.deepEqual(links.map(a => a.textContent), ["View results", "HTML report", "JSON", "CSV", "Improve"]);
   assert.equal(links[0].getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.equal(links[1].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
-  assert.match(links[2].getAttribute("href"), /report\?format=html$/);
-  assert.equal(links[2].rel, "noopener");
+  assert.equal(links[4].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
+  assert.match(links[1].getAttribute("href"), /report\?format=html$/);
+  assert.equal(links[1].rel, "noopener");
+  const exports = document.querySelector(".campaign-exports");
+  assert.equal(exports.open, false);
+  assert.equal(exports.querySelector("summary").textContent, "Export");
+  exports.open = true; exports.dispatchEvent(new document.defaultView.KeyboardEvent("keydown", {key:"Escape", bubbles:true}));
+  assert.equal(exports.open, false); assert.equal(document.activeElement, exports.querySelector("summary"));
   assert.equal(calls.filter(c => c.options?.method === "POST").length, 0);
 });
 
@@ -160,7 +165,7 @@ test("history and per-card failures preserve useful result links and recover wit
   await flush();
   const card = page.document.querySelector(".campaign");
   assert.match(card.querySelector(".progress").textContent, /Trial counts unavailable/);
-  assert.equal(card.querySelectorAll("a").length, 6);
+  assert.equal(card.querySelectorAll("a").length, 5);
   failList = true;
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);
@@ -199,36 +204,27 @@ test("campaign cancellation and resume are explicit actions, never consequences 
 });
 
 
-test("only saved baseline records badge matching campaigns with their actual strategy", async t => {
+test("only saved baseline records badge matching campaigns while details stay in results", async t => {
   const baseline = {id: "baseline-1", name: "Production grasping", campaign_id: "campaign-a", strategy_id: "grasp-v2"};
   const page = setup(t, {campaigns: [campaign, {...campaign, id: "campaign-b", name: "Another baseline experiment"}], baselines: [baseline]});
   await flush();
   const [saved, ordinary] = page.document.querySelectorAll(".campaign");
   assert.equal(saved.querySelector(".baseline-badge").hidden, false);
-  assert.equal(saved.querySelector(".campaign-baselines .baseline-name").textContent, "Production grasping");
-  assert.equal(saved.querySelector(".campaign-baselines span").textContent, "Strategy: grasp-v2");
-  assert.equal(saved.querySelector(".baseline-action").hidden, true);
-  assert.equal(saved.querySelector(".baseline-name").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a&baseline=baseline-1");
   assert.equal(ordinary.querySelector(".baseline-badge").hidden, true);
-  assert.equal(ordinary.querySelector(".baseline-action").textContent, "Set as baseline");
-  assert.equal(ordinary.querySelector(".baseline-action").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-b&baseline=setup");
   assert.equal(page.calls.some(call => call.options?.method), false);
 });
 
-test("baseline setup is offered only after completion and saved badges update on refresh", async t => {
+test("saved baseline badges update on refresh without adding setup controls", async t => {
   const row = {...campaign, status: "running"};
   const baselines = [];
   const page = setup(t, {campaigns: [row], baselines});
   await flush();
   const card = page.document.querySelector(".campaign");
-  assert.equal(card.querySelector(".baseline-action").hidden, true);
   row.status = "completed";
   baselines.push({id: "saved", campaign_id: row.id, strategy_id: "mock", name: "<img src=x onerror=alert(1)>"});
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);
-  assert.equal(card.querySelector(".baseline-action").hidden, true);
   assert.equal(card.querySelector(".baseline-badge").hidden, false);
-  assert.equal(card.querySelector(".campaign-baselines .baseline-name").textContent, baselines[0].name);
   assert.equal(card.querySelector("img"), null);
   assert.equal(page.timers.size, 0);
   assert.equal(page.calls.some(call => call.options?.method), false);
@@ -250,16 +246,16 @@ test("unavailable baseline service preserves campaign results and exposes retry 
 });
 
 
-test("multiple saved strategies keep separate exact baseline links without mislabeling other campaigns", async t => {
+test("multiple saved strategies retain a single baseline indicator and results destination", async t => {
   const page = setup(t, {baselines: [
     {id: "reference-a", campaign_id: campaign.id, strategy_id: "agent-a", name: "Agent A"},
     {id: "reference-b", campaign_id: campaign.id, strategy_id: "agent-b", name: "Agent B"},
     {id: "unrelated", campaign_id: "elsewhere", strategy_id: "agent-c", name: "Other campaign"},
   ]});
   await flush();
-  const links = [...page.document.querySelectorAll(".baseline-name")];
-  assert.deepEqual(links.map(link => link.textContent), ["Agent A", "Agent B"]);
-  assert.deepEqual(links.map(link => new URL(link.href).searchParams.get("baseline")), ["reference-a", "reference-b"]);
+  assert.equal(page.document.querySelector(".baseline-badge").hidden, false);
+  assert.equal(page.document.querySelector(".baseline-name"), null);
+  assert.equal(page.document.querySelector(".campaign-actions > a").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
   assert.equal(page.document.querySelector(".campaign small").textContent.includes("v1"), false);
   assert.match(page.document.querySelector(".campaign small").textContent, /^Completed/);
   assert.equal(page.calls.some(call => call.options?.method), false);
