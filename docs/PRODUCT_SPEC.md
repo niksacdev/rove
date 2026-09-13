@@ -225,6 +225,20 @@ regression coverage; live AI generation and hardware performance were not valida
 
 ## 5. Create datasets and validate cases
 
+### Build on open robotics datasets
+
+The [ABC import](product/abc-dataset-support.md) builds on the ABC team's data and
+conversion tools. A selected observation, task and exported robot state become an
+ordinary ROVE case, retaining source episode, split, domain, frame and artifact
+identity. CLI and the existing Cases import dialog share the same boundary. Full
+recordings and demonstrated actions remain reference material; they never establish
+that a newly evaluated strategy completed the physical task. This provides an
+onboarding path into existing strategy comparisons, SME review and campaign history.
+See [ADR-028](architecture/ADR-028-abc-episode-import.md) for scope and validation;
+integration of upstream simulation or physical evaluation results is a future step.
+
+### Review customer cases and outputs
+
 A customer without labels can run the initial campaign and have an SME review three distinct targets:
 
 1. **Case validity:** usable input, clear instruction and sufficient evidence for the stated assessment.

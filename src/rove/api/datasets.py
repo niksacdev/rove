@@ -36,6 +36,9 @@ def errors():
 
 def create_dataset_router(root: Path, launch) -> APIRouter:
     router = APIRouter()
+    from rove.api.abc_import import create_abc_router
+
+    router.include_router(create_abc_router(root))
 
     def service():
         return DatasetService(root)

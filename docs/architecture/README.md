@@ -19,6 +19,7 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted | Campaign workspace, local mock journey and responsive gallery verified |
 | [026: Versioned strategy catalog](ADR-026-versioned-strategy-catalog.md) | Accepted | Immutable local strategy catalog and multi-strategy execution tested; editor browser integration pending |
 | [027: Versioned evaluation iterations](ADR-027-trial-to-campaign-improvement.md) | Accepted | Shared CLI, managed trial handoff and validated iteration timeline implemented; full mock browser loop and narrow timeline verified |
+| [028: ABC episode import](ADR-028-abc-episode-import.md) | Accepted | Shared import design reuses upstream conversion, existing Case records and managed source assets; see ADR for validation status |
 
 ## How the decisions connect
 
@@ -41,6 +42,9 @@ flowchart TD
     C --> J[027: Versioned evaluation iterations]
     K --> J
     M --> J
+    S --> A[028: ABC episode import]
+    H --> A
+    A --> J
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

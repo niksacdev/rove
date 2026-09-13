@@ -1158,6 +1158,7 @@ class EvaluationPipeline:
                 "acceptable_interpretations",
                 "difficulty",
                 "robot",
+                "robot_descriptor",
                 "action_dim",
                 "state_dim",
                 "control_space",

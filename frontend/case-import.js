@@ -35,10 +35,15 @@ if (typeof document !== "undefined") (() => {
   let rows = [], busy = false, opener;
   const notice = text => { $("bulkImportStatus").textContent = text; };
   const invalidate = () => { rows = []; $("bulkImportPreview").replaceChildren(); $("confirmBulkImport").disabled = true; notice(""); };
-  $("showBulkImport").addEventListener("click", () => { opener = document.activeElement; if (dialog.showModal) dialog.showModal(); else dialog.setAttribute("open", ""); $("bulkCaseFile").focus(); });
-  const close = () => { if (busy) return; if (dialog.close) dialog.close(); else dialog.removeAttribute("open"); opener?.focus(); };
+  $("showBulkImport").addEventListener("click", () => { opener = document.activeElement; if (dialog.showModal) dialog.showModal(); else dialog.setAttribute("open", ""); $("caseImportFormat").focus(); });
+  const close = () => { if (busy || dialog.dataset.importBusy === "true") return; if (dialog.close) dialog.close(); else dialog.removeAttribute("open"); opener?.focus(); };
   $("closeBulkImport").addEventListener("click", close);
   dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
+  $("caseImportFormat").addEventListener("change", () => {
+    const abc = $("caseImportFormat").value === "abc";
+    $("bulkJsonlPanel").hidden = abc; $("abcImportPanel").hidden = !abc;
+    invalidate();
+  });
   $("bulkCaseFile").addEventListener("change", invalidate); $("bulkCaseImages").addEventListener("change", invalidate);
   function render() {
     const list = $("bulkImportPreview"); list.replaceChildren();
@@ -58,7 +63,7 @@ if (typeof document !== "undefined") (() => {
   $("confirmBulkImport").addEventListener("click", async () => {
     if (busy || !rows.length) return;
     busy = true;
-    for (const id of ["bulkCaseFile", "bulkCaseImages", "previewBulkImport", "confirmBulkImport", "closeBulkImport"]) $(id).disabled = true;
+    for (const id of ["bulkCaseFile", "bulkCaseImages", "previewBulkImport", "confirmBulkImport", "closeBulkImport", "caseImportFormat"]) $(id).disabled = true;
     const imported = [];
     try {
       for (const row of rows) {
@@ -82,7 +87,7 @@ if (typeof document !== "undefined") (() => {
       if (rows.every(row => row.status === "imported")) notice(`Imported ${imported.length} cases and added them to your campaign. Close to inspect them.`);
     } finally {
       busy = false;
-      for (const id of ["bulkCaseFile", "bulkCaseImages", "previewBulkImport", "closeBulkImport"]) $(id).disabled = false;
+      for (const id of ["bulkCaseFile", "bulkCaseImages", "previewBulkImport", "closeBulkImport", "caseImportFormat"]) $(id).disabled = false;
       // A retry requires a new explicit preview; never blindly resubmit uncertain imports.
       $("confirmBulkImport").disabled = true;
     }

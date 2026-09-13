@@ -51,6 +51,14 @@ annotations are retained. Re-importing preserves user edits and creates no extra
 Reference annotations are unreviewed source material, kept separate from candidate
 inputs and observed episode evidence. Historical runs remain in History.
 
+Use **Cases → Import cases → XDOF ABC episode** to turn an upstream ABC export
+into a case with a selected camera observation and current robot state. The same
+operation is available as `rove data case import-abc` for automated dataset
+preparation. ROVE builds on the ABC project's converter and public samples;
+demonstrated actions remain reference material. Follow the
+[ABC dataset guide](examples/abc/README.md) for preparation, source versions and
+the supported export formats.
+
 Name and pin a baseline, inspect clock-aware trace lanes beside a candidate trial,
 and open preserved stage outputs or exact recording selections. Explicit frozen
 annotation bindings can grade later candidates without exposing labels to them.

@@ -100,6 +100,25 @@ def _review_revision(service, identity, patch, expected):
 
 
 def _execute(args):
+    if args.resource == "case" and args.action == "import-abc":
+        from rove.datasets.abc import import_prepared, prepare_episode
+
+        prepared = prepare_episode(
+            args.directory,
+            episode_id=args.episode_id,
+            source_revision=args.source_revision,
+            split=args.split,
+            domain=args.domain,
+            frame_index=args.frame_index,
+            camera=args.camera,
+        )
+        if args.preview:
+            return prepared.preview()
+        if args.preview_hash is not None and prepared.fingerprint != args.preview_hash:
+            raise ValueError("The episode or selection changed; preview it again")
+        return import_prepared(
+            DatasetService(args.store), prepared, expected_preview_hash=args.preview_hash
+        )
     service = DatasetService(args.store)
     action = args.action
     if args.resource == "case":
@@ -222,6 +241,20 @@ def main(argv=None):
     batch.add_argument("--operation-id", help="Stable batch identity for resumable retries")
     samples = command(cases, "import-samples", "Synchronize a bundled-format sample library")
     samples.add_argument("directory", type=Path, help="Directory containing manifest.json")
+    abc = command(cases, "import-abc", "Import a selected observation from an ABC exported episode")
+    abc.add_argument("directory", type=Path, help="One upstream exported episode directory")
+    abc.add_argument("--episode-id", required=True, help="Original upstream episode identity")
+    abc.add_argument(
+        "--source-revision", required=True, help="Pinned source revision or archive SHA-256"
+    )
+    abc.add_argument("--split", choices=["train", "val", "unknown"], default="unknown")
+    abc.add_argument("--domain", choices=["real", "sim", "unknown"], default="unknown")
+    abc.add_argument("--frame-index", type=int, default=0, help="Zero-based exported frame")
+    abc.add_argument("--camera", choices=["top", "left", "right", "combined"], default="top")
+    abc.add_argument("--preview", action="store_true", help="Validate and preview without saving")
+    abc.add_argument(
+        "--preview-hash", help="Reject import if the source or selection changed since preview"
+    )
     listing = command(cases, "list", "Search current case revisions", page=True)
     listing.add_argument("--query", default="")
     listing.add_argument("--category", default="")

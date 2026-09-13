@@ -189,6 +189,12 @@ input:focus-visible, textarea:focus-visible { outline-color: var(--f-purple); }
 #newCaseDialog #importPanel > summary { display: none; }
 #newCaseDialog #caseEditStatus { font-size: 12px; }
 .import-content { padding: 24px; }
+.abc-option-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+#abcImportPanel details { margin: 20px 0; }
+#abcPreview { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--f-border); }
+#abcPreviewImage { display: block; max-width: 100%; max-height: 320px; margin: 0 auto 18px; border-radius: 10px; object-fit: contain; }
+#abcPreviewWarnings { padding-left: 20px; }
+@media (max-width: 480px) { .abc-option-grid { grid-template-columns: 1fr; } }
 #bulkImportPreview { max-height: 230px; overflow-y: auto; padding-left: 24px; }
 #bulkImportPreview li { margin: 10px 0; }
 .picker-tabs { display: flex; gap: 4px; padding: 12px 26px; background: var(--f-bg); border-bottom: 1px solid var(--f-border); }
