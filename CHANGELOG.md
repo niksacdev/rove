@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Import ABC robotics episodes as versioned cases
 
-Build on XDOF and the ABC project's exported episodes through Cases → Import cases or the CLI. Preview a selected camera observation and robot state, preserve the original episode files and source identity, then compare strategies through existing campaigns. Demonstrations stay separate from candidate outcomes, with missing calibration and robot-model evidence made explicit.
+Build on XDOF and the ABC project's exported episodes through Cases → Import cases or the CLI. Preview a selected camera observation and robot state, preserve the original episode files and source identity, then compare strategies through existing campaigns. Demonstrations stay separate from candidate outcomes, with missing calibration and robot-model evidence made explicit. *(PR #25)*
 
 ### Compare robotics strategies and track evaluation iterations
 

@@ -283,6 +283,13 @@ reviews, and dataset preview/freezing. PNG/JPEG inputs are bounded and checked
 against their full content hash and decoded format. Missing assets remain visible
 in case history but cannot launch a valid evaluation.
 
+[ABC episode import](../product/abc-dataset-support.md) uses the same case service
+from the CLI and browser. It consumes upstream converted real-data and public
+simulation-preview profiles, selects a camera/frame, and preserves current
+bimanual state plus private source assets. Demonstration trajectories are never
+treated as candidate outcome evidence. [ADR-028](ADR-028-abc-episode-import.md)
+records source limitations, diagrams and validation.
+
 ```mermaid
 flowchart LR
     I[Customer image and task] --> C[Immutable case revision]
