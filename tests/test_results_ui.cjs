@@ -54,9 +54,10 @@ test("Results opens history first with shared navigation, explicit review routes
   await flush();
   assert.equal(document.querySelector("h1").textContent, "Campaigns");
   assert.equal(document.querySelector("#roveNav [aria-current]").textContent, "Campaigns");
-  assert.equal(document.querySelector(".workspace-tabs [aria-current]").textContent, "Campaigns");
-  assert.equal(document.querySelector(".workspace-tabs a:last-child").getAttribute("href"), "/static/history.html");
+  assert.equal(document.querySelector(".workspace-tabs"), null);
+  assert.equal(document.querySelector('#roveNav nav a').getAttribute("href"), "/static/history.html");
   assert.equal(document.querySelector(".page-heading a").getAttribute("href"), "/static/datasets.html");
+  assert.equal(document.querySelector(".page-heading a").textContent, "New campaign");
   assert.equal(document.getElementById("advancedConfiguration").open, false);
   assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];

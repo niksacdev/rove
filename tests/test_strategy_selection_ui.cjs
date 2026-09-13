@@ -30,6 +30,7 @@ async function workspace(t, catalog = [alpha, beta]) {
     else throw Error(`Unexpected request ${url}`);
     return {ok: true, json: async () => payload};
   };
+  w.eval(require("node:fs").readFileSync(require("node:path").resolve(__dirname,"../frontend/strategy-table.js"),"utf8"));
   w.eval(read("navigation.js")); w.eval(read("datasets.js")); await pause();
   const choose = id => [...el("strategyCards").querySelectorAll("input")].find(input => input.value === id).click();
   const set = (id, value, type = "input") => { el(id).value = value; el(id).dispatchEvent(new w.Event(type, {bubbles: true})); };
@@ -46,17 +47,16 @@ test("campaign payload accepts distinct strategy sets, supports legacy input and
   assert.throws(() => buildCampaign({...input, strategyIds: [], strategyId: "alpha"}), /at least one strategy/);
 });
 
-test("strategy cards expose actual endpoint assignments without automatically selecting or running", async t => {
+test("strategy checkbox table exposes actual endpoint assignments without automatically selecting or running", async t => {
   const {el, calls} = await workspace(t);
   assert.equal(el("campaignStrategy").hidden, true);
   assert.equal(el("strategyCards").querySelectorAll("input:checked").length, 0);
   const card = el("strategyCards").querySelector('[data-strategy-id="alpha"]');
   assert.match(card.textContent, /Vision and planner/);
   assert.match(card.textContent, /Grounded two-stage pipeline/);
-  assert.match(card.textContent, /Perceivecamera-vlm/);
-  assert.match(card.textContent, /Planplanner-agent/);
-  assert.match(card.textContent, /ActSkipped/);
-  assert.match(card.textContent, /Verifyexpert-grader/);
+  assert.equal(card.tagName,"TR");
+  assert.deepEqual([...el("strategyCards").querySelectorAll("th")].map(cell=>cell.textContent),["Select","Strategy","Perceive","Plan","Act","Verify"]);
+  assert.deepEqual([...card.querySelectorAll(".strategy-stage")].map(cell=>cell.textContent),["camera-vlm","planner-agent","Skipped","expert-grader"]);
   assert.equal(card.querySelector("img"), null);
   assert.equal(calls.some(call => call.method !== "GET"), false);
 });
@@ -65,14 +65,14 @@ test("multiple selections survive steps, drive preview payload and invalidate pr
   const {w, el, calls, choose, set} = await workspace(t);
   set("campaignContract", "rules", "change");
   choose("alpha"); choose("beta"); set("campaignRepeats", "4");
-  // The deep-linked case is inspected initially; selecting it in the picker includes it in this draft.
+  // A deep-linked case is already selected, including when opening Configure.
   el("selectExisting").click(); await pause();
-  el("caseList").querySelector('input[data-case-id="case-r1"]').click(); el("confirmCasePicker").click(); await pause();
+  assert.equal(el("caseList").querySelector('input[data-case-id="case-r1"]').checked,true); el("confirmCasePicker").click(); await pause();
   set("campaignContract", "rules", "change");
   w.document.querySelector('[data-journey-step="run"]').click();
-  assert.match(el("runSummary").textContent, /1 case × 2 strategies × 4 repeats = 8 planned trials/);
+  assert.match(el("runSummary").textContent, /1 case × 2 strategies × 4 attempts = 8 planned trials/);
   assert.match(el("runSummary").textContent, /Vision and planner, Direct VLA/);
-  assert.match(el("campaignCalculation").textContent, /1 case × 2 strategies × 4 repeats = 8 planned trials/);
+  assert.match(el("campaignCalculation").textContent, /1 case × 2 strategies × 4 attempts = 8 planned trials/);
   el("previewCampaign").click(); await pause();
   assert.deepEqual(calls.find(call => call.url === "/api/campaigns/preview").body.strategies, ["alpha", "beta"]);
   assert.equal(el("startBaseline").disabled, false);
@@ -81,7 +81,7 @@ test("multiple selections survive steps, drive preview payload and invalidate pr
   choose("alpha");
   assert.equal(el("startBaseline").disabled, true);
   assert.equal(el("campaignMeasures").childElementCount, 0);
-  assert.match(el("runSummary").textContent, /1 case × 1 strategy × 4 repeats = 4 planned trials/);
+  assert.match(el("runSummary").textContent, /1 case × 1 strategy × 4 attempts = 4 planned trials/);
   assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases"), false);
 });
 
@@ -104,4 +104,28 @@ test("the twentieth selection disables further cards and deselecting re-enables 
   assert.equal(el("strategyCards").querySelector('input[value="s20"]').disabled, true);
   choose("s0");
   assert.equal(el("strategyCards").querySelector('input[value="s20"]').disabled, false);
+});
+
+
+test("strategy rows render typed endpoints and configured verifier checks without JSON or inferred stages",async t=>{
+  const catalog=[{...alpha,id:"typed",perceive:{endpoint:"camera-vlm",timeout_ms:2000},verify:{endpoint:"primary-verifier",checks:[{endpoint:"grounding-check",role:"constraint",required:true}]},sim:"recorded-sim"},
+    {...beta,id:"runtime",verification_checks:[{endpoint:"<script>unsafe</script>",role:"diagnostic",required:false}],compute_dynamics:true}];
+  const {w,el,calls}=await workspace(t,catalog);
+  const row=el("strategyCards").querySelector('tr[data-strategy-id="typed"]');
+  assert.match(row.querySelector('[data-label="Perceive"]').textContent,/camera-vlm/);
+  assert.match(row.querySelector('[data-label="Verify"]').textContent,/primary-verifier.*grounding-check.*Required constraint/);
+  assert.match(row.querySelector('.strategy-identity small').textContent,/Simulation: recorded-sim/);
+  const runtime=el("strategyCards").querySelector('tr[data-strategy-id="runtime"]');
+  assert.match(runtime.querySelector('[data-label="Verify"]').textContent,/<script>unsafe<\/script>.*Diagnostic check.*Dynamics check enabled/);
+  assert.equal(runtime.querySelector("script"),null);assert.doesNotMatch(el("strategyCards").textContent,/\[object Object\]/);
+  row.querySelector(".strategy-identity label").click();
+  const chosen=el("strategyCards").querySelector('input[value="typed"]');assert.equal(chosen.checked,true);assert.equal(w.document.activeElement,chosen);
+  assert.equal(el("strategyCards").querySelectorAll("input:checked").length,1);assert.equal(calls.some(call=>call.method!=="GET"),false);
+});
+
+
+test("shared strategy columns retain table layout alongside legacy campaign styles",async t=>{
+ const {w,el}=await workspace(t);
+ for(const file of ["datasets.css","strategy-table.css","fluent.css"]){const style=w.document.createElement("style");style.textContent=read(file);w.document.head.append(style);}
+ for(const cell of el("strategyCards").querySelectorAll("td"))assert.equal(w.getComputedStyle(cell).display,"table-cell");
 });

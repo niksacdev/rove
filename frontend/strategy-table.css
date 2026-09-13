@@ -1,0 +1,17 @@
+.rove-strategy-table-host { display:block; overflow:auto; border:1px solid var(--f-border); border-radius:var(--f-radius-control,4px); }
+.rove-strategy-table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:14px; line-height:21px; }
+.rove-strategy-table th { background:var(--f-surface); color:var(--f-text-secondary); padding:12px; text-align:left; font-size:14px; font-weight:600; border-bottom:1px solid var(--f-border); }
+.rove-strategy-table th:first-child { width:72px; font-size:12px; white-space:nowrap; }.rove-strategy-table th:nth-child(2) { width:29%; }
+.rove-strategy-table td { display:table-cell; padding:16px 12px; vertical-align:top; border-bottom:1px solid var(--f-border); overflow-wrap:anywhere; }
+.rove-strategy-table tr:hover { background:var(--f-elevated); }.rove-strategy-table tr.selected { background:var(--f-selected); }
+.rove-strategy-table input { width:18px; height:18px; margin:2px 0 0; accent-color:var(--f-accent); }
+.rove-strategy-table .strategy-identity label { display:block; font-size:16px; line-height:24px; font-weight:600; margin:0; cursor:pointer; color:var(--f-text); }
+.rove-strategy-table .strategy-identity p { margin:5px 0; font-size:14px; line-height:21px; color:var(--f-text-secondary); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.rove-strategy-table small { display:block; font-size:12px; line-height:19px; color:var(--f-text-muted); }
+.rove-strategy-table .strategy-stage>span { display:block; font-size:14px; color:var(--f-text); }.rove-strategy-table .strategy-check { margin-top:10px; }
+@media(max-width:760px){
+ .rove-strategy-table,.rove-strategy-table tbody { display:block; }.rove-strategy-table thead { display:none; }
+ .rove-strategy-table tr { display:grid; grid-template-columns:42px minmax(0,1fr) minmax(0,1fr); padding:12px 0; border-bottom:1px solid var(--f-border); }
+ .rove-strategy-table td { display:block; border:0; padding:8px 12px; }.rove-strategy-table .strategy-identity { grid-column:2/4; }.rove-strategy-table .strategy-stage:nth-child(odd) { grid-column:2; }
+ .rove-strategy-table .strategy-stage::before { content:attr(data-label); display:block; font-size:12px; color:var(--f-text-muted); margin-bottom:4px; }
+}

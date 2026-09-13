@@ -60,6 +60,7 @@ test("dataset selection inherits its definition and submits all prior and added 
   const pause = () => new Promise(resolve => setTimeout(resolve, 30));
   try {
     w.eval(fs.readFileSync(path.join(frontend, "navigation.js"), "utf8"));
+  w.eval(require("node:fs").readFileSync(require("node:path").resolve(__dirname,"../frontend/strategy-table.js"),"utf8"));
     w.eval(fs.readFileSync(path.join(frontend, "datasets.js"), "utf8"));
     await pause();
     const el = id => w.document.getElementById(id);

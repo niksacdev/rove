@@ -21,8 +21,8 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [027: Versioned evaluation iterations](ADR-027-trial-to-campaign-improvement.md) | Accepted | Shared CLI, managed trial handoff and validated iteration timeline implemented; full mock browser loop and narrow timeline verified |
 | [028: ABC episode import](ADR-028-abc-episode-import.md) | Accepted | Shared import design reuses upstream conversion, existing Case records and managed source assets; see ADR for validation status |
 | [029: Workspace interaction consistency](ADR-029-workspace-interaction-consistency.md) | Accepted | Compact campaign list, reviewed strategy changes and unclipped accessible overlays |
-
-| [030: Foundry-inspired visual language](ADR-030-foundry-visual-language.md) | Accepted | Shared Fluent tokens, evaluation list, controls and theme contrast checks |
+| [030: Foundry-inspired visual language](ADR-030-foundry-visual-language.md) | Accepted; navigation/setup refined by ADR-031 | Shared Fluent tokens, evaluation list, controls and theme contrast checks |
+| [031: Shared evaluation workspace](ADR-031-shared-evaluation-workspace.md) | Implemented; verification limits recorded | Peer Trials/Campaigns browsers, shared strategy selection, persistent campaign identity and explicit scoring semantics |
 
 ## How the decisions connect
 
@@ -48,6 +48,9 @@ flowchart TD
     S --> A[028: ABC episode import]
     H --> A
     A --> J
+    J --> W[031: Shared evaluation workspace]
+    K --> W
+    M --> W
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

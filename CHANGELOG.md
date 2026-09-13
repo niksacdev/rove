@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Share the trial and campaign workspace
+
+Trials and Campaigns now consistently open their record browsers, with New trial and New campaign actions. Quick comparisons keep their task, image and robot description through Case, Configure, Run and Results. Both workflows use the same strategy selection table and existing execution services. Campaign name, attempts and live trial totals stay above the steps; saved campaigns show their frozen setup. Success criteria identify the pass condition and checking method, configuration checks report their status beside Run, and a new draft shows a clear empty Results state. Active-run history navigation preserves live output.
+
 ### Align the workspace with Azure AI Foundry
 
 Use one Foundry-inspired Fluent layer across trials, campaigns, configuration, results and exported HTML reports. Neutral light/dark surfaces, restrained purple actions, flat navigation and aligned campaign columns replace conflicting page styles. Trials use the same full-width browsing pattern, with details opened on selection. Improvement cards identify the strategy, affected trials and direct next actions. A live trial calculator, explicit criteria and assessment methods, campaign/strategy progress, scoped Results tabs and separate Campaign history clarify the workflow. Settings is a global top-right gear. Static asset revalidation prevents mixed renderer/style versions. An optional local Copilot assistant connection supports reviewed drafts. Existing evaluation execution, evidence and approval flows are preserved. *(PR #27)*

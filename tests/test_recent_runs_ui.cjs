@@ -9,7 +9,7 @@ async function workspace(t, entries) {
   w.lucide = {createIcons(){}}; w.HTMLElement.prototype.scrollIntoView = () => {};
   w.fetch = async (url, options = {}) => { calls.push({url, method: options.method || "GET"}); return {ok: true, json: async () => url.includes("history") ? [] : url.includes("strategies") ? {strategies: []} : url.includes("endpoints") ? {endpoints: []} : {defaults: {}, endpoints: {}, strategies: {}}}; };
   w.eval(read("navigation.js")); w.eval(read("stage-renderers.js"));
-  w.eval(read("app.js") + '\nwindow.sidebarTest = {seed(entries) {runHistory = entries; strategies = [{id:"alpha",display_name:"Vision and planning baseline"},{id:"beta",display_name:"Candidate planner revision 2"}]; renderHistory();}, active() {return runHistory[activeHistoryIndex]?.id;}, records() {return runHistory;}};'); await pause();
+  w.eval(read("strategy-table.js")); w.eval(read("app.js") + '\nwindow.sidebarTest = {seed(entries) {runHistory = entries; strategies = [{id:"alpha",display_name:"Vision and planning baseline"},{id:"beta",display_name:"Candidate planner revision 2"}]; renderHistory();}, active() {return runHistory[activeHistoryIndex]?.id;}, records() {return runHistory;}};'); await pause();
   w.sidebarTest.seed(entries);
   return {w, calls, doc: w.document};
 }

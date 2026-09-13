@@ -129,7 +129,7 @@ async function workspace(t) {
     else throw Error(`Unexpected request ${url}`);
     return {ok: true, json: async () => value};
   };
-  for (const file of ["navigation.js", "stage-renderers.js", "trial-output.js", "campaign-progress.js", "datasets.js"]) w.eval(read(file));
+  for (const file of ["navigation.js", "strategy-table.js", "stage-renderers.js", "trial-output.js", "campaign-progress.js", "datasets.js"]) w.eval(read(file));
   const pause = () => new Promise(resolve => setTimeout(resolve, 30)); await pause();
   return {w, calls, pause, fail: value => {stageFailure = value;}, eventCount: () => eventNumber};
 }

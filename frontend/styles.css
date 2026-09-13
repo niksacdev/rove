@@ -293,3 +293,29 @@ dialog[open]::backdrop { animation: rove-backdrop-in 180ms ease-out; }
 
 .strategy-chip > span:first-of-type:not(.check-icon), .strategy-chip > .check-icon + span { font-size:13px; }
 .strategy-tooltip .text-gray-500 { color:var(--f-text-muted); }
+/* Trial and campaign creation use the same case/configure/execute/review progression. */
+body[data-quick-step] .root-main { overflow-y:auto; }
+#quickWorkspace { flex-shrink:0; padding:0 24px 20px; }
+#quickWorkspace[hidden] { display:none; }
+#quickWorkspace .quick-workspace-commandbar { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:0 0 20px; }
+#quickWorkspace #quickTrialCount { font-size:16px; margin:0; color:var(--f-text-secondary); }
+#quickWorkspace #evalBtn { width:auto; min-width:160px; flex:auto; min-height:40px; height:auto; padding:9px 18px; font-size:14px; font-weight:600; border-radius:var(--f-radius-control,4px); }
+#quickJourney { display:flex; flex-wrap:wrap; gap:24px; border-bottom:1px solid var(--f-border); margin-bottom:24px; }
+#quickJourney button { padding:12px 2px; min-height:44px; border:0; border-bottom:3px solid transparent; border-radius:0; color:var(--f-text-secondary); background:transparent; font-size:16px; }
+#quickJourney [aria-current="step"] { color:var(--f-text); border-bottom-color:var(--f-accent-text); font-weight:600; }
+#quickWorkspace [data-quick-panel][hidden],#chatArea[hidden] { display:none; }
+#quickWorkspace h2 { font-size:24px; font-weight:600; line-height:32px; margin:0 0 12px; }
+#quickWorkspace h2:focus { outline:none; }
+#quickWorkspace p { font-size:16px; line-height:25px; color:var(--f-text-secondary); }
+#quickWorkspace .quick-section-heading { display:flex; align-items:start; flex-wrap:wrap; gap:16px; justify-content:space-between; }
+#quickWorkspace .quick-section-heading > div { flex:1 1 340px; }
+#quickWorkspace button.secondary { min-height:36px; padding:7px 14px; border:1px solid var(--f-border-strong); border-radius:var(--f-radius-control,4px); color:var(--f-text); background:var(--f-surface); font-size:14px; }
+#quickWorkspace #quickComposer { max-height:none; overflow:visible; padding:20px 0; border-top:0; background:transparent; }
+#quickWorkspace #taskInput { min-height:110px; font-size:16px; line-height:25px; }
+#quickWorkspace #previewImg { height:180px; max-width:100%; object-fit:contain; }
+#quickWorkspace #configToggle { display:none; }
+#quickWorkspace #strategyGrid { display:block; max-height:none; padding:0; }
+#quickWorkspace .quick-workspace-actions { display:flex; gap:12px; margin-top:16px; }
+#quickWorkspace #plusPopover { bottom:auto; top:50px; }
+#quickWorkspace .composer-input-row { align-items:start; }
+@media(max-width:640px){#quickWorkspace {padding:0 16px 16px;}#quickJourney {gap:18px;}#quickWorkspace .quick-workspace-commandbar {align-items:stretch;}#quickRunAction {flex:1;}#quickWorkspace #evalBtn {width:100%;}}

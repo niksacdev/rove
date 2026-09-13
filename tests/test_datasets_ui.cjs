@@ -52,9 +52,9 @@ test("final reviews require attribution and rationale; drafts preserve unfinishe
 });
 
 test("campaign repetitions remain bounded integers and unavailable inputs cannot launch", () => {
-  for (const repeats of [0, 2.5, 1001, NaN]) assert.throws(() => buildCampaign(campaign({repeats})), /Repeats/);
+  for (const repeats of [0, 2.5, 1001, NaN]) assert.throws(() => buildCampaign(campaign({repeats})), /Attempts/);
   assert.throws(() => buildCampaign(campaign({caseIds: []})), /Select/);
-  assert.throws(() => buildCampaign(campaign({contractId: ""})), /scoring rules/);
+  assert.throws(() => buildCampaign(campaign({contractId: ""})), /Confirm your criteria in Success metrics/);
   assert.throws(() => buildCampaign(campaign({timeout: Infinity})), /timeout/);
   assert.deepEqual(buildCampaign(campaign()).seeds, [0, 1, 2]);
   assert.deepEqual(buildCampaign(campaign()).ks, [1, 3]);
