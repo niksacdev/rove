@@ -438,3 +438,55 @@ async def test_improvement_keeps_exact_frozen_baseline_and_compares_each_candida
     request.baseline_revision_id = named["id"]
     with pytest.raises(ValueError, match="exact source campaign"):
         prepare_launch(h["root"], request, load_config(h["path"]))
+
+
+def test_improvement_preserves_execution_errors_alongside_missing_assessments():
+    from rove.benchmarks.seeds import _recommendations
+
+    items = _recommendations(
+        [
+            {
+                "strategy_id": "base",
+                "trial_id": "failed",
+                "task_id": "case",
+                "seed": 7,
+                "outcome": "unknown",
+                "execution": "error",
+                "result": {"failure_stage": "perceive", "error": "Connection refused"},
+            },
+            {
+                "strategy_id": "base",
+                "trial_id": "unscored",
+                "task_id": "case",
+                "seed": 11,
+                "outcome": "unknown",
+                "execution": "completed",
+                "result": {},
+            },
+        ],
+        ["base"],
+        [{"id": "case", "task": "Put the bowl on the plate"}],
+    )
+    assert [item["source"] for item in items] == ["recorded_failure", "missing_assessment"]
+    assert all(item["affected_trials"] == 1 and item["total_trials"] == 2 for item in items)
+    assert items[0]["title"] == "Scene understanding could not finish"
+    assert items[0]["evidence"] == [
+        {
+            "trial_id": "failed",
+            "task": "Put the bowl on the plate",
+            "seed": 7,
+            "error": "Connection refused",
+        }
+    ]
+    assert items[1]["trial_ids"] == ["unscored"]
+    assert items[1]["evidence"][0]["error"] is None
+
+
+def test_improvement_without_trials_never_claims_passed_cases():
+    from rove.benchmarks.seeds import _recommendations
+
+    item = _recommendations([], ["base"])[0]
+    assert item["source"] == "no_trials"
+    assert item["affected_trials"] == item["total_trials"] == 0
+    assert item["trial_ids"] == []
+    assert item["title"] == "Run this strategy first"

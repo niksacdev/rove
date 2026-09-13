@@ -97,6 +97,22 @@ endpoints:
       mock_latency_ms: [200, 500]
     capabilities: [scene_analysis, task_planning, verification]
 
+  # Optional local evaluation assistant. Select with ROVE_ASSISTANT_ENDPOINT.
+  local-assistant:
+    type: agent
+    adapter: copilot_agent
+    display_name: "Local evaluation assistant"
+    deployment_type: local
+    config:
+      model: qwen/qwen3-vl-8b
+      timeout_seconds: 120
+      provider:
+        type: openai
+        base_url: http://127.0.0.1:1234/v1
+        wire_api: completions
+        max_prompt_tokens: 12000
+        max_output_tokens: 1800
+
   # --- VLAs ---
   smolvla-450m:
     type: vla

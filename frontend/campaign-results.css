@@ -28,3 +28,10 @@ body[data-workflow-step="review"] .journey {margin-bottom:24px;}
 body[data-workflow-step="review"] .step-heading {margin-bottom:12px;}
 .outcome-statistics {margin:18px 0;}.outcome-stat {padding:12px 0;}
 .target-outcome {display:flex;justify-content:space-between;gap:16px;margin-top:16px;font-size:13px;}.target-outcome span {color:var(--f-text-muted);}
+
+.outcome-meaning {font-size:16px;line-height:1.6;color:var(--f-text-secondary);max-width:90ch;}
+.outcome-attention {padding:20px;margin:20px 0;border:1px solid var(--f-border);border-radius:var(--f-radius-panel);background:var(--f-surface);}
+.outcome-attention h3 {font-size:20px;line-height:28px;margin:0 0 12px;}
+.outcome-attention li {font-size:16px;line-height:1.6;margin:8px 0;}
+.outcome-stat span,.outcome-legend,.outcome-bar-row strong,.outcome-bar-row small,.chart-note {font-size:14px;}
+.outcome-chart {border-radius:var(--f-radius-panel);}

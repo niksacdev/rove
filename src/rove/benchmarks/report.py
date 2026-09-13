@@ -118,15 +118,15 @@ def to_csv(data: dict) -> str:
 
 
 _REPORT_STYLE = """
-:root{--f-bg:#181c1c;--f-surface:#212727;--f-elevated:#2a3131;--f-border:#343d3c;--f-text:#fff;--f-text-secondary:#d1d5db;--f-text-muted:#9ca3af;--accent:#81c9bf;--pass:#4ade80;--fail:#fb7185;--unknown:#a1a1aa;color-scheme:dark}
+:root{--f-bg:#1b1b1b;--f-surface:#242424;--f-elevated:#303030;--f-border:#404040;--f-text:#fff;--f-text-secondary:#e0e0e0;--f-text-muted:#b3b3b3;--accent:#d1bcf4;--pass:#4ade80;--fail:#fb7185;--unknown:#a1a1aa;color-scheme:dark}
 
-[data-theme=light]{--f-bg:#f7f7f2;--f-surface:#fff;--f-elevated:#eef1eb;--f-border:#e2e4e8;--f-text:#1a1b1e;--f-text-secondary:#374151;--f-text-muted:#626a76;--accent:#0d665f;--pass:#15803d;--fail:#be123c;--unknown:#71717a;color-scheme:light}
+[data-theme=light]{--f-bg:#f5f5f5;--f-surface:#fff;--f-elevated:#f0f0f0;--f-border:#d1d1d1;--f-text:#242424;--f-text-secondary:#424242;--f-text-muted:#616161;--accent:#5b3f9f;--pass:#15803d;--fail:#be123c;--unknown:#71717a;color-scheme:light}
 
 *{box-sizing:border-box}
-body{margin:0;background:var(--f-bg);color:var(--f-text);font:14px Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.6}
+body{margin:0;background:var(--f-bg);color:var(--f-text);font:14px 'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.6}
 a{color:var(--accent);text-decoration:none}
 a:hover{text-decoration:underline}
-button{font:inherit;cursor:pointer;padding:7px 12px;background:var(--f-elevated);border:1px solid var(--f-border);border-radius:6px;color:var(--f-text)}
+button{font:inherit;cursor:pointer;padding:7px 12px;background:var(--f-elevated);border:1px solid var(--f-border);border-radius:4px;color:var(--f-text)}
 a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .topbar{display:flex;align-items:center;gap:12px;padding:12px max(24px,calc((100vw - 1240px)/2));border-bottom:1px solid var(--f-border)}
 .brand{font-weight:700;letter-spacing:-.03em;color:var(--f-text)}
@@ -208,7 +208,7 @@ footer{border-top:1px solid var(--f-border);margin-top:36px;padding-top:20px;fon
 .chart-panel{padding:18px 4px 0}
 .evidence-heading{display:block}
 }
-@media print{body{--f-bg:#fff;--f-surface:#fff;--f-elevated:#eef1eb;--f-border:#ccc;--f-text:#111;--f-text-secondary:#333;--f-text-muted:#555;--accent:#0d665f;color-scheme:light}
+@media print{body{--f-bg:#fff;--f-surface:#fff;--f-elevated:#f0f0f0;--f-border:#ccc;--f-text:#111;--f-text-secondary:#333;--f-text-muted:#555;--accent:#5b3f9f;color-scheme:light}
 .topbar button,.jump-links{display:none}
 main{padding:20px}
 .panel,.hero,.stat{break-inside:avoid}
@@ -295,19 +295,19 @@ def to_html(data: dict) -> str:
             template=None,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            font={"family": "Inter, system-ui, sans-serif", "size": 11, "color": "#d1d5db"},
+            font={"family": "Segoe UI, system-ui, sans-serif", "size": 11, "color": "#d1d5db"},
             colorway=palette,
             margin={"l": 62, "r": 24, "t": 24, "b": 70},
             height=height,
             legend={"orientation": "h", "y": -0.28, "x": 0},
-            hoverlabel={"bgcolor": "#212727", "font_color": "#fff"},
+            hoverlabel={"bgcolor": "#242424", "font_color": "#fff"},
             meta={
                 "assessment_scope": scope,
                 "metric_scope": assessments.get("scope", "configured_verification"),
             },
         )
-        figure.update_xaxes(gridcolor="#343d3c", zerolinecolor="#343d3c", automargin=True)
-        figure.update_yaxes(gridcolor="#343d3c", zerolinecolor="#343d3c", automargin=True)
+        figure.update_xaxes(gridcolor="#404040", zerolinecolor="#404040", automargin=True)
+        figure.update_yaxes(gridcolor="#404040", zerolinecolor="#404040", automargin=True)
         markup = figure.to_html(
             full_html=False,
             include_plotlyjs=False,

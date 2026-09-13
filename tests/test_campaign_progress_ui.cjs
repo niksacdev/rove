@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path");
 const {JSDOM} = require("jsdom");
-const {buildStrategyProgress, render, elapsedLabel} = require("../frontend/campaign-progress.js");
+const {buildStrategyProgress, campaignRollup, render, elapsedLabel} = require("../frontend/campaign-progress.js");
 const root = path.resolve(__dirname, "..");
 const campaign = {id: "campaign", status: "running", spec: {name: "Pick comparison", tasks: [{id: "case", task: "Place the red part in the bin"}], strategies: ["baseline", "candidate"], seeds: [10, 20]}, strategy_definitions: {baseline: {display_name: "Current pipeline"}, candidate: {display_name: "Candidate pipeline"}}};
 const started = "2026-09-13T10:00:00Z", now = Date.parse(started) + 65000;
@@ -16,6 +16,9 @@ test("strategy lanes distinguish queued work, actual running trial and elapsed t
   assert.deepEqual(lanes[0].executions[0].stages.map(stage => stage.stage), ["act"]);
   assert.equal(lanes[1].executions.length, 0);
   assert.equal(elapsedLabel(null), "Elapsed time unavailable");
+  const waiting = buildStrategyProgress(campaign, [{...running, execution: "queued"}], {}, now);
+  assert.equal(waiting[0].executions.length, 0, "a queued journal placeholder has no recorded execution to inspect");
+  assert.equal(waiting[0].remaining, 2);
 });
 
 test("execution completion is distinct from acceptance and errors; cancelled campaigns do not promise queued work", () => {
@@ -35,6 +38,45 @@ test("real parallel agent-loop fixture cannot fabricate stages from adapter tele
   assert.deepEqual(lanes[0].executions[0].stages.map(stage => stage.stage), ["act", "verify"]);
 });
 
+test("rollup counts only exact planned slots and retained completion survives resumed polling", () => {
+  const resumed = {...campaign, spec: {...campaign.spec, tasks: [...campaign.spec.tasks, {id: "second", task: "Inspect the tray"}]}};
+  const completed = {...running, seed: 10, execution: "completed", outcome: "unknown"};
+  const rows = [
+    completed, {...completed, execution: "running"}, // A repeated stale page must not undo completion.
+    {...running, execution: "timeout"},
+    {...running, strategy_id: "candidate", execution: "cancelled"},
+    {...running, strategy_id: "candidate", seed: 10},
+    {...running, task_id: "second", seed: 10, execution: "queued"},
+    {...running, task_id: "not-in-this-campaign", execution: "completed"},
+    {...running, seed: 999, execution: "completed"},
+    {...running, strategy_id: "unselected", execution: "completed"},
+  ];
+  const overall = campaignRollup(buildStrategyProgress(resumed, rows, {}, now));
+  assert.deepEqual(overall, {planned: 8, finished: 3, completed: 1, running: 1, errors: 1, cancelled: 1, queued: 4, notRun: 0, status: "running"});
+  assert.equal(overall.finished + overall.running + overall.queued, overall.planned);
+  const stopped = campaignRollup(buildStrategyProgress({...resumed, status: "cancelled"}, rows.filter(row => row.execution !== "running"), {}, now));
+  assert.equal(stopped.queued, 0); assert.equal(stopped.notRun, 5);
+  assert.equal(stopped.finished, 3); assert.equal(stopped.cancelled, 1);
+});
+
+test("pending and final rollups keep execution errors and unresolved acceptance distinct", t => {
+  const dom = new JSDOM('<main id="lanes"></main>'); t.after(() => dom.window.close());
+  const view = dom.window.document.getElementById("lanes");
+  render(view, buildStrategyProgress({...campaign, status: "pending"}, []), () => {});
+  assert.match(view.textContent, /0 of 4 trials finished/);
+  assert.match(view.textContent, /0 completed · 0 running · 4 queued/);
+  assert.equal(view.querySelector("progress").value, 0);
+  const rows = campaign.spec.strategies.flatMap(strategy_id => campaign.spec.seeds.map(seed => ({...running, strategy_id, seed, execution: strategy_id === "candidate" ? "error" : "completed", outcome: "unknown"})));
+  render(view, buildStrategyProgress({...campaign, status: "completed"}, rows), () => {});
+  assert.match(view.textContent, /4 of 4 trials finished/);
+  assert.match(view.textContent, /2 completed · 0 running · 0 queued · 2 execution errors/);
+  assert.match(view.textContent, /Task acceptance is assessed separately/);
+  assert.doesNotMatch(view.textContent, /passed|successful|100%/i);
+  assert.equal(view.querySelector("progress").value, 4);
+  assert.equal(view.querySelector("progress").max, 4);
+  assert.equal(view.querySelector("progress").getAttribute("aria-valuetext"), "4 of 4 planned trials finished");
+});
+
 test("progress is visible without a disclosure, safely escaped and preserves inspect-button focus across polls", t => {
   const dom = new JSDOM('<main id="lanes"></main>'); t.after(() => dom.window.close());
   const container = dom.window.document.getElementById("lanes"), inspected = [];
@@ -46,7 +88,11 @@ test("progress is visible without a disclosure, safely escaped and preserves ins
   assert.match(container.textContent, /Current trial · repetition 2 · 1m 5s elapsed/);
   assert.match(container.textContent, /Act · running · agent/);
   assert.match(container.textContent, /Waiting for its turn/);
-  assert.equal(container.querySelectorAll('[role="status"]').length, 2);
+  assert.equal(container.querySelectorAll('[role="status"]').length, 3);
+  assert.equal(container.querySelector("progress").max, 4);
+  assert.equal(container.querySelector("progress").value, 0);
+  assert.match(container.textContent, /0 of 4 trials finished/);
+  assert.match(container.textContent, /0 completed · 1 running · 3 queued · 0 execution errors/);
   const button = container.querySelector("button"); button.focus(); button.click(); assert.deepEqual(inspected, ["trial"]);
   lanes[0].executions[0].elapsed = "1m 7s elapsed";
   render(container, lanes, id => inspected.push(id));

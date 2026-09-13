@@ -18,11 +18,11 @@ test("outcome charts use strategy-specific counts and expose unresolved assessme
   const data = summary(), rows = outcomeRows(data, campaign);
   assert.deepEqual(rows.map(row => [row.name, row.passed, row.failed, row.unknown]), [["Current pipeline", 1, 1, 1], ["Changed planner", 2, 0, 1]]);
   const {container} = view(t, data);
-  assert.match(container.querySelector(".outcome-statistics").textContent, /Accepted3Rejected1Unassessed2Trials recorded6 \/ 6/);
+  assert.match(container.querySelector(".outcome-statistics").textContent, /Passed3Failed1Not scored2Trials recorded6 \/ 6/);
   assert.equal(container.querySelectorAll(".outcome-bar").length, 2);
-  assert.match(container.querySelector(".outcome-bar").getAttribute("aria-label"), /1 accepted, 1 rejected, 1 unassessed/);
+  assert.match(container.querySelector(".outcome-bar").getAttribute("aria-label"), /1 passed, 1 failed, 1 not scored/);
   assert.ok(Math.abs(parseFloat(container.querySelector(".outcome-bar .unknown").style.width) - 100 / 3) < 0.001);
-  assert.match(container.querySelector(".target-chart").textContent, /task success · Unassessed/);
+  assert.match(container.querySelector(".target-chart").textContent, /task success · Not scored/);
   assert.match(container.querySelector(".target-chart").textContent, /pipeline latency · Not met/);
 });
 test("reliability toggles between actual pass@k and pass^k while bounds remain visibly distinct from estimates", t => {
@@ -51,4 +51,18 @@ test("missing timing, all-unknown reliability, zero trials and hostile labels re
   assert.match(container.textContent, /Reliability becomes available/);
   assert.equal(container.querySelector("svg"), null);
   assert.equal(container.querySelectorAll(".outcome-statistics").length, 1, "refresh replaces, rather than duplicates, charts");
+});
+
+test("unscored guidance separates failed execution from missing expert ratings and opens Trials", t => {
+  const {container}=view(t);
+  const data={completed_trials:3,planned_trials:3,tasks:[{strategy_id:"a",passed:0,failed:0,unknown:3}],strategies:[{strategy_id:"a"}]};
+  render(container,data,{contract:{criteria:[{required:true,assessment:"human_review"}]}},{trials:[{outcome:"unknown",execution:"error"},{outcome:"unknown",execution:"completed",assessment_ids:[]},{outcome:"unknown",execution:"completed",assessment_ids:["conflicting"]}]});
+  const text=container.querySelector(".outcome-attention").textContent;
+  assert.match(text,/1 trial did not finish successfully/);
+  assert.match(text,/1 trial needs expert ratings/);
+  assert.match(text,/missing or unresolved/);
+  assert.match(container.textContent,/Passed means.*required success criteria/);
+  let opened=false;container.addEventListener("rove:inspect-campaign-trials",()=>opened=true);
+  container.querySelector(".outcome-attention button").click();assert.equal(opened,true);
+  assert.equal(container.querySelector(".outcome-stat.fail strong").textContent,"0");
 });

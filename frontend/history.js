@@ -93,6 +93,13 @@ if (typeof document !== "undefined") (() => {
     }
     return response.json();
   }
+  function routeOffset() { const offset=Number(new URLSearchParams(location.search).get("offset")); return Number.isSafeInteger(offset) && offset>=0 ? offset : 0; }
+  function browseTrials(push=false, focus=false) {
+    const previous=state.selected; state.selected=null;state.currentTrial=null;++state.detailVersion;state.events=[];
+    $("trialDetailView").hidden=true;$("trialBrowser").hidden=false;$("inspector").setAttribute("aria-busy","false");markSelected();
+    if(push) {const url=new URL(location.href);url.searchParams.delete("trial");url.searchParams.delete("compare");history.pushState({},"",url);}
+    if(focus) {const selected=[...$("trialList").querySelectorAll(".trial-link")].find(item=>item.dataset.trialId===previous);(selected || $("refreshTrials")).focus();}
+  }
   function markSelected() {
     for (const item of $("trialList").querySelectorAll("a")) {
       if (item.dataset.trialId === state.selected) item.setAttribute("aria-current", "true");
@@ -112,11 +119,18 @@ if (typeof document !== "undefined") (() => {
       state.total = page.total; state.recent = page.trials;
       $("trialList").replaceChildren();
       for (const trial of page.trials) {
-        const item = node("li");
-        const anchor = link("", `/static/history.html?trial=${encodeURIComponent(trial.id)}`);
-        anchor.className = "trial-link"; anchor.dataset.trialId = trial.id;
+        const item = node("li",null,"trial-row");
+        const destination=new URL(location.href);destination.searchParams.set("trial",trial.id);destination.searchParams.delete("compare");
+        const anchor = link("View results", destination.pathname+destination.search);
+        anchor.className = "trial-link trial-action secondary"; anchor.dataset.trialId = trial.id;
         const view = trialPresentation(trial);
-        anchor.append(node("span", trialTitle(trial), "trial-title"), node("span", trialStrategy(trial), "muted trial-meta"), badge(view.verdict, view.verdict), node("span", ` · ${trial.status || "Unknown execution"}`, "muted"), node("span", `${trial.source || "Unknown source"} · ${date(trial.created_at)}`, "muted trial-meta"));
+        anchor.setAttribute("aria-label",`View results: ${trialTitle(trial)}`);
+        const task=node("div",null,"trial-task");task.append(node("strong",trialTitle(trial),"trial-title"),node("span",`${({quick:"Standalone trial",campaign:"Campaign trial",legacy:"Imported trial"})[trial.source] || "Trial"} · ${trial.id.slice(0,8)}`,"muted trial-source"));
+        const strategy=node("span",trialStrategy(trial),"trial-strategy");
+        const outcome=node("div",null,"trial-outcome");outcome.append(badge(({pass:"Passed",fail:"Failed",unknown:"Not scored"})[view.verdict],view.verdict),node("span",`Execution: ${trial.status || "unknown"}`,"trial-execution"));
+        const created=node("time",null,"trial-created"),parsed=new Date(trial.created_at);
+        if(trial.created_at && Number.isFinite(parsed.getTime())) {created.textContent=parsed.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});created.append(node("span",parsed.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"}),"trial-time muted"));created.dateTime=parsed.toISOString();created.title=date(trial.created_at);created.setAttribute("aria-label",`Created ${date(trial.created_at)}`);} else created.textContent="Time not recorded";
+        item.append(task,strategy,outcome,created);
         anchor.addEventListener("click", event => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault(); selectTrial(trial.id, true, true);
@@ -351,6 +365,8 @@ if (typeof document !== "undefined") (() => {
     const version = ++state.detailVersion;
     if (push) { const url = new URL(location.href); url.searchParams.set("trial", id); history.pushState({}, "", url); }
     markSelected();
+    $("trialBrowser").hidden=true;$("trialDetailView").hidden=false;
+    const backUrl=new URL(location.href);backUrl.searchParams.delete("trial");backUrl.searchParams.delete("compare");$("backToTrials").href=backUrl.pathname+backUrl.search;
     $("inspector").setAttribute("aria-busy", "true");
     $("inspector").replaceChildren(node("p", "Loading saved trial…", "muted"));
     try {
@@ -366,24 +382,21 @@ if (typeof document !== "undefined") (() => {
     } finally { if (version === state.detailVersion) $("inspector").setAttribute("aria-busy", "false"); }
   }
   $("sourceFilter").addEventListener("change", () => {
-    state.offset = 0; const url = new URL(location.href);
+    state.offset = 0; const url = new URL(location.href);url.searchParams.delete("offset");
     if ($("sourceFilter").value) url.searchParams.set("source", $("sourceFilter").value); else url.searchParams.delete("source");
     history.pushState({}, "", url); loadList();
   });
   $("refreshTrials").addEventListener("click", () => { loadList(); if (state.selected) selectTrial(state.selected); });
-  $("previousPage").addEventListener("click", () => { state.offset = Math.max(0, state.offset - state.limit); loadList(); });
-  $("nextPage").addEventListener("click", () => { state.offset += state.limit; loadList(); });
+  function changePage(offset) {state.offset=offset;const url=new URL(location.href);if(offset)url.searchParams.set("offset",String(offset));else url.searchParams.delete("offset");history.pushState({},"",url);loadList();}
+  $("previousPage").addEventListener("click", () => changePage(Math.max(0,state.offset-state.limit)));
+  $("nextPage").addEventListener("click", () => changePage(state.offset+state.limit));
+  $("backToTrials").addEventListener("click",event=>{if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();browseTrials(true,true);});
   window.addEventListener("popstate", () => {
     const source = new URLSearchParams(location.search).get("source");
-    $("sourceFilter").value = ["quick", "campaign", "legacy"].includes(source) ? source : ""; state.offset = 0; loadList();
+    $("sourceFilter").value = ["quick", "campaign", "legacy"].includes(source) ? source : ""; state.offset = routeOffset(); loadList();
     const id = new URLSearchParams(location.search).get("trial");
     if (id) selectTrial(id);
-    else {
-      state.selected = null; ++state.detailVersion; markSelected();
-      const title = node("h2", "Inspect a trial"); title.id = "inspectorHeading";
-      $("inspector").replaceChildren(title, node("p", "Select an attempt to inspect its saved evidence.", "muted"));
-      $("inspector").setAttribute("aria-busy", "false");
-    }
+    else browseTrials();
   });
   $("exportExchange").addEventListener("click", async () => {
     const button = $("exportExchange"), status = $("exportStatus");
@@ -400,7 +413,7 @@ if (typeof document !== "undefined") (() => {
   });
   const source = new URLSearchParams(location.search).get("source");
   if (["quick", "campaign", "legacy"].includes(source)) { $("sourceFilter").value = source; }
-  loadList();
+  state.offset=routeOffset();loadList();
   const selected = new URLSearchParams(location.search).get("trial");
   if (selected) selectTrial(selected);
 })();

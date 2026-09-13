@@ -248,6 +248,57 @@ def test_invalid_generated_contract_never_becomes_ai_draft(h, change):
     assert all(c["assessment"] == "human_review" for c in data["contract"]["criteria"])
 
 
+@pytest.mark.parametrize(
+    "description",
+    [
+        "Candidate must achieve at least 80% pass@k for the task, evaluated using mock VLA output.",
+        "Candidate must achieve at least 80% pass@k^2.",
+        "The output must achieve pass^k of 0.9.",
+        "Require pass_at_k above 80%.",
+        "Require pass_pow_k above 80%.",
+        "Task success rate must exceed 90%.",
+        "The agent must succeed across multiple trials.",
+    ],
+)
+def test_aggregate_statistics_cannot_be_individual_output_criteria(h, description):
+    output = output_for(h)
+    output["contract"]["criteria"][0]["description"] = description
+    h["runtime"].output = output
+    response = draft(h)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["source"] == "template"
+    assert data["assistant_configured"] and not data["assistant_available"]
+    assert data["warnings"] and data["requires_confirmation"]
+    assert description not in [c["description"] for c in data["contract"]["criteria"]]
+    assert data["contract"]["metrics"] == [
+        "task_success",
+        "pass_at_k",
+        "pass_pow_k",
+        "pipeline_latency",
+    ]
+    assert h["service"].list_contracts() == []
+
+
+def test_output_criterion_can_contain_task_specific_numbers_and_uncertainty(h):
+    output = output_for(h)
+    description = (
+        "The plan describes placing 2 red blocks in the bin and acknowledges that "
+        "mock output does not prove physical completion."
+    )
+    output["contract"]["criteria"][0]["description"] = description
+    h["runtime"].output = output
+    data = draft(h).json()
+    assert data["source"] == "ai"
+    assert data["contract"]["criteria"][0]["description"] == description
+    prompt = h["runtime"].instances[-1][0].system_message
+    assert "ONE candidate output" in prompt
+    assert "mock VLM/VLA only tests plumbing" in prompt
+    assert "not individual acceptance criteria" in prompt
+    assert data["observation_basis"] == "task_and_annotations"
+    assert h["runtime"].calls[-1][1] == ""
+
+
 def test_invalid_selection_and_large_context_do_not_start_runtime(h):
     for update in (
         {"case_revision_ids": ["missing"]},

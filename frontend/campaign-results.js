@@ -9,25 +9,45 @@
       return {id: strategy.strategy_id, name: label(campaign, strategy.strategy_id), passed: tasks.reduce((s,t) => s+(t.passed || 0),0), failed: tasks.reduce((s,t) => s+(t.failed || 0),0), unknown: tasks.reduce((s,t) => s+(t.unknown || 0),0), ...strategy};
     });
   }
-  function render(container, summary, campaign) {
+  function render(container, summary, campaign, options = {}) {
     const doc = container.ownerDocument;
     const node = (tag,text,cls) => { const el=doc.createElement(tag); if(text!=null) el.textContent=String(text); if(cls)el.className=cls; return el; };
     const svg = (tag,attrs) => { const el=doc.createElementNS("http://www.w3.org/2000/svg",tag); for(const [key,value] of Object.entries(attrs)) el.setAttribute(key,String(value)); return el; };
     const rows=outcomeRows(summary,campaign); container.replaceChildren();
     const totals=rows.reduce((s,r)=>({passed:s.passed+r.passed,failed:s.failed+r.failed,unknown:s.unknown+r.unknown}),{passed:0,failed:0,unknown:0});
     const stats=node("div",null,"outcome-statistics");
-    for(const [title,value,kind] of [["Accepted",totals.passed,"pass"],["Rejected",totals.failed,"fail"],["Unassessed",totals.unknown,"unknown"],["Trials recorded",`${summary.completed_trials || 0} / ${summary.planned_trials || 0}`,"recorded"]]) {
+    for(const [title,value,kind] of [["Passed",totals.passed,"pass"],["Failed",totals.failed,"fail"],["Not scored",totals.unknown,"unknown"],["Trials recorded",`${summary.completed_trials || 0} / ${summary.planned_trials || 0}`,"recorded"]]) {
       const card=node("div",null,`outcome-stat ${kind}`); card.append(node("span",title),node("strong",value)); stats.append(card);
     }
     container.append(stats);
+    const meaning=node("p","Passed means the trial met the campaign’s required success criteria. Failed means at least one required check failed. Not scored means no valid final assessment is available.","outcome-meaning");container.append(meaning);
+    if(totals.unknown) {
+      const attention=node("section",null,"outcome-attention");
+      attention.append(node("h3",`${totals.unknown} ${totals.unknown===1?"trial needs":"trials need"} attention before scoring is complete`));
+      const unknown=(options.trials || []).filter(trial=>trial.outcome==="unknown");
+      const requiresReview=(campaign.contract?.criteria || []).some(criterion=>criterion.required!==false && criterion.assessment==="human_review");
+      let errors=0,reviews=0,other=0;
+      for(const trial of unknown) {
+        if(["error","timeout","cancelled","interrupted"].includes(trial.execution))errors++;
+        else if(requiresReview && !(trial.assessment_ids || []).length && ["completed","invalid_verdict","unresolved_evidence"].includes(trial.execution))reviews++;
+        else other++;
+      }
+      const causes=node("ul");
+      if(errors)causes.append(node("li",`${errors} ${errors===1?"trial did":"trials did"} not finish successfully. Open the recorded error before retrying or changing a model.`));
+      if(reviews)causes.append(node("li",`${reviews} ${reviews===1?"trial needs":"trials need"} expert ratings. This campaign uses human review; ROVE does not assign those ratings automatically.`));
+      if(other || unknown.length<totals.unknown)causes.append(node("li","Some required evidence or assessments are missing or unresolved. Open the trials to see what was recorded."));
+      attention.append(causes);
+      const inspect=node("button","Review trials","secondary");inspect.type="button";inspect.addEventListener("click",()=>container.dispatchEvent(new doc.defaultView.CustomEvent("rove:inspect-campaign-trials",{bubbles:true})));attention.append(inspect);
+      container.append(attention);
+    }
     const grid=node("div",null,"outcome-charts");
     const outcomes=node("section",null,"outcome-chart"); outcomes.append(node("h3","Outcomes by strategy"));
-    const legend=node("div",null,"outcome-legend"); for(const [name,kind] of [["Accepted","pass"],["Rejected","fail"],["Unassessed","unknown"]]) legend.append(node("span",name,kind)); outcomes.append(legend);
+    const legend=node("div",null,"outcome-legend"); for(const [name,kind] of [["Passed","pass"],["Failed","fail"],["Not scored","unknown"]]) legend.append(node("span",name,kind)); outcomes.append(legend);
     for(const row of rows) {
       const n=row.passed+row.failed+row.unknown, item=node("div",null,"outcome-bar-row");
-      const bar=node("div",null,"outcome-bar"); bar.setAttribute("role","img"); bar.setAttribute("aria-label",`${row.name}: ${row.passed} accepted, ${row.failed} rejected, ${row.unknown} unassessed`);
+      const bar=node("div",null,"outcome-bar"); bar.setAttribute("role","img"); bar.setAttribute("aria-label",`${row.name}: ${row.passed} passed, ${row.failed} failed, ${row.unknown} not scored`);
       for(const kind of ["passed","failed","unknown"]) { const part=node("span",null,{passed:"pass",failed:"fail",unknown:"unknown"}[kind]);part.style.width=`${n ? row[kind]/n*100 : 0}%`;bar.append(part); }
-      item.append(node("strong",row.name),bar,node("small",`${row.passed} accepted · ${row.failed} rejected · ${row.unknown} unassessed`)); outcomes.append(item);
+      item.append(node("strong",row.name),bar,node("small",`${row.passed} passed · ${row.failed} failed · ${row.unknown} not scored`)); outcomes.append(item);
     }
     if(!rows.length) outcomes.append(node("p","No strategy outcomes recorded yet.","muted"));
     grid.append(outcomes);
@@ -73,7 +93,7 @@
     if (summary.campaign_targets?.length) {
       const targets=node("section",null,"outcome-chart target-chart"); targets.append(node("h3","Success targets"));
       for (const target of summary.campaign_targets) {
-        const row=node("div",null,"target-outcome"), status={met:"Met",not_met:"Not met",unknown:"Unassessed"}[target.status] || "Unassessed";
+        const row=node("div",null,"target-outcome"), status={met:"Met",not_met:"Not met",unknown:"Not scored"}[target.status] || "Not scored";
         row.append(node("strong",label(campaign,target.strategy_id)),node("span",`${target.metric.replaceAll("_"," ")} · ${status}`));
         row.dataset.state=target.status; targets.append(row);
       }

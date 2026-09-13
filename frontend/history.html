@@ -8,32 +8,33 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=workspace-polish-4">
-  <link rel="stylesheet" href="/static/history.css?v=workspace-polish-4">
-  <link rel="stylesheet" href="/static/navigation.css?v=workspace-polish-4">
-  <script src="/static/navigation.js?v=workspace-polish-4" defer></script>
-  <script src="/static/history-traces.js?v=trial-first-4"></script>
-  <script src="/static/history.js?v=trial-first-4" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/history.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/navigation.css?v=foundry-7">
+  <script src="/static/navigation.js?v=foundry-7" defer></script>
+  <script src="/static/history-traces.js?v=foundry-7"></script>
+  <script src="/static/history.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/fluent.css?v=foundry-7">
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
   <header id="roveNav" data-section="results"></header>
   <main id="main">
-    <div class="page-heading"><div><h1>Results</h1><p class="intro">Every attempt, its frozen configuration, and the evidence behind its assessment.</p>
-        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="button">Create a campaign</a></div>
+    <div class="page-heading"><div><h1>Saved trials</h1>
+        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="primary-link button">Create a campaign</a></div>
     <nav class="workspace-tabs" aria-label="Results"><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">Trials</a></nav>
     <div class="history-layout">
-      <section class="history-list-panel" aria-labelledby="trialsHeading">
-        <div class="panel-heading"><h2 id="trialsHeading">Saved trials</h2><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>
-        <label class="filter-label" for="sourceFilter">Source</label>
-        <select id="sourceFilter"><option value="">All trials</option><option value="quick">Quick evaluations</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select>
-        <p id="listStatus" class="muted" role="status" aria-live="polite"></p>
+      <section id="trialBrowser" class="history-list-panel" aria-label="Saved trials">
+        <div class="trial-commandbar"><p id="listStatus" class="muted" role="status" aria-live="polite"></p><label class="filter-label" for="sourceFilter">Source</label><select id="sourceFilter"><option value="">All trials</option><option value="quick">Standalone trials</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>
+        <div class="trial-columns" aria-hidden="true"><span>Task</span><span>Strategy</span><span>Outcome / execution</span><span>Created</span><span>Actions</span></div>
         <ul id="trialList" class="trial-list" aria-label="Saved trials"></ul>
         <div class="pagination"><button type="button" id="previousPage" class="secondary" disabled>Previous</button><span id="pageLabel" class="muted"></span><button type="button" id="nextPage" class="secondary" disabled>Next</button></div>
       </section>
+      <div id="trialDetailView" hidden><div class="trial-detail-commandbar"><a id="backToTrials" href="/static/history.html" class="secondary trial-action">← Back to trials</a></div>
       <section id="inspector" class="inspector" aria-labelledby="inspectorHeading" aria-busy="false">
         <div class="empty-state"><h2 id="inspectorHeading" tabindex="-1">Inspect a trial</h2><p>Select an attempt to inspect its assessment, measurements, stage activity and configuration.</p><p class="muted">Opening a saved trial never reruns the agent.</p></div>
       </section>
+      </div>
     </div>
   </main>
 </body>

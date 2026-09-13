@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
 from rove.adapters.registry import AdapterRegistry
+from rove.api.frontend import FrontendStaticFiles
 from rove.api.local_only import LocalOnlyMiddleware
 from rove.api.strategy_revisions import create_strategy_revision_router
 from rove.api.trials import create_trial_router
@@ -784,7 +785,7 @@ if _data_dir.is_dir():
 _frontend_dir = Path(__file__).parent.parent.parent.parent / "frontend"
 
 if _frontend_dir.is_dir():
-    app.mount("/static", StaticFiles(directory=str(_frontend_dir)), name="frontend-static")
+    app.mount("/static", FrontendStaticFiles(directory=str(_frontend_dir)), name="frontend-static")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -792,4 +793,4 @@ async def serve_dashboard():
     index_path = _frontend_dir / "index.html"
     if not index_path.exists():
         return HTMLResponse("<h1>ROVE</h1><p>Frontend not found. Place index.html in frontend/</p>")
-    return FileResponse(index_path)
+    return FileResponse(index_path, headers={"Cache-Control": "no-cache"})

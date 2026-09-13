@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Align the workspace with Azure AI Foundry
+
+Use one Foundry-inspired Fluent layer across trials, campaigns, configuration, results and exported HTML reports. Neutral light/dark surfaces, restrained purple actions, flat navigation and aligned campaign columns replace conflicting page styles. Trials use the same full-width browsing pattern, with details opened on selection. Improvement cards identify the strategy, affected trials and direct next actions. A live trial calculator, explicit criteria and assessment methods, campaign/strategy progress, scoped Results tabs and separate Campaign history clarify the workflow. Settings is a global top-right gear. Static asset revalidation prevents mixed renderer/style versions. An optional local Copilot assistant connection supports reviewed drafts. Existing evaluation execution, evidence and approval flows are preserved. *(PR #27)*
+
 ### Make the evaluation workspace easier to scan
 
 Campaigns now appear as compact rows with View results, Export and Improve controls. Improvements open a focused, evidence-linked strategy change with preview and explicit approval. The trial workspace uses neutral surfaces, unclipped strategy details, larger sample previews and consistent sidebar actions, with Settings below Sample cases.

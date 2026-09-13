@@ -34,8 +34,8 @@
         for (const comparison of edge.comparisons || []) {
           const counts = comparison.paired_counts;
           if (!comparison.comparable || !counts) continue;
-          relation.append(node("p", `${comparison.baseline_strategy_id} → ${comparison.candidate_strategy_id}: ${counts.fail_to_pass || 0} failed → accepted, ${counts.pass_to_fail || 0} accepted → failed, ${counts.unknown || 0} unresolved pairs.`, "trajectory-pairs"));
-          if (edge.baseline_revision_id) for (const outcome of comparison.baseline_outcomes || []) relation.append(node("p", `Frozen reference: ${outcome.passed} accepted · ${outcome.failed} rejected · ${outcome.unknown} unassessed.`));
+          relation.append(node("p", `${comparison.baseline_strategy_id} → ${comparison.candidate_strategy_id}: ${counts.fail_to_pass || 0} failed → passed, ${counts.pass_to_fail || 0} passed → failed, ${counts.unknown || 0} unresolved pairs.`, "trajectory-pairs"));
+          if (edge.baseline_revision_id) for (const outcome of comparison.baseline_outcomes || []) relation.append(node("p", `Frozen reference: ${outcome.passed} passed · ${outcome.failed} failed · ${outcome.unknown} not scored.`));
         }
         details.append(relation);
       }
@@ -43,9 +43,9 @@
         const version = (item.strategy_versions || []).find(strategy => strategy.id === outcome.strategy_id), row = node("div", null, "trajectory-outcome"), name = version?.name || outcome.strategy_id;
         const title = node("div", null, "trajectory-outcome-heading"); title.append(node("strong", name), node("span", Number.isFinite(outcome.latency_p95_ms) ? `${Math.round(outcome.latency_p95_ms)} ms p95` : "Timing unavailable", "trajectory-timing"));
         const bar = node("div", null, "trajectory-outcome-bar"), total = outcome.passed + outcome.failed + outcome.unknown;
-        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", `${name}: ${outcome.passed} accepted, ${outcome.failed} rejected, ${outcome.unknown} unassessed`);
+        bar.setAttribute("role", "img"); bar.setAttribute("aria-label", `${name}: ${outcome.passed} passed, ${outcome.failed} failed, ${outcome.unknown} not scored`);
         for (const key of ["passed", "failed", "unknown"]) { const part = node("span", null, `trajectory-${key}`); part.style.width = `${total ? outcome[key] / total * 100 : 0}%`; bar.append(part); }
-        row.append(title, bar, node("p", `${outcome.passed} accepted · ${outcome.failed} rejected · ${outcome.unknown} unassessed`, "trajectory-counts")); card.append(row);
+        row.append(title, bar, node("p", `${outcome.passed} passed · ${outcome.failed} failed · ${outcome.unknown} not scored`, "trajectory-counts")); card.append(row);
       }
       details.append(node("p", `Scoring contract: ${item.contract_id || "Legacy configured verification"}`, "trajectory-reference"));
       for (const strategy of item.strategy_versions || []) details.append(node("p", `${strategy.name} · ${strategy.id} · resolved configuration ${strategy.fingerprint || "unavailable"}`, "trajectory-reference"));

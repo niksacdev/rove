@@ -69,7 +69,7 @@
       mode.value = parent.definition.pipeline_mode || "sequential"; verify.value = parent.definition.verify_mode || "auto";
       if (parent.definition.verify?.mode && parent.definition.verify.mode !== "auto") verify.value = parent.definition.verify.mode;
       setSimpleEnabled(); json.value = JSON.stringify(draft().definition, null, 2);
-      if(state.recommendedStage) { const stage=state.recommendedStage; const original=typeof parent.definition[stage] === "string" ? parent.definition[stage] : parent.definition[stage]?.endpoint || "Not used"; recommendation.textContent=`Test a different ${stage} endpoint against the recorded failures. Current endpoint: ${original}.`; }
+      if(state.recommendedStage) { const stage=state.recommendedStage; const label={perceive:"scene understanding",plan:"planning",act:"action prediction",verify:"verification",sim:"simulation"}[stage]; const original=typeof parent.definition[stage] === "string" ? parent.definition[stage] : parent.definition[stage]?.endpoint || "Not used"; recommendation.textContent=`Choose another model for ${label}. Currently using: ${original}.`; }
       status.textContent = `Source: ${parent.strategy_id}. The original strategy stays unchanged. Preview your changes before saving.`;
     } catch (error) { if (version === state.version) status.textContent = error.message; }
     finally { if (version === state.version) { fields.disabled = false; previewButton.disabled = !state.parent; } }
@@ -116,7 +116,7 @@
       ? "Uses current strategy settings. Review differences from the saved baseline before running."
       : "The source is today's configuration, not the archived baseline. Preview the campaign comparison afterward to check all differences from the saved baseline.";
     dialog.classList.toggle("recommended-revision", Boolean(state.recommendedStage));
-    $("strategyRevisionHeading").textContent = state.recommendedStage ? `Review ${state.recommendedStage} change` : "Create a strategy revision";
+    $("strategyRevisionHeading").textContent = state.recommendedStage ? `Change ${{perceive:"scene understanding",plan:"planning",act:"action prediction",verify:"verification",sim:"simulation"}[state.recommendedStage]} model` : "Create a strategy revision";
     saveButton.textContent = state.recommendedStage ? "Save & use revision" : "Save strategy revision";
     for(const stage of stageNames) stages[stage].closest("label").hidden = Boolean(state.recommendedStage && stage !== state.recommendedStage);
     for(const control of [mode, verify]) control.closest("label").hidden = Boolean(state.recommendedStage);

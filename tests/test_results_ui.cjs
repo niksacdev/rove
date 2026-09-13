@@ -60,11 +60,13 @@ test("Results opens history first with shared navigation, explicit review routes
   assert.equal(document.getElementById("advancedConfiguration").open, false);
   assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];
-  assert.deepEqual(links.map(a => a.textContent), ["View results", "HTML report", "JSON", "CSV", "Improve"]);
+  assert.deepEqual(links.map(a => a.textContent), ["View results", "History", "HTML report", "JSON", "CSV", "Improve"]);
   assert.equal(links[0].getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.equal(links[4].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
-  assert.match(links[1].getAttribute("href"), /report\?format=html$/);
-  assert.equal(links[1].rel, "noopener");
+  assert.equal(links[1].getAttribute("href"), "/static/campaign-history.html?campaign=campaign-a");
+  assert.equal(links[1].className, links[0].className);
+  assert.equal(links[5].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
+  assert.match(links[2].getAttribute("href"), /report\?format=html$/);
+  assert.equal(links[2].rel, "noopener");
   const exports = document.querySelector(".campaign-exports");
   assert.equal(exports.open, false);
   assert.equal(exports.querySelector("summary").textContent, "Export");
@@ -84,6 +86,7 @@ test("legacy campaign links focus the exact card and preserve untrusted labels a
   assert.equal(card.querySelector("h3").textContent, row.name);
   assert.equal(card.querySelector("img"), null);
   assert.equal(card.querySelector("a").getAttribute("href"), "/static/datasets.html?step=review&campaign=part%2Fa%3Fb");
+  assert.equal(card.querySelector('a[aria-label^="History for"]').getAttribute("href"), "/static/campaign-history.html?campaign=part%2Fa%3Fb");
   assert.ok(calls.some(c => c.url === "/api/campaigns/part%2Fa%3Fb"));
   assert.equal(calls.filter(c => c.options?.method).length, 0);
 });
@@ -165,7 +168,7 @@ test("history and per-card failures preserve useful result links and recover wit
   await flush();
   const card = page.document.querySelector(".campaign");
   assert.match(card.querySelector(".progress").textContent, /Trial counts unavailable/);
-  assert.equal(card.querySelectorAll("a").length, 5);
+  assert.equal(card.querySelectorAll("a").length, 6);
   failList = true;
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);
@@ -256,8 +259,8 @@ test("multiple saved strategies retain a single baseline indicator and results d
   assert.equal(page.document.querySelector(".baseline-badge").hidden, false);
   assert.equal(page.document.querySelector(".baseline-name"), null);
   assert.equal(page.document.querySelector(".campaign-actions > a").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.equal(page.document.querySelector(".campaign small").textContent.includes("v1"), false);
-  assert.match(page.document.querySelector(".campaign small").textContent, /^Completed/);
+  assert.equal(page.document.querySelector(".campaign-status").textContent.includes("v1"), false);
+  assert.match(page.document.querySelector(".campaign-status").textContent, /^Completed/);
   assert.equal(page.calls.some(call => call.options?.method), false);
 });
 
@@ -272,4 +275,21 @@ test("campaign Improve action retains exact source and is offered only after exe
   rows[1].status = "completed"; const timer = [...timers.values()][0]; timer.callback(); await flush();
   cards = [...document.querySelectorAll(".campaign")]; assert.equal(cards[1].querySelector(".improve-link").hidden, false);
   assert.equal(calls.filter(call => call.options?.method).length, 0);
+});
+
+test("campaign list exposes aligned status, trial count and creation time without losing full timestamp", async t => {
+  const page = setup(t, {campaigns:[{...campaign,created_at:"2026-09-13T11:42:00Z"}]}); await flush();
+  const card=page.document.querySelector(".campaign");
+  assert.deepEqual([...card.children].map(child=>child.className),["campaign-title","campaign-status","progress campaign-trials","campaign-created","campaign-actions"]);
+  assert.equal(page.document.querySelector(".campaign-columns").getAttribute("aria-hidden"),"true");
+  assert.equal(card.querySelector(".campaign-status").textContent,"Completed");
+  assert.equal(card.querySelector(".campaign-status").dataset.status,"completed");
+  const created=card.querySelector("time");assert.equal(created.dateTime,"2026-09-13T11:42:00.000Z");assert.ok(created.title);assert.match(created.getAttribute("aria-label"),/^Created /);
+  assert.match(card.querySelector(".campaign-trials").textContent,/3 \/ 3 trials/);
+  assert.equal(page.calls.some(call=>call.options?.method),false);
+});
+
+test("unavailable campaign creation date does not emit a fabricated timestamp", async t => {
+  const page=setup(t,{campaigns:[{...campaign,created_at:"not-a-date"}]});await flush();
+  const created=page.document.querySelector(".campaign-created");assert.equal(created.textContent,"Date unavailable");assert.equal(created.hasAttribute("datetime"),false);
 });
