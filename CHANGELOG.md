@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Align the workspace with Azure AI Foundry
 
-Use one Foundry-inspired Fluent layer across trials, campaigns, configuration, results and exported HTML reports. Neutral light/dark surfaces, restrained purple actions, flat navigation and aligned campaign columns replace conflicting page styles. Existing evaluation execution, evidence and approval flows are preserved.
+Use one Foundry-inspired Fluent layer across trials, campaigns, configuration, results and exported HTML reports. Neutral light/dark surfaces, restrained purple actions, flat navigation and aligned campaign columns replace conflicting page styles. Trials use the same full-width browsing pattern, with details opened on selection. Improvement cards identify the strategy, affected trials and direct next actions. Existing evaluation execution, evidence and approval flows are preserved. *(PR #27)*
 
 ### Make the evaluation workspace easier to scan
 

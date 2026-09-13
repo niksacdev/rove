@@ -67,14 +67,12 @@ button, input, textarea, select { font-family:var(--f-font); }
 .rove-nav nav a[aria-current="page"]::after { content:''; position:absolute; bottom:0; left:16px; right:16px; height:3px; border-radius:2px; background:var(--f-accent-text); }
 .rove-nav nav a:hover { background:var(--f-elevated); }
 .rove-nav .rove-theme { min-height:32px; padding:4px 12px; border-radius:var(--f-radius-control); font-size:13px; }
-.rove-footer { min-height:48px; padding:8px 24px; background:var(--f-header); }
 #quickSidebar { background:var(--f-header); width:224px; }
 .quick-links { gap:4px; padding:8px; }
-.quick-links .sidebar-action, #quickSidebar .rove-settings { min-height:36px; padding:8px 12px; font-size:14px; border:1px solid transparent; border-radius:var(--f-radius-control); background:transparent; color:var(--f-text-secondary); }
-.quick-links .sidebar-action:hover, #quickSidebar .rove-settings:hover { border-color:transparent; background:var(--f-elevated); }
-.quick-links [aria-current="page"], #quickSidebar .rove-settings[aria-current="page"] { border-left:3px solid var(--f-accent-text); background:var(--f-selected); color:var(--f-text); }
-#quickSidebar .rove-footer { margin:0 8px 8px; padding:8px 0 0; background:transparent; }
-#quickSidebar .sidebar-action svg, #quickSidebar .rove-settings svg { width:18px; height:18px; }
+.quick-links .sidebar-action { min-height:36px; padding:8px 12px; font-size:14px; border:1px solid transparent; border-radius:var(--f-radius-control); background:transparent; color:var(--f-text-secondary); }
+.quick-links .sidebar-action:hover { border-color:transparent; background:var(--f-elevated); }
+.quick-links [aria-current="page"] { border-left:3px solid var(--f-accent-text); background:var(--f-selected); color:var(--f-text); }
+#quickSidebar .sidebar-action svg { width:18px; height:18px; }
 body:not(:has(.root-layout)) > main { max-width:1440px; margin:24px auto; padding:0 32px; }
 .page-heading { margin-bottom:20px; }
 .page-heading h1, .root-page-heading h1, .step-heading h2, body[data-improving="true"] .step-heading h2 { font-size:24px; line-height:32px; font-weight:600; letter-spacing:0; }
@@ -163,8 +161,22 @@ body .results-section { margin-top:0; }
   .root-page-heading { padding:20px 16px 0; }
 }
 @media (pointer:coarse) {
-  body .campaign-actions .campaign-action, body .secondary, body .primary-link, .quick-links .sidebar-action, #quickSidebar .rove-settings, .rove-nav .rove-theme { min-height:44px; }
+  body .campaign-actions .campaign-action, body .secondary, body .primary-link, .quick-links .sidebar-action, .rove-nav .rove-theme { min-height:44px; }
 }
 @media (prefers-reduced-motion:reduce) {
   :where(.primary-link,.secondary,.campaign-action,.sidebar-action) { transition:none; }
 }
+
+/* Improvement cards start with the problem and an actionable next step. */
+body .improvement-suggestion { border:1px solid var(--f-border); border-radius:var(--f-radius-panel); background:var(--f-surface); padding:20px; margin:0 0 16px; }
+body .improvement-suggestion h3 { font-size:18px; line-height:26px; margin:0 0 4px; }
+body .improvement-suggestion .improvement-strategy { color:var(--f-accent-text); font-size:14px; margin:0 0 12px; }
+body .improvement-suggestion > p { margin:0 0 16px; }
+.improvement-actions { display:flex; flex-wrap:wrap; gap:8px; }
+body .improvement-actions > a, body .improvement-actions > button { display:inline-flex; align-items:center; min-height:32px; padding:5px 12px; border:1px solid var(--f-border-strong); border-radius:var(--f-radius-control); background:var(--f-surface); color:var(--f-text); text-decoration:none; font-size:14px; font-weight:600; line-height:20px; }
+body .improvement-actions > :first-child { background:var(--f-accent); border-color:var(--f-accent); color:#fff; }
+body .improvement-actions > :first-child:hover { background:var(--f-accent-hover); }
+body .improvement-suggestion .improvement-evidence { margin:16px 0 0; }
+body .improvement-suggestion .improvement-evidence a { display:block; border:0; padding:8px 0; min-height:32px; font-size:14px; }
+body .improvement-error pre { max-height:160px; }
+@media(pointer:coarse) { body .improvement-actions > a, body .improvement-actions > button { min-height:44px; } }

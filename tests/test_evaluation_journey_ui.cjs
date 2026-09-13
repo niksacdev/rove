@@ -641,7 +641,7 @@ test("trial and campaign seeds prepopulate immutable inputs and retain source, s
         assert.match(el("improvementIntro").textContent, /Cases retained \(1\)/);
         assert.match(el("improvementIntro").textContent, /Investigate the recorded plan failure/);
         let revisionSource; el("createCampaignStrategyRevision").addEventListener("click",()=>{revisionSource=el("campaignStrategy").value;});
-        [...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Review a plan change").click();
+        [...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Change planning model").click();
         assert.equal(revisionSource,"strategy","source-stage recommendation maps to its restored strategy definition");
       }
       assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases" || call.url === "/api/evaluate"), false);
@@ -752,4 +752,24 @@ test("improvement retains a single exact baseline revision and requires an expli
       assert.equal(calls.find(call => call.url === "/api/campaigns/from-cases").body.baseline_revision_id, "baseline-r1");
     } finally {dom.window.close();}
   }
+});
+
+test("improvement cards identify the problem and route named evidence without executing", async () => {
+  const seed=seedFixture("campaign");
+  seed.recommendations=[{strategy_id:"original-strategy",source:"missing_assessment",stage:"verify",title:"Review unscored trials",text:"These outputs need a review.",affected_trials:2,total_trials:3,trial_ids:["trial-a","trial-b"],evidence:[{trial_id:"trial-a",task:"Place <b>bowl</b>",seed:7},{trial_id:"trial-b",task:"Pick mug",seed:11}]}];
+  const page=await workspace("?improve=campaign-source",{seed});
+  try {
+    const card=page.el("improvementAdvice").querySelector("article");
+    assert.equal(card.querySelector("h3").textContent,"Review unscored trials");
+    assert.match(card.querySelector(".improvement-strategy").textContent,/2 of 3 trials/);
+    const action=card.querySelector(".improvement-actions a");
+    assert.equal(action.textContent,"Review an unscored trial");
+    assert.equal(action.getAttribute("href"),"/static/history.html?trial=trial-a");
+    const evidence=card.querySelector(".improvement-evidence");
+    assert.match(evidence.textContent,/Place <b>bowl<\/b> · seed 7/);
+    assert.equal(evidence.querySelector("b"),null);
+    const metrics=[...card.querySelectorAll("button")].find(button=>button.textContent==="Review success metrics");metrics.click();
+    assert.equal(page.el("metricsStep").hidden,false);
+    assert.equal(page.calls.some(call=>call.url==="/api/campaigns/from-cases"||call.url==="/api/evaluate"),false);
+  } finally {page.dom.window.close();}
 });

@@ -67,3 +67,23 @@ report behavior; provider inference is outside this presentation change.
 - [Fluent typography](https://fluent2.microsoft.design/typography)
 - [Fluent color](https://fluent2.microsoft.design/color)
 - [Fluent layout](https://fluent2.microsoft.design/layout)
+
+## Browsing and actionable improvement refinement
+
+Trials and Campaigns both start with full-width lists. Opening a trial reveals
+its inspector; Back to trials restores the source filter, page and focus.
+Deep links still open the requested trial directly. Settings is a gear link in
+the top-right shared navigation on every workspace, superseding ADR-029's sidebar
+placement.
+
+Improvement recommendations identify the strategy, affected-trial counts and
+named case evidence. Execution failures and missing assessments produce separate
+recommendations even within one strategy. Model changes open the existing
+reviewed revision editor; unscored trials link to their evidence and success
+metrics. A strategy with no recorded trials is never described as passing.
+Missing error messages stay absent rather than being invented. These are
+recorded findings; optional model-authored interpretation remains labelled.
+
+Regression coverage includes `test_history_routes_ui.cjs`,
+`test_evaluation_journey_ui.cjs` and `test_campaign_seeds.py` for browsing,
+evidence actions, mixed failure/unknown results and empty history.

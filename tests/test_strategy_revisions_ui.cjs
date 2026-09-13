@@ -99,7 +99,7 @@ test("failure recommendation reviews one compatible component and requires appro
   try {
     el("createCampaignStrategyRevision").dataset.recommendedStage = "perceive";
     await open(false);
-    assert.equal(el("strategyRevisionHeading").textContent, "Review perceive change");
+    assert.equal(el("strategyRevisionHeading").textContent, "Change scene understanding model");
     assert.equal(el("revisionStage_plan").closest("label").hidden, true);
     assert.equal(el("revisionStage_perceive").closest("label").hidden, false);
     assert.match(el("strategyRecommendation").textContent, /Current endpoint: vision/);

@@ -84,8 +84,16 @@ def _strategy_seed(frozen, definitions, source, config_path):
     return selected, rows, blockers
 
 
-def _recommendations(trials, strategies):
+def _recommendations(trials, strategies, tasks=None):
     recommendations = []
+    task_names = {task["id"]: task.get("task", task["id"]) for task in tasks or []}
+    stage_names = {
+        "perceive": "Scene understanding",
+        "plan": "Planning",
+        "act": "Action prediction",
+        "verify": "Verification",
+        "sim": "Simulation",
+    }
     for sid in strategies:
         rows = [trial for trial in trials if trial.get("strategy_id") == sid]
         unresolved = [
@@ -99,43 +107,106 @@ def _recommendations(trials, strategies):
             for trial in rows
             if trial.get("outcome") == "fail" or trial.get("execution") in {"error", "timeout"}
         ]
-        stages = Counter((trial.get("result") or {}).get("failure_stage") for trial in failures)
-        stages = Counter(
-            {
-                stage: count
-                for stage, count in stages.items()
-                if stage in {"perceive", "plan", "act", "verify", "sim"}
-            }
-        )
-        if unresolved or not rows:
-            stage, source = "verify", "missing_assessment"
-            text = "Complete outstanding reviews and inspect missing outcome evidence before choosing a component to change. An unresolved result does not mean the agent performed poorly."
-            cited = unresolved
-        elif failures and stages:
-            stage, source = stages.most_common(1)[0][0], "recorded_failure"
-            text = f"Inspect the recorded {stage} failures. Test one {stage} component change as a hypothesis, keeping cases, criteria and attempt budget fixed."
-            cited = [
-                trial
-                for trial in failures
-                if (trial.get("result") or {}).get("failure_stage") == stage
-            ]
-        elif failures:
-            stage, source = "verify", "recorded_outcome"
-            text = "Inspect the failed trial evidence before choosing which component to change; the saved results do not identify a failure stage."
-            cited = failures
-        else:
-            stage, source = None, "suggestion"
-            text = "The recorded cases passed. Consider a separate campaign with harder held-out cases or a latency study; changed case coverage is a new assessment, not a same-condition ablation."
-            cited = rows
-        recommendations.append(
-            {
-                "strategy_id": sid,
-                "stage": stage,
-                "source": source,
-                "text": text,
-                "trial_ids": [trial["trial_id"] for trial in cited if trial.get("trial_id")][:30],
-            }
-        )
+        groups = []
+        if failures:
+            stages = Counter((trial.get("result") or {}).get("failure_stage") for trial in failures)
+            stages = Counter(
+                {stage: count for stage, count in stages.items() if stage in stage_names}
+            )
+            if stages:
+                stage = stages.most_common(1)[0][0]
+                cited = [
+                    trial
+                    for trial in failures
+                    if (trial.get("result") or {}).get("failure_stage") == stage
+                ]
+                execution_errors = any(
+                    trial.get("execution") in {"error", "timeout"} for trial in cited
+                )
+                groups.append(
+                    (
+                        stage,
+                        "recorded_failure",
+                        cited,
+                        f"{stage_names[stage]} {'could not finish' if execution_errors else 'failed its checks'}",
+                        "Open a failed trial to check the cause, or choose a different model for this stage. The change is a hypothesis to test; it is not saved until you approve it.",
+                    )
+                )
+            else:
+                groups.append(
+                    (
+                        None,
+                        "recorded_outcome",
+                        failures,
+                        "Review failed trials",
+                        "The saved results do not identify which stage caused the failure. Start with a failed trial before changing a model.",
+                    )
+                )
+        if unresolved:
+            groups.append(
+                (
+                    "verify",
+                    "missing_assessment",
+                    unresolved,
+                    "Review unscored trials",
+                    "These trials have no pass or fail assessment. Complete their reviews or add the missing outcome evidence before comparing quality.",
+                )
+            )
+        if not rows:
+            groups.append(
+                (
+                    None,
+                    "no_trials",
+                    [],
+                    "Run this strategy first",
+                    "No trials were recorded for this strategy. Review its configuration and run the campaign.",
+                )
+            )
+        elif not failures and not unresolved:
+            groups.append(
+                (
+                    None,
+                    "suggestion",
+                    rows,
+                    "Try more challenging cases",
+                    "The recorded cases passed. Add harder held-out cases to test broader coverage, or keep these cases and compare another strategy.",
+                )
+            )
+        for stage, source, cited, title, text in groups:
+            evidence = []
+            for trial in cited[:30]:
+                if not trial.get("trial_id"):
+                    continue
+                result = trial.get("result") or {}
+                error = result.get("error") or trial.get("reason")
+                if not error:
+                    error = next(
+                        (row.get("error") for row in result.get("stages", []) if row.get("error")),
+                        None,
+                    )
+                evidence.append(
+                    {
+                        "trial_id": trial["trial_id"],
+                        "task": task_names.get(
+                            trial.get("task_id"), trial.get("task_id") or "Recorded task"
+                        ),
+                        "seed": trial.get("seed"),
+                        "error": str(sanitize(error))[:500] if error else None,
+                    }
+                )
+            recommendations.append(
+                {
+                    "strategy_id": sid,
+                    "stage": stage,
+                    "source": source,
+                    "title": title,
+                    "text": text,
+                    "affected_trials": len(cited),
+                    "total_trials": len(rows),
+                    "trial_ids": [item["trial_id"] for item in evidence],
+                    "evidence": evidence,
+                }
+            )
     return recommendations
 
 
@@ -281,7 +352,7 @@ def campaign_seed(root, campaign_id, *, config_path=None):
         "contract_id": campaign.get("contract_id"),
         "dataset_revision_id": campaign.get("dataset_revision_id"),
         "baselines": [b for b in BaselineStore(root).list() if b["campaign_id"] == campaign_id],
-        "recommendations": _recommendations(trials, spec["strategies"]),
+        "recommendations": _recommendations(trials, spec["strategies"], spec["tasks"]),
         "next_steps": next_steps,
         "warnings": [
             "Source settings are retained for a new campaign. Changed cases, criteria or attempt budgets do not establish a comparable ablation."

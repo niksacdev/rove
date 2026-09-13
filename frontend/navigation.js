@@ -13,18 +13,10 @@
     return ["strategies", "models", "settings"].includes(view) ? "configure" : view === "home" ? "start" : "evaluate";
   }
   function setActive(section) {
-    placeSettings();
-    document.querySelectorAll("#roveNav [data-nav-section], #roveFooter [data-nav-section]").forEach(link => {
+    document.querySelectorAll("#roveNav [data-nav-section]").forEach(link => {
       if (link.dataset.navSection === section) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
-  }
-  function placeSettings() {
-    const footer = document.getElementById("roveFooter"), sidebar = document.getElementById("quickSidebar");
-    if (!footer) return;
-    const wide = !window.matchMedia || window.matchMedia("(min-width: 641px)").matches;
-    const destination = sidebar && !sidebar.hidden && wide ? sidebar : document.body;
-    if (footer.parentElement !== destination) destination.appendChild(footer);
   }
   function themeLabel() {
     const button = document.getElementById("themeToggle");
@@ -44,14 +36,12 @@
     const nav = document.createElement("nav"); nav.setAttribute("aria-label", "Main navigation");
     for (const [key, label, href] of items) { const link = document.createElement("a"); link.href = href; link.textContent = label; link.dataset.navSection = key; nav.append(link); }
     const utilities = document.createElement("div"); utilities.className = "rove-utilities";
-    const settings = document.createElement("a"); settings.href = "/?view=strategies"; settings.className = "rove-settings"; settings.dataset.navSection = "configure"; settings.setAttribute("aria-label", "Settings: strategies and connections");
-    settings.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9.2 3-.7 2.2-1.7 1L4.5 6l-2 3.5L4 11.2v1.7l-1.5 1.6 2 3.5 2.3-.2 1.7 1 .7 2.2h4l.7-2.2 1.7-1 2.3.2 2-3.5-1.5-1.6v-1.7l1.5-1.7L18 6l-2.3.2-1.7-1L13.3 3Z"/><circle cx="11.2" cy="12" r="3"/></svg><span>Settings</span>';
+    const settings = document.createElement("a"); settings.href = "/?view=strategies"; settings.className = "rove-settings"; settings.dataset.navSection = "configure"; settings.setAttribute("aria-label", "Settings"); settings.title = "Settings";
+    settings.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9.2 3-.7 2.2-1.7 1L4.5 6l-2 3.5L4 11.2v1.7l-1.5 1.6 2 3.5 2.3-.2 1.7 1 .7 2.2h4l.7-2.2 1.7-1 2.3.2 2-3.5-1.5-1.6v-1.7l1.5-1.7L18 6l-2.3.2-1.7-1L13.3 3Z"/><circle cx="11.2" cy="12" r="3"/></svg>';
     const theme = document.createElement("button"); theme.type = "button"; theme.id = "themeToggle"; theme.className = "rove-theme";
     theme.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
-    utilities.append(theme);
-    const footer = document.createElement("footer"); footer.id = "roveFooter"; footer.className = "rove-footer"; footer.setAttribute("aria-label", "Workspace settings"); footer.append(settings);
-    document.body.classList.add("rove-shell"); document.body.appendChild(footer);
-    window.matchMedia?.("(min-width: 641px)").addEventListener("change", placeSettings);
+    utilities.append(theme, settings);
+    document.body.classList.add("rove-shell");
     host.replaceChildren(brand, nav, utilities);
     setActive(host.dataset.section || sectionForView(rootView(location.search))); themeLabel();
   }

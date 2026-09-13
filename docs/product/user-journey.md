@@ -588,3 +588,15 @@ flowchart LR
 ```
 
 Implementation and validation: [ADR-030](../architecture/ADR-030-foundry-visual-language.md).
+
+### Current browsing and improvement behavior
+
+Trials and Campaigns share a full-width list. View results opens the selected
+trial's evidence; Back to trials returns to the same source and page. Settings is
+available from a gear icon at the top right of every workspace.
+
+Improve starts with a named problem, strategy and affected-trial count. It offers
+Open a failed trial / Change model for a recorded stage failure, or Review an
+unscored trial / Review success metrics for missing assessments. Expanded evidence
+identifies tasks and attempt seeds. Saving a model revision still requires preview
+and human approval; running it remains a separate action.
