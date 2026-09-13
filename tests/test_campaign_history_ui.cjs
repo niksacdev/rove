@@ -19,7 +19,7 @@ test("campaign history uses the exact selected lineage and shared navigation wit
   assert.equal(document.getElementById("campaignHistoryName").textContent,"Tray comparison");
   assert.equal(document.querySelector("#roveNav [aria-current]").textContent,"Campaigns");
   assert.equal(document.querySelectorAll('#roveNav a[aria-label="Settings"]').length,1);
-  assert.equal(document.querySelector('link[rel="stylesheet"]:last-of-type').getAttribute("href"),"/static/fluent.css?v=foundry-7");
+  assert.equal(document.querySelector('link[rel="stylesheet"]:last-of-type').getAttribute("href"),"/static/fluent.css?v=workspace-8");
   assert.equal(document.getElementById("historyViewResults").getAttribute("href"),"/static/datasets.html?step=review&campaign=selected");
   assert.equal(document.querySelector("main > a").getAttribute("href"),"/static/benchmarks.html");
   assert.equal(document.querySelectorAll(".trajectory-iteration").length,2);

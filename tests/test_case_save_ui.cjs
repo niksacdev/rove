@@ -26,6 +26,7 @@ async function setup(options = {}) {
     else throw Error(`Unexpected ${url}`);
     return {ok: true, status: 200, json: async () => value};
   };
+  w.eval(require("node:fs").readFileSync(require("node:path").resolve(__dirname,"../frontend/strategy-table.js"),"utf8"));
   w.eval(fs.readFileSync(path.join(root, "navigation.js"), "utf8")); w.eval(fs.readFileSync(path.join(root, "datasets.js"), "utf8")); await pause();
   el("showImport").click(); el("caseName").value = "Customer scene"; el("caseTask").value = "Place red part into bin"; el("newCaseExpectation").value = "Identify the red part accurately.";
   Object.defineProperty(el("caseImage"), "files", {value: [new w.File(["png"], "scene.png", {type: "image/png"})]});

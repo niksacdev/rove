@@ -3,26 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROVE · Results · Trials</title>
+  <title>ROVE · Trials</title>
   <script>
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=foundry-7">
-  <link rel="stylesheet" href="/static/history.css?v=foundry-7">
-  <link rel="stylesheet" href="/static/navigation.css?v=foundry-7">
-  <script src="/static/navigation.js?v=foundry-7" defer></script>
-  <script src="/static/history-traces.js?v=foundry-7"></script>
-  <script src="/static/history.js?v=foundry-7" defer></script>
-  <link rel="stylesheet" href="/static/fluent.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/styles.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/history.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/navigation.css?v=workspace-8">
+  <script src="/static/navigation.js?v=workspace-8" defer></script>
+  <script src="/static/history-traces.js?v=workspace-8"></script>
+  <script src="/static/history.js?v=workspace-8" defer></script>
+  <link rel="stylesheet" href="/static/fluent.css?v=workspace-8">
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
-  <header id="roveNav" data-section="results"></header>
+  <header id="roveNav" data-section="evaluate"></header>
   <main id="main">
-    <div class="page-heading"><div><h1>Saved trials</h1>
-        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/static/datasets.html" class="primary-link button">Create a campaign</a></div>
-    <nav class="workspace-tabs" aria-label="Results"><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">Trials</a></nav>
+    <div class="page-heading"><div><h1>Trials</h1>
+        <details><summary>Export workspace for analysis</summary><p>The ZIP includes all local cases, reviews, trial records and private assets. Active evaluations must finish first. SQLite remains the working database; the versioned tables can be transformed for Fabric or Delta Lake.</p><button id="exportExchange" type="button" class="secondary">Download relational exchange</button><p id="exportStatus" role="status"></p></details></div><a href="/?view=quick" class="primary-link button">New trial</a></div>
     <div class="history-layout">
       <section id="trialBrowser" class="history-list-panel" aria-label="Saved trials">
         <div class="trial-commandbar"><p id="listStatus" class="muted" role="status" aria-live="polite"></p><label class="filter-label" for="sourceFilter">Source</label><select id="sourceFilter"><option value="">All trials</option><option value="quick">Standalone trials</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>

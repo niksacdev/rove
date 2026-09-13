@@ -1,670 +1,346 @@
-# ROVE campaign workspace
+# ROVE evaluation workspace
 
-**Status:** Five-stage workspace verified locally. The trial-first entry and guided Improve loop below are implemented with local regression coverage; the complete loop is browser-verified with mock execution and task-based templates. Mock evidence does not establish live AI or hardware performance.
-**Decision:** [ADR-025](../architecture/ADR-025-workflow-navigation.md).
+**Status:** Implemented with automated regression and desktop browser checks recorded
+below. Trial/campaign execution, SQLite history, case promotion and baseline services
+remain the foundation. Live model/hardware performance is outside this UI validation.
+**Decision:** [ADR-031](../architecture/ADR-031-shared-evaluation-workspace.md), which
+supersedes conflicting navigation and setup presentation in ADR-030.
 
-**ROVE evaluates robotics agent pipelines on your task.** A customer should bring
-the same task, image and robot description, choose a set of configured systems,
-compare their outputs immediately, then repeat campaigns to measure improvement. The interface must explain that sequence directly.
-
-## Latest entry: try a task, then build a campaign
-
-**Settings** is a gear at the top right of every workspace. The trial sidebar
-contains recent comparisons, All saved trials and Sample cases. Changing views
-preserves the in-progress trial draft.
-
-The customer's first action is the familiar chat runner: enter the task, provide an
-image and optional URDF, and choose the set of strategies to compare. Execution
-produces one saved trial per strategy, with outputs and stages available together.
-The immediate comparison gives direction; campaigns add repeated evidence over time. **Add to campaign** starts a prepared
-campaign workspace from that trial's input and strategy, after which the user can add
-cases and strategies. This supersedes treating the chat runner as a secondary legacy
-experience. It does not require an additional Quick Evaluation concept in the UI.
-
-```mermaid
-flowchart LR
-    Q[Chat: same task, image, URDF and selected strategies] --> T[Compare saved strategy trials]
-    T --> P[Add to campaign: seed case and strategy]
-    P --> C[Add cases and strategies]
-    C --> M[Review 3–5 editable assessment criteria]
-    M --> R[Review and run]
-    R --> O[Automatic Results on completion]
-    O --> B[Set as baseline]
-    B --> L[Campaign browser]
-    L --> I[Improve: prefilled workflow and suggestions]
-    I --> C
-```
-
-**Add to campaign** preserves a link to the source trial. The trial remains an
-exploratory reference: a new campaign schedules fresh attempts, and does not count
-that earlier execution as an extra repetition. Reuse its managed image, instruction,
-robot input where supplied and exact selected strategy. If a source was an ad-hoc
-model selection or the reusable configuration changed, resolve an explicit immutable
-strategy revision rather than substitute a similarly named current strategy. Missing
-source assets/configuration require a visible repair step before launch.
-
-Success metrics presents three to five individually editable assessment criteria when
-supported by the task, with an honest task-based template if no AI assistant is
-configured. These are rubric rows, not three to five invented performance measures.
-Each criterion retains its grading method, evidence needs and required/diagnostic
-role. Source expectations remain editable. Suggested criteria do not rate an output
-or demonstrate that a robot completed an action.
-
-**Review and run** shows the exact cases, strategies, repetitions and agreed scoring
-before execution. Run retains per-strategy progress and trial IDs. The foreground
-campaign moves to Results after completion, without asking the user to rediscover the
-report. Opening a saved report never resumes or reruns execution.
-
-**Set as baseline** is campaign-level wording for a reference containing one specific
-completed campaign strategy and its frozen assessment snapshot. A single-strategy
-campaign has an obvious reference; a multi-strategy campaign needs an explicit choice.
-The campaign browser's **Improve** action opens the prepopulated workflow, with
-recommendations on its first page. Show the source campaign/baseline and findings that
-motivate each suggestion. Missing expert judgments suggest reviewing evidence first;
-a low observed outcome may support a proposed component ablation as a hypothesis,
-not a causal diagnosis.
-
-Keep the baseline's cases, scoring and repetition plan for a controlled component
-ablation. Adding cases broadens coverage and changes assessment conditions. The UI
-must identify that difference before running and must not advertise an unrestricted
-headline improvement against the narrower baseline. The existing comparison validator
-remains authoritative; the baseline and its historical evidence are never rewritten.
-Improve offers an explicit saved-reference selector (prefilled only when one exists),
-and sends the exact baseline revision with the source campaign. Recommendations read
-current assessments; comparison values use the frozen reference, even after later reviews.
-
-The source trial already retains the uploaded URDF as a managed robot asset and the
-existing promotion service preserves image/task lineage. The handoff now compares the complete public input context before reusing a case,
-including the presence or absence of a managed robot description. It preserves robot
-assets through promotion and campaign execution and restores missing strategy IDs as
-immutable snapshot revisions only when endpoint/default fingerprints still match.
-Drift requires explicit candidate selection or component repair. Local regression
-coverage exercises these paths; the full-loop browser check below verified saved
-robot inputs, criteria editing, automatic Results and an exact baseline comparison.
-The earlier six-trial browser check below establishes the preceding campaign workspace.
+**ROVE evaluates robotics agent pipelines on your task.** Compare the same task,
+image and robot description across strategies, inspect evidence, and retain campaigns
+that make later changes and outcomes traceable.
 
 ## Who the journey serves
 
 | Persona | Work to complete | Useful result |
 | --- | --- | --- |
-| Robotics Researcher | Select representative cases and compare configured strategies under the same criteria | Repeated trials, failure traces and a baseline for a controlled ablation |
-| ML Engineer on a Manipulation Team | Add customer images/tasks, describe the expected result and inspect outputs with an SME | A reusable case collection and evidence of which customer tasks succeed, fail or remain unassessed |
-| Platform / AI Infrastructure Team | Maintain strategy and endpoint configuration in Settings | Return to an evaluation where those named strategies can be selected and their captured versions inspected |
+| Robotics Researcher | Compare configured strategies and isolate component changes | Repeatable trials, traces and a baseline under recorded conditions |
+| ML Engineer on a Manipulation Team | Try customer observations quickly, then broaden coverage | Immediate output comparison and a reviewed evaluation set |
+| Platform / AI Infrastructure Team | Maintain strategies/endpoints and automate comparisons | Shared configuration, durable results and equivalent CLI operations |
 
-An SME supplies judgments and annotations. A suggested expected outcome is a draft;
-it never becomes an expert judgment merely because the interface populated it.
-An initial image can support a perception or planning assessment. It cannot establish
-that the robot completed the task without outcome evidence.
+An SME reviews case validity, reusable annotations or individual outputs. A suggested
+criterion is a draft, not an expert judgment. An initial observation supports
+perception/planning assessment; physical completion requires outcome evidence from an
+execution of the candidate system.
 
-## Why the previous design failed
+## Navigation and creation
 
-The previous navigation consolidation improved route consistency but left users to
-connect cases, contracts, datasets, campaigns and trial history themselves. A long
-case dropdown hid the useful image/task gallery. Small links did not explain what
-creating a campaign accomplished. Quick evaluation competed with the main workflow,
-while configuration and the assistant appeared in unrelated places. A passed route
-test did not establish that a customer could understand or complete an evaluation.
+**Trials** and **Campaigns** are peer destinations in the global navigation. They
+open saved-record browsers. **Settings** remains a separate gear on the right for
+reusable strategies, endpoints and preferences. It is not a workflow stage.
 
-## One campaign, five stages
+Home offers **New trial** and **New campaign**, using those same creation labels in
+the browsers. These actions open drafts; browsing an existing result never creates
+or resumes execution. A trial browser row identifies one strategy attempt. Trying
+three strategies on one case produces three trials displayed as a useful comparison.
 
-```mermaid
-flowchart LR
-    C["Cases<br/>Add new or select existing"] --> F["Configure<br/>Choose strategies"]
-    F --> M["Success metrics<br/>Agree criteria and evidence"]
-    M --> R["Run campaign<br/>Watch each strategy"]
-    R --> V["Results<br/>Charts, summary, inspect trials"]
-    V --> C
-    S["Settings<br/>Strategies and connections"] -. Available strategies .-> F
-```
+A campaign is a named evaluation of cases, strategies and repetitions. It organizes
+fresh trials and their scoring; it does not replace the immediate trial workflow.
+Do not introduce competing objects called Quick Evaluation, Experiment or Run.
 
-Primary navigation is **Start · Evaluate · Results**. **Settings** sits separately
-on the right, providing strategies, models/connections and application preferences.
-Configure chooses from those existing strategies. Success metrics is a separate stage
-for agreeing what success means and what evidence will establish it. Settings maintains
-the reusable configurations themselves; the extra stage creates no new storage entity.
+## Latest entry: try a task, then build a campaign
 
-The creation action and destination title both say **Create a campaign**.
-“Evaluate” describes the work; **Run campaign** executes the configured campaign.
-Neither creates another object called an evaluation or a run. The saved records are
-campaigns and trials.
-A trial executes one strategy on one case for one repetition. Opening **Review results**
-reads saved evidence. **Compare a strategy change** previews differences; only
-**Start comparison campaign** executes new trials. ROVE measures improvement rather
-than modifying an agent automatically.
-
-Start explains what a campaign produces and offers a clear **Create a campaign**
-action. A campaign is a named evaluation of selected cases against selected strategies,
-with a chosen number of attempts per case and strategy. It produces a report backed
-by individually inspectable trials. A one-case, one-strategy, one-attempt campaign is
-the smallest form of the same journey; users need not learn a separate quick workflow.
-
-### 1. Cases: assemble the work to evaluate
-
-A **task** is the robotics objective or instruction. A **case** is one concrete test:
-an observation, that task, relevant environment/robot conditions, and an expected
-outcome. Several cases can assess the same task under different observations or
-conditions. There is no additional persisted Task container. Optional robot geometry
-belongs only where the evaluation needs it; the current case intake does not claim a
-dedicated URDF upload or validated embodiment contract.
-
-Provide **Add new**, **Select existing** and **Import cases**. Add new opens a dialog
-for one image, instruction, name and expected outcome. Select existing opens one
-bounded library dialog with **Cases** and **Datasets** tabs. Individual cases use image
-previews, search and categories. Datasets are saved case collections, not a competing
-execution path. Selecting a dataset loads its exact case versions and scoring rules
-into Cases for inspection; the user then chooses **Choose strategies** explicitly.
-
-Selections become image/task cards in the campaign. Expected-outcome and expert-review
-details can be expanded per case, keeping the primary list compact. Source annotations
-or suggestions remain editable drafts, with their origin made clear. Do not claim
-image understanding from a task-derived suggestion alone or create a human review
-from populated draft text. Removing or editing a case retains the other selections.
-
-Import cases accepts a JSONL metadata file plus explicitly selected PNG/JPEG images,
-matched by filename. Each line describes one case; optional object fields retain
-candidate context, conditions, recorded evidence and private reference material. Preview
-validates the batch before upload. The current UI accepts 1–100 cases, a JSONL file up
-to 1 MiB and images up to 16 MiB each. Images are separate assets, not embedded in
-JSONL. Completed imports remain saved if a later import fails; uncertain responses
-require checking the library before retrying rather than blindly duplicating cases.
-
-**Save case collection** belongs in Review results after inspecting the selected work.
-Offer a new collection or **Add to an existing collection**. Adding creates a new
-revision retaining previous members and their exact review choices; it does not rewrite
-an earlier dataset. Show resulting membership and review coverage. A collection can
-still contain unreviewed cases, but that gap must remain visible. The storage term
-"freeze" belongs in technical details rather than the primary action label.
-
-### 2. Configure: choose the strategies
-
-Select one or several strategy cards from the available configuration. A strategy
-supplies the pipeline stages, models and endpoints for a trial. The same selected
-cases and scoring rules apply to every chosen strategy. For example, **4 cases × 3
-strategies × 2 repetitions = 24 trials** in one campaign. Show the selected strategy
-names and total before launch; do not make users create separate campaigns to compare
-three existing systems on the same data.
-
-Use two clear paths:
-
-| Intent | Setup | Result |
-| --- | --- | --- |
-| Compare existing strategies | Select several strategies in Configure and run one campaign | Per-strategy results on the same cases, with individual trial evidence |
-| Test a component change | Start from a baseline strategy, save a changed strategy revision, then preview a comparison campaign | Candidate results against the preserved baseline under matching assessment conditions |
-
-Strategy editing creates a new reusable revision; it does not rewrite `rove.yaml`
-or mutate a strategy used by earlier campaigns. Show its source strategy, changed
-components and saved identity. The configuration catalog supplies selectable strategies;
-Settings maintains reusable setup, while Configure selects what this campaign runs.
-Changing a model or prompt is a candidate change. Changing the cases, grading rules
-or required evidence changes the assessment conditions and must be visible before
-claiming comparability. A saved revision uses current endpoint settings at campaign creation; the campaign
-freezes the complete resolved configuration. The editor starts from the current source
-definition, so drift from a saved baseline must be shown. See
-[ADR-026](../architecture/ADR-026-versioned-strategy-catalog.md) for the storage and
-snapshot boundary.
-
-The optional assistant can help select or revise a strategy after case selection.
-Keep the selected cases and strategies as its context, and keep the manual path usable
-when the assistant is unavailable. A response or a saved revision never starts trials.
-
-### 3. Success metrics: agree what the result will mean
-
-Give assessment its own stage after strategy selection. A customer should see the
-selected cases, the systems being compared and the evidence available before deciding
-which results will be useful. Show plain-language **Success criteria**: expected
-outcomes, assessment method, required evidence and applicable constraints. Show the
-selected report measures and any campaign targets alongside their units and direction.
-Advanced contract JSON remains in collapsed details.
-
-The assistant may draft or explain criteria and suitable metrics using those cases
-and strategy capabilities. Drafts must be visibly reviewable before they change the
-campaign; generated text is neither an SME judgment nor proof of a physical outcome.
-An initial-image case can support output or perception assessment. Completion time,
-autonomous completion, constraint outcomes and recovery require appropriate episode
-evidence. Missing evidence should explain an unavailable measure rather than produce
-a score. The user can edit criteria and continue manually without an AI provider.
-
-The existing versioned success contract remains the authoritative record. Both manual
-controls and assistant proposals use host validation and exact-preview confirmation.
-Changes to cases, strategies or scoring invalidate an obsolete prepared launch; moving
-between stages never executes trials. Each selected strategy receives the same case
-set and scoring rules so the comparison remains interpretable.
-
-### 4. Run campaign: confirm the configuration and inspect its trials
-
-Show a readable confirmation: campaign name, selected cases, strategy names, success
-criteria, repetitions, total planned trials and available execution limits. Explain
-unavailable cost estimates rather than rendering them as zero. Keep advanced limits
-out of the primary path unless needed. The **Run campaign** action starts the configured trials
-only after validation; navigation never starts or resumes work.
+The quick workspace has **Case → Configure → Run → Results**. Case retains the
+conversational task refinement, observation upload and optional URDF. Configure uses
+the same strategy selection table as campaigns. Run executes the existing pipeline;
+Results shows saved outputs and evidence, with **Add to campaign**.
 
 ```mermaid
 flowchart TD
-    C["Campaign: 3 cases × 2 strategies × 2 attempts"] --> T["12 planned trials"]
-    T --> A["Trial: one case + one strategy + one attempt"]
-    A --> P["Configured pipeline stages"]
-    P --> E["Trace, measurements and outcome"]
-    E --> R["Campaign report"]
+    H[Home] --> NT[New trial]
+    H --> NC[New campaign]
+    NT --> TC[Case: task, image, optional URDF and chat refinement]
+    TC --> TF[Configure: shared strategy table]
+    TF --> TR[Run: existing pipeline progress]
+    TR --> TO[Results: compare saved strategy trials]
+    TO --> ADD[Add to campaign]
+    NC --> CC[Cases]
+    ADD --> CC
+    CC --> CF[Configure: shared strategy table]
+    CF --> CM[Success metrics]
+    CM --> CR[Run]
+    CR --> CO[Review and improve]
+    CO --> B[Set as baseline or Improve]
+    B --> CC
 ```
 
-Lead with a progress card for each selected strategy: completed/planned attempts,
-active or most recent case and explicit queued/running/completed/error state. Never
-present the whole campaign as one undifferentiated pipeline. Expanding a strategy
-reveals its trials and their pipeline activity.
+**Add to campaign** carries the source task, managed image, robot input when supplied
+and exact strategy context. The original trial remains an exploratory reference.
+Campaign execution schedules fresh attempts rather than silently increasing its
+repetition count with that earlier trial. Configuration drift or missing assets
+requires a repair or explicit alternative; a similarly named current strategy is not
+a substitute for its historical identity.
 
-A pipeline stage is part of a trial, not another trial. Run shows trial identity,
-case/task, strategy and attempt number, with links to saved evidence. Campaign progress
-refreshes every two seconds while a campaign is active and the Run page is visible.
-Active trial stage events also refresh the strategy overview. **Pipeline progress and output** fetches recorded stage events when expanded; **Refresh
-this trial** fetches them again. This is recorded-event inspection, not token streaming.
-The inline view reads up to 200 events and directs longer traces to the full inspector.
-Completion of execution does not imply that the assessment passed.
+Changing quick-workspace stages retains the task, image, robot input and selected
+strategies. Progress, original pipeline output, saved trial history and case promotion
+remain available. Results opens at the top of the recorded output. Review case inputs
+returns to the editable draft; opening older history does not pretend to restore its
+attachments. History and pending sample loads cannot overwrite a live comparison.
+Conversation prepares the input; stage navigation itself never runs
+a strategy or rates an output.
 
-### 5. Results: understand the outcome, then inspect evidence
+## A persistent campaign header
 
-Open the exact completed or in-progress campaign. **Review results** reads recorded
-outcomes and their supporting traces; it does not execute the pipeline again. Entering
-Review refreshes the saved assessments so it reflects trials completed since launch.
-Show success, failure, unknown assessments and execution errors distinctly. Attributed
-expert review assesses existing outputs and does not add attempts to the denominator.
+Every campaign stage has one shared header with **Campaign name**, **Attempts per
+case** and the live total: **cases × strategies × attempts = planned trials**. The
+attempt count applies separately to each selected strategy on each case. For example,
+4 cases × 3 strategies × 2 attempts produces 24 trials.
 
-Present information in this order:
+In a new draft, name and attempt count are editable and every selection updates the
+total. Invalid counts show an actionable validation message rather than a plausible
+number. The server preview remains authoritative for whether execution is permitted.
 
-1. Campaign identity, execution completion, assessment coverage and declared target status.
-2. Per-strategy outcome charts: passed, failed and unknown counts with a common scale.
-   Follow with pass@k and pass^k curves and supported latency/robotics measures.
-3. A compact AI outcome summary, when available: what the
-   retained evidence supports, the important gaps and a useful next investigation.
-4. **Inspect trials** as a disclosure containing the case/strategy/attempt records,
-   outputs, measurements, traces and expert review. Baseline and comparison actions
-   remain discoverable without exposing the entire evidence ledger immediately.
-
-A graph needs a readable text equivalent and counts; color alone cannot explain an
-outcome. Unknown is a distinct segment, never omitted from the denominator. Keep
-strategy curves separate. Unresolved lower/upper outcome bounds are not confidence
-intervals. A missing value is unavailable, never zero, and no chart should infer a
-metric the assessment API withheld. P95 pipeline latency describes pipeline execution,
-not robot cycle time. Episode completion time and constraint or recovery results are
-shown only with their recorded evidence scope, coverage, units and denominators.
-
-An AI summary explains existing results; it does not change scores or invent causes.
-Link claims to retained evidence where available, call out synthetic/recorded/output-only
-scope, and separate hypotheses from observations. Provider unavailability leaves the
-charts, recorded results and trial inspection fully usable. Opening Results or asking
-for an explanation does not launch new trials.
-
-**Set as baseline** is a primary action for a completed campaign. A baseline gives one
-campaign strategy the role of a comparison reference, preserving its configuration,
-cases, scoring criteria and assessment snapshot. If the campaign contains several
-strategies, select the reference strategy explicitly. Name the baseline and save it;
-opening its form does not mark the campaign as a baseline or execute trials.
-
-Results shows a **Baseline** badge only when an actual saved baseline references that
-campaign. A campaign name containing “baseline,” being the first campaign, or merely
-opening the setup form is not sufficient. Pending expert assessments remain unknown
-in the saved reference; later ratings do not silently rewrite it. Revision history and
-pinning belong in secondary details, after the main reference has been established.
+In a saved campaign, the header and setup are read-only and derive from the recorded
+specification. Attempts use the number of recorded seeds, not the maximum seed value,
+a default field value or an assumption of consecutive seeds. For seeds `[2, 7, 19]`,
+the attempt count is three. Display historical strategy/case identity even when today's
+configuration differs. **Improve** creates an editable copy linked to the source;
+it never edits the saved execution or baseline in place.
 
 ```mermaid
-flowchart LR
-    C["Completed campaign strategy"] --> S["Set as baseline<br/>Name and confirm"]
-    S --> B["Saved baseline reference<br/>Frozen assessment snapshot"]
-    B --> R["Results: Baseline badge"]
-    B --> P["Compare a strategy change<br/>Preview matching conditions"]
-    P --> X["Start comparison campaign<br/>Execute new trials"]
-    X --> V["Review results<br/>Read evidence and compare"]
+stateDiagram-v2
+    [*] --> Draft: New campaign
+    Draft --> Draft: Edit cases, strategies, criteria and attempts
+    Draft --> Running: Validate and explicitly run
+    Running --> Saved: Execution finishes
+    Saved --> Saved: Browse setup, outputs and assessments
+    Saved --> ImprovementDraft: Improve
+    ImprovementDraft --> Running: Validate and explicitly run
+    note right of Saved
+        Header and setup use the recorded spec.
+        Seeds retain their original identities.
+        Baseline assessments remain frozen.
+    end note
 ```
 
-**Compare a strategy change** accepts an existing candidate strategy or helps save a
-new revision of the baseline strategy. It shows component differences against the
-reference and preserves the baseline's recorded strategy and assessment snapshot. Only **Start comparison campaign**
-executes those new trials after preview validation. The reference campaign is not
-rerun. ROVE reports improvement or regression; it does not modify the agent itself.
+## Campaign stages
 
-Use explicit collection actions such as **Save reviewed collection** and **Use this
-collection in a campaign**. Reusable annotations, case-validity reviews and ratings of
-one trial output remain separate. An accepted output is not automatically a reusable
-label. Saving a collection or baseline preserves evidence without rerunning it.
+### 1. Cases
+
+A task is the robotics objective. A case combines an observation, task, relevant
+robot/environment conditions and expected outcome. Several cases can test the same
+task under different conditions; no additional Task container is needed.
+
+Provide **Add new**, **Select existing** and **Import cases**. The existing library
+uses bounded image cards, search and categories. Datasets are saved case collections
+inside that library. Selecting one loads exact case versions for inspection before
+choosing strategies. Import supports the existing JSONL/image flow and
+[ABC episode import](abc-dataset-support.md); imported demonstrations remain private
+reference evidence rather than newly earned candidate success.
+
+Selected cases appear as compact image/task cards with expectations and review
+material available on expansion. Preserve other selections when one case is edited
+or removed. Source annotations and AI suggestions retain their origin and draft
+status. Optional robot geometry belongs only where the assessment needs it.
+
+### 2. Configure
+
+Quick trials and campaigns render one shared strategy table with selection checkboxes
+and the configured stage endpoints. The user should see what each selected strategy
+will execute without learning two configuration interfaces. Endpoint names describe
+existing configuration; selection does not provision or modify a model.
+
+Use the same configured strategies and stage graph as the original runner, including
+sequential and parallel execution behavior. The UI presents selection and readiness;
+ROVE's engine executes, scores and persists the trials.
+
+**Check configuration** reports **Checking**, **Ready** or **Blocked** inline beside
+the relevant controls. Keep the checked selection visible, explain repairable errors,
+and invalidate stale feedback when inputs change. Readiness verifies the checks
+actually performed; it does not imply live provider availability or model quality.
+
+A controlled component ablation starts from a source strategy, previews changes and
+saves an explicit new revision. It does not rewrite the source configuration or a
+strategy already recorded by an earlier campaign. Changing cases or scoring broadens
+or changes assessment conditions and must remain visible in comparisons.
+
+### 3. Success metrics
+
+This stage separates a rule for judging one trial from statistics computed over
+trials. It first presents the campaign's proposed criteria, typically three to five
+when appropriate, with individual editing. AI drafts are labelled; without a working
+assistant the task-based template is labelled accordingly. Drafting never creates a
+judgment or proves the assistant inspected an image.
+
+Each criterion clearly shows:
+
+| Field | Meaning |
+| --- | --- |
+| Pass condition | What this individual output or episode must demonstrate |
+| Checked by | Manual expert review or a named configured verifier |
+| Evidence and requirement | Which result is assessed and whether acceptance is required |
+
+A written pass condition is not executable code. **Manual review** remains unscored
+until a person records a judgment. **Configured verification** requires a real
+configured binding and suitable evidence; changing description text does not program
+new verifier behavior. Do not label a criterion automatic merely because it was
+suggested by AI.
+
+Below the criteria, show a noninteractive report-statistics table with **How
+calculated** and **When available**. These rows explain the report rather than asking
+users to invent scoring functions through checkboxes.
+
+| Report statistic | How calculated | When available |
+| --- | --- | --- |
+| Task success | Accepted outcomes under the campaign's required criteria | After relevant judgments/verifier outcomes exist; unknowns stay visible |
+| pass@k | Estimated chance of at least one accepted attempt among k for a case/strategy | Repeated assessed attempts with enough eligible observations |
+| pass^k | Estimated chance that all k attempts succeed under the report's estimator | Repeated assessed attempts with enough eligible observations |
+| Pipeline latency | Recorded execution duration | When timing is recorded, independently of outcome acceptance |
+| Robotics outcome measures | Declared episode measurements such as completion time or intervention | Only when the relevant execution evidence and measurement exist |
+
+The backend remains the authority for exact estimators, denominators, eligibility and
+uncertainty. Never substitute a text criterion or an execution-complete badge for
+accepted outcome evidence. See [success and performance measures](metrics-and-success.md).
+
+**Reuse criteria from another evaluation** copies its scoring setup into the draft
+for review; it does not import outcomes or silently relabel this campaign's trials.
+**Technical settings** contains contracts, targets and annotation bindings for users
+who need them. Those controls remain functional without dominating the normal path.
+
+### 4. Run
+
+Show the selected cases, strategies, criteria and attempts in a coherent confirmation,
+then start only on an explicit execution action. During execution show campaign and
+per-strategy progress with inspectable trial and pipeline-stage identities. Execution
+completion, failure, cancellation and acceptance remain distinct.
+
+A saved campaign shows its recorded setup rather than editable launch fields. Opening
+its Run or Results stage never starts work. Foreground completion opens results
+without asking the user to rediscover the report. Changing pages or refreshing
+progress must not create duplicate attempts.
+
+### 5. Review and improve
+
+Results are scoped to the selected campaign and begin with outcomes and strategy
+charts. An optional AI summary interprets saved evidence and is labelled separately
+from measured scores. **Inspect trials** exposes outputs, errors, traces, grader
+results and SME review. Scoring/baseline details are progressively disclosed.
+
+For a new draft with no execution, this stage shows **No results yet** and **Go to
+Run**. It does not show another campaign picker, unexplained comparison controls or
+unrelated saved results. A saved campaign with no recorded attempts states that
+condition rather than suggesting that every trial passed.
+
+**Set as baseline** preserves one selected completed strategy's assessment snapshot.
+For multiple strategies the user selects the reference explicitly. **Improve** opens
+a linked editable draft with its cases, strategies, criteria and repetition plan
+prepopulated, alongside recommendations grounded in failed or unassessed trials.
+Missing judgments suggest review first; suggested model changes are hypotheses.
+
+Case/strategy/criteria changes are recorded in the connected iteration timeline.
+Only matching assessment conditions support a controlled comparison. Broader cases
+and changed metrics still provide useful history without justifying an unrestricted
+headline improvement. Reassessment does not create another trial; later reviews do
+not rewrite a frozen baseline.
+
+**Save case collection** or **Add to an existing collection** creates a dataset
+revision with explicit membership and review coverage. Old revisions remain available.
+The storage operation called freeze need not appear as a primary user action.
 
 ## Visual and interaction requirements
 
-Use warm neutral surfaces, slate text and restrained teal accents. Avoid purple
-neon accents and gradients. Give the header, step controls and primary buttons enough
-height and spacing to communicate hierarchy. Status text must never overlay or shrink
-the task composer into unusability. A connection indicator belongs with its relevant
-connection or assistant, not on top of the input.
+Retain the shared visual token layer and saved theme. Use one consistent global
+header, readable stage controls, genuine buttons and generous spacing. Status text
+must not obscure the task input. Keep primary actions distinct from record links and
+avoid duplicate configuration/name fields on different stages.
 
-Use one labelled main navigation landmark, real destination links and `aria-current`.
-Dialogs need a visible title, keyboard dismissal, focus containment and focus return.
-Visible focus, labelled inputs, announced progress and contrast must work in both
-themes. Hidden stages must leave the tab order. Narrow layouts must retain readable
-labels, usable image cards and the primary action without horizontal page scrolling.
+Use labelled navigation, real links, visible focus and `aria-current`. Dialogs retain
+focus, dismiss accessibly and return focus to their trigger. Announce pending/check
+results. Hidden stages leave the tab order. The strategy table must remain usable on
+narrow screens without forcing horizontal page scrolling; its endpoint information
+must remain accessible. Avoid inventing thumbnails for records without images.
 
-## Routes, state and compatibility
+## Routes, saved state and automation
 
-| Route | Ownership |
+| Route | Purpose |
 | --- | --- |
-| `/` | Start |
-| `/static/datasets.html` | Evaluate, Cases stage |
-| `/static/datasets.html?step=configure` | Evaluate, Configure stage |
-| `/static/datasets.html?step=metrics` | Evaluate, Success metrics stage |
-| `/static/datasets.html?step=run` | Evaluate, Run stage |
-| `/static/datasets.html?step=review&campaign=ID` | Review results for that campaign; Results context |
-| `/static/benchmarks.html` | Results, campaign reports and comparisons |
-| `/static/history.html` and trial parameters | Results, saved trial evidence |
-| `/?view=strategies`, `/?view=models`, `/?view=settings` | Settings and its local views |
-| `/?view=quick` | Existing single-input chat runner route; trial-first entry |
-| `/?view=examples` | Existing sample-library compatibility route; new case-selection actions stay in the campaign workspace |
+| `/` | Home with New trial and New campaign |
+| `/?view=quick` | New or active quick workspace, retaining existing runner compatibility |
+| `/static/history.html` | Trials browser and exact trial inspection |
+| `/static/benchmarks.html` | Campaigns browser |
+| `/static/datasets.html` | New campaign workspace |
+| `/static/datasets.html?step=configure` | Campaign strategy selection |
+| `/static/datasets.html?step=metrics` | Campaign success criteria and report-statistics explanation |
+| `/static/datasets.html?step=run` | Campaign confirmation or saved execution |
+| `/static/datasets.html?step=review&campaign=ID` | Review and improve for that saved campaign |
+| `/?view=strategies`, `/?view=models`, `/?view=settings` | Settings views |
 
-Local stage changes preserve selected cases, edited criteria and strategy choices.
-Back/Forward restores the selected stage without replaying an action. Saved campaign,
-case and trial IDs retain their meaning. Missing IDs show a recovery route rather than
-silently opening another record. Browser drafts are not durable records unless saved;
-full-page reload recovery must not be implied unless implemented and verified.
+Back/Forward restores context without replaying actions. Missing IDs show a recovery
+route instead of loading a different record. Draft retention within the workspace
+must not imply durable cross-reload recovery unless verified. Browser draft state is
+separate from frozen server specifications and SQLite evidence.
 
-The single-input chat runner is the preferred trial-first entry in the latest
-refinement. It retains saved trials, configured strategies and pipeline output, and
-**Add to campaign** connects that result to repeated evaluation. Direct campaign
-creation remains available for customers who already have cases to compare.
-The advanced manifest builder remains a secondary tool for existing users.
+The [CLI capability guide](cli-ui-parity.md) covers equivalent meaningful operations:
+case intake, immediate comparisons, repeated campaigns, reviews, baselines, reports
+and timeline. UI refactoring does not replace those services with browser-only logic.
+The [CI example](../../examples/ci/README.md) retains explicit study/report artifacts;
+it does not assume a persistent runner or establish hosted/live-provider validation.
 
 ## Acceptance and delivery evidence
 
-The earlier PR #21 had 52 passing UI tests and route/theme browser checks. That is
-historical evidence for its implementation, not acceptance of this redesign.
+The earlier workspace checks in Git history establish their respective revisions,
+not acceptance of this redesign. Verify the following on the new revision:
 
-The five-stage refinement has local behavior coverage for metrics navigation, draft
-confirmation, per-strategy progress, graph values and explanation fallbacks. Browser
-verification below exercised the complete workflow with mock strategies and task-based
-templates. Live AI generation remains excluded from this validation.
+- Trials/Campaigns browse existing records; New trial/New campaign consistently open
+  creation drafts. Settings remains accessible across all workspace pages.
+- Quick Case/Configure/Run/Results retains chat refinement, task, image, optional robot
+  input, chosen strategies, pipeline progress, results, history and Add to campaign.
+- Both Configure stages use the same checkbox/stage/endpoint component and selection
+  semantics. Inline configuration checks show pending, ready and blocked states.
+- Campaign header fields persist across every stage and update from draft selections.
+  Saved setup/header uses its exact spec, including nonconsecutive seed identities.
+- Success rules distinguish pass condition, reviewer/verifier and required evidence;
+  automatic report-statistics explanations cannot be mistaken for executable graders.
+- New-draft Results has a focused no-results state. Saved Results retains exact campaign
+  scope and its trial inspection, baseline and Improve actions.
+- Improve creates an editable source-linked copy; saved cases/strategies/repetition
+  plans and frozen baseline assessments remain unchanged.
+- Mock multi-strategy execution still creates the expected durable trials and stage
+  evidence. Navigation, previews, retries and inspection do not duplicate execution.
+- Desktop/narrow and light/dark checks cover focus, overlays, readable controls,
+  pending errors, navigation and both complete journeys.
 
-The following are the continuing acceptance contract:
+This work changes interaction and presentation. It does not by itself fix or verify
+any live VLA adapter, real robot integration, provider availability or physical task
+success.
 
-- Add a customer image/task and select several gallery samples, then edit/remove cases
-  without losing other selections or leaving the workspace.
-- Keep the picker bounded with many cases; exercise category/search, keyboard dismissal
-  and focus return. No ordinary browse action opens the legacy runner.
-- Show editable success drafts with accurate source/evidence limitations. No generated
-  material writes an SME judgment or reports physical success from an initial image.
-- Move through Cases, Configure, Success metrics, Run and Results without losing
-  selections or starting work from navigation; back/forward and saved links must agree.
-- Show mixed pass/fail/unknown results, unavailable robotics measures, target outcomes
-  and unresolved curves accurately; expanded evidence must match chart counts.
-- Select configured strategies, inspect success criteria and use the manual path with
-  the optional assistant unavailable. Chat changes must follow the same validation.
-- Select three existing strategies for the same case set and confirm the full planned
-  trial count; each strategy must contribute its own identifiable trials and report row.
-- Save a changed strategy revision without altering its source, restart the application,
-  then select that exact revision for a baseline comparison. Historical evidence must
-  remain readable without resolving the current YAML source again.
-- Confirm the case × strategy × repetition count, run an isolated mock campaign, inspect
-  identifiable live trials and follow one to its trace and back to the same campaign.
-- Add cases to an existing collection and verify the new revision retains prior members
-  while old revisions and review identities are unchanged.
-- Review a result, save the relevant collection and set a completed campaign strategy
-  as baseline without rerunning old trials. Results must show a baseline badge only
-  after its reference is saved; opening review or comparison preparation creates no trials.
-- Preview a changed strategy against the saved baseline. Only explicit **Start comparison
-  campaign** executes new trials; expert reassessment does not increase attempt counts.
-- Inspect the complete flow on desktop and narrow screens in both themes, including
-  input/status alignment, readable controls, validation errors and browser Back/Forward.
+### Verification of the shared workspace, 13 September 2026
 
-Local DOM regression tests now cover the revised stages, retained drafts, blocked
-launches, gallery pagination/search/categories, staged checkbox and image selection,
-focus return on close, exact case expectations saved into scoring rules, collection
-hydration and membership preservation, stale scoring edits and slow-save responses,
-Run identity/deep links, exact strategy/rubric confirmation, and lazy recorded-stage
-and output inspection. Review refreshes authoritative assessments when entered after
-Run; saved Run links display recorded configuration and hide launch actions. Campaign
-refresh preserves expanded trial evidence. Refreshing evidence and browser navigation
-do not launch work.
-These tests retain the earlier route and preview protections; they do not replace
-visual, keyboard and end-to-end browser checks.
+Browser checks on the local server covered Trials/Campaigns navigation, a quick mock
+execution, automatic Results, Add to campaign with the saved case/strategy, inline
+configuration errors, empty draft Results and the frozen campaign strategy table in
+light and dark themes. The completed mock trial is
+`33199165eac04e30a66ab5c6e949f112`; the trial store increased from 246 to 247 records.
+The existing six campaigns were not rerun or modified by this check.
 
-Browser verification exercised the full desktop flow in the dark theme using an
-isolated three-trial mock campaign: select cases, confirm configuration, execute,
-inspect trial evidence and open Review. The stale Review summary found during that
-check was corrected and covered by regression tests. The shared shell was also
-checked on narrow screens in light and dark themes. These checks establish UI and
-local mock behavior, not model quality or robot performance. The 390px case gallery was verified in both themes with bounded scrolling, visible search and category controls, image cards and a fixed selection footer.
+DOM regressions cover a two-strategy SSE comparison with task/image/URDF identity,
+late input loads, history isolation, Results scrolling, selection persistence,
+configuration approval invalidation and campaign draft/saved-state transitions.
+A layout regression loads the legacy campaign and shared styles together to catch
+stacked table cells. Narrow-screen browser interaction has not been revalidated in
+this pass; responsive rules remain in the shared components. Mock checks establish
+workflow behavior, not model or robot task performance.
 
-Case-specific expected outcomes are saved in the success contract by exact case
-revision ID. Editing expectations or scoring controls invalidates the launch preview
-and requires confirmation. A late save response cannot activate rules for an older
-draft. Collection extension retains prior members and exact review selections while
-creating a new revision. Loading a saved collection displays its actual case cards;
-adding a case changes the current selection without rewriting that saved collection.
-The [workflow specification](evaluation-workflows.md), [success criteria model](metrics-and-success.md)
-and [evidence inspector](traces-and-measurements.md) remain authoritative for semantics.
+## Historical verification
 
-The final integration check created two immutable mock strategy revisions in the UI,
-selected both alongside the original, and executed the same case across all three.
-All three trials were persisted. Sequential output includes Perceive, Plan, Act and
-Verify; parallel agent-loop output follows its actual recorded stages. Internal
-perception calls and simulator resets remain telemetry and are not extra pipeline
-stages. The original observation/task composer remains available through **Run a
-trial**, including an exact saved-case handoff from case details.
-
-SQLite remains the local transactional store. The existing interactive runner
-executes selected strategies concurrently; campaign trial slots remain dispatched
-serially, while each strategy retains its configured sequential or parallel pipeline
-mode. This change does not introduce a new campaign scheduling engine.
+These records preserve the evidence referenced by earlier ADRs. They describe earlier
+revisions and do not substitute for verification of the shared workspace above.
 
 ### Five-stage browser verification, 13 September 2026
 
-An isolated local instance on port 5014 completed campaign
-`0dcb416a21a755b2be325b61b061df0c`: one case, two mock strategy revisions and three
-repetitions produced six completed, persisted trials. The flow loaded task-based
-success suggestions, required explicit criteria confirmation and launched only from
-Run. Each strategy displayed its recorded stage activity: the sequential pipeline
-showed four stages and the parallel configuration showed its act/verify path.
-
-Results displayed six unassessed outcomes, zero accepted and zero rejected, matching
-the lack of expert ratings despite completed execution. **Inspect trials** began
-collapsed. At 390px the measured content width was 384px, with no horizontal page
-overflow. This verifies the five-stage local workflow, honest unknown outcomes and
-responsive layout; it does not demonstrate live assistant quality, robot motion or
-physical success. Earlier gallery verification in both themes remains separate evidence.
-
-Independent review additionally identified saved-contract metadata leaking into edit
-requests, stale visible criteria on saved-rule selection, mixed-method criteria losing
-their assessment bindings, and misleading template fallback labels. The implementation
-was corrected, with focused regression coverage added to the UI checks. Backend tests
-use a fake runtime to check generated-draft constraints, cache freshness, evidence
-anchors and fallback behavior; no live provider inference was part of this validation.
+The earlier isolated campaign `0dcb416a21a755b2be325b61b061df0c` executed one case
+against two mock strategies with three attempts each. All six trials completed, with
+zero accepted/rejected and six unassessed outcomes because expert ratings were absent.
+Per-strategy stages and a 390px layout were checked. This established that revision's
+local execution, unknown-outcome reporting and responsive layout, not live assistant,
+policy or hardware performance.
 
 ### Trial-to-campaign-to-Improve browser verification, 13 September 2026
 
-On the isolated local instance at port 5014, an existing case and Panda URDF produced
-saved mock chat trial `edaad514826b4169a6b018fcc242fe69`. **Add to campaign** retained
-the case, selected strategy and managed robot description. The unconfigured assistant
-provided three honestly labelled task-based criteria. Editing and saving the first
-criterion, then **Review and run**, created campaign
-`a868c340bdf15b57ac6d5fa4810d506e` with three fresh trials and automatically opened Results.
-
-**Set as baseline** saved the reference. **Improve** preserved its three criteria,
-repetition defaults and exact baseline revision. A repeat candidate campaign,
-`9e772a205b4550a4a2a40400ac758a5b`, also opened Results automatically. Its baseline
-comparison reported matching conditions and zero component differences. Outcomes
-remained pending expert review; this verified reference preservation and a no-change
-comparison, not a measured agent improvement.
-
-At 390px, Cases and Success metrics—including criterion editing—had no horizontal
-page overflow. The normal viewport was restored afterward. This check used actual
-local mock execution and an unconfigured-AI fallback. It did not call a live provider,
-execute a physical robot or establish Panda hardware performance. Sidebar/Settings
-presentation corrections are separate from this verified workflow and need their own
-final UI checks.
-
-### Scriptable access and improvement over time
-
-The [CLI capability table](cli-ui-parity.md) maps immediate comparisons, data and review
-management, campaign execution, baseline improvement and evidence inspection to
-supported commands. All use the same validation, configuration loader and durable
-assessment services. The [CI example](../../examples/ci/README.md) adds reports,
-explicit gates and restoration of a chosen study artifact.
-
-Results includes an evaluation timeline before detailed trial inspection. Its cards
-show date, case/repetition counts, strategy outcomes and latency, change badges and
-report actions. Technical comparison details stay collapsed. Only validated campaign
-source or exact baseline references connect iterations; changing cases, rules or
-execution conditions is visible and never presented as continuous performance gain.
-Current assessment scores can change after reviews; exact baseline outcomes remain
-frozen and distinctly identified.
-
-Browser verification on the isolated mock store displayed the two linked completed
-campaigns from the journey above with chronological markers, outcome bars, p95 latency,
-same-configuration and synthetic-evidence badges, and usable report/results buttons.
-Comparison details started collapsed. At 390px the timeline remained readable with
-no horizontal overflow (384px document width). This confirms navigation and evidence
-presentation; all outcomes were still awaiting review.
-
-## Workspace clarity and approved improvements
-
-Robotics developers start with an observation, task and robot description, compare
-strategies, then use campaigns to track repeated evaluations. Navigation supports
-that work through consistent action controls and readable observations.
-
-- **Campaigns:** one compact row per campaign with status, trial counts, and
-  View results, Export and Improve. Export contains HTML, JSON and CSV.
-- **Improve:** three recorded recommendations at most, with supporting trials and
-  comparison details expandable. Recorded failures can open a focused strategy
-  stage editor. The user chooses a compatible alternative, previews the exact
-  change and explicitly saves it into the campaign draft before running.
-- **Baseline:** saved results selected as the comparison reference. The Results
-  view retains baseline selection and details; the browser shows a compact badge.
-- **Trial workspace:** Settings is available from the global top-right gear. Neutral
-  charcoal surfaces and a restrained action accent distinguish controls from
-  connection and outcome status. Sample cases emphasizes observation previews.
-
-```mermaid
-flowchart LR
-  A[Campaign list] --> B[View results]
-  A --> C[Export report]
-  A --> D[Improve]
-  D --> E[Recorded finding and supporting trials]
-  E --> F[Choose compatible stage alternative]
-  F --> G[Preview exact changes]
-  G --> H[Human approval: Save and use revision]
-  H --> I[Review campaign draft]
-  I --> J[Explicitly run campaign]
-  J --> B
-```
-
-Recommendations identify what to investigate; they do not assert that a different
-endpoint will improve performance. Original strategies and saved baselines remain
-unchanged. Model-authored outcome interpretation is labelled separately from
-recorded findings. Optional local VLA compatibility is documented in the
-[local inference guide](../research/vla_local_inference_guide.md).
-
-See [ADR-029](../architecture/ADR-029-workspace-interaction-consistency.md).
-
-## Foundry-inspired workspace
-
-Azure AI Foundry is the visual reference for ROVE's AI evaluation workspace.
-Robotics developers retain the immediate trial composer; evaluation owners get
-a scannable campaign list and drill into outcomes and evidence. Platform teams
-reach strategies and connections through Settings. These personas use the same
-neutral surfaces, purple action accent, readable step navigation and consistent
-fields and dialogs in either saved theme.
-
-Campaign rows show name, status, recorded trials and creation date, with View
-results, Export and Improve controls. Narrow layouts retain all information in
-stacked rows. Color emphasizes selection and action; outcome status retains its
-separate meaning. Reports use matching typography and surfaces while remaining
-standalone exports. This is a shared CSS adaptation of Fluent guidance, not a
-new framework or an Azure resource-management workflow.
-
-```mermaid
-flowchart LR
-  D[Robotics developer] --> T[Compare strategies in a trial]
-  O[Evaluation owner] --> C[Browse campaigns]
-  C --> R[View results and inspect evidence]
-  C --> I[Review an improvement]
-  I --> A[Approve a strategy revision]
-  A --> T
-  P[Platform team] --> S[Settings: strategies and connections]
-```
-
-Implementation and validation: [ADR-030](../architecture/ADR-030-foundry-visual-language.md).
-
-### Current browsing and improvement behavior
-
-Trials and Campaigns share a full-width list. View results opens the selected
-trial's evidence; Back to trials returns to the same source and page. Settings is
-available from a gear icon at the top right of every workspace.
-
-Improve starts with a named problem, strategy and affected-trial count. It offers
-Open a failed trial / Change model for a recorded stage failure, or Review an
-unscored trial / Review success metrics for missing assessments. Expanded evidence
-identifies tasks and attempt seeds. Saving a model revision still requires preview
-and human approval; running it remains a separate action.
-
-### Plan, judge and watch execution
-
-Configure shows a live planned-trial calculation directly below the campaign
-name: cases × strategies × repeats. It updates with selections; invalid repeat
-counts do not display a misleading total. The server preview still decides
-whether the campaign can actually run.
-
-Success criteria answer three questions in visible controls: what the output
-must demonstrate, what evidence is being assessed, and who checks it. Each
-criterion names its assessment method. Expert review leaves acceptance pending
-until ratings exist; configured verification uses the selected verifier and still
-requires valid evidence. Runtime and repeated-trial metrics describe the
-recorded attempts and confirmed assessments. They do not turn a proposed action
-into evidence of physical completion. Template drafts are labelled separately
-from AI-generated suggestions.
-
-Run switches to an execution workspace with a campaign rollup and per-strategy
-progress. Completed execution, errors and cancellation remain distinct from
-assessment outcomes. The saved setup is available on demand below progress;
-foreground completion opens Results through the existing route.
-
-```mermaid
-flowchart LR
-  C[Configure: live trial calculation] --> S[Success: criteria, evidence and judge]
-  S --> P[Preview and approve launch]
-  P --> R[Campaign and strategy progress]
-  R --> O[Results and evidence]
-  R --> D[Saved configuration on demand]
-```
-
-### Results and history
-
-Results stay scoped to the selected campaign. Overview shows Passed, Failed and
-Not scored counts and strategy charts. Execution errors and missing expert ratings
-are explained separately; Review trials opens the Trials tab. Scoring details
-contains exact criteria, measurements and baseline comparisons. Back to campaigns
-returns to the browser. Campaign history is a separate page that shows the selected
-campaign's connected iterations and configuration changes.
-
-Saved trials use the same full-width list pattern as Campaigns. Task, strategy,
-assessment, execution status, date, time and a short ID distinguish repeated
-attempts. View results opens evidence without re-execution; Back preserves the
-source filter and page. The trial runner shows eight recent comparisons in a
-320-pixel sidebar, with older comparisons still accessible. No observation
-thumbnail is invented when the local history record has no managed image reference.
-
-```mermaid
-flowchart LR
-  B[Campaigns] --> O[Overview: outcomes and strategy charts]
-  O --> T[Trials: inspect errors, outputs and reviews]
-  O --> S[Scoring details and baseline comparison]
-  B --> H[History: connected campaign iterations]
-  B --> I[Improve: findings and reviewed changes]
-  Q[Saved trials] --> E[Selected trial evidence]
-  E --> Q
-```
-
-Static pages and assets revalidate with the local server. Asset URLs are versioned
-together during this transition to prevent an old row renderer loading under a new
-list header. This changes frontend delivery only; SQLite records are retained.
-
-An optional local assistant is configured as `local-assistant` in `rove.yaml`.
-Start a compatible OpenAI-style local server on port 1234 with
-`qwen/qwen3-vl-8b` available, then launch ROVE with
-`ROVE_ASSISTANT_ENDPOINT=local-assistant rove serve --port 5010`.
-The Copilot SDK remains the assistant runtime. Task/annotation drafting was verified
-through the local API; images are not passed to this drafting path. Connection and
-schema validity do not establish suggestion quality. Drafts always require review.
+The earlier mock trial `edaad514826b4169a6b018fcc242fe69` retained its image/task and
+Panda URDF through Add to campaign. Campaign `a868c340bdf15b57ac6d5fa4810d506e`
+created three fresh attempts; a saved baseline and Improve led to candidate
+`9e772a205b4550a4a2a40400ac758a5b`. Results opened automatically and the comparison
+showed matching conditions with no component differences. Outcomes remained pending
+review. Cases and criterion editing were checked at 390px. This established lineage
+and a no-change comparison in that revision, not measured improvement or hardware use.

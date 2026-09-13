@@ -76,13 +76,15 @@ function buildReview(input) {
 }
 
 function buildCampaign(input) {
+  if (!input.name?.trim()) throw new Error("Give this campaign a name in the header above.");
   if (!input.caseIds.length && !input.datasetId) throw new Error("Select at least one case or a saved dataset.");
   const strategies = input.strategyIds === undefined ? (input.strategyId ? [input.strategyId] : []) : input.strategyIds;
-  if (!input.contractId || !Array.isArray(strategies) || !strategies.length) throw new Error("Choose scoring rules and at least one strategy.");
+  if (!Array.isArray(strategies) || !strategies.length) throw new Error("Select at least one strategy in Configure.");
+  if (!input.contractId) throw new Error("Confirm your criteria in Success metrics using Review and run.");
   if (strategies.length > 20) throw new Error("Choose no more than 20 strategies for one campaign.");
   if (strategies.some(id => typeof id !== "string" || !id.trim()) || new Set(strategies).size !== strategies.length) throw new Error("Choose distinct configured strategies.");
   const repeats = Number(input.repeats), timeout = Number(input.timeout);
-  if (!Number.isInteger(repeats) || repeats < 1 || repeats > 1000) throw new Error("Repeats must be an integer from 1 to 1000.");
+  if (!Number.isInteger(repeats) || repeats < 1 || repeats > 1000) throw new Error("Attempts must be an integer from 1 to 1000.");
   if (!Number.isFinite(timeout) || timeout < 1 || timeout > 3600) throw new Error("Attempt timeout must be between 1 and 3600 seconds.");
   return {name: input.name.trim(), ...(input.datasetId ? {dataset_revision_id: input.datasetId} : {case_revision_ids: [...input.caseIds]}), contract_id: input.contractId, strategies: [...strategies], seeds: Array.from({length: repeats}, (_, index) => index), ks: [...new Set([1, Math.min(3, repeats), repeats])].sort((a, b) => a - b), timeout_s: timeout};
 }
@@ -156,7 +158,7 @@ if (typeof document !== "undefined") (() => {
   const initialLocation=location.href;
   state.step = "cases";
   Object.assign(state, {expectations: new Map(), pickerSelected: null, strategies: [], selectedStrategyIds: [], search: "", category: "", liveVersion: 0});
-  const stepCopy = {cases: ["What should your agent be able to do?", "A case pairs a task with its observation and test conditions."], configure: ["Choose the strategies to compare", "Use the same cases to compare your pipelines."], metrics: ["Success criteria", "Determined for your campaign. Review or edit before running."], run: ["Run your campaign", "One case × one strategy × one repetition = one trial. Follow each trial, then inspect its evidence."], review: ["Campaign outcomes", "Compare performance, understand the evidence, then inspect any trial."]};
+  const stepCopy = {cases: ["What should your agent be able to do?", "A case pairs a task with its observation and test conditions."], configure: ["Choose the strategies to compare", "Use the same cases to compare your pipelines."], metrics: ["Success criteria", "Determined for your campaign. Review or edit before running."], run: ["Run your campaign", "One case × one strategy × one attempt = one trial. Follow each trial, then inspect its evidence."], review: ["Campaign outcomes", "Compare performance, understand the evidence, then inspect any trial."]};
   function writeRoute() {
     const url = new URL(location.href); url.searchParams.set("step", state.step); if(state.campaignId){url.searchParams.delete("trial");url.searchParams.delete("improve");}
     for (const [key, value] of [["campaign", state.campaignId], ["case", state.caseId]]) { if (value) url.searchParams.set(key, value); else url.searchParams.delete(key); }
@@ -167,9 +169,8 @@ if (typeof document !== "undefined") (() => {
     state.step = Object.hasOwn(stepCopy, step) ? step : "cases"; document.body.dataset.workflowStep = state.step;
     const improving = state.seedDraft?.source.type === "campaign" && !state.campaignId;
     document.body.dataset.improving = String(improving);
-    const firstStep = document.querySelector('[data-journey-step="cases"] > div'); if(firstStep)firstStep.textContent = improving ? "Improve" : "Cases";
-    $("workspaceTitle").textContent = state.step === "review" ? "Review results" : state.step === "run" && state.campaignId && !state.preparingRun ? "Campaign trials" : "Create a campaign";
-    document.title = state.step === "review" ? "ROVE · Results · Review" : "ROVE · Evaluate";
+    const firstStep = document.querySelector('[data-journey-step="cases"] > div'); if(firstStep)firstStep.textContent = "Cases";
+    document.title = "ROVE · Campaign workspace";
     window.RoveNavigation?.setActive(state.step === "review" ? "results" : "evaluate");
     for (const panel of document.querySelectorAll("[data-workflow-panel]")) panel.hidden = panel.dataset.workflowPanel !== state.step;
     for (const anchor of document.querySelectorAll("[data-journey-step]")) {
@@ -183,10 +184,13 @@ if (typeof document !== "undefined") (() => {
     $("stepDescription").textContent = improving && state.step === "cases" ? "Review findings, then test a change." : stepCopy[state.step][1];
     if(improving && state.step === "cases") $("casesStep").hidden = !state.improvementCasesEditing;
     $("improvementIntro").hidden = (!state.seedDraft && !state.seedCancelled) || state.step !== "cases";
-    if (state.step === "configure") prepareCriteriaDraft();
-    if (state.step === "metrics") { prepareCriteriaDraft(); draftMetrics(); }
+    const saved = Boolean(state.campaignId && !state.preparingRun);
+    if (state.step === "configure" && !saved) prepareCriteriaDraft();
+    if (state.step === "metrics" && !saved) { prepareCriteriaDraft(); draftMetrics(); }
     if (state.step === "run" && state.campaignId && !state.preparingRun) refreshLiveTrials();
     if (state.step === "review" && state.campaignId) openCampaign(state.campaignId, false);
+    if (state.step === "review" && !state.campaignId) renderEmptyResults();
+    updateCampaignHeader(); renderSavedSetup();
     if (push) writeRoute(); if (focus) $("stepHeading").focus();
   }
   async function restoreRoute() {
@@ -195,7 +199,7 @@ if (typeof document !== "undefined") (() => {
     if (campaign !== state.campaignId) { $("resultCampaign").value = campaign || ""; await openCampaign(campaign, false); }
     // A newer history transition may have occurred while campaign data loaded.
     if (query.toString() !== new URLSearchParams(location.search).toString()) return;
-    if (id && id !== state.caseId) { await openCase(id); if (state.step === "cases" && state.detail) { state.selected.set(caseId(state.detail), state.detail); updateSelected(); } }
+    if (id && id !== state.caseId) { await openCase(id); if (query.toString() !== new URLSearchParams(location.search).toString()) return; if (!campaign && state.caseId === id && caseId(state.detail || {}) === id) { state.selected.set(caseId(state.detail), state.detail); updateSelected(); if(state.step==="metrics"){prepareCriteriaDraft();draftMetrics();} } }
     if (state.step === "run" && state.campaignId) refreshLiveTrials();
     if (query.get("pick") === "existing" && !$("casePicker").open) openPicker();
     else if (!id && state.caseId) { ++state.detailVersion; state.caseId = null; state.detail = null; state.reviewEdit = null; $("caseInspector").replaceChildren(node("h2", "Inspect a case"), node("p", "Open a case to inspect its inputs, outputs and reviews.", "muted")); $("caseInspector").setAttribute("aria-busy", "false"); updateSelected(); }
@@ -211,8 +215,9 @@ if (typeof document !== "undefined") (() => {
   $("caseReuseSlot").append($("caseReusePanel"));
   $("assistantConfigureSlot").append($("assistantPanel"));
 
-  const savedRules = node("details"); savedRules.append(node("summary", "Use previously saved scoring rules"), $("campaignContract").closest("label")); $("savedMetricsSlot").append(savedRules);
+  const savedRules = node("details"); savedRules.append(node("summary", "Reuse criteria from another evaluation"), node("p","Choose previously saved criteria and checking methods to use in this campaign. Your cases and strategies stay selected."), $("campaignContract").closest("label")); $("savedMetricsSlot").append(savedRules);
   $("campaignContract").setAttribute("form","baselineForm");
+  $("campaignContract").closest("label").firstChild.textContent="Criteria to reuse";
   for(const id of ["successScope","evidenceMode"]) $("scopeControls").append($(id).closest("label"));
   $("assessmentScope").append($("scopeHint"));
   $("scoringAdvanced").append($("assessmentMethod").closest("label"),$("verifierEndpointLabel"),$("gradingNotice"));
@@ -397,8 +402,68 @@ if (typeof document !== "undefined") (() => {
       $("metricDraftStatus").textContent = "Your configuration changed. Review and confirm success metrics again.";
       $("contractPanel").open = true;
     }
-    state.draftVersion = (state.draftVersion || 0) + 1; state.campaignPreview = null; state.campaignOperation = null; $("startBaseline").disabled = true; $("campaignMeasures").replaceChildren(); updateBudget(); }
+    state.draftVersion = (state.draftVersion || 0) + 1; state.campaignPreview = null; state.campaignOperation = null; $("startBaseline").disabled = true; $("campaignMeasures").replaceChildren(); if($("campaignStatus").textContent && !state.campaignId)showConfigurationStatus("Configuration changed. Check it again before running.","pending"); updateBudget(); }
   function invalidateFreeze() { state.freezePreview = null; $("freezeDataset").disabled = true; }
+  function trialCalculation(cases, strategies, attempts) {
+    return `${cases} ${cases===1?"case":"cases"} × ${strategies} ${strategies===1?"strategy":"strategies"} × ${attempts} ${attempts===1?"attempt":"attempts"} = ${cases*strategies*attempts} planned trials`;
+  }
+  function updateCampaignHeader() {
+    const id = state.campaignId, saved = Boolean(id && !state.preparingRun);
+    const campaign = state.headerCampaign?.id===id ? state.headerCampaign : null;
+    $("campaignDraftFields").hidden=saved; $("campaignAttemptHelp").hidden=saved;
+    for(const field of [$("campaignName"),$("campaignRepeats")])field.disabled=saved;
+    $("headerImprove").hidden=!saved || !campaign;
+    $("headerImprove").href=id?`/static/datasets.html?improve=${encodeURIComponent(id)}`:"/static/datasets.html";
+    if(saved) {
+      $("workspaceTitle").textContent=campaign?.spec?.name || (state.headerError ? "Campaign unavailable" : "Loading campaign…");
+      $("campaignHeaderContext").textContent=campaign?`${campaign.status} · Saved configuration. Choose Improve campaign to test changes.`:state.headerError || "Loading the saved campaign configuration.";
+      const spec=campaign?.spec;
+      $("campaignCalculation").textContent=spec && [spec.tasks,spec.strategies,spec.seeds].every(Array.isArray)?trialCalculation(spec.tasks.length,spec.strategies.length,spec.seeds.length):"Trial plan unavailable until the saved configuration loads.";
+      $("campaignCalculation").classList.remove("invalid");
+      return;
+    }
+    const improving=state.seedDraft?.source.type==="campaign";
+    $("workspaceTitle").textContent=improving?"Improve campaign":"New campaign";
+    const source=improving?state.campaigns.find(item=>item.id===state.seedDraft.source.id):null;
+    $("campaignHeaderContext").textContent=improving?`Improvement draft${source?.name?` based on ${source.name}`:""}. Original results stay unchanged.`:"Compare strategies on your cases, then track improvement over time.";
+    const count=state.frozenDataset?state.frozenDataset.members.filter(item=>item.disposition==="included").length:state.selected.size;
+    const attempts=Number($("campaignRepeats").value), valid=Number.isInteger(attempts) && attempts>=1 && attempts<=1000;
+    $("campaignCalculation").textContent=valid?trialCalculation(count,state.selectedStrategyIds.length,attempts):"Enter a whole number of attempts from 1 to 1,000 to calculate planned trials.";
+    $("campaignCalculation").classList.toggle("invalid",!valid);
+  }
+  function renderSavedSetup() {
+    const panel=$("savedCampaignSetup"), saved=Boolean(state.campaignId && !state.preparingRun && ["cases","configure","metrics"].includes(state.step));
+    panel.hidden=!saved;
+    if(!saved)return;
+    $("improvementIntro").hidden=true;$("casesStep").hidden=true;$("configureStep").hidden=true;$("metricsStep").hidden=true;
+    panel.replaceChildren();
+    const campaign=state.headerCampaign?.id===state.campaignId?state.headerCampaign:null;
+    if(!campaign){panel.append(node("p",state.headerError || "Loading saved configuration…","muted"));return;}
+    $("stepHeading").textContent={cases:"Cases in this campaign",configure:"Strategies in this campaign",metrics:"Success criteria for this campaign"}[state.step];
+    $("stepDescription").textContent="These are the saved inputs used for this campaign. Improve campaign starts an editable copy.";
+    if(state.step==="cases") {
+      for(const task of campaign.spec.tasks || []) {
+        const row=node("section",null,"saved-setup-row");row.append(node("h3",task.name || task.task || task.id));
+        if(task.task && task.name)row.append(node("p",task.task));
+        if(task.case_revision_id)row.append(node("p",`Case revision: ${task.case_revision_id}`,"muted"));
+        row.append(objectDetails("Recorded case inputs",task));panel.append(row);
+      }
+    } else if(state.step==="configure") {
+      const definitions=[];
+      for(const id of campaign.spec.strategies || []) {
+        const strategy=campaign.strategy_definitions?.[id] || campaign.config?.strategies?.[id];
+        if(strategy)definitions.push({...strategy,id});
+        else panel.append(node("p",`${id}: pipeline details were not recorded.`,"muted"));
+      }
+      if(definitions.length){const table=node("div");table.id="savedStrategyTable";window.RoveStrategyTable.render(table,{strategies:definitions,selected:campaign.spec.strategies,disabled:true});panel.prepend(table);}
+      if(campaign.spec.timeout_s!=null)panel.append(node("p",`Time limit per trial: ${campaign.spec.timeout_s} seconds.`));
+    } else {
+      if(campaign.contract) {
+        for(const criterion of campaign.contract.criteria || []){const row=node("section",null,"saved-setup-row");row.append(node("h3",criterion.description),node("p",`${criterion.required===false?"Optional":"Required"} · ${criterion.assessment==="human_review"?"Expert review":criterion.assessment?.replaceAll("_"," ") || "Checking method not recorded"}`,"muted"));panel.append(row);}
+        panel.append(objectDetails("Saved scoring rules",campaign.contract));
+      } else panel.append(node("p","Scoring rules are not included in this saved record.","muted"));
+    }
+  }
   function updateBudget() {
     const count = state.frozenDataset ? state.frozenDataset.members.filter(item => item.disposition === "included").length : state.selected.size;
     const context = $("runContext"); context.replaceChildren();
@@ -407,15 +472,15 @@ if (typeof document !== "undefined") (() => {
     else context.append(node("p", "No cases selected. Return to Cases to select inputs or use a saved dataset.", "notice"));
     const strategies = state.selectedStrategyIds.map(id => state.strategies.find(item => item.id === id)).filter(Boolean), contract = activeContract();
     const repeats=Number($("campaignRepeats").value), validRepeats=Number.isInteger(repeats) && repeats>=1 && repeats<=1000;
-    const calculation=validRepeats ? `${count} ${count===1?"case":"cases"} × ${strategies.length} ${strategies.length===1?"strategy":"strategies"} × ${repeats} ${repeats===1?"repeat":"repeats"} = ${count*strategies.length*repeats} planned trials` : "Enter a whole number of repeats from 1 to 1,000 to calculate planned trials.";
-    $("campaignCalculation").textContent=calculation;$("campaignCalculation").classList.toggle("invalid",!validRepeats);
-    $("runSummary").replaceChildren(node("strong", $("campaignName").value || "Untitled campaign"), node("p",calculation), node("p", `${strategies.length === 1 ? "Strategy" : "Strategies"}: ${strategies.map(item => item.display_name || item.id).join(", ") || "Not selected"}`), node("p", `Scoring rules: ${contract?.name || "Not confirmed"}`));
+    const calculation=validRepeats ? trialCalculation(count,strategies.length,repeats) : "Enter a whole number of attempts from 1 to 1,000 to calculate planned trials.";
+    updateCampaignHeader();
+    $("runSummary").replaceChildren(node("strong", $("campaignName").value || "Untitled campaign"), node("p",calculation), node("p", `${strategies.length === 1 ? "Strategy" : "Strategies"}: ${strategies.map(item => item.display_name || item.id).join(", ") || "Not selected"}`), node("p", `Success criteria: ${contract?.name || "Not confirmed"}`));
     if (contract) { const rubric = node("details"); rubric.append(node("summary", "Review exact scoring criteria")); for (const criterion of contract.criteria || []) rubric.append(node("p", criterion.description)); for (const [id, value] of Object.entries(contract.case_expectations || {})) { rubric.append(node("h4", state.selected.get(id)?.name || id), node("p", value, "detail-instruction muted")); } $("runSummary").append(rubric); }
 
     $("continueConfigure").disabled = !count;
     $("freezeContract").value = $("campaignContract").value;
     $("selectionCount").textContent = `${state.selected.size} selected`;
-    $("selectedCaseCount").textContent = `${count} cases`;
+    $("selectedCaseCount").textContent = `${count} ${count===1?"case":"cases"}`;
     $("campaignBudget").textContent = validRepeats ? "Define success criteria next, then review the exact configuration before running." : calculation;
   }
   function selectionChanged() { if (state.generatedContractId && $("campaignContract").value === state.generatedContractId) $("campaignContract").value = ""; state.criteriaDirty = true; state.frozenDataset = null; state.freezeMembers = null; invalidateCampaign(); invalidateFreeze(); $("freezePreview").textContent = "Selection changed. Preview exact case and review revisions again."; updateSelected(); }
@@ -482,19 +547,27 @@ if (typeof document !== "undefined") (() => {
     }
     return payload;
   }
+  function showConfigurationStatus(message, status) {
+    $("campaignStatus").textContent=message;$("campaignStatus").className=`configuration-status ${status}`;
+  }
   async function previewCampaign() {
-    $("previewCampaign").disabled = true; $("startBaseline").disabled = true;
+    const draftVersion=state.draftVersion;
+    $("previewCampaign").disabled = true; $("previewCampaign").textContent="Checking…"; $("startBaseline").disabled = true;
+    $("campaignMeasures").replaceChildren();$("campaignStatus").setAttribute("aria-busy","true");
+    showConfigurationStatus("Checking cases, strategies and success criteria…","pending");
     try {
       const payload = currentCampaign(), signature = JSON.stringify(payload);
       const preview = await post("/api/campaigns/preview", payload);
-      if (JSON.stringify(currentCampaign()) !== signature) return;
+      if (state.draftVersion!==draftVersion || JSON.stringify(currentCampaign()) !== signature) {showConfigurationStatus("Configuration changed while checking. Check again before running.","pending");return;}
       state.campaignPreview = {payload, signature, preview}; state.campaignOperation = crypto.randomUUID();
       metricsPreview($("campaignMeasures"), preview);
       if(preview.comparisons) for(const item of preview.comparisons) {const comparison=item.comparison || item;$("campaignMeasures").append(node("p",`${item.strategy_id || item.candidate_strategy_id}: ${comparison.comparable ? "Conditions match the saved baseline." : "Changed assessment conditions: " + (comparison.reasons || []).join("; ")}`,comparison.comparable?"comparison-context":"notice full-width"));}
       $("campaignBudget").textContent = `${preview.planned_trials} planned trials. ${preview.ready ? "Configuration is ready." : "Resolve the blockers before running."}`;
       for (const blocker of preview.blockers || []) $("campaignMeasures").append(node("p", typeof blocker === "string" ? blocker : JSON.stringify(blocker), "error-text full-width"));
       $("startBaseline").disabled = !preview.ready;
-    } catch (error) { tell(error.message, true); } finally { $("previewCampaign").disabled = false; }
+      showConfigurationStatus(preview.ready?`Ready to run ${preview.planned_trials} trials. Select Run campaign to start.`:`Cannot run yet. ${(preview.blockers || []).map(item=>typeof item==="string"?item:JSON.stringify(item)).join(" ") || "Review the checks above."}`,preview.ready?"ready":"blocked");
+    } catch (error) { showConfigurationStatus(error.message,"blocked");tell(error.message, true); }
+    finally { $("previewCampaign").disabled = false;$("previewCampaign").textContent="Check configuration";$("campaignStatus").setAttribute("aria-busy","false"); }
   }
   function renderCase(item) {
     const container = $("caseInspector"); container.replaceChildren();
@@ -692,6 +765,11 @@ if (typeof document !== "undefined") (() => {
     }
     container.append(objectDetails("Exact comparison and assessment revisions", comparison));
   }
+  function renderEmptyResults() {
+    $("resultCampaignPicker").hidden=true;$("currentCampaignContext").hidden=true;$("campaignHistoryLink").hidden=true;
+    $("campaignResultActions").hidden=true;$("refreshCampaigns").hidden=true;$("advancedComparisons").hidden=true;$("comparisonResults").replaceChildren();
+    $("campaignResults").replaceChildren(node("h3","No results yet"),node("p","Run this campaign to see strategy outcomes, inspect trials and choose what to improve.","muted"),button("Go to Run",()=>goStep("run")));
+  }
   async function openCampaign(id, push = true) {
     // Refreshing evidence must not replace an explicitly selected historical snapshot
     // with the catalog head. The saved object is immutable and already fetched by ID.
@@ -700,21 +778,24 @@ if (typeof document !== "undefined") (() => {
     $("advancedComparisons").hidden=true;
     $("reviewStep").append($("reviewWorkspaceSlot"));
     if(state.campaignId!==id) state.resultTab="overview";
-    $("resultCampaignPicker").hidden=Boolean(id);
+    $("resultCampaignPicker").hidden=true;
+    $("campaignResultActions").hidden=!id;$("refreshCampaigns").hidden=!id;
     $("currentCampaignContext").hidden=!id;
     $("currentCampaignContext").textContent=id ? "Loading campaign…" : "";
     $("campaignHistoryLink").hidden=!id;
     $("campaignHistoryLink").href=id ? `/static/campaign-history.html?campaign=${encodeURIComponent(id)}` : "/static/benchmarks.html";
-    const version = ++state.campaignVersion; state.campaignId = id; state.reviewCampaign = null; state.baselineNew = false; state.reviewCampaignContract = null; $("resultCampaign").value = id || ""; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true; $("comparisonAction").hidden = true;
+    const version = ++state.campaignVersion; state.campaignId = id; state.headerError=null; state.reviewCampaign = null; state.baselineNew = false; state.reviewCampaignContract = null; $("resultCampaign").value = id || ""; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true; $("comparisonAction").hidden = true;
+    updateCampaignHeader(); renderSavedSetup();
     if (push) { goStep("review", false); writeRoute(); }
     state.namedBaseline = null;
     $("namedBaselineDetails").replaceChildren(); $("namedBaselineStatus").textContent = ""; renderBaselineReference();
-    if (!id) { $("campaignResults").replaceChildren(node("p", "Choose a campaign to inspect its assessed outcomes.", "muted")); return; }
+    if (!id) { goStep(state.step,false,false);renderEmptyResults(); return; }
     $("campaignResults").replaceChildren(node("p", "Loading authoritative campaign assessments…", "muted"));
     try {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (version !== state.campaignVersion) return;
       const campaign = detail.campaign; const selectedOption=[...$("resultCampaign").options].find(option=>option.value===id); if(selectedOption)selectedOption.textContent=`${campaign.spec.name} · ${campaign.status}`; state.reviewCampaign = campaign; state.reviewCampaignContract = campaign.contract_id || null; $("campaignResults").replaceChildren();
+      state.headerCampaign=campaign;updateCampaignHeader();renderSavedSetup();
       $("currentCampaignContext").textContent=`${campaign.spec.name} · ${campaign.status} · ${date(campaign.created_at)}`;
       const tabs=node("div",null,"results-tabs");tabs.setAttribute("role","tablist");tabs.setAttribute("aria-label","Campaign results");
       const overview=node("section");overview.id="resultOverview";
@@ -732,7 +813,7 @@ if (typeof document !== "undefined") (() => {
       const analysis = node("section", null, "ai-outcome-summary"); analysis.id = "campaignAiSummary"; overview.append(analysis); if (state.step === "review") renderOutcomeSummary(id, analysis, version);
       renderSummary(result.summary, details);
       details.append($("advancedComparisons"),$("comparisonResults"));
-      $("advancedComparisons").hidden=false;
+      $("advancedComparisons").hidden=!campaign.contract_id;
       trialInspection.append($("reviewWorkspaceSlot"));
       selectResultTab(state.resultTab || "overview");
       details.append(link("Open full report", `/api/campaigns/${encodeURIComponent(id)}/report?format=html`), objectDetails("Assessment source, coverage and review revisions", result.assessments));
@@ -745,7 +826,7 @@ if (typeof document !== "undefined") (() => {
         const task=campaign.spec.tasks.find(entry=>entry.id===trial.task_id),taskName=task?.task || trial.task_id;
         const item=node("li",null,"campaign-trial-row"),identity=node("div",null,"campaign-trial-task");
         const repeatIndex=(campaign.spec.seeds || []).indexOf(trial.seed);
-        identity.append(node("strong",taskName),node("span",repeatIndex>=0?`Repeat ${repeatIndex+1}`:`Seed ${trial.seed}`,"muted"));
+        identity.append(node("strong",taskName),node("span",repeatIndex>=0?`Attempt ${repeatIndex+1}`:`Seed ${trial.seed}`,"muted"));
         const strategy=node("span",campaign.strategy_definitions?.[trial.strategy_id]?.display_name || trial.strategy_id,"campaign-trial-strategy");
         const outcome=node("div",null,"campaign-trial-outcome");outcome.append(node("strong",({pass:"Passed",fail:"Failed",unknown:"Not scored"})[trial.outcome] || "Not scored"));
         if(trial.execution)outcome.append(node("span",`Execution: ${trial.execution.replaceAll("_"," ")}`,"muted"));
@@ -773,7 +854,7 @@ if (typeof document !== "undefined") (() => {
         async function updateComparison(){const selected=strategy.value;try{const comparison=await request(`/api/campaigns/${encodeURIComponent(id)}/comparison?candidate_strategy_id=${encodeURIComponent(selected)}`);if(version!==state.campaignVersion || selected!==strategy.value)return;renderComparison(comparison);content.append($("comparisonResults"));}catch(error){content.replaceChildren(node("p",error.message,"error-text"));}}
         strategy.addEventListener("change",updateComparison);await updateComparison();
       }
-    } catch (error) { if (version === state.campaignVersion) $("campaignResults").replaceChildren(node("p", error.message, "error-text"), button("Retry results", () => openCampaign(id))); }
+    } catch (error) { if (version === state.campaignVersion) {state.headerError="Saved configuration could not be loaded. Retry results to reconnect.";updateCampaignHeader();renderSavedSetup();$("campaignResults").replaceChildren(node("p", error.message, "error-text"), button("Retry results", () => openCampaign(id)));} }
   }
   $("campaignResults").addEventListener("rove:inspect-campaign-trials",()=>{selectResultTab("trials");$("resultTab-trials")?.focus();});
   function selectResultTab(name) {
@@ -942,7 +1023,7 @@ if (typeof document !== "undefined") (() => {
   });
   $("assessmentMethod").addEventListener("change", () => { $("verifierEndpointLabel").hidden = $("assessmentMethod").value !== "configured_verifier"; });
   $("contractJson").addEventListener("input", () => { $("successCriteria").required = !$("contractJson").value.trim(); });
-  function scopeHint() { $("scopeHint").textContent = $("evidenceMode").value === "candidate_output" ? "Output acceptance does not establish observed robot task success." : $("evidenceMode").value === "recorded_episode" ? "This assesses supplied episode evidence from its producing system. Replaying a recording cannot prove a new candidate executed successfully." : "Synthetic rollout evidence demonstrates the evaluation workflow; it is not measured robot performance."; }
+  function scopeHint() { $("scopeHint").textContent = $("evidenceMode").value === "candidate_output" ? "This checks what the agent said or proposed. It does not establish observed robot task success." : $("evidenceMode").value === "recorded_episode" ? "This checks what happened in the supplied robot recording. It does not show that a different strategy executed successfully." : "This checks a synthetic rollout. Its result demonstrates the evaluation workflow, not measured robot performance."; }
   $("evidenceMode").addEventListener("change", scopeHint);
   function caseImage(item) {
     const digest = item.image_asset?.sha256;
@@ -1006,39 +1087,17 @@ if (typeof document !== "undefined") (() => {
   }
   function renderStrategy() {
     const container = $("strategyCards"), summary = $("strategySummary");
-    container.replaceChildren(); summary.replaceChildren();
-    const selectedIds = new Set(state.selectedStrategyIds);
-    $("strategySelectionCount").textContent = `${selectedIds.size} selected · up to 20`;
-    if (!state.strategies.length) { container.append(node("p", "No strategies are available. Add a pipeline in Settings to start comparing.", "muted")); return; }
-    for (const strategy of state.strategies) {
-      const card = node("label", null, "campaign-strategy-card"); card.dataset.strategyId = strategy.id;
-      card.classList.toggle("selected", selectedIds.has(strategy.id));
-      const heading = node("span", null, "strategy-card-heading"), checkbox = node("input");
-      checkbox.type = "checkbox"; checkbox.value = strategy.id; checkbox.checked = selectedIds.has(strategy.id);
-      checkbox.dataset.strategyId = strategy.id; checkbox.disabled = !checkbox.checked && selectedIds.size >= 20;
-      checkbox.setAttribute("aria-label", `Compare ${strategy.display_name || strategy.id}`);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked && !state.selectedStrategyIds.includes(strategy.id)) {
-          if (state.selectedStrategyIds.length >= 20) { checkbox.checked = false; tell("Choose no more than 20 strategies for one campaign.", true); return; }
-          state.selectedStrategyIds.push(strategy.id);
-        } else if (!checkbox.checked) state.selectedStrategyIds = state.selectedStrategyIds.filter(id => id !== strategy.id);
-        $("campaignStrategy").value = state.selectedStrategyIds[0] || ""; state.seedSelectionReviewed=true;
-        invalidateCampaign(); renderStrategy();
-        [...$("strategyCards").querySelectorAll("input")].find(input => input.value === strategy.id)?.focus();
-      });
-      heading.append(checkbox, node("strong", strategy.display_name || strategy.id)); card.append(heading);
-      card.append(node("span", strategy.description || "Saved pipeline configuration", "strategy-card-description"));
-      const stages = node("span", null, "strategy-stage-grid");
-      for (const stage of ["perceive", "plan", "act", "verify"]) {
-        const configured = strategy[stage], endpoint = typeof configured === "string" ? configured : configured?.endpoint;
-        const row = node("span", null, "strategy-stage");
-        row.append(node("span", stage.charAt(0).toUpperCase() + stage.slice(1)), node("span", endpoint || "Skipped", endpoint ? "strategy-endpoint" : "muted")); stages.append(row);
-      }
-      card.append(stages);
-      if (strategy.pipeline_mode) card.append(node("span", `${strategy.pipeline_mode === "parallel" ? "Parallel" : "Sequential"} pipeline${strategy.sim ? ` · Simulation: ${strategy.sim}` : ""}`, "strategy-card-meta"));
-      container.append(card);
-    }
-    summary.append(node("p", selectedIds.size ? "Every selected strategy runs on every case with the same repetitions and scoring rules. Each attempt becomes a separate trial for comparison." : "Choose one or more strategies. A campaign can compare models, complete agents and pipeline revisions on the same cases.", "muted"));
+    summary.replaceChildren();
+    $("strategySelectionCount").textContent = `${state.selectedStrategyIds.length} selected · up to 20`;
+    window.RoveStrategyTable.render(container,{strategies:state.strategies,selected:state.selectedStrategyIds,limit:20,onChange(id,checked){
+      if(checked && !state.selectedStrategyIds.includes(id)) {
+        if(state.selectedStrategyIds.length>=20){tell("Choose no more than 20 strategies for one campaign.",true);renderStrategy();return;}
+        state.selectedStrategyIds.push(id);
+      } else if(!checked)state.selectedStrategyIds=state.selectedStrategyIds.filter(value=>value!==id);
+      $("campaignStrategy").value=state.selectedStrategyIds[0] || "";state.seedSelectionReviewed=true;
+      invalidateCampaign();renderStrategy();
+    }});
+    summary.append(node("p",state.selectedStrategyIds.length?"Every selected strategy runs on every case with the same attempts and success criteria. Each attempt becomes a saved trial.":"Choose the pipelines to compare. Configure reusable strategies in Settings.","muted"));
   }
   // Compatibility for saved tooling that sets the original single-selection control.
   function legacyStrategySelection() { state.seedSelectionReviewed=true;
@@ -1094,7 +1153,10 @@ if (typeof document !== "undefined") (() => {
       const edit=button("Edit",()=>{card.dataset.editing="true";editor.hidden=false;row.hidden=true;input.focus();});edit.setAttribute("aria-label",`Edit criterion ${index+1}`);
       function closeEdit(){delete card.dataset.editing;editor.hidden=true;row.hidden=false;edit.focus();}
       editor.append(button("Save change",()=>{if(!input.value.trim()){input.setCustomValidity("Describe this criterion.");input.reportValidity();return;}input.setCustomValidity("");copy.textContent=input.value.trim();input.value=copy.textContent;input.dispatchEvent(new Event("change",{bubbles:true}));closeEdit();}),button("Cancel",()=>{input.value=copy.textContent;closeEdit();}));
-      row.append(number,copy,edit);card.append(row,editor,node("small",criterion.assessment==="configured_verifier"?`Checked by configured verifier: ${criterion.endpoint || "endpoint not recorded"}`:"Checked by an expert: a reviewer rates this criterion","muted"));container.append(card);
+      const condition=node("div",null,"criterion-condition");condition.append(node("span",criterion.required===false?"Pass condition · optional":"Pass condition · required","criterion-field-label"),copy);
+      const checking=node("dl",null,"criterion-assessment");checking.append(node("dt","Checked by"),node("dd",criterion.assessment==="configured_verifier"?`Configured verifier: ${criterion.endpoint || "endpoint not recorded"}`:"Expert review (manual)","criterion-checker"));
+      const explanation=node("p",criterion.assessment==="configured_verifier"?"Uses this endpoint's recorded verdict. The description documents the expectation; changing it does not change the verifier's implementation.":"A reviewer must rate this output after the trial. Until then, this criterion is not scored.","criterion-checking-explanation");
+      row.append(number,condition,edit);card.append(row,editor,checking,explanation);container.append(card);
     }
     $("successCriteria").closest("label").hidden = true;
     for (const [id, expectation] of Object.entries(contract.case_expectations || {})) if (state.selected.has(id) && (!preserveExpectations || !state.expectations.has(id))) state.expectations.set(id, expectation);
@@ -1105,14 +1167,29 @@ if (typeof document !== "undefined") (() => {
     }
     if (state.selected.size) container.append(cases);
     const measures=$("suggestedMeasures"); measures.replaceChildren();
-    for (const metric of contract.metrics || []) { const card=node("div",null,"suggested-measure");card.append(node("strong",metricLabel(metric)),node("span",({task_success:"Fraction of trials accepted by the required checks. Unassessed trials remain explicit.",pass_at_k:"Chance of at least one accepted attempt in k repeats of the same case and strategy.",pass_pow_k:"Consistency across k repeated attempts on the same case and strategy.",pipeline_latency:"Time spent running the pipeline, recorded automatically. This is not physical task completion time.",constraint_outcomes:"Acceptance of required constraints where the evaluator provides evidence.",episode_completion_time:"Elapsed episode time from recorded execution evidence.",autonomous_completion:"Completion without intervention, when the episode evidence records it.",recovery:"Recovery outcomes where a disturbance and subsequent response are recorded."})[metric] || "Reported only when the configured evaluator supplies the required measurement."));measures.append(card); }
+    const table=node("table",null,"report-measures-table");table.setAttribute("aria-label","Report measures and availability");const head=node("thead"),headRow=node("tr"),body=node("tbody");
+    for(const title of ["Measure","How calculated","When available"]) {const cell=node("th",title);cell.scope="col";headRow.append(cell);}head.append(headRow);table.append(head,body);measures.append(table);
+    const descriptions={
+      task_success:["Task acceptance","Passed trials divided by assessed trials, per strategy.","A final value requires all planned trials to be assessed. Missing outcomes remain Not scored."],
+      pass_at_k:["At least one success · pass@k","Estimated chance of at least one accepted attempt in k attempts of the same case and strategy, averaged across cases.","When the campaign includes at least k attempts per case. Missing outcomes produce a range."],
+      pass_pow_k:["Consistent success · pass^k","Estimated chance that all k attempts pass on the same case and strategy, averaged across cases.","When the campaign includes at least k attempts per case. Missing outcomes produce a range."],
+      pipeline_latency:["Pipeline latency","95th percentile of recorded pipeline duration, per strategy. This is not physical task completion time.","The declared report measure requires timing for all planned attempts; no expert rating required."],
+      constraint_outcomes:["Constraint acceptance","Fraction of episodes with zero recorded constraint violations.","When every episode supplies a constraint-violation count."],
+      episode_completion_time:["Robot completion time","Mean completion time across successful recorded episodes.","When outcomes and completion timing are recorded, with at least one successful episode."],
+      autonomous_completion:["Autonomous completion","Fraction of episodes that pass with zero human interventions.","When every episode has an assessed outcome and an intervention count."],
+      recovery:["Recovery","Recorded recoveries divided by recorded recovery opportunities.","When every episode supplies both counts and at least one opportunity exists."]
+    };
+    for(const metric of contract.metrics || []) {
+      const values=descriptions[metric] || [metricLabel(metric),"Calculated by the configured evaluator.","When its required measurement is recorded."];
+      const row=node("tr");values.forEach((value,index)=>{const cell=node(index===0?"th":"td",value);if(index===0)cell.scope="row";row.append(cell);});body.append(row);
+    }
     const needsReview=(contract.criteria || []).some(criterion=>criterion.assessment==="human_review");
-    $("gradingNotice").textContent=needsReview ? "Expert review is required for these criteria. Acceptance stays pending until the required ratings are recorded." : "Configured verification stages assess these criteria. Missing or invalid evidence remains unassessed.";
+    $("gradingNotice").textContent=needsReview ? "Expert review is required. Acceptance stays pending until the required ratings are recorded; running the pipeline alone cannot supply these ratings." : "Configured verifiers supply the verdicts. Missing or invalid evidence is Not scored; editing these descriptions does not create a new automatic check.";
     scopeHint(); $("verifierEndpointLabel").hidden=$("assessmentMethod").value!=="configured_verifier";
   }
   async function draftMetrics(force = false) {
     const context=metricsContextPayload(), signature=metricsContextSignature();
-    $("metricsContext").textContent=`${state.selected.size} cases · ${state.selectedStrategyIds.length} strategies · ${context.seeds.length} repeats`;
+    $("metricsContext").textContent=`${state.selected.size} cases · ${state.selectedStrategyIds.length} strategies · ${context.seeds.length} attempts`;
     if (!state.selected.size || !context.strategies.length || !context.seeds.length) { $("metricDraftStatus").textContent="Choose cases and at least one strategy before drafting success metrics."; return; }
     if (!force && $("campaignContract").value) {
       const saved=activeContract(); if(saved && state.appliedContractId !== saved.id) { applyMetricContract(saved, false); state.appliedContractId=saved.id; } state.confirmedMetricContext=metricsContextSignature();
@@ -1129,9 +1206,10 @@ if (typeof document !== "undefined") (() => {
       applyMetricContract(result.contract); state.metricsEdited=false;state.metricDraftContext=metricsContextSignature();state.metricDraftEvidence=result.evidence_fingerprint;
       $("campaignContract").value="";invalidateCampaign();
       $("metricDraftSource").textContent=result.source==="ai"?"Agent-drafted success metrics":"Task-based draft";
-      $("metricDraftStatus").textContent=result.source==="ai"?result.rationale:"Drafted from your task and available evidence. Review each criterion before running.";
+      $("metricDraftStatus").textContent="Review each proposed criterion and its checking method before running.";
+      $("metricDraftRationale").textContent=result.source==="ai"?result.rationale || "":"";
       $("metricsConnectionStatus").textContent=result.source==="ai"?"An AI assistant proposed these criteria; you approve the final rules.":`AI suggestions unavailable. ${(result.assistant_configured ?? result.assistant_available)?"The configured assistant could not generate suggestions.":"The assistant is not connected."} These criteria use task-based templates.`;
-      if(result.source==="ai")$("metricDraftStatus").append(node("span"," Review these criteria against the observations before confirming."));
+
       $("contractPanel").open=true;
     } catch(error){if(version===state.metricDraftVersion){$("metricDraftSource").textContent="Suggestions unavailable";$("metricDraftStatus").textContent=`Could not prepare suggestions: ${error.message}. You can edit and confirm criteria below.`;}}
     finally{if(version===state.metricDraftVersion){state.metricPendingSignature=null;$("regenerateMetrics").disabled=false;}}
@@ -1176,7 +1254,11 @@ if (typeof document !== "undefined") (() => {
   });
   for (const id of ["assessmentMethod", "verifierEndpoint"]) $(id).addEventListener("change", () => { state.gradingOverride=true;
     $("gradingNotice").textContent=$("assessmentMethod").value==="human_review" ? "All criteria will use expert review. Acceptance stays pending until the required ratings are recorded." : "All criteria will use the selected verification endpoint. Missing or invalid evidence remains unassessed.";
-    for(const description of $("generatedCriteria").querySelectorAll(".suggested-criterion small")) description.textContent=$("assessmentMethod").value==="human_review" ? "Checked by an expert: a reviewer rates this criterion" : `Checked by configured verifier: ${$("verifierEndpoint").value || "select an endpoint"}`;
+    for(const card of $("generatedCriteria").querySelectorAll(".suggested-criterion")) {
+      const human=$("assessmentMethod").value==="human_review";
+      card.querySelector(".criterion-checker").textContent=human ? "Expert review (manual)" : `Configured verifier: ${$("verifierEndpoint").value || "select an endpoint"}`;
+      card.querySelector(".criterion-checking-explanation").textContent=human ? "A reviewer must rate this output after the trial. Until then, this criterion is not scored." : "Uses this endpoint's recorded verdict. The description documents the expectation; changing it does not change the verifier's implementation.";
+    }
   });
   for (const id of ["targetMetric", "targetOperator", "targetThreshold"]) for (const type of ["input","change"]) $(id).addEventListener(type,()=>{state.targetEdited=true;});
   for (const id of ["annotationEndpoint", "annotationKey", "annotationTarget"]) for (const type of ["input","change"]) $(id).addEventListener(type,()=>{state.bindingEdited=true;});
@@ -1221,12 +1303,12 @@ if (typeof document !== "undefined") (() => {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (id !== state.campaignId || version !== state.liveVersion) return;
       const campaign = detail.campaign, summary = result.summary;
+      state.headerCampaign=campaign;state.headerError=null;updateCampaignHeader();
       if (["running","pending","queued","cancelling"].includes(campaign.status)) state.autoResultsCampaign=id;
-      $("workspaceTitle").textContent = "Campaign trials";
       $("liveTrialStatus").textContent = `${campaign.spec.name} · ${campaign.status}`;
       const container = $("liveTrials");
       if (state.liveCardCampaign !== id) { state.liveCardCampaign = id; state.liveTrialCards = new Map(); state.progressEvents = new Map(); container.replaceChildren(); }
-      $("runSummary").replaceChildren(node("strong", campaign.spec.name), node("p", `${summary.planned_trials || 0} planned trials across ${campaign.spec.tasks.length} cases.`), node("p", `Strategies: ${(campaign.spec.strategies || []).map(id => campaign.strategy_definitions?.[id]?.display_name || campaign.config?.strategies?.[id]?.display_name || id).join(", ")}`), node("p", `Scoring rules: ${campaign.contract?.name || campaign.contract_id || "See campaign report"}`));
+      $("runSummary").replaceChildren(node("strong", campaign.spec.name), node("p", `${summary.planned_trials || 0} planned trials across ${campaign.spec.tasks.length} cases.`), node("p", `Strategies: ${(campaign.spec.strategies || []).map(id => campaign.strategy_definitions?.[id]?.display_name || campaign.config?.strategies?.[id]?.display_name || id).join(", ")}`), node("p", `Success criteria: ${campaign.contract?.name || campaign.contract_id || "See campaign report"}`));
       if (campaign.contract) $("runSummary").append(objectDetails("Saved scoring criteria and case expectations", campaign.contract));
       const strategyName = id => campaign.strategy_definitions?.[id]?.display_name || campaign.config?.strategies?.[id]?.display_name || id;
       const currentKeys = new Set(); let position = 0;
@@ -1245,7 +1327,7 @@ if (typeof document !== "undefined") (() => {
         }
         entry.task = task; entry.title.textContent = strategyName(trial.strategy_id) || "Strategy trial";
         const repeatIndex = (campaign.spec.seeds || []).indexOf(trial.seed);
-        entry.detail.textContent = `${task?.task || task?.name || trial.task_id} · ${repeatIndex >= 0 ? `repetition ${repeatIndex + 1}` : `seed ${trial.seed}`} · assessment: ${trial.outcome || "pending"}`;
+        entry.detail.textContent = `${task?.task || task?.name || trial.task_id} · ${repeatIndex >= 0 ? `attempt ${repeatIndex + 1}` : `seed ${trial.seed}`} · assessment: ${trial.outcome || "pending"}`;
         if (container.children[position] !== entry.card) container.insertBefore(entry.card, container.children[position] || null);
         position += 1;
         if (entry.stages?.open) loadTrialProgress(trial.trial_id, entry.content, task);
@@ -1334,7 +1416,7 @@ if (typeof document !== "undefined") (() => {
         const chosen=select("improvementBaseline",[["","No saved reference"],...seed.baselines.map(item=>[item.revision_id,`${item.name} · revision ${item.revision || 1}`])],state.seedBaselineRevision || "");
         chosen.addEventListener("change",()=>{state.seedBaselineRevision=chosen.value || null;invalidateCampaign();});comparisonSettings.append(label("Compare against baseline",chosen),node("p","Recommendations use current reviews. Comparisons use the saved baseline assessments.","comparison-context"));
       } else comparisonSettings.append(node("p","No baseline is saved yet. This campaign will be a new result you can compare later.","muted"));
-      const comparison=node("p","Keep cases, scoring and repetitions fixed for a controlled ablation. Adding cases measures expanded coverage.","comparison-context");comparison.id="improvementComparisonNote";comparisonSettings.append(comparison);
+      const comparison=node("p","Keep cases, scoring and attempts fixed for a controlled ablation. Adding cases measures expanded coverage.","comparison-context");comparison.id="improvementComparisonNote";comparisonSettings.append(comparison);
       panel.append(link("View original results",`/static/datasets.html?step=review&campaign=${encodeURIComponent(seed.source.id)}`));
       const interpretation=node("details",null,"improvement-interpretation"); interpretation.append(node("summary","Outcome analysis"));
       const contents=node("div",null,"improvement-ai");contents.append(node("p","Preparing an interpretation of the recorded outcomes…","muted"));interpretation.append(contents);panel.append(interpretation);

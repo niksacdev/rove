@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const items = [
-    ["evaluate", "Evaluate", "/?view=quick"],
+    ["evaluate", "Trials", "/static/history.html"],
     ["results", "Campaigns", "/static/benchmarks.html"],
   ];
   function rootView(search) {
@@ -12,7 +12,13 @@
   function sectionForView(view) {
     return ["strategies", "models", "settings"].includes(view) ? "configure" : view === "home" ? "start" : "evaluate";
   }
+  function sectionForPath(path, fallback) {
+    if (path === "/static/history.html") return "evaluate";
+    if (["/static/datasets.html", "/static/benchmarks.html", "/static/campaign-history.html"].includes(path)) return "results";
+    return fallback;
+  }
   function setActive(section) {
+    section = sectionForPath(location.pathname, section);
     document.querySelectorAll("#roveNav [data-nav-section]").forEach(link => {
       if (link.dataset.navSection === section) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
@@ -43,8 +49,8 @@
     utilities.append(theme, settings);
     document.body.classList.add("rove-shell");
     host.replaceChildren(brand, nav, utilities);
-    setActive(host.dataset.section || sectionForView(rootView(location.search))); themeLabel();
+    setActive(location.pathname === "/" || location.pathname === "/static/index.html" ? sectionForView(rootView(location.search)) : host.dataset.section); themeLabel();
   }
-  if (typeof module !== "undefined" && module.exports) module.exports = {items, rootView, sectionForView};
+  if (typeof module !== "undefined" && module.exports) module.exports = {items, rootView, sectionForView, sectionForPath};
   if (typeof document !== "undefined") { window.RoveNavigation = {setActive, rootView, sectionForView, applyTheme}; mount(); }
 })();

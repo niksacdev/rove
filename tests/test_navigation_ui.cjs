@@ -4,17 +4,21 @@ const {JSDOM} = require("jsdom");
 const root = path.resolve(__dirname, ".."), read = name => fs.readFileSync(path.join(root, "frontend", name), "utf8");
 const pause = () => new Promise(resolve => setTimeout(resolve, 25));
 
-for (const [file, section] of [["index.html","start"],["datasets.html","evaluate"],["benchmarks.html","results"],["history.html","results"]]) {
+for (const [file, section] of [["index.html","start"],["datasets.html","results"],["benchmarks.html","results"],["history.html","evaluate"],["campaign-history.html","results"]]) {
   test(`${file} shares exactly the same primary links and accessible theme control`, () => {
-    const dom = new JSDOM(read(file), {url:"http://localhost/",runScripts:"outside-only"}), w = dom.window;
+    const dom = new JSDOM(read(file), {url:`http://localhost${file === "index.html" ? "/" : `/static/${file}`}`,runScripts:"outside-only"}), w = dom.window;
     try {
       w.document.documentElement.dataset.theme = "dark";
       w.eval(read("navigation.js"));
       const links = [...w.document.querySelectorAll('#roveNav nav a')];
-      assert.deepEqual(links.map(a=>[a.textContent,a.getAttribute('href')]), [["Evaluate","/?view=quick"],["Campaigns","/static/benchmarks.html"]]);
+      assert.deepEqual(links.map(a=>[a.textContent,a.getAttribute('href')]), [["Trials","/static/history.html"],["Campaigns","/static/benchmarks.html"]]);
       const active = w.document.querySelectorAll("#roveNav [aria-current=page]");
       assert.equal(active.length,1);
       assert.equal(active[0].dataset.navSection,section);
+      if (file !== "index.html") {
+        w.RoveNavigation.setActive(section === "evaluate" ? "results" : "evaluate");
+        assert.equal(w.document.querySelector("#roveNav [aria-current=page]").dataset.navSection,section,"legacy step names cannot switch the selected resource");
+      }
       const settings = w.document.querySelector("#roveNav .rove-utilities .rove-settings");
       assert.equal(settings.getAttribute("href"), "/?view=strategies");
       assert.equal(settings.getAttribute("aria-label"),"Settings");
@@ -38,14 +42,14 @@ test("root journey routes configuration and quick runs without losing an in-prog
   w.HTMLElement.prototype.scrollIntoView=()=>{};
   w.fetch=async(url,options={})=>{calls.push({url,method:options.method||"GET"});return {ok:true,json:async()=>url.includes("history")?[]:url.includes("strategies")?{strategies:[]}:url.includes("endpoints")?{endpoints:[]}:url.includes("models")?{models:[]}:{defaults:{},endpoints:{},strategies:{}}};};
   try {
-    w.eval(read("navigation.js"));w.eval(read("stage-renderers.js"));w.eval(read("app.js") + ";window.testRoot={setupTabs,setRunning,restoreEvaluation,switchView};"); await pause();
+    w.eval(read("navigation.js"));w.eval(read("stage-renderers.js"));w.eval(read("strategy-table.js")); w.eval(read("app.js") + ";window.testRoot={setupTabs,setRunning,restoreEvaluation,switchView};"); await pause();
     const el=id=>w.document.getElementById(id);
     assert.equal(el("quickComposer").hidden,true);
     assert.equal(el("quickSidebar").hidden,true);
     // The original runner stays discoverable alongside repeatable campaigns.
-    assert.match(w.document.querySelector('.start-actions [data-root-view="quick"]').textContent, /Run a trial/);
+    assert.match(w.document.querySelector('.start-actions [data-root-view="quick"]').textContent, /New trial/);
     assert.equal(w.document.querySelector('.start-actions .start-primary').getAttribute("href"),"/?view=quick");
-    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/static/benchmarks.html");
+    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/static/datasets.html");
     w.testRoot.switchView("quick");
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);
@@ -90,17 +94,24 @@ test("root journey routes configuration and quick runs without losing an in-prog
 });
 
 
-test("campaign creation actions and destination use one name", () => {
-  for (const page of ["index.html", "benchmarks.html", "history.html"]) {
+test("each resource browser has one matching New action and no duplicate resource navigation", () => {
+  for (const [page,title,label,href] of [["history.html","Trials","New trial","/?view=quick"],["benchmarks.html","Campaigns","New campaign","/static/datasets.html"]]) {
     const dom = new JSDOM(fs.readFileSync(path.join(root, "frontend", page), "utf8"));
-    const links = [...dom.window.document.querySelectorAll('a[href="/static/datasets.html"]')];
-    assert.ok(links.some(link => link.textContent.includes("Create a campaign")), page);
-    assert.ok(links.every(link => !/New evaluation|Create an evaluation/.test(link.textContent)), page);
+    const doc = dom.window.document;
+    assert.equal(doc.querySelector("h1").textContent,title);
+    assert.equal(doc.querySelector(".page-heading > a").textContent,label);
+    assert.equal(doc.querySelector(".page-heading > a").getAttribute("href"),href);
+    assert.equal(doc.querySelector(".workspace-tabs"),null);
     dom.window.close();
   }
-  const dom = new JSDOM(fs.readFileSync(path.join(root, "frontend/datasets.html"), "utf8"));
-  assert.equal(dom.window.document.getElementById("workspaceTitle").textContent, "Create a campaign");
-  dom.window.close();
+});
+
+test("direct trial drafts and Settings highlight their own destination before the runner loads", () => {
+  for (const [view,section] of [["quick","evaluate"],["examples","evaluate"],["strategies","configure"],["models","configure"]]) {
+    const dom=new JSDOM(read("index.html"),{url:`http://localhost/?view=${view}`,runScripts:"outside-only"});
+    try {dom.window.eval(read("navigation.js"));assert.equal(dom.window.document.querySelector("#roveNav [aria-current=page]").dataset.navSection,section);}
+    finally {dom.window.close();}
+  }
 });
 
 test("trial sidebar exposes full button-style library destinations with icons and readable labels", () => {

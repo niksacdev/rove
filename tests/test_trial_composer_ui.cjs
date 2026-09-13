@@ -16,11 +16,12 @@ async function composer(options = {}) {
     if (route.startsWith("/api/trial-assets/")) return {ok: true, blob: async () => new w.Blob(["image"], {type: "image/png"})};
     if (route.endsWith("panda.urdf")) return {ok: !options.noRobot, blob: async () => new w.Blob(['<robot name="panda"/>'], {type: "application/xml"})};
     if (route === "/api/examples") return {ok: true, json: async () => ({examples: [{task: "Place the block", filename: "block.png", import_status: "imported", case_revision_id: "case-r1", eval_category: "atomic"}]})};
+    if (route === "/data/legacy.png") return {ok:true,blob:async()=>{await options.legacyWait;return new w.Blob(["legacy"],{type:"image/png"});}};
     if (route === "/api/evaluate") return {ok: true, json: async () => ({eval_id: "evaluation", trial_ids: {mock: "trial"}, strategies: ["mock"]})};
-    return {ok: true, json: async () => route.includes("history") ? [] : route === "/api/strategies" ? {strategies: [{id: "mock", display_name: "Mock", perceive: "mock-vlm", verify: "mock-vlm"}]} : route === "/api/models" ? {models: []} : {defaults: {}, endpoints: {}, strategies: {}}};
+    return {ok: true, json: async () => route.includes("history") ? [] : route === "/api/strategies" ? {strategies: options.strategies || [{id: "mock", display_name: "Mock", perceive: "mock-vlm", verify: "mock-vlm"}]} : route === "/api/models" ? {models: []} : {defaults: {}, endpoints: {}, strategies: {}}};
   };
   w.eval(source("navigation.js")); w.eval(source("sample-cases.js") + ";window.createSampleCaseCard = createSampleCaseCard;"); w.eval(source("stage-renderers.js"));
-  w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning,showHistoryEntry};");
+  w.eval(source("strategy-table.js")); w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning,showHistoryEntry,loadExample,seedHistory(entries){runHistory=entries;renderHistory();}};");
   const pause = () => new Promise(resolve => setTimeout(resolve, 40)); await pause();
   return {w, calls, streams, el: id => w.document.getElementById(id), pause};
 }
@@ -113,4 +114,103 @@ test("trial sample gallery opens the original composer with a versioned case rat
     assert.match(sample.textContent, /Use in a trial/);
     assert.equal(calls.some(call => call.method === "POST"), false);
   } finally { w.close(); }
+});
+
+
+test("shared quick journey runs one case against two strategies through existing SSE and preserves inputs for refinement",async()=>{
+  const {w,calls,streams,el,pause}=await composer({strategies:[{id:"mock",display_name:"Planner",perceive:"vlm",plan:"agent",verify:"grader",pipeline_mode:"sequential"},{id:"vla",display_name:"VLA",act:"policy",verify:"grader",pipeline_mode:"parallel",verification_checks:[{endpoint:"collision",role:"constraint",required:true}]}]});
+  const step=name=>w.document.querySelector(`#quickJourney [data-quick-step="${name}"]`).click();
+  try{
+    assert.equal(el("quickCasePanel").hidden,false);assert.equal(el("quickComposer").parentElement.id,"quickCaseComposer");
+    step("configure");assert.equal(el("quickConfigurePanel").hidden,false);assert.equal(el("quickComposer").hidden,true);
+    assert.match(el("strategyGrid").querySelector('[data-strategy-id="vla"]').textContent,/policy.*grader.*collision.*Required constraint/);
+    for(const id of ["mock","vla"])el("strategyGrid").querySelector(`input[value="${id}"]`).click();
+    assert.match(el("quickTrialCount").textContent,/1 case × 2 strategies × 1 attempt = 2 trials/);
+    step("case");assert.equal(el("taskInput").value,"Place the block in the tray");
+    assert.equal(calls.some(call=>call.method==="POST"),false);el("evalBtn").click();await pause();
+    const submissions=calls.filter(call=>call.route==="/api/evaluate");assert.equal(submissions.length,1);
+    assert.equal(submissions[0].body.get("strategy_ids"),"mock,vla");assert.equal(submissions[0].body.get("urdf").name,"panda.urdf");assert.equal(submissions[0].body.get("case_revision_id"),"case-r1");
+    assert.equal(el("quickRunPanel").hidden,false);assert.equal(el("chatArea").hidden,false);assert.equal(el("taskInput").disabled,true);
+    assert.equal(el("taskInput").value,"Place the block in the tray");assert.ok(el("quickCaseComposer"));
+    streams[0].emit("strategy_started",{strategy_id:"vla",pipeline_mode:"parallel"});
+    streams[0].emit("stage",{strategy_id:"mock",stage:"perceive",status:"completed",latency_ms:14,model_id:"vlm",output:{scene_description:"Block observed on tray"}});
+    el("tabBar").querySelector('[data-tab-id="mock"]').click();assert.match(el("tab-content-mock").textContent,/Block observed on tray/);
+    for(const sid of ["mock","vla"])streams[0].emit("strategy_complete",{strategy_id:sid,success:true,total_latency_ms:100});
+    streams[0].emit("complete",{trial_ids:{mock:"trial-a",vla:"trial-b"},results:[{strategy_id:"mock",stages:[]},{strategy_id:"vla",stages:[]}]});
+    assert.equal(el("quickResultsPanel").hidden,false);assert.equal(el("quickRunAction").hidden,true);assert.equal(el("taskInput").disabled,false);
+    assert.equal(el("tab-content-__summary__").querySelectorAll(".trial-campaign-link").length,2);
+    step("case");el("taskInput").value="Refined placement instruction";el("taskInput").dispatchEvent(new w.Event("input",{bubbles:true}));
+    assert.equal(el("strategyGrid").querySelectorAll("input:checked").length,2);assert.equal(calls.filter(call=>call.route==="/api/evaluate").length,1);
+    step("results");assert.match(el("quickTrialCount").textContent,/2 trials/);assert.ok(el("tab-content-mock"));
+  }finally{w.close();}
+});
+
+test("quick Run action guides missing configuration without issuing an evaluation",async()=>{
+  const {w,calls,el,pause}=await composer();
+  try{el("evalBtn").click();await pause();assert.equal(el("quickConfigurePanel").hidden,false);assert.equal(calls.some(call=>call.method==="POST"),false);el("strategyGrid").querySelector("input").click();el("removeImage").click();el("evalBtn").click();await pause();assert.equal(el("quickCasePanel").hidden,false);assert.equal(calls.some(call=>call.method==="POST"),false);}finally{w.close();}
+});
+
+
+test("reopening an older recent run cannot replace the active stream's output or history target",async()=>{
+  const {w,el,calls,streams,pause}=await composer();
+  try {
+    w.caseRunnerTest.seedHistory([{id:"older",task:"Old task",strategyIds:["old-strategy"],timestamp:"2026-01-01T00:00:00Z",status:"completed",results:{"old-strategy":{stages:[],success:true}},summaryResults:{}}]);
+    el("strategyGrid").querySelector("input").click();el("evalBtn").click();await pause();
+    const live=el("tab-content-mock");assert.ok(live);
+    w.caseRunnerTest.showHistoryEntry(0);await pause();
+    assert.equal(el("tab-content-mock"),live);assert.equal(el("tab-content-old-strategy"),null);
+    assert.match(el("liveAnnouncer").textContent,/comparison is running/);
+    streams[0].emit("stage",{strategy_id:"mock",stage:"perceive",status:"completed",latency_ms:12,model_id:"mock-vlm",output:{scene_description:"Live evidence remains attached"}});
+    assert.match(live.textContent,/Live evidence remains attached/);
+    assert.equal(calls.filter(call=>call.route==="/api/evaluate").length,1);
+    streams[0].emit("complete",{trial_ids:{mock:"trial-current"},results:[{strategy_id:"mock",stages:[]}]});
+    w.caseRunnerTest.showHistoryEntry(0);assert.ok(el("tab-content-old-strategy"));
+  }finally{w.close();}
+});
+
+
+test("legacy sample loading cannot replace the active comparison's locked case",async()=>{
+  const {w,el,calls,pause}=await composer();
+  try {
+    el("strategyGrid").querySelector("input").click();el("evalBtn").click();await pause();
+    const input=el("taskInput").value,image=el("previewImg").src,robot=w.caseRunnerTest.robot,source=w.caseRunnerTest.savedCase;
+    await w.caseRunnerTest.loadExample({filename:"legacy.png",task:"Different sample task"});await pause();
+    assert.equal(el("taskInput").value,input);assert.equal(el("previewImg").src,image);assert.equal(w.caseRunnerTest.robot,robot);assert.equal(w.caseRunnerTest.savedCase,source);
+    assert.equal(calls.some(call=>call.route==="/data/legacy.png"),false);assert.equal(el("taskInput").disabled,true);assert.match(el("liveAnnouncer").textContent,/Finish the running comparison/);
+  }finally{w.close();}
+});
+
+
+test("Results opens at the outcome summary and queued stream scrolling cannot push it back to the bottom",async()=>{
+  const {w,el,streams,pause}=await composer();
+  try {
+    const frames=[];w.requestAnimationFrame=callback=>{frames.push(callback);return frames.length;};
+    Object.defineProperty(el("chatArea"),"scrollHeight",{value:1800,configurable:true});
+    el("strategyGrid").querySelector("input").click();el("evalBtn").click();await pause();
+    streams[0].emit("stage",{strategy_id:"mock",stage:"perceive",status:"completed",model_id:"mock-vlm",output:{scene_description:"Observed"}});
+    el("chatArea").scrollTop=1200;
+    streams[0].emit("complete",{trial_ids:{mock:"trial"},results:[{strategy_id:"mock",stages:[]}]});
+    assert.equal(el("chatArea").scrollTop,0);for(const frame of frames.splice(0))frame();assert.equal(el("chatArea").scrollTop,0);
+    w.document.querySelector('#quickJourney [data-quick-step="case"]').click();el("chatArea").scrollTop=900;
+    w.document.querySelector('#quickJourney [data-quick-step="results"]').click();for(const frame of frames.splice(0))frame();assert.equal(el("chatArea").scrollTop,0);
+    el("chatArea").scrollTop=600;w.caseRunnerTest.showHistoryEntry(0);for(const frame of frames.splice(0))frame();assert.equal(el("chatArea").scrollTop,0);
+  }finally{w.close();}
+});
+
+
+test("late legacy sample responses cannot overwrite newer inputs or a comparison snapshot",async()=>{
+  for(const scenario of ["inputs","running","completed"]){
+    let release;const legacyWait=new Promise(resolve=>{release=resolve;});const {w,el,calls,streams,pause}=await composer({legacyWait});
+    try {
+      const original=el("taskInput").value,image=el("previewImg").src;
+      const loading=w.caseRunnerTest.loadExample({filename:"legacy.png",task:"Late task replacement"});await pause();
+      assert.equal(w.caseRunnerTest.savedCase.id,"case-r1","pending sample preserves the current bound case");
+      if(scenario==="inputs"){el("taskInput").value="More recent instruction";el("taskInput").dispatchEvent(new w.Event("input",{bubbles:true}));}
+      else {el("strategyGrid").querySelector("input").click();el("evalBtn").click();await pause();const submitted=calls.find(call=>call.route==="/api/evaluate");assert.equal(submitted.body.get("case_revision_id"),"case-r1");assert.equal(submitted.body.get("urdf").name,"panda.urdf");if(scenario==="completed")streams[0].emit("complete",{trial_ids:{mock:"trial"},results:[{strategy_id:"mock",stages:[]}]});}
+      release();await loading;await pause();
+      assert.equal(el("taskInput").value,scenario==="inputs"?"More recent instruction":original);assert.equal(el("previewImg").src,image);assert.equal(w._selectedExampleFilename,null);
+      assert.equal(calls.filter(call=>call.route==="/api/evaluate").length,scenario==="inputs"?0:1);
+      assert.match(el("liveAnnouncer").textContent,/Sample loading cancelled/);
+    }finally{release();w.close();}
+  }
 });

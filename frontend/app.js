@@ -8,7 +8,10 @@ let selectedSavedCase = null;
 let caseInputVersion = 0;
 let loadingCaseVersion = 0;
 let isRunning = false;
+let quickStep = "case";
+let quickRunSnapshot = null;
 let currentEventSource = null;
+let runningEvaluationId = null;
 let strategies = [];
 let selectedStrategyIds = new Set();
 let activeTabId = null;
@@ -405,6 +408,7 @@ function renderInsightsCard(insights, parentEl) {
 // ---- Initialize ----
 document.addEventListener("DOMContentLoaded", async function() {
   lucide.createIcons();
+  initQuickWorkspace();
   initTopNav();
   switchView(window.RoveNavigation.rootView(location.search), false);
   await Promise.all([loadStrategies(), loadModels(), loadConfig()]);
@@ -433,6 +437,44 @@ async function loadConfig() {
   } catch (e) {
     console.error("Failed to load config:", e);
   }
+}
+
+// ---- Shared trial workspace: the original runner owns execution and output. ----
+function initQuickWorkspace() {
+  document.getElementById("quickCaseComposer").append(document.getElementById("quickComposer"));
+  document.getElementById("quickStrategySelection").append(document.getElementById("configPanel"));
+  document.getElementById("quickRunAction").append(evalBtn);evalBtn.textContent="Run comparison";evalBtn.setAttribute("aria-label","Run comparison");evalBtn.title="Run selected strategies once on this case";
+  configToggle.hidden=true;configContent.style.display="";
+  document.querySelectorAll("[data-quick-step]").forEach(function(control){control.addEventListener("click",()=>setQuickStep(control.dataset.quickStep));});
+  document.getElementById("quickSampleCases").addEventListener("click",()=>switchView("examples"));
+  for(const input of [taskInput,imageInput,urdfInput]){input.addEventListener("input",updateQuickWorkspace);input.addEventListener("change",updateQuickWorkspace);}
+  document.getElementById("quickResultsSummary").textContent="Compare pipeline outputs and verdicts below. Add a saved trial to a campaign to define success criteria and repeat the comparison.";
+}
+function setQuickStep(step) {
+  if(!["case","configure","run","results"].includes(step))return;
+  quickStep=step;
+  if((step==="run"||step==="results") && Object.keys(tabData).length)restoreEvaluation();else updateQuickWorkspace();
+  if(step==="results") {chatArea.scrollTop=0;document.querySelector(".root-main").scrollTop=0;}
+  document.querySelector(`[data-quick-panel="${step}"] h2`)?.focus();
+}
+function updateQuickWorkspace() {
+  const workspace=document.getElementById("quickWorkspace");if(!workspace)return;
+  const visible=currentView==="quick"||currentView==="evaluation";workspace.hidden=!visible;
+  document.getElementById("quickWelcome").hidden=true;
+  document.getElementById("quickComposer").hidden=!visible||quickStep!=="case";
+  if(!visible){chatArea.hidden=false;return;}
+  document.body.dataset.quickStep=quickStep;
+  for(const control of document.querySelectorAll("#quickJourney [data-quick-step]")) {if(control.dataset.quickStep===quickStep)control.setAttribute("aria-current","step");else control.removeAttribute("aria-current");}
+  for(const panel of document.querySelectorAll("[data-quick-panel]"))panel.hidden=panel.dataset.quickPanel!==quickStep;
+  document.getElementById("quickRunAction").hidden=quickStep==="results";
+  const outputs=quickStep==="run"||quickStep==="results";chatArea.hidden=!outputs;
+  tabBar.classList.toggle("hidden",!outputs || !(Object.keys(tabData).length>1 || summaryEl));
+  const snapshot=outputs&&quickRunSnapshot, count=snapshot?snapshot.strategies.length:selectedStrategyIds.size;
+  document.getElementById("quickTrialCount").textContent=`${snapshot||selectedFile?1:0} case × ${count} ${count===1?"strategy":"strategies"} × 1 attempt = ${snapshot||selectedFile?count:0} ${count===1?"trial":"trials"}`;
+  document.getElementById("quickRunHeading").textContent=isRunning?"Running your comparison":Object.keys(tabData).length?"Execution finished":"Ready to compare?";
+  document.getElementById("quickRunSummary").textContent=snapshot?`${snapshot.task} · ${isRunning?"Follow each strategy below. Every execution is saved as a trial.":"Open Results to inspect the recorded outputs."}`:"Run comparison uses your current case and selected strategies. You can run directly from any step when ready.";
+  document.querySelector("#quickHeading h1").textContent=isRunning?"Trial comparison":outputs&&Object.keys(tabData).length?"Trial results":"New trial";
+  evalBtn.textContent=isRunning?"Running…":"Run comparison";
 }
 
 // ---- Top nav click handlers ----
@@ -502,7 +544,7 @@ async function loadSavedCase(id) {
     taskInput.value = item.task; taskInput.style.height = "auto"; taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
     previewImg.src = URL.createObjectURL(blob); previewImg.alt = "Observation for " + item.name; imagePreview.classList.remove("hidden");
     const url = new URL(location.href); url.searchParams.set("view", "quick"); url.searchParams.set("case", item.id); history.replaceState({}, "", url);
-    switchView("quick", false);
+    quickStep="case";switchView("quick", false);
     status.textContent = `Case: ${item.name} · revision ${item.revision || item.id}. Each selected strategy creates a recorded trial linked to this case.${robotFile ? " Bundled robot description attached." : " Add a robot description if your strategy requires it."}`;
     taskInput.focus();
   } catch (error) { if (version === caseInputVersion) { status.textContent = error.message + " No case was loaded or executed."; announce(error.message); } }
@@ -522,6 +564,7 @@ function setRootChrome(view) {
     else link.removeAttribute("aria-current");
   });
   window.RoveNavigation.setActive(window.RoveNavigation.sectionForView(view));
+  updateQuickWorkspace();
 }
 
 function initTopNav() {
@@ -585,6 +628,7 @@ function restoreEvaluation() {
   document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
   updateTopNav("evaluate");
 
+  updateQuickWorkspace();
   scrollToBottom();
 }
 
@@ -654,6 +698,7 @@ function switchView(view, push = true) {
   }
   // Each destination starts at its heading; trial restoration keeps its own scroll behavior.
   chatArea.scrollTop = 0;
+  updateQuickWorkspace();
 }
 
 function initGettingStarted() {
@@ -1125,12 +1170,15 @@ async function renderExamplesView() {
 }
 
 async function loadExample(ex) {
+  if(isRunning) {announce("Finish the running comparison before loading another sample case.");return;}
   if (ex.case_revision_id) { await loadSavedCase(ex.case_revision_id); return; }
-  clearCaseBinding();
+  const version=++caseInputVersion;
   try {
     var resp = await fetch(API_BASE + "/data/" + ex.filename);
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     var blob = await resp.blob();
+    if(version!==caseInputVersion || isRunning) {announce("Sample loading cancelled because the inputs changed or a comparison started.");return;}
+    clearCaseBinding();
     var name = ex.filename.split("/").pop();
     selectedFile = new File([blob], name, { type: blob.type });
     window._selectedExampleFilename = ex.filename;
@@ -1150,8 +1198,9 @@ async function loadExample(ex) {
     window._selectedCorrection = ex.correction || null;
     window._selectedConstraints = ex.constraints || null;
 
-    switchView("quick");
+    quickStep="case";switchView("quick");
   } catch (e) {
+    if(version!==caseInputVersion || isRunning)return;
     console.error("Failed to load example:", e);
     alert("Failed to load example image: " + e.message);
   }
@@ -1539,9 +1588,13 @@ function deleteHistoryEntry(idx) {
 }
 
 function showHistoryEntry(idx) {
-  activeHistoryIndex = idx;
   var entry = runHistory[idx];
   if (!entry) return;
+  if(isRunning && entry.id!==runningEvaluationId) {
+    announce("A comparison is running. Finish it before reopening an older run here, or use All saved trials to inspect history separately.");
+    return;
+  }
+  activeHistoryIndex = idx;
 
   // If this is the currently running/active evaluation, just restore the view
   if (entry.status === "running" && Object.keys(tabData).length > 0) {
@@ -1557,6 +1610,7 @@ function showHistoryEntry(idx) {
   renderHistoryItems();
 
   // Show evaluation content
+  quickStep="results";quickRunSnapshot={task:entry.task,strategies:entry.strategyIds};
   currentView = "evaluation";
   rootRoute("quick", false);
   setRootChrome("evaluation");
@@ -1717,6 +1771,7 @@ function showHistoryEntry(idx) {
     Object.keys(tabData).forEach(function(sid) { renderTrialCampaignActions(entry, tabData[sid].el, sid); });
     if (ids.length > 1 && summaryEl) renderTrialCampaignActions(entry, summaryEl);
   }
+  updateQuickWorkspace();chatArea.scrollTop=0;document.querySelector(".root-main").scrollTop=0;
 }
 
 // ---- localStorage persistence ----
@@ -1850,7 +1905,8 @@ function restoreHistory() {
 // ---- Config panel toggle ----
 var _configCollapsed = true;
 function initConfigPanel() {
-  _configCollapsed = true;
+  _configCollapsed = false;
+  configContent.style.display="";
   configChevron.style.transform = "rotate(180deg)";
   configToggle.addEventListener("click", function() {
     setConfigCollapsed(!_configCollapsed);
@@ -1858,6 +1914,7 @@ function initConfigPanel() {
 }
 
 function setConfigCollapsed(collapsed) {
+  if(document.getElementById("quickWorkspace")){configContent.style.display="";if(selectedFile)imagePreview.classList.remove("hidden");if(selectedUrdfFile)urdfPreview.classList.remove("hidden");return;}
   _configCollapsed = collapsed;
   configContent.style.display = collapsed ? "none" : "";
   configChevron.style.transform = collapsed ? "rotate(180deg)" : "";
@@ -1905,145 +1962,18 @@ async function loadStrategies() {
 
 function renderStrategyCards() {
   window.RoveTooltips?.hide();
-  strategyGrid.textContent = "";
-  strategies.forEach(function(s) {
-    var chip = document.createElement("div");
-    chip.className = "strategy-chip bg-f-surface border border-f-border rounded-full px-3 py-1.5 cursor-pointer flex items-center gap-1.5";
-    chip.setAttribute("data-strategy-id", s.id);
-    chip.setAttribute("role", "checkbox");
-    chip.setAttribute("tabindex", "0");
-    chip.setAttribute("aria-checked", "false");
-    chip.setAttribute("aria-label", s.display_name);
-
-    // Checkmark (hidden when not selected)
-    var checkWrap = document.createElement("span");
-    checkWrap.className = "check-icon w-3.5 h-3.5 rounded-full bg-f-purple items-center justify-center shrink-0";
-    var checkSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    checkSvg.setAttribute("width", "8");
-    checkSvg.setAttribute("height", "8");
-    checkSvg.setAttribute("viewBox", "0 0 24 24");
-    checkSvg.setAttribute("fill", "none");
-    checkSvg.setAttribute("stroke", "white");
-    checkSvg.setAttribute("stroke-width", "3");
-    checkSvg.setAttribute("stroke-linecap", "round");
-    checkSvg.setAttribute("stroke-linejoin", "round");
-    var checkPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    checkPath.setAttribute("d", "M20 6L9 17l-5-5");
-    checkSvg.appendChild(checkPath);
-    checkWrap.appendChild(checkSvg);
-    chip.appendChild(checkWrap);
-
-    var nameSpan = document.createElement("span");
-    nameSpan.className = "text-[11px] font-medium text-gray-200 whitespace-nowrap";
-    nameSpan.textContent = s.display_name;
-    chip.appendChild(nameSpan);
-
-    // Tag count (subtle)
-    if (s.tags && s.tags.length) {
-      var tagDot = document.createElement("span");
-      tagDot.className = "w-1.5 h-1.5 rounded-full bg-gray-600 shrink-0";
-      chip.appendChild(tagDot);
-      var tagSpan = document.createElement("span");
-      tagSpan.className = "text-[10px] text-gray-500";
-      tagSpan.textContent = s.tags[0];
-      chip.appendChild(tagSpan);
-    }
-
-    // Hover popover with stage->model detail
-    var popover = document.createElement("div");
-    popover.className = "chip-popover";
-    popover.setAttribute("aria-hidden", "true");
-
-    var popName = document.createElement("div");
-    popName.className = "text-[11px] font-semibold text-gray-200 mb-1";
-    popName.textContent = s.display_name;
-    popover.appendChild(popName);
-
-    if (s.description) {
-      var popDesc = document.createElement("div");
-      popDesc.className = "text-[10px] text-gray-500 mb-2";
-      popDesc.textContent = s.description;
-      popover.appendChild(popDesc);
-    }
-
-    var stageList = document.createElement("div");
-    stageList.className = "space-y-1";
-    ["perceive", "plan", "act", "verify"].forEach(function(stage) {
-      if (!s[stage]) return;
-      var colors = STAGE_COLORS[stage];
-      var row = document.createElement("div");
-      row.className = "flex items-center gap-2";
-      var dot = document.createElement("span");
-      dot.className = "w-1.5 h-1.5 rounded-full shrink-0";
-      if (stage === "perceive" || stage === "plan") dot.style.background = "#439c92";
-      else if (stage === "act") dot.style.background = "#10b981";
-      else dot.style.background = "#f59e0b";
-      row.appendChild(dot);
-      var label = document.createElement("span");
-      label.className = "text-[10px] uppercase tracking-wider w-[38px] shrink-0 " + colors.text;
-      label.textContent = stage.slice(0, 4);
-      row.appendChild(label);
-      var model = document.createElement("span");
-      model.className = "text-[10px] text-gray-300 font-mono truncate";
-      model.textContent = s[stage];
-      row.appendChild(model);
-      stageList.appendChild(row);
-    });
-    if (s.sim) {
-      var simRow = document.createElement("div");
-      simRow.className = "flex items-center gap-2";
-      var simDot = document.createElement("span");
-      simDot.className = "w-1.5 h-1.5 rounded-full shrink-0";
-      simDot.style.background = "#3b82f6";
-      simRow.appendChild(simDot);
-      var simLabel = document.createElement("span");
-      simLabel.className = "text-[10px] uppercase tracking-wider w-[38px] shrink-0 text-blue-300";
-      simLabel.textContent = "sim";
-      simRow.appendChild(simLabel);
-      var simModel = document.createElement("span");
-      simModel.className = "text-[10px] text-gray-300 font-mono truncate";
-      simModel.textContent = s.sim;
-      simRow.appendChild(simModel);
-      stageList.appendChild(simRow);
-    }
-    popover.appendChild(stageList);
-
-    chip.appendChild(popover);
-
-    // Click handler
-    function toggleStrategy() {
-      if (selectedStrategyIds.has(s.id)) {
-        selectedStrategyIds.delete(s.id);
-      } else {
-        selectedStrategyIds.add(s.id);
-      }
-      updateStrategyCards();
-      updateSelectedCount();
-    }
-    chip.addEventListener("click", toggleStrategy);
-    chip.addEventListener("keydown", function(e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleStrategy(); }
-    });
-
-    strategyGrid.appendChild(chip);
-  });
+  if(!window.RoveStrategyTable){strategyGrid.textContent="Strategy selection could not load. Reload this page.";return;}
+  window.RoveStrategyTable.render(strategyGrid,{strategies,selected:selectedStrategyIds,limit:20,disabled:isRunning,onChange:function(id,checked){
+    if(isRunning)return;
+    if(checked){if(selectedStrategyIds.size>=20)return;selectedStrategyIds.add(id);}else selectedStrategyIds.delete(id);
+    updateStrategyCards();updateSelectedCount();
+  }});
 }
-
-function updateStrategyCards() {
-  document.querySelectorAll(".strategy-chip").forEach(function(chip) {
-    var sid = chip.getAttribute("data-strategy-id");
-    var isSelected = selectedStrategyIds.has(sid);
-    if (isSelected) {
-      chip.classList.add("selected");
-    } else {
-      chip.classList.remove("selected");
-    }
-    chip.setAttribute("aria-checked", String(isSelected));
-  });
-}
+function updateStrategyCards() { renderStrategyCards(); }
 
 function updateSelectedCount() {
   selectedCount.textContent = "(" + selectedStrategyIds.size + " selected)";
+  updateQuickWorkspace();
 }
 
 function setConnection(ok) {
@@ -2072,7 +2002,7 @@ removeImageBtn.addEventListener("click", function() {
   selectedFile = null;
   window._selectedExampleFilename = null;
   imageInput.value = "";
-  imagePreview.classList.add("hidden");
+  imagePreview.classList.add("hidden");updateQuickWorkspace();
 });
 
 // ---- Plus button popover ----
@@ -2105,7 +2035,7 @@ removeUrdfBtn.addEventListener("click", function() {
   caseInputVersion++;
   selectedUrdfFile = null;
   urdfInput.value = "";
-  urdfPreview.classList.add("hidden");
+  urdfPreview.classList.add("hidden");updateQuickWorkspace();
 });
 
 // ---- Auto-resize textarea + keyboard shortcuts ----
@@ -2139,15 +2069,17 @@ evalBtn.addEventListener("click", async function() {
 
   // Prompt user to select a strategy if none selected
   if (selectedStrategyIds.size === 0) {
-    setConfigCollapsed(false);
+    setConfigCollapsed(false);setQuickStep("configure");
     announce("Please select at least one strategy before evaluating");
-    strategyGrid.style.outline = "2px solid #0f766e";
+    strategyGrid.style.outline = "2px solid var(--f-accent-text)";
     setTimeout(function() { strategyGrid.style.outline = ""; }, 1500);
     return;
   }
 
-  if (!task || !selectedFile) return;
+  if (!task || !selectedFile) {setQuickStep("case");announce(!task?"Describe the task before running.":"Attach an observation before running.");taskInput.focus();return;}
 
+  caseInputVersion++; // A run supersedes any pending legacy sample load.
+  quickRunSnapshot={task,strategies:Array.from(selectedStrategyIds)};quickStep="run";
   setRunning(true);
 
   var ids = Array.from(selectedStrategyIds);
@@ -2166,8 +2098,7 @@ evalBtn.addEventListener("click", async function() {
   setupTabs(ids);
   addUserCard(previewImg.src, task, ids);
 
-  taskInput.value = "";
-  taskInput.style.height = "38px";
+  // Keep the case available for refinement; execution receives this immutable form snapshot.
 
   var form = new FormData();
   form.append("image", selectedFile);
@@ -3253,6 +3184,7 @@ function renderTrialCampaignActions(entry, container, onlyStrategy) {
 
 // ---- SSE connection ----
 function connectSSE(evalId) {
+  runningEvaluationId=evalId;
   if (currentEventSource) currentEventSource.close();
 
   var es = new EventSource(API_BASE + "/api/evaluate/" + evalId + "/stream");
@@ -3538,7 +3470,11 @@ function connectSSE(evalId) {
 // ---- UI helpers ----
 function setRunning(val) {
   isRunning = val;
+  if(!val)runningEvaluationId=null;
   evalBtn.disabled = val;
+  for(const control of [taskInput,imageInput,urdfInput,removeImageBtn,removeUrdfBtn,plusBtn,document.getElementById("quickSampleCases")])control.disabled=val;
+  if(val)quickStep="run";else if(quickStep==="run"&&Object.keys(tabData).length){quickStep="results";chatArea.scrollTop=0;document.querySelector(".root-main").scrollTop=0;}
+  renderStrategyCards();updateQuickWorkspace();
   if (val) {
     evalBtn.classList.add("opacity-50");
     setConfigCollapsed(true);
@@ -3549,6 +3485,7 @@ function setRunning(val) {
 
 function scrollToBottom() {
   requestAnimationFrame(function() {
+    if(quickStep==="results" && (currentView==="quick"||currentView==="evaluation"))return;
     chatArea.scrollTop = chatArea.scrollHeight;
   });
 }

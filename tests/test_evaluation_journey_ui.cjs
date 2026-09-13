@@ -39,10 +39,10 @@ async function workspace(query = "", options = {}) {
     else if (url === "/api/campaigns") value = [{id: "campaign", name: "Baseline", status: "completed"}];
     else if (url === "/api/campaigns/metrics-draft") { if (options.metricWait) await options.metricWait; value = {contract: metricContract, source: options.metricSource || "ai", rationale: "Based on the selected placement case", evidence_fingerprint: "case-evidence-r1"}; }
     else if (url.endsWith("/outcome-summary")) { if (options.summaryFail) throw Error("Assistant unavailable"); value = options.outcomeSummary || {source: "recorded", headline: "Assessments remain pending", findings: [], next_steps: []}; }
-    else if (url === "/api/campaigns/preview") value = {ready: !options.blocked, blockers: options.blocked ? ["Episode outcome requires recorded evidence"] : [], planned_trials: 3, metrics: [{name: "task_success", status: "needs_review", reason: "SME review required"}]};
+    else if (url === "/api/campaigns/preview") {if(options.previewWait)await options.previewWait;if(options.previewError)throw Error("Configuration service unavailable");value = {ready: !options.blocked, blockers: options.blocked ? ["Episode outcome requires recorded evidence"] : [], planned_trials: 3, metrics: [{name: "task_success", status: "needs_review", reason: "SME review required"}]};}
     else if (url === "/api/campaigns/from-cases") value = {id: "campaign", planned_trials: 3};
     else if (url.endsWith("/campaign-draft") || url.endsWith("/improvement-draft")) { if(options.seedWait) await options.seedWait; if(options.seedFailure) throw Error("Source unavailable"); value = options.seed; }
-    else if (url === "/api/campaigns/campaign") { if(options.campaignWait) await options.campaignWait; value = {campaign: {id: "campaign", contract_id: "contract", spec: {name: "Baseline", seeds: [0, 1, 2], strategies: ["strategy"], tasks: [{id: "case-r1", case_revision_id: "case-r1", task: "Place in bin"}]}, status: campaignStatus}, summary}; }
+    else if (url === "/api/campaigns/campaign") { if(options.campaignWait) await options.campaignWait;if(options.campaignError)throw Error("Campaign unavailable"); value = {campaign: {id: "campaign", contract_id: "contract", spec: options.campaignSpec || {name: "Baseline", seeds: [0, 1, 2], strategies: ["strategy"], tasks: [{id: "case-r1", case_revision_id: "case-r1", task: "Place in bin"}]}, status: campaignStatus}, summary}; }
     else if (url === "/api/campaigns/campaign/assessments") value = {summary, assessments: {}, trials: campaignTrials};
     else throw Error(`Unexpected request: ${method} ${url}`);
     return {ok: true, status: 200, json: async () => value};
@@ -53,6 +53,7 @@ async function workspace(query = "", options = {}) {
   w.eval(fs.readFileSync(path.join(root, "frontend/trial-output.js"), "utf8"));
   w.eval(fs.readFileSync(path.join(root, "frontend/campaign-progress.js"), "utf8"));
   w.eval(fs.readFileSync(path.join(root, "frontend/campaign-results.js"), "utf8"));
+  w.eval(require("node:fs").readFileSync(require("node:path").resolve(__dirname,"../frontend/strategy-table.js"),"utf8"));
   w.eval(fs.readFileSync(path.join(root, "frontend/datasets.js"), "utf8")); await pause();
   const el = id => w.document.getElementById(id), step = name => w.document.querySelector(`[data-journey-step="${name}"]`).click();
   const set = (id, value, type = "input") => { el(id).value = value; el(id).dispatchEvent(new w.Event(type, {bubbles: true})); };
@@ -99,7 +100,7 @@ test("campaign and legacy case deep links restore context and history clears sta
   try {
     assert.equal(el("reviewStep").hidden, false); assert.match(el("campaignResults").textContent, /Baseline/); assert.equal(el("caseDetailHeading").textContent, "Pick red part");
     await route("?step=run&campaign=campaign&case=case-r1"); assert.equal(el("runStep").hidden, false);
-    await route("?step=cases"); assert.equal(el("casesStep").hidden, false); assert.equal(el("caseDetailHeading"), null); assert.match(el("campaignResults").textContent, /Choose a campaign/);
+    await route("?step=cases"); assert.equal(el("casesStep").hidden, false); assert.equal(el("caseDetailHeading"), null); assert.match(el("campaignResults").textContent, /No results yet/);
     await route("?case=case-r1"); assert.equal(el("casesStep").hidden, false); assert.equal(el("caseDetailHeading").textContent, "Pick red part");
     assert.equal(calls.filter(isMutation).length, 0);
   } finally { dom.window.close(); }
@@ -254,7 +255,7 @@ test("saved Run links restore identified trials; refresh and browser navigation 
   const {dom, el, calls, pause, route} = await workspace("?step=run&campaign=campaign");
   try {
     assert.equal(el("runStep").hidden, false); assert.equal(el("liveTrialsPanel").hidden, false);
-    assert.match(el("liveTrials").textContent, /Place in bin/); assert.match(el("liveTrials").textContent, /strategy.*repetition 1/);
+    assert.match(el("liveTrials").textContent, /Place in bin/); assert.match(el("liveTrials").textContent, /strategy.*attempt 1/);
     assert.match(el("liveTrials").textContent, /Trial trial/);
     assert.equal(new URL(el("liveTrials").querySelector("a").href).searchParams.get("trial"), "trial");
     el("refreshLiveTrials").click(); await pause();
@@ -351,9 +352,9 @@ test("Run confirms strategy and exact scoring rules, then lazily exposes recorde
     el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
     el("prepareRun").click(); await pause();
     assert.match(el("runSummary").textContent, /Warehouse pilot/);
-    assert.match(el("runSummary").textContent, /1 case × 1 strategy × 3 repeats = 3 planned trials/);
+    assert.match(el("runSummary").textContent, /1 case × 1 strategy × 3 attempts = 3 planned trials/);
     assert.match(el("runSummary").textContent, /Strategy: Mock strategy/);
-    assert.match(el("runSummary").textContent, /Scoring rules: Grasp planning acceptance/);
+    assert.match(el("runSummary").textContent, /Success criteria: Grasp planning acceptance/);
     const criteria = el("runSummary").querySelector("details"); assert.equal(criteria.open, false);
     criteria.open = true; assert.match(criteria.textContent, /Identify occlusion before planning a grasp/);
     assert.match(criteria.textContent, /Pick red part/);
@@ -637,7 +638,7 @@ test("trial and campaign seeds prepopulate immutable inputs and retain source, s
         assert.equal(el("improvementIntro").querySelector("h2"), null);
       } else {
         assert.match(el("stepHeading").textContent, /^Improve /);
-        assert.equal(w.document.querySelector('[data-journey-step="cases"] > div').textContent, "Improve");
+        assert.equal(w.document.querySelector('[data-journey-step="cases"] > div').textContent, "Cases");
         assert.equal(el("casesStep").hidden, true);
         assert.equal(el("improvementIntro").querySelector("h2"), null);
         const editCases=[...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Edit cases");
@@ -788,13 +789,13 @@ test("Configure calculator tracks selected cases, strategies and valid repeats i
   try {
     await pick(["case-r1","case-r2"]);step("configure");
     el("strategyCards").querySelectorAll("input")[0].click();el("strategyCards").querySelectorAll("input")[1].click();
-    assert.equal(el("campaignCalculation").textContent,"2 cases × 2 strategies × 3 repeats = 12 planned trials");
+    assert.equal(el("campaignCalculation").textContent,"2 cases × 2 strategies × 3 attempts = 12 planned trials");
     set("campaignRepeats","4");assert.match(el("campaignCalculation").textContent,/= 16 planned trials$/);
     el("campaignBudget").textContent="Preview complete";assert.match(el("campaignCalculation").textContent,/= 16 planned trials$/);
     for(const invalid of ["1.5","-1","0","1001",""]) {set("campaignRepeats",invalid);assert.match(el("campaignCalculation").textContent,/whole number/);assert.doesNotMatch(el("campaignCalculation").textContent,/=/);}
-    set("campaignRepeats","3");el("strategyCards").querySelector("input").click();assert.match(el("campaignCalculation").textContent,/2 cases × 1 strategy × 3 repeats = 6/);
+    set("campaignRepeats","3");el("strategyCards").querySelector("input").click();assert.match(el("campaignCalculation").textContent,/2 cases × 1 strategy × 3 attempts = 6/);
     step("cases");[...el("selectedCases").querySelectorAll("button")].find(button=>button.textContent==="Remove").click();
-    assert.match(el("campaignCalculation").textContent,/1 case × 1 strategy × 3 repeats = 3/);
+    assert.match(el("campaignCalculation").textContent,/1 case × 1 strategy × 3 attempts = 3/);
   }finally{dom.window.close();}
 });
 
@@ -804,7 +805,7 @@ test("success criteria surface scope, evidence and checking methods while preser
   try {
     await pick();step("configure");set("campaignStrategy","strategy","change");set("campaignContract",mixed.id,"change");step("metrics");await pause();
     for(const id of ["successScope","evidenceMode","assessmentMethod"]){const control=el(id);assert.equal(control.form.id,"contractForm");for(const disclosure of [...w.document.querySelectorAll("details")].filter(item=>item.contains(control)))assert.equal(disclosure.open,true);}
-    assert.match(el("generatedCriteria").textContent,/Checked by an expert/);assert.match(el("generatedCriteria").textContent,/Checked by configured verifier: grader/);
+    assert.match(el("generatedCriteria").textContent,/Expert review \(manual\)/);assert.match(el("generatedCriteria").textContent,/Configured verifier: grader/);
     assert.match(el("gradingNotice").textContent,/pending until.*ratings/);assert.match(el("scopeHint").textContent,/does not establish observed robot task success/);
     assert.equal(el("reportMeasures").tagName,"SECTION");assert.match(el("reportMeasures").textContent,/at least one accepted attempt/);assert.match(el("reportMeasures").textContent,/not physical task completion time/);
     assert.equal(el("moreScoringOptions").querySelector("details"),null);
@@ -829,9 +830,9 @@ test("Results tabs respond to outcome actions and keyboard, retain selection on 
   }finally{dom.window.close();}
 });
 
-test("standalone Results can choose a campaign without displaying empty campaign history actions",async()=>{
-  const {dom,el}=await workspace("?step=review");
-  try{assert.equal(el("resultCampaignPicker").hidden,false);assert.equal(el("campaignHistoryLink").hidden,true);}finally{dom.window.close();}
+test("a draft Results step has no campaign picker or empty comparison controls and returns to Run",async()=>{
+  const {dom,el,calls}=await workspace("?step=review");
+  try{assert.equal(el("resultCampaignPicker").hidden,true);assert.equal(el("campaignHistoryLink").hidden,true);assert.equal(el("advancedComparisons").hidden,true);assert.equal(el("campaignResultActions").hidden,true);assert.match(el("campaignResults").textContent,/No results yet/);el("campaignResults").querySelector("button").click();assert.equal(el("runStep").hidden,false);assert.equal(calls.filter(isMutation).length,0);}finally{dom.window.close();}
 });
 
 
@@ -839,11 +840,89 @@ test("campaign Trials use readable aligned rows and real results/review buttons 
   const {dom,el,pause}=await workspace("?step=review&campaign=campaign",{campaignTrials:[{task_id:"case-r1",trial_id:"trial",strategy_id:"strategy",seed:1,outcome:"unknown",execution:"error"}]});
   try {
     el("resultTab-trials").click();const row=el("trialInspection").querySelector(".campaign-trial-row");
-    assert.equal(row.tagName,"LI");assert.equal(row.children.length,4);assert.match(row.querySelector(".campaign-trial-task").textContent,/Place in bin.*Repeat 2/);
+    assert.equal(row.tagName,"LI");assert.equal(row.children.length,4);assert.match(row.querySelector(".campaign-trial-task").textContent,/Place in bin.*Attempt 2/);
     assert.match(row.querySelector(".campaign-trial-outcome").textContent,/Not scored.*Execution: error/);
     const actions=row.querySelectorAll(".campaign-trial-actions > a.secondary");assert.equal(actions.length,2);
     assert.equal(actions[0].textContent,"View results");assert.equal(actions[0].getAttribute("href"),"/static/history.html?trial=trial");
     actions[1].click();await pause();assert.equal(el("reviewWorkspaceSlot").hidden,false);assert.equal(el("caseInspection").open,true);
     assert.equal(el("campaignHistoryLink").parentElement.id,"campaignResultActions");assert.equal(el("openBaselineDialog").parentElement.id,"campaignResultActions");
   }finally{dom.window.close();}
+});
+
+
+test("Success metrics distinguish pass conditions, real checking methods and noninteractive report statistics",async()=>{
+  const mixed=mixedContract();const {dom,w,el,pick,step,set,pause,calls}=await workspace("",{contracts:[mixed]});
+  try {
+    await pick();step("configure");set("campaignStrategy","strategy","change");set("campaignContract",mixed.id,"change");step("metrics");await pause();
+    const criteria=[...el("generatedCriteria").querySelectorAll(".suggested-criterion")];
+    assert.match(criteria[0].querySelector(".criterion-field-label").textContent,/Pass condition/);
+    assert.match(criteria[0].querySelector(".criterion-checker").textContent,/Expert review \(manual\)/);
+    assert.match(criteria[1].querySelector(".criterion-checking-explanation").textContent,/does not change the verifier's implementation/);
+    assert.match(el("metricsStep").querySelector(".criterion-outcome-guide").textContent,/Pass.*Fail.*Not scored.*execution failed/);
+    const table=el("suggestedMeasures").querySelector("table");assert.ok(table);
+    assert.deepEqual([...table.querySelectorAll("thead th")].map(cell=>cell.textContent),["Measure","How calculated","When available"]);
+    assert.equal(el("suggestedMeasures").querySelector("button,a,input,[role=tab]"),null);
+    assert.equal(el("metricDraftRationale").closest("details").id,"metricsConnectionDetails");
+    assert.match(el("savedMetricsSlot").textContent,/Reuse criteria from another evaluation.*criteria and checking methods/);
+    assert.equal(el("moreScoringOptions").querySelector("summary").textContent,"Technical settings");assert.equal(el("moreScoringOptions").querySelector("details"),null);
+    for(const id of ["targetMetric","annotationKey","contractJson"])assert.equal(el(id).closest("details").id,"moreScoringOptions");
+    set("assessmentMethod","configured_verifier","change");set("verifierEndpoint","new-verifier","change");
+    for(const card of criteria)assert.match(card.querySelector(".criterion-checker").textContent,/Configured verifier: new-verifier/);
+    assert.equal(calls.some(call=>call.url==="/api/campaigns/from-cases"),false);
+  }finally{dom.window.close();}
+});
+
+test("campaign header owns form-associated draft controls above every step and invalidates approval",async()=>{
+ const p=await workspace("?case=case-r1");const {dom,w,el,step,set,pause}=p;
+ try {
+  const header=el("campaignHeader"),nav=w.document.querySelector(".journey");
+  assert.ok(header.compareDocumentPosition(nav)&w.Node.DOCUMENT_POSITION_FOLLOWING);
+  for(const id of ["campaignName","campaignRepeats"]){assert.equal(el(id).closest("#campaignHeader"),header);assert.equal(el(id).form,el("baselineForm"));}
+  for(const id of ["cases","configure","metrics","run","review"]){step(id);assert.equal(el("campaignDraftFields").hidden,false);assert.equal(el("campaignRepeats").disabled,false);}
+  step("configure");set("campaignStrategy","strategy","change");set("campaignContract","contract","change");step("run");el("previewCampaign").click();await pause();assert.equal(el("startBaseline").disabled,false);
+  step("cases");set("campaignRepeats","5");assert.equal(el("startBaseline").disabled,true);assert.match(el("campaignCalculation").textContent,/1 case × 1 strategy × 5 attempts = 5/);
+ }finally{dom.window.close();}
+});
+
+test("saved header and setup use the frozen spec despite draft edits and nonconsecutive seeds",async()=>{
+ const spec={name:"Saved robotics test",seeds:[7,11],strategies:["strategy","another"],tasks:[{id:"saved-case",task:"Saved robot task"}],timeout_s:45};
+ const p=await workspace("?campaign=campaign",{campaignSpec:spec});const {dom,el,step,set,calls,route}=p;
+ try {
+  set("campaignName","Unrelated draft");set("campaignRepeats","99");
+  for(const tab of ["cases","configure","metrics","run","review"]){step(tab);assert.equal(el("campaignDraftFields").hidden,true);assert.equal(el("campaignName").disabled,true);assert.equal(el("workspaceTitle").textContent,"Saved robotics test");assert.equal(el("campaignCalculation").textContent,"1 case × 2 strategies × 2 attempts = 4 planned trials");}
+  step("cases");assert.equal(el("casesStep").hidden,true);assert.match(el("savedCampaignSetup").textContent,/Saved robot task/);
+  step("configure");assert.equal(el("configureStep").hidden,true);assert.match(el("savedCampaignSetup").textContent,/45 seconds/);
+  assert.match(el("headerImprove").href,/improve=campaign/);assert.equal(calls.filter(isMutation).length,0);
+  await route("?step=cases");assert.equal(el("campaignName").disabled,false);assert.equal(el("campaignName").value,"Unrelated draft");assert.equal(el("savedCampaignSetup").hidden,true);
+ }finally{dom.window.close();}
+});
+
+test("unknown saved campaign never displays a draft total as recorded configuration",async()=>{
+ let release;const wait=new Promise(resolve=>release=resolve);const p=await workspace("?campaign=campaign",{campaignWait:wait,campaignError:true});
+ try{assert.equal(p.el("campaignDraftFields").hidden,true);assert.match(p.el("workspaceTitle").textContent,/Loading/);assert.doesNotMatch(p.el("campaignCalculation").textContent,/=/);release();await p.pause();assert.match(p.el("workspaceTitle").textContent,/unavailable/);assert.doesNotMatch(p.el("campaignCalculation").textContent,/=/);}finally{release();p.dom.window.close();}
+});
+
+test("configuration check reports progress, readiness and stale changes beside Run without launching",async()=>{
+ let release;const wait=new Promise(resolve=>release=resolve);const p=await workspace("?case=case-r1",{previewWait:wait});const {dom,el,set,step,pause,calls}=p;
+ try{step("configure");set("campaignStrategy","strategy","change");set("campaignContract","contract","change");step("run");el("previewCampaign").click();assert.equal(el("previewCampaign").textContent,"Checking…");assert.match(el("campaignStatus").textContent,/Checking cases/);assert.equal(el("campaignStatus").getAttribute("aria-busy"),"true");release();await pause();assert.match(el("campaignStatus").textContent,/Ready to run 3 trials/);assert.equal(el("startBaseline").disabled,false);set("campaignRepeats","4");assert.match(el("campaignStatus").textContent,/changed/);assert.equal(el("startBaseline").disabled,true);assert.equal(calls.some(c=>c.url==="/api/campaigns/from-cases"),false);}finally{release();dom.window.close();}
+});
+
+test("configuration failures and missing fields remain visible next to the launch controls",async()=>{
+ for(const options of [{blocked:true},{previewError:true}]){
+  const p=await workspace("?case=case-r1",options);const {dom,el,set,step,pause}=p;
+  try{step("configure");set("campaignStrategy","strategy","change");set("campaignContract","contract","change");step("run");el("previewCampaign").click();await pause();assert.match(el("campaignStatus").textContent,options.blocked?/Cannot run yet.*Episode/:/service unavailable/);assert.equal(el("startBaseline").disabled,true);set("campaignName"," ");el("previewCampaign").click();await pause();assert.match(el("campaignStatus").textContent,/Give this campaign a name/);}finally{dom.window.close();}
+ }
+});
+
+
+test("case deep links populate selection and calculator on every draft step",async()=>{
+ for(const stage of ["cases","configure","metrics","run","review"]){
+  const {dom,el,set,calls}=await workspace(`?step=${stage}&case=case-r1`);
+  try {
+   set("campaignStrategy","strategy","change");
+   assert.match(el("campaignCalculation").textContent,/1 case × 1 strategy × 3 attempts = 3 planned trials/);
+   assert.match(el("runContext").textContent,/Pick red part/);
+   assert.equal(calls.filter(isMutation).length,0);
+  }finally{dom.window.close();}
+ }
 });

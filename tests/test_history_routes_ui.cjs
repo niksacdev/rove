@@ -8,6 +8,11 @@ test("trial source links and Back restore the displayed filter without rerunning
   w.fetch=async(url,options={})=>{assert.equal(options.method||"GET","GET");calls.push(url);return {ok:true,json:async()=>({trials:[],total:0})};};
   try {
     w.eval(read("navigation.js"));w.eval(read("history.js"));await pause();
+    assert.equal(w.document.querySelector("h1").textContent,"Trials");
+    assert.equal(w.document.querySelector("#roveNav [aria-current]").textContent,"Trials");
+    assert.equal(w.document.querySelector(".workspace-tabs"),null);
+    assert.equal(w.document.querySelector(".page-heading > a").textContent,"New trial");
+    assert.equal(w.document.querySelector(".page-heading > a").getAttribute("href"),"/?view=quick");
     const filter=w.document.getElementById("sourceFilter");
     assert.equal(filter.value,"quick");assert.ok(calls.some(url=>url.includes("source=quick")));
     filter.value="legacy";filter.dispatchEvent(new w.Event("change"));await pause();
