@@ -88,6 +88,7 @@
       differences.append(node("p", `New strategy ID: ${preview.strategy_id}`, {class: "record-id"}));
       for (const item of preview.differences || []) { const row = node("div", null, {class: "revision-difference"}); row.append(node("strong", item.path), node("pre", JSON.stringify(item.before ?? null, null, 2)), node("span", "→"), node("pre", JSON.stringify(item.after ?? null, null, 2))); differences.append(row); }
       saveButton.disabled = !preview.preview_hash; status.textContent = "Review these exact changes. Saving adds a strategy revision; it does not run the pipeline.";
+      if (state.recommendedStage) dialog.scrollTop = dialog.scrollHeight;
     } catch (error) { if (version === state.version) status.textContent = error.message; }
     finally { if (!state.saving) previewButton.disabled = !state.parent; }
   });

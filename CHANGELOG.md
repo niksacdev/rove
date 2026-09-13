@@ -12,7 +12,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 Campaigns now appear as compact rows with View results, Export and Improve controls. Improvements open a focused, evidence-linked strategy change with preview and explicit approval. The trial workspace uses neutral surfaces, unclipped strategy details, larger sample previews and consistent sidebar actions, with Settings below Sample cases.
 
-Local VLA import failures now expose their actual dependency cause. The model-loading code remains present; the current LeRobot runtime is still incompatible with the secured dependency stack.
+Local VLA import failures now expose their actual dependency cause. The model-loading code remains present; the current LeRobot runtime is still incompatible with the secured dependency stack. *(PR #26)*
 
 ### Import ABC robotics episodes as versioned cases
 
