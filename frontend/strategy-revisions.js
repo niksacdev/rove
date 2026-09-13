@@ -12,6 +12,7 @@
   const close = node("button", "Close", {type: "button", class: "secondary", id: "closeStrategyRevision"}); header.append(close); dialog.append(header);
   dialog.append(node("p", "Start from a current strategy, change its components, and save a new reusable revision. This does not change the original strategy or execute any trials.", {class: "muted"}));
   dialog.append(node("p", "The source is today's configuration, not the archived baseline. Preview the campaign comparison afterward to check all differences from the saved baseline.", {class: "notice", id: "strategyRevisionSourceNotice"}));
+  const recommendation = node("p", "", {id: "strategyRecommendation", class: "revision-recommendation", hidden: ""}); dialog.append(recommendation);
   const form = node("form", null, {id: "strategyRevisionForm"}); const fields = node("fieldset", null, {class: "revision-fields", id: "strategyRevisionFields"});
   const addControl = (title, control) => { const label = node("label", title); label.append(control); fields.append(label); return control; };
   const source = addControl("Source strategy", node("select", null, {id: "revisionParent", required: ""}));
@@ -33,7 +34,7 @@
   const previewButton = node("button", "Preview changes", {id: "previewStrategyRevision", type: "button"});
   const saveButton = node("button", "Save strategy revision", {id: "saveStrategyRevision", type: "submit", disabled: ""}); actions.append(previewButton, saveButton);
   form.append(status, differences, actions); dialog.append(form); document.body.append(dialog);
-  const state = {parent: null, preview: null, version: 0, candidate: false, opener: null, saving: false, saved: false};
+  const state = {parent: null, preview: null, version: 0, candidate: false, opener: null, saving: false, saved: false, recommendedStage: null};
   async function request(url, body) { const response = await fetch(url, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)} : {}); const result = await response.json(); if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : `Unable to save configuration (HTTP ${response.status}).`); return result; }
   const invalidate = () => { state.preview = null; state.saved = false; saveButton.disabled = true; differences.replaceChildren(); };
   function draft() {
@@ -43,9 +44,11 @@
     else {
       definition = copy(state.parent.definition); definition.display_name = name.value.trim();
       if (!definition.display_name) throw new Error("Name the new strategy revision.");
-      for (const stage of stageNames) { const selected = stages[stage].value; definition[stage] = !selected ? null : typeof definition[stage] === "object" && definition[stage] ? {...definition[stage], endpoint: selected} : selected; }
-      definition.pipeline_mode = mode.value; definition.verify_mode = verify.value;
-      if (typeof definition.verify === "object" && definition.verify) definition.verify.mode = verify.value;
+      for (const stage of state.recommendedStage ? [state.recommendedStage] : stageNames) { const selected = stages[stage].value; definition[stage] = !selected ? null : typeof definition[stage] === "object" && definition[stage] ? {...definition[stage], endpoint: selected} : selected; }
+      if (!state.recommendedStage) {
+        definition.pipeline_mode = mode.value; definition.verify_mode = verify.value;
+        if (typeof definition.verify === "object" && definition.verify) definition.verify.mode = verify.value;
+      }
     }
     return {parent_id: state.parent.strategy_id, expected_parent_fingerprint: state.parent.fingerprint, definition};
   }
@@ -66,6 +69,7 @@
       mode.value = parent.definition.pipeline_mode || "sequential"; verify.value = parent.definition.verify_mode || "auto";
       if (parent.definition.verify?.mode && parent.definition.verify.mode !== "auto") verify.value = parent.definition.verify.mode;
       setSimpleEnabled(); json.value = JSON.stringify(draft().definition, null, 2);
+      if(state.recommendedStage) { const stage=state.recommendedStage; const original=typeof parent.definition[stage] === "string" ? parent.definition[stage] : parent.definition[stage]?.endpoint || "Not used"; recommendation.textContent=`Test a different ${stage} endpoint against the recorded failures. Current endpoint: ${original}.`; }
       status.textContent = `Source: ${parent.strategy_id}. The original strategy stays unchanged. Preview your changes before saving.`;
     } catch (error) { if (version === state.version) status.textContent = error.message; }
     finally { if (version === state.version) { fields.disabled = false; previewButton.disabled = !state.parent; } }
@@ -77,12 +81,14 @@
   previewButton.addEventListener("click", async () => {
     const version = ++state.version; invalidate(); previewButton.disabled = true; status.textContent = "Checking the proposed revision…";
     try {
+      if (state.recommendedStage && !useJson.checked) { const stage=state.recommendedStage, before=typeof state.parent.definition[stage] === "string" ? state.parent.definition[stage] : state.parent.definition[stage]?.endpoint || ""; if(stages[stage].value === before) throw new Error("Choose a different compatible endpoint to test this recommendation."); }
       const payload = draft(), signature = JSON.stringify(payload); const preview = await request("/api/strategy-revisions/preview", payload);
       if (version !== state.version || signature !== JSON.stringify(draft())) return;
       state.preview = {payload, signature, hash: preview.preview_hash, operation: crypto.randomUUID()};
       differences.append(node("p", `New strategy ID: ${preview.strategy_id}`, {class: "record-id"}));
       for (const item of preview.differences || []) { const row = node("div", null, {class: "revision-difference"}); row.append(node("strong", item.path), node("pre", JSON.stringify(item.before ?? null, null, 2)), node("span", "→"), node("pre", JSON.stringify(item.after ?? null, null, 2))); differences.append(row); }
       saveButton.disabled = !preview.preview_hash; status.textContent = "Review these exact changes. Saving adds a strategy revision; it does not run the pipeline.";
+      if (state.recommendedStage) dialog.scrollTop = dialog.scrollHeight;
     } catch (error) { if (version === state.version) status.textContent = error.message; }
     finally { if (!state.saving) previewButton.disabled = !state.parent; }
   });
@@ -104,6 +110,17 @@
   function dismiss() { if (state.saving) return; ++state.version; if (typeof dialog.close === "function") dialog.close(); else dialog.removeAttribute("open"); state.opener?.focus(); }
   close.addEventListener("click", dismiss); dialog.addEventListener("cancel", event => { event.preventDefault(); dismiss(); });
   async function open(candidate, opener) {
+    state.recommendedStage = stageNames.includes(opener?.dataset.recommendedStage) ? opener.dataset.recommendedStage : null;
+    recommendation.hidden = !state.recommendedStage;
+    $("strategyRevisionSourceNotice").textContent = state.recommendedStage
+      ? "Uses current strategy settings. Review differences from the saved baseline before running."
+      : "The source is today's configuration, not the archived baseline. Preview the campaign comparison afterward to check all differences from the saved baseline.";
+    dialog.classList.toggle("recommended-revision", Boolean(state.recommendedStage));
+    $("strategyRevisionHeading").textContent = state.recommendedStage ? `Review ${state.recommendedStage} change` : "Create a strategy revision";
+    saveButton.textContent = state.recommendedStage ? "Save & use revision" : "Save strategy revision";
+    for(const stage of stageNames) stages[stage].closest("label").hidden = Boolean(state.recommendedStage && stage !== state.recommendedStage);
+    for(const control of [mode, verify]) control.closest("label").hidden = Boolean(state.recommendedStage);
+    advanced.hidden = Boolean(state.recommendedStage); useJson.checked=false;
     state.candidate = candidate; state.opener = opener; state.saved = false; state.parent = null; invalidate(); const version = ++state.version;
     source.replaceChildren(); fields.disabled = true; previewButton.disabled = true; status.textContent = "Loading strategies…";
     if (typeof dialog.showModal === "function") dialog.showModal(); else dialog.setAttribute("open", ""); close.focus();
@@ -113,7 +130,7 @@
       const preferred = candidate ? $("baselineStrategy")?.value : $("campaignStrategy")?.value;
       if ([...source.options].some(option => option.value === preferred)) source.value = preferred;
       if (!source.value) throw new Error("No source strategies are available. Add a strategy in Settings first.");
-      await loadParent(); if (dialog.open) name.focus();
+      await loadParent(); if (dialog.open) (state.recommendedStage ? stages[state.recommendedStage] : name).focus();
     } catch (error) { if (version === state.version) status.textContent = error.message; }
   }
   $("createCampaignStrategyRevision")?.addEventListener("click", event => open(false, event.currentTarget));

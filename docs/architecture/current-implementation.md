@@ -6,6 +6,10 @@ Local follow-up adds preserved recording selections, native trace ancestry, caus
 synthetic episodes, explicit annotation bindings and named baselines. The
 [delivery plan](../product/implementation-plan.md) records remaining work.
 
+[Workspace interaction consistency](ADR-029-workspace-interaction-consistency.md)
+adds compact campaign rows and focused, explicitly approved strategy changes.
+The trial interface uses shared neutral tokens and viewport-bounded tooltips.
+
 ROVE runs configurable robotics evaluation pipelines from a local dashboard and a
 repeated-trial campaign runner. Both now create durable trial identities and frozen
 configuration records before execution, retain available intermediate events, and

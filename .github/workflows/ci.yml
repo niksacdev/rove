@@ -37,6 +37,7 @@ jobs:
           uv run --frozen bandit -q -r src -c pyproject.toml
           node --check frontend/navigation.js
           node --check frontend/app.js
+          node --check frontend/tooltips.js
           node --check frontend/sample-cases.js
           node --check frontend/benchmarks.js
           node --check frontend/history.js

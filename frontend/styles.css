@@ -1,11 +1,11 @@
 /* ---- Theme variables ---- */
 :root {
-  --f-bg: #181c1c;
-  --f-surface: #212727;
-  --f-elevated: #2a3131;
-  --f-border: #343d3c;
-  --f-border-strong: #4b5957;
-  --f-text: #f2f3ef;
+  --f-bg: #191a1c;
+  --f-surface: #232427;
+  --f-elevated: #2c2e31;
+  --f-border: #35373b;
+  --f-border-strong: #53565d;
+  --f-text: #f3f4f6;
   --f-text-secondary: #d1d5db;
   --f-text-muted: #9ca3af;
   --f-text-faint: #6b7280;
@@ -15,16 +15,16 @@
   --f-popover-border: #4a4a4a;
   --f-shadow: rgba(0,0,0,0.4);
   --f-stage-dot-bg: #383838;
-  --f-accent: #0f766e;
-  --f-accent-hover: #0d665f;
-  --f-accent-text: #81c9bf;
+  --f-accent: #526d94;
+  --f-accent-hover: #405778;
+  --f-accent-text: #aec2df;
   --f-purple: var(--f-accent);
   color-scheme: dark;
 }
 [data-theme="light"] {
-  --f-bg: #f7f7f2;
+  --f-bg: #f7f8fa;
   --f-surface: #ffffff;
-  --f-elevated: #eef1eb;
+  --f-elevated: #eef0f3;
   --f-border: #e2e4e8;
   --f-border-strong: #cdd0d5;
   --f-text: #1a1b1e;
@@ -37,7 +37,7 @@
   --f-popover-border: #e2e4e8;
   --f-shadow: rgba(0,0,0,0.1);
   --f-stage-dot-bg: #d1d5db;
-  --f-accent-text: #0d665f;
+  --f-accent-text: #405778;
   color-scheme: light;
 }
 
@@ -60,8 +60,8 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 [data-theme="light"] .border-gray-600 { border-color: #d1d5db !important; }
 
 @keyframes pulse-purple {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(15,118,110,0.5); }
-  50% { box-shadow: 0 0 12px 4px rgba(15,118,110,0.35); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82,109,148,0.5); }
+  50% { box-shadow: 0 0 12px 4px rgba(82,109,148,0.35); }
 }
 @keyframes slide-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -76,15 +76,15 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   40% { opacity: 1; transform: scale(1); }
 }
 @keyframes dot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(15,118,110,0.6); }
-  50% { box-shadow: 0 0 6px 2px rgba(15,118,110,0.3); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(82,109,148,0.6); }
+  50% { box-shadow: 0 0 6px 2px rgba(82,109,148,0.3); }
 }
 .animate-slide-in { animation: slide-in 0.4s ease-out forwards; opacity: 0; }
 .animate-fade-out { animation: fade-out 0.15s ease-out forwards; }
 
 /* Stage progress dots */
 .stage-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--f-stage-dot-bg); transition: all 0.3s ease; }
-.stage-dot.running { background: #0f766e; animation: dot-pulse 1.5s ease-in-out infinite; }
+.stage-dot.running { background: #526d94; animation: dot-pulse 1.5s ease-in-out infinite; }
 .stage-dot.done { background: #22c55e; }
 .stage-dot.error { background: #ef4444; }
 
@@ -109,24 +109,20 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 .json-expand pre { white-space: pre-wrap; word-break: break-word; }
 
 /* Strategy chip selection */
-.strategy-chip { transition: all 0.15s ease; position: relative; }
-.strategy-chip:hover { border-color: var(--f-border-strong); background: rgba(15,118,110,0.03); }
-.strategy-chip.selected { border-color: #0f766e; background: rgba(15,118,110,0.1); }
+.strategy-chip { min-height: 38px; transition: all 0.15s ease; position: relative; }
+.strategy-chip:hover { border-color: var(--f-border-strong); background: rgba(82,109,148,0.03); }
+.strategy-chip.selected { border-color: #526d94; background: rgba(82,109,148,0.1); }
 .strategy-chip .check-icon { display: none; }
 .strategy-chip.selected .check-icon { display: flex; }
 
-/* Strategy hover popover */
-.strategy-chip .chip-popover {
-  display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  background: var(--f-popover-bg); border: 1px solid var(--f-popover-border); border-radius: 8px; padding: 8px 10px;
-  min-width: 180px; z-index: 30; box-shadow: 0 4px 16px var(--f-shadow);
-  pointer-events: none;
-}
-.strategy-chip .chip-popover::after {
-  content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-  border: 5px solid transparent; border-top-color: var(--f-popover-border);
-}
-.strategy-chip:hover .chip-popover { display: block; }
+/* Source content stays hidden; the shared overlay escapes composer clipping. */
+.strategy-chip .chip-popover { display: none !important; }
+.strategy-tooltip { position: fixed; z-index: 1000; box-sizing: border-box; width: 320px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow: auto; padding: 16px; border: 1px solid var(--f-border-strong); border-radius: 10px; background: var(--f-elevated); color: var(--f-text); box-shadow: 0 8px 32px #0005; font-size: 12px; line-height: 1.6; animation: rove-fade-in 140ms ease-out; }
+.strategy-tooltip .truncate { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.strategy-tooltip > div:first-child { font-size: 13px; }
+.strategy-tooltip [class*="text-[10px]"] { font-size: 12px; }
+.strategy-tooltip [class*="w-[38px]"] { width: 52px; }
+.strategy-chip:focus-visible, #taskInput:focus-visible { outline: 2px solid var(--f-accent-text); outline-offset: 3px; }
 
 /* Tab styling — pill tabs with per-strategy accent color */
 .strategy-tab {
@@ -144,7 +140,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   left: 0;
   right: 0;
   height: 2px;
-  background: var(--tab-color, #0f766e);
+  background: var(--tab-color, #526d94);
   border-radius: 1px 1px 0 0;
 }
 .strategy-tab .tab-color-dot {
@@ -162,18 +158,18 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   left: 0;
   right: 0;
   height: 2px;
-  background: #0f766e;
+  background: #526d94;
   border-radius: 1px 1px 0 0;
 }
 
 /* Sidebar active item */
 .sidebar-item { transition: all 0.15s ease; }
-.sidebar-item.active { background: rgba(15,118,110,0.1); }
+.sidebar-item.active { background: rgba(82,109,148,0.1); }
 .sidebar-item.active .sidebar-accent { opacity: 1; }
 
 /* Sidebar nav link with purple accent */
 .sidebar-nav-link { position: relative; transition: all 0.15s ease; }
-.sidebar-nav-link.active { background: rgba(15,118,110,0.1); color: var(--f-text); }
+.sidebar-nav-link.active { background: rgba(82,109,148,0.1); color: var(--f-text); }
 .sidebar-nav-link.active::before {
   content: '';
   position: absolute;
@@ -182,20 +178,20 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: #0f766e;
+  background: #526d94;
   border-radius: 0 3px 3px 0;
 }
 
 /* Purple gradient for feature cards */
 .gradient-card {
-  background: linear-gradient(135deg, rgba(15,118,110,0.15) 0%, rgba(109,40,217,0.08) 100%);
-  border-color: rgba(15,118,110,0.25);
+  background: linear-gradient(135deg, rgba(82,109,148,0.15) 0%, rgba(109,40,217,0.08) 100%);
+  border-color: rgba(82,109,148,0.25);
 }
 
 /* Pipeline animation */
 @keyframes stage-highlight {
   0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.04); box-shadow: 0 0 20px rgba(15,118,110,0.3); }
+  50% { opacity: 1; transform: scale(1.04); box-shadow: 0 0 20px rgba(82,109,148,0.3); }
 }
 .pipeline-stage { opacity: 0.5; transition: all 0.3s ease; }
 .pipeline-stage:nth-child(1) { animation: stage-highlight 4s ease-in-out 0s infinite; }
@@ -208,13 +204,13 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 }
 .pipeline-arrow {
   width: 32px; height: 2px;
-  background: repeating-linear-gradient(90deg, #0f766e 0, #0f766e 6px, transparent 6px, transparent 12px);
+  background: repeating-linear-gradient(90deg, #526d94 0, #526d94 6px, transparent 6px, transparent 12px);
   background-size: 24px 2px;
   animation: arrow-flow 0.8s linear infinite;
 }
 @media (max-width: 640px) {
   .pipeline-flow { flex-direction: column !important; }
-  .pipeline-arrow { width: 2px; height: 24px; background: repeating-linear-gradient(180deg, #0f766e 0, #0f766e 6px, transparent 6px, transparent 12px); background-size: 2px 24px; animation: arrow-flow-v 0.8s linear infinite; }
+  .pipeline-arrow { width: 2px; height: 24px; background: repeating-linear-gradient(180deg, #526d94 0, #526d94 6px, transparent 6px, transparent 12px); background-size: 2px 24px; animation: arrow-flow-v 0.8s linear infinite; }
   @keyframes arrow-flow-v { 0% { background-position: 0 0; } 100% { background-position: 0 24px; } }
 }
 
@@ -227,10 +223,10 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
 
 /* Skip navigation link */
 .skip-link { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; z-index: 100; }
-.skip-link:focus { position: fixed; top: 4px; left: 4px; width: auto; height: auto; padding: 8px 16px; background: #0f766e; color: #fff; border-radius: 6px; font-size: 14px; font-weight: 600; z-index: 100; outline: 2px solid #fff; outline-offset: 2px; }
+.skip-link:focus { position: fixed; top: 4px; left: 4px; width: auto; height: auto; padding: 8px 16px; background: #526d94; color: #fff; border-radius: 6px; font-size: 14px; font-weight: 600; z-index: 100; outline: 2px solid #fff; outline-offset: 2px; }
 
 /* Strategy popover: keyboard accessible via focus-within */
-.strategy-chip:focus-within .chip-popover { display: block; }
+
 
 /* Image hover zoom */
 .img-zoom {
@@ -281,7 +277,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   outline: none;
   transition: border-color 0.15s;
 }
-.history-filter-input:focus { border-color: #0f766e; }
+.history-filter-input:focus { border-color: #526d94; }
 .history-filter-input::placeholder { color: var(--f-text-faint); }
 
 .history-filter-select {
@@ -297,7 +293,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   -webkit-appearance: none;
   appearance: none;
 }
-.history-filter-select:focus { border-color: #0f766e; }
+.history-filter-select:focus { border-color: #526d94; }
 
 /* ---- Compare / Diff highlights ---- */
 .diff-changed {
@@ -313,8 +309,8 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans
   margin-left: -8px;
 }
 .compare-chip.selected {
-  border-color: #0f766e;
-  background: rgba(15,118,110,0.1);
+  border-color: #526d94;
+  background: rgba(82,109,148,0.1);
 }
 
 /* Keep the application frame and task composer usable before utility styles load. */
@@ -355,3 +351,13 @@ body:has(.root-layout) { display: flex; flex-direction: column; overflow: hidden
 .trial-next-step-actions a { min-height:40px; display:inline-flex; align-items:center; color:var(--f-accent-text); }
 .trial-next-step-actions .trial-campaign-link { padding:9px 14px; border:1px solid var(--f-border); border-radius:7px; color:var(--f-text); font-weight:600; text-decoration:none; }
 .trial-next-step-actions a:focus-visible { outline:2px solid var(--f-accent-text); outline-offset:4px; }
+
+/* Shared, restrained movement. Results and execution never wait for animation. */
+@keyframes rove-fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rove-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+#examplesView:not(.hidden), dialog[open] { animation: rove-fade-in 180ms ease-out; }
+dialog[open]::backdrop { animation: rove-backdrop-in 180ms ease-out; }
+@media (prefers-reduced-motion: reduce) { #examplesView, dialog, dialog::backdrop, .strategy-tooltip { animation: none !important; transition: none !important; } }
+
+.strategy-chip > span:first-of-type:not(.check-icon), .strategy-chip > .check-icon + span { font-size:13px; }
+.strategy-tooltip .text-gray-500 { color:var(--f-text-muted); }

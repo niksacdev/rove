@@ -69,26 +69,30 @@ function campaignCard(campaign) {
     const heading = document.createElement("div"); heading.className = "campaign-title";
     const title = document.createElement("h3"), detail = document.createElement("small");
     const baselineBadge = document.createElement("span"); baselineBadge.className = "baseline-badge"; baselineBadge.textContent = "Baseline"; baselineBadge.hidden = true;
-    const baselineDetails = document.createElement("div"); baselineDetails.className = "campaign-baselines"; baselineDetails.hidden = true;
     heading.append(title, baselineBadge);
     const progress = document.createElement("p"); progress.className = "progress";
     progress.textContent = "Loading trial counts…";
     const actions = document.createElement("div"); actions.className = "campaign-actions";
-    const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "Review results", "primary-link");
-    const report = campaignLink(`/api/campaigns/${encoded}/report?format=html`, "Open report", "report-link");
-    report.target = "_blank"; report.rel = "noopener";
-    const setBaseline = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}&baseline=setup`, "Set as baseline", "baseline-action");
-    const improve = campaignLink(`/static/datasets.html?improve=${encoded}`, "Improve", "improve-link");
+    const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "View results", "campaign-action");
+    const improve = campaignLink(`/static/datasets.html?improve=${encoded}`, "Improve", "campaign-action improve-link");
     improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
-    actions.append(review, improve, report, setBaseline);
-    const exports = document.createElement("div"); exports.className = "campaign-exports";
-    const exportLabel = document.createElement("span"); exportLabel.textContent = "Export:";
-    exports.append(exportLabel);
-    for (const format of ["json", "csv"]) exports.append(campaignLink(`/api/campaigns/${encoded}/report?format=${format}`, format.toUpperCase()));
-    const control = document.createElement("button"); control.className = "secondary"; control.type = "button";
+    const exports = document.createElement("details"); exports.className = "campaign-exports";
+    const exportLabel = document.createElement("summary"); exportLabel.className = "campaign-action"; exportLabel.textContent = "Export";
+    const exportOptions = document.createElement("div"); exportOptions.className = "campaign-export-options";
+    for (const format of ["html", "json", "csv"]) {
+      const option = campaignLink(`/api/campaigns/${encoded}/report?format=${format}`, format === "html" ? "HTML report" : format.toUpperCase());
+      if (format === "html") { option.target = "_blank"; option.rel = "noopener"; }
+      exportOptions.append(option);
+    }
+    exports.append(exportLabel, exportOptions);
+    exports.addEventListener("keydown", event => { if (event.key === "Escape") { exports.open = false; exportLabel.focus(); event.stopPropagation(); } });
+    actions.append(review, exports, improve);
+    const control = document.createElement("button"); control.className = "campaign-action secondary"; control.type = "button";
     actions.append(control);
-    card.append(heading, detail, progress, baselineDetails, actions, exports);
-    entry = {card, title, detail, progress, control, baselineBadge, baselineDetails, setBaseline, improve, summaryLoaded: false};
+    const overview = document.createElement("div"); overview.className = "campaign-overview";
+    overview.append(heading, detail, progress);
+    card.append(overview, actions);
+    entry = {card, title, detail, progress, control, baselineBadge, improve, summaryLoaded: false};
     campaignCards.set(id, entry);
     $("history").append(card);
   }
@@ -99,16 +103,6 @@ function campaignCard(campaign) {
   const baselines = savedBaselines?.filter(b => b && b.campaign_id === id && typeof b.id === "string" && b.id && typeof b.strategy_id === "string" && b.strategy_id) || [];
   entry.baselineBadge.hidden = baselines.length === 0;
   entry.card.classList.toggle("is-baseline", baselines.length > 0);
-  entry.baselineDetails.replaceChildren();
-  entry.baselineDetails.hidden = baselines.length === 0;
-  for (const baseline of baselines) {
-    const row = document.createElement("p");
-    const name = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}&baseline=${encodeURIComponent(baseline.id)}`, baseline.name || "Saved baseline", "baseline-name");
-    name.setAttribute("aria-label", `Baseline: ${baseline.name || "Saved baseline"}`);
-    const strategy = document.createElement("span"); strategy.textContent = `Strategy: ${baseline.strategy_id}`;
-    row.append(name, strategy); entry.baselineDetails.append(row);
-  }
-  entry.setBaseline.hidden = campaign.status !== "completed" || baselines.length > 0;
   entry.improve.hidden = campaign.status !== "completed";
   entry.improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
   entry.control.hidden = campaign.status === "completed";

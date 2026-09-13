@@ -6,6 +6,39 @@
 
 ---
 
+## Current ROVE checkout: optional local policy runtime
+
+ROVE retains the SmolVLA and pi0.5 loading path in `LeRobotVLAAdapter`. The default
+development installation omits their ML dependencies. The experimental extra
+can be installed in a Python 3.12+ checkout while retaining other installed extras:
+
+```bash
+uv sync --frozen --extra smolvla --inexact
+```
+
+Restart ROVE afterward: the adapter checks dependency imports when the server
+starts. The `smolvla` extra name covers both SmolVLA and pi0.5. Installing it
+does not download model weights or validate a checkpoint, tokenizer, robot
+embodiment or device. The adapter loads the configured checkpoint when a trial
+requests inference. See [the optional-runtime security limitations](../../SECURITY.md#optional-lerobot-environment)
+before using it; this remains an experimental environment outside the supported
+default dependency audit.
+
+**Offline import audit, 2026-09-13:** installing the frozen extra alone does not
+produce a usable policy runtime. LeRobot 0.6.1 imports its dataset package through
+the policy factory and fails on missing `av`. Importing a specific policy directly
+also executes the same parent package initializer. Its full dataset extra requires
+`datasets<5` and `pandas<3`, while its pi/SmolVLA extras require
+`transformers<5.6`; these conflict with ROVE's current dependency choices
+(`datasets>=5.0.1`, `transformers>=5.10.0`). Do not work around this by downgrading
+the main environment or bypassing upstream package initialization. A validated
+compatible runtime or a separately integrated policy endpoint is required before
+claiming local inference works. No model weights or live inference were exercised
+in this audit.
+
+The model research below is historical reference, not validation of the current
+locked runtime or every checkpoint listed.
+
 ## Quick Reference: Hardware Compatibility Matrix
 
 | Model          | Params | Framework                         | MPS (Apple Silicon)          | CUDA | CPU        | Min VRAM         |

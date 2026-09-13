@@ -33,6 +33,8 @@ for (const [file, section] of [["index.html","start"],["datasets.html","evaluate
 test("root journey routes configuration and quick runs without losing an in-progress draft", async () => {
   const dom = new JSDOM(read("index.html"), {url:"http://localhost/",runScripts:"outside-only",pretendToBeVisual:true}), w = dom.window, calls=[];
   w.lucide={createIcons(){}};
+  const desktop = {matches:true, addEventListener(_event, callback){this.changed=callback;}};
+  w.matchMedia=()=>desktop;
   w.HTMLElement.prototype.scrollIntoView=()=>{};
   w.fetch=async(url,options={})=>{calls.push({url,method:options.method||"GET"});return {ok:true,json:async()=>url.includes("history")?[]:url.includes("strategies")?{strategies:[]}:url.includes("endpoints")?{endpoints:[]}:url.includes("models")?{models:[]}:{defaults:{},endpoints:{},strategies:{}}};};
   try {
@@ -47,11 +49,23 @@ test("root journey routes configuration and quick runs without losing an in-prog
     w.testRoot.switchView("quick");
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);
+    assert.equal(el("roveFooter").parentElement, el("quickSidebar"));
+    assert.equal(el("roveFooter").previousElementSibling.getAttribute("aria-label"), "Trial library");
+    assert.equal(w.document.querySelectorAll(".rove-settings").length,1);
+    desktop.matches=false; desktop.changed();
+    assert.equal(el("roveFooter").parentElement,w.document.body);
+    desktop.matches=true; desktop.changed();
+    assert.equal(el("roveFooter").parentElement,el("quickSidebar"));
+    w.testRoot.switchView("examples");
+    assert.equal(el("quickSidebar").hidden,false);
+    assert.equal(el("roveFooter").parentElement,el("quickSidebar"));
+    w.testRoot.switchView("quick");
     el("taskInput").value="Keep this task while checking endpoints";
     w.document.querySelector('#roveFooter [data-nav-section="configure"]').click();
     assert.equal(w.location.search,"?view=strategies");
     assert.equal(el("quickComposer").hidden,true);
     assert.equal(el("configureHeading").hidden,false);
+    assert.equal(el("roveFooter").parentElement,w.document.body);
     w.document.querySelector('#configureHeading [data-root-view="models"]').click();
     assert.equal(w.location.search,"?view=models");
     assert.equal(w.document.querySelector('#configureHeading [aria-current]').textContent,"Endpoints");

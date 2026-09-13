@@ -8,7 +8,7 @@ function sampleCaseHref(record) {
 
 function createSampleCaseCard(record, apiBase = "", doc = document) {
   const node = (tag, text, className) => { const element = doc.createElement(tag); if (text != null) element.textContent = String(text); if (className) element.className = className; return element; };
-  const card = node("article", null, "rounded-lg border border-f-border bg-f-surface");
+  const card = node("article", null, "sample-case-card rounded-lg border border-f-border bg-f-surface");
   const href = sampleCaseHref(record);
   const selection = node(href ? "a" : "div", null, "flex items-center gap-3 w-full p-2 rounded-lg hover:bg-f-surface/80 transition-colors text-left group");
   if (href) { selection.href = href; selection.setAttribute("aria-label", `Select case: ${record.task}`); }
