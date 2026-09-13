@@ -40,7 +40,9 @@ test("saved trials browse full-width then open details and return to the same so
     assert.equal(calls.length,1);assert.match(calls[0],/offset=25.*source=campaign/);
     const row=w.document.querySelector(".trial-row"),action=row.querySelector(".trial-link");
     assert.deepEqual([...row.children].map(child=>child.className),["trial-task","trial-strategy","trial-outcome","trial-created","trial-link trial-action secondary"]);
-    assert.match(row.textContent,/Place the red part.*Vision pipeline.*unknown.*completed/);
+    assert.match(row.textContent,/Place the red part.*Vision pipeline.*Not scored.*Execution: completed/);
+    assert.match(row.querySelector(".trial-source").textContent,/trial\/a/);
+    assert.ok(row.querySelector(".trial-time").textContent);
     assert.equal(new URL(action.href).searchParams.get("offset"),"25");
     action.click();await pause();assert.equal(el("trialBrowser").hidden,true);assert.equal(el("trialDetailView").hidden,false);
     assert.equal(el("inspectorHeading").textContent,"Place the red part");

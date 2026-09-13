@@ -8,26 +8,26 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=foundry-5">
-  <link rel="stylesheet" href="/static/history.css?v=foundry-5">
-  <link rel="stylesheet" href="/static/datasets.css?v=foundry-5">
-  <link rel="stylesheet" href="/static/campaign-progress.css?v=trial-first-4">
-  <link rel="stylesheet" href="/static/stage-renderers.css?v=trial-first-4">
-  <link rel="stylesheet" href="/static/navigation.css?v=foundry-5">
-  <script src="/static/navigation.js?v=foundry-5" defer></script>
-  <script src="/static/case-import.js?v=abc-import-1" defer></script>
-  <script src="/static/abc-import.js?v=abc-import-1" defer></script>
-  <script src="/static/stage-renderers.js?v=trial-first-4" defer></script>
-  <script src="/static/trial-output.js?v=trial-first-4" defer></script>
-  <script src="/static/campaign-progress.js?v=trial-first-4" defer></script>
-  <link rel="stylesheet" href="/static/campaign-results.css?v=trial-first-4">
-  <script src="/static/campaign-results.js?v=trial-first-4" defer></script>
-  <link rel="stylesheet" href="/static/campaign-trajectory.css?v=foundry-5">
-  <script src="/static/campaign-trajectory.js?v=foundry-5" defer></script>
-  <script src="/static/datasets.js?v=foundry-5" defer></script>
-  <link rel="stylesheet" href="/static/strategy-revisions.css?v=foundry-5">
-  <script src="/static/strategy-revisions.js?v=foundry-5" defer></script>
-  <link rel="stylesheet" href="/static/fluent.css?v=foundry-5">
+  <link rel="stylesheet" href="/static/styles.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/history.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/datasets.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/campaign-progress.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/stage-renderers.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/navigation.css?v=foundry-7">
+  <script src="/static/navigation.js?v=foundry-7" defer></script>
+  <script src="/static/case-import.js?v=foundry-7" defer></script>
+  <script src="/static/abc-import.js?v=foundry-7" defer></script>
+  <script src="/static/stage-renderers.js?v=foundry-7" defer></script>
+  <script src="/static/trial-output.js?v=foundry-7" defer></script>
+  <script src="/static/campaign-progress.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/campaign-results.css?v=foundry-7">
+  <script src="/static/campaign-results.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/campaign-trajectory.css?v=foundry-7">
+  <script src="/static/campaign-trajectory.js?v=foundry-7" defer></script>
+  <script src="/static/datasets.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/strategy-revisions.css?v=foundry-7">
+  <script src="/static/strategy-revisions.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/fluent.css?v=foundry-7">
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -68,7 +68,7 @@
       </form>
     </details>
     </dialog>
-    <div id="casesWorkspaceSlot"></div>
+    <div id="casesWorkspaceSlot"></div><div id="caseReuseSlot"></div><div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Save reviewed cases to a dataset →</button></div>
     <div id="caseWorkspace" class="case-workspace">
       <details id="caseInspection"><summary>Expert review, prior outputs and evidence</summary><section id="caseInspector" class="workspace-panel" aria-labelledby="caseDetailHeading"><div class="empty-state"><h2 id="caseDetailHeading" tabindex="-1">Inspect a case</h2><p>See its success contract, available measures, baseline outputs and expert reviews.</p></div></section></details>
     </div>
@@ -84,6 +84,7 @@
       <form id="baselineForm">
         <label>Saved scoring rules<select id="campaignContract" required><option value="">Choose saved scoring rules</option></select></label>
         <div class="form-grid"><label>Campaign name<input id="campaignName" value="Customer baseline" required maxlength="160"></label><select id="campaignStrategy" hidden aria-hidden="true" tabindex="-1"><option value="">Choose a strategy</option></select><label>Repeats per case<input id="campaignRepeats" type="number" min="1" max="1000" value="3" required></label></div>
+        <p id="campaignCalculation" class="campaign-calculation" role="status" aria-live="polite"></p>
         <fieldset class="strategy-selection"><legend>Strategies to compare</legend><div class="strategy-selection-heading"><p>Choose saved pipelines to run on the same cases.</p><span id="strategySelectionCount" role="status">0 selected · up to 20</span></div><div id="strategyCards" class="strategy-cards"><p class="muted">Loading configured strategies…</p></div></fieldset>
         <div class="form-actions"><button id="createCampaignStrategyRevision" type="button" class="secondary">Create a strategy revision</button></div><p id="campaignRevisionMessage" role="status" class="muted"></p>
         <div id="strategySummary" class="strategy-summary"></div><details><summary>Advanced trial settings</summary><label>Trial timeout (seconds)<input id="campaignTimeout" type="number" min="1" max="3600" value="120" required></label></details>
@@ -95,30 +96,31 @@
     <section id="metricsStep" data-workflow-panel="metrics" aria-label="Success metrics" hidden>
       <div class="metrics-assistance"><div><span id="metricDraftSource" class="ai-source">Campaign success</span><p id="metricDraftStatus" role="status">Choose your cases and strategies. ROVE will propose what to measure.</p></div><button id="regenerateMetrics" type="button" class="secondary">Regenerate suggestions</button></div>
 
-      <div id="metricsContext"></div>
+      <div id="metricsContext"></div><details id="metricsConnectionDetails"><summary>Suggestion source</summary><p id="metricsConnectionStatus">Suggestions are drafts for your review.</p></details>
       <details id="contractPanel" open>
         <summary>Success criteria for your campaign</summary><p class="criteria-intro">Review these proposed criteria. Edit any item before running.</p>
-        <form id="contractForm"><div id="generatedCriteria"></div><p id="gradingNotice" class="notice">Expert review is selected. ROVE records outputs, latency and reliability measures; acceptance stays pending until an expert rates the trials.</p>
-          <div class="form-grid"><label>Scoring rules name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>What are you assessing?<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Grading method<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">What must a successful output demonstrate?<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
-          <details id="scoringAdvanced"><summary>Change assessment method or use recorded robot evidence</summary></details><label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
+        <form id="contractForm"><h2 class="metrics-section-heading">What counts as a pass?</h2><p class="metrics-explanation">A trial passes when execution can be assessed and every required criterion and check is satisfied. A required failure makes it fail. Otherwise, missing ratings or evidence leave it unassessed.</p><div id="generatedCriteria"></div><p id="gradingNotice" class="notice">Expert review is selected. ROVE records outputs, latency and reliability measures; acceptance stays pending until an expert rates the trials.</p>
+          <div class="form-grid"><label>Scoring rules name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>What are you assessing?<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Change all criteria to<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">What must a successful output demonstrate?<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
+          <section id="assessmentScope" class="metrics-definition"><h2>What is judged?</h2><div class="form-grid" id="scopeControls"></div></section><section id="scoringAdvanced" class="metrics-definition"><h2>Who checks it?</h2><p>Each criterion shows its current checking method. Changing the selection below applies that method to all criteria.</p></section><label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
           <p id="scopeHint" class="notice">Output acceptance does not establish observed robot task success.</p>
           <details><summary>Campaign target and reviewed annotation binding</summary><p class="muted">Targets judge a campaign against a business requirement. An annotation binding sends a selected frozen review field only to its configured verifier.</p><div class="form-grid"><label>Target measure<select id="targetMetric"><option value="">No aggregate target</option><option value="task_success">Task acceptance fraction</option><option value="pipeline_latency">Pipeline latency (ms)</option><option value="episode_completion_time">Episode completion time (s)</option><option value="autonomous_completion">Autonomous completion fraction</option><option value="recovery">Recovery fraction</option><option value="constraint_outcomes">Constraint acceptance fraction</option></select></label><label>Target comparison<select id="targetOperator"><option value="gte">At least</option><option value="lte">At most</option></select></label><label>Threshold<input id="targetThreshold" type="number" min="0" step="any" placeholder="For example: 0.9"></label><label>Verifier endpoint for labels<input id="annotationEndpoint" placeholder="Optional configured endpoint"></label><label>Reviewed annotation field<input id="annotationKey" placeholder="For example: expectations"></label><label>Verifier reference field<input id="annotationTarget" placeholder="For example: expected_plan"></label></div></details>
           <details><summary>Advanced: exact success contract (JSON)</summary><label>Override the fields above with a versioned contract<textarea id="contractJson" rows="4" spellcheck="false" placeholder="Optional complete success contract with named criteria and metrics"></textarea></label></details>
           <button type="submit" id="saveContract">Confirm scoring rules</button>
         </form>
       </details>
-      <details id="reportMeasures"><summary>Measures in your report</summary><div id="suggestedMeasures" class="suggested-measures"></div></details><details id="moreScoringOptions"><summary>Scoring settings</summary><div id="savedMetricsSlot"></div></details><div class="form-actions"><button id="prepareRun" type="button">Review and run →</button></div>
+      <section id="reportMeasures" class="metrics-definition"><h2>How is performance measured?</h2><p>Acceptance uses the checks above. Repeated trials measure consistency; execution timing is recorded separately.</p><div id="suggestedMeasures" class="suggested-measures"></div></section><div id="savedMetricsSlot"></div><details id="moreScoringOptions"><summary>Advanced settings</summary></details><div class="form-actions"><button id="prepareRun" type="button">Review and run →</button></div>
     </section>
     <section id="runStep" data-workflow-panel="run" aria-label="Run campaign trials" hidden>
-      <div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Edit configuration</button></div>
-      <section class="workspace-panel"><h2 id="runConfirmationHeading">Ready to run?</h2><p class="intro">A trial is one complete strategy execution on one case. Perceive, plan, act and verify are stages within that trial.</p><div id="runSummary" class="run-summary"></div><div id="campaignMeasures" class="metric-preview"></div><div id="runLaunchActions" class="form-actions"><button id="previewCampaign" type="button" class="secondary">Check configuration</button><button id="startBaseline" type="submit" form="baselineForm" disabled>Run campaign</button></div><p id="campaignStatus" role="status" aria-live="polite"></p></section>
-      <section id="liveTrialsPanel" class="workspace-panel" hidden><div class="panel-heading"><h2>Campaign trials</h2><button id="refreshLiveTrials" class="secondary" type="button">Refresh</button></div><p id="liveTrialStatus" role="status"></p><div id="strategyProgress" class="campaign-progress" aria-label="Execution by strategy"></div><details id="liveTrialDetails"><summary>Inspect individual trials</summary><div id="liveTrials"></div></details><div class="form-actions"><button class="secondary" data-go-step="review" type="button">View partial results →</button></div></section>
+      <div id="runEditActions" class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Edit configuration</button></div>
+      <details id="runConfigDisclosure" open><summary id="runConfigSummary" hidden>View campaign configuration</summary><section class="workspace-panel"><h2 id="runConfirmationHeading">Ready to run?</h2><p class="intro">A trial is one complete strategy execution on one case. Perceive, plan, act and verify are stages within that trial.</p><div id="runSummary" class="run-summary"></div><div id="campaignMeasures" class="metric-preview"></div><div id="runLaunchActions" class="form-actions"><button id="previewCampaign" type="button" class="secondary">Check configuration</button><button id="startBaseline" type="submit" form="baselineForm" disabled>Run campaign</button></div><p id="campaignStatus" role="status" aria-live="polite"></p></section></details>
+      <section id="liveTrialsPanel" class="workspace-panel" hidden><div class="panel-heading"><h2>Campaign progress</h2><button id="refreshLiveTrials" class="secondary" type="button">Refresh</button></div><p id="liveTrialStatus" role="status"></p><div id="strategyProgress" class="campaign-progress" aria-label="Campaign execution progress"></div><details id="liveTrialDetails"><summary>Inspect individual trials</summary><div id="liveTrials"></div></details><div class="form-actions"><button class="secondary" data-go-step="review" type="button">View partial results →</button></div></section>
     </section>
     <section id="reviewStep" data-workflow-panel="review" aria-label="Review results" hidden>
 
     <section id="resultsPanel" class="workspace-panel" aria-labelledby="resultsHeading">
       <div class="panel-heading"><h2 id="resultsHeading">Campaign results</h2><button id="refreshCampaigns" type="button" class="secondary">Refresh results</button></div>
-      <label class="saved-campaign-picker">Campaign<select id="resultCampaign"><option value="">Choose a campaign</option></select></label>
+      <label id="resultCampaignPicker" class="saved-campaign-picker">Campaign<select id="resultCampaign"><option value="">Choose a campaign</option></select></label>
+      <p id="currentCampaignContext" class="muted" hidden></p><a id="campaignHistoryLink" class="secondary" hidden>View campaign history</a>
       <div id="campaignResultActions" class="result-primary-actions"><button type="button" id="openBaselineDialog" disabled>Set as baseline</button><button type="button" id="improveCampaign" class="secondary" disabled>Improve this campaign</button><span id="currentBaselineLabel" class="muted"></span></div><div id="campaignResults"><p class="muted">Open a baseline to inspect assessed outcomes and prepare one controlled change.</p></div>
 <details id="advancedComparisons"><summary>Advanced comparison controls</summary>      <section id="comparisonAction" class="next-action" hidden><h3>Test a strategy change</h3><p>Set a baseline above, then compare a changed strategy with that saved result. ROVE keeps the cases and scoring rules fixed and runs new trials to measure whether the change helped.</p><button type="button" id="showComparison">Compare a strategy change</button></section>
       <details id="ablationPanel" hidden>
@@ -127,10 +129,9 @@
         <div class="form-actions"><button id="createCandidateStrategyRevision" type="button" class="secondary">Create a candidate from this strategy</button></div><p id="candidateRevisionMessage" role="status" class="muted"></p>
         <div id="baselineComparisonIdentity" class="baseline-identity"></div><form id="ablationForm"><div class="form-grid"><label>Candidate strategy<select id="candidateStrategy" required><option value="">Choose a candidate</option></select></label><label>Candidate campaign name<input id="ablationName" value="Candidate ablation" required maxlength="160"></label><label>Intended change<input id="intendedChange" placeholder="For example: use a different planning model" maxlength="2000"></label></div><div id="ablationPreview" class="notice">Preview to confirm that conditions match and see every recorded difference.</div><div class="form-actions"><button id="previewAblation" type="button" class="secondary">Preview comparison</button><button id="runAblation" type="submit" disabled>Start comparison campaign</button></div></form>
       </details>
-</details>      <div id="comparisonResults"></div><div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Configure another campaign</button><a href="/static/benchmarks.html">All results →</a></div>
+</details>      <div id="comparisonResults"></div><div class="step-actions"><a class="secondary" href="/static/benchmarks.html">Back to campaigns</a></div>
     </section>
-    <div id="reviewWorkspaceSlot"></div><div id="caseReuseSlot"></div>
-    <div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Save reviewed cases to a dataset →</button></div>
+    <div id="reviewWorkspaceSlot" hidden></div>
     </section>
     <details id="caseReusePanel" class="workspace-panel"><summary>Saved datasets · reuse a case collection</summary>
     <section id="freezePanel" class="workspace-panel" aria-labelledby="freezeHeading">

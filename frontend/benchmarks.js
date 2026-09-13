@@ -76,6 +76,8 @@ function campaignCard(campaign) {
     progress.textContent = "Loading trial counts…";
     const actions = document.createElement("div"); actions.className = "campaign-actions";
     const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "View results", "campaign-action");
+    const campaignHistory = campaignLink(`/static/campaign-history.html?campaign=${encoded}`, "History", "campaign-action");
+    campaignHistory.setAttribute("aria-label", `History for ${campaign.name || "this campaign"}`);
     const improve = campaignLink(`/static/datasets.html?improve=${encoded}`, "Improve", "campaign-action improve-link");
     improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
     const exports = document.createElement("details"); exports.className = "campaign-exports";
@@ -88,11 +90,11 @@ function campaignCard(campaign) {
     }
     exports.append(exportLabel, exportOptions);
     exports.addEventListener("keydown", event => { if (event.key === "Escape") { exports.open = false; exportLabel.focus(); event.stopPropagation(); } });
-    actions.append(review, exports, improve);
+    actions.append(review, campaignHistory, exports, improve);
     const control = document.createElement("button"); control.className = "campaign-action secondary"; control.type = "button";
     actions.append(control);
     card.append(heading, statusLabel, progress, createdLabel, actions);
-    entry = {card, title, statusLabel, createdLabel, progress, control, baselineBadge, improve, summaryLoaded: false};
+    entry = {card, title, statusLabel, createdLabel, progress, control, baselineBadge, improve, campaignHistory, summaryLoaded: false};
     campaignCards.set(id, entry);
     $("history").append(card);
   }
@@ -115,6 +117,7 @@ function campaignCard(campaign) {
   entry.card.classList.toggle("is-baseline", baselines.length > 0);
   entry.improve.hidden = campaign.status !== "completed";
   entry.improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
+  entry.campaignHistory.setAttribute("aria-label", `History for ${campaign.name || "this campaign"}`);
   entry.control.hidden = campaign.status === "completed";
   const action = ["running", "pending"].includes(campaign.status) ? "cancel" : "resume";
   entry.control.textContent = action === "cancel" ? "Cancel campaign" : "Resume remaining trials";

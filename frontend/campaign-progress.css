@@ -1,4 +1,13 @@
 .campaign-progress { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); gap:16px; margin:20px 0 28px; }
+.campaign-progress-rollup { grid-column:1 / -1; min-width:0; padding:24px; border:1px solid var(--f-border); border-radius:14px; background:var(--f-bg); }
+.campaign-progress-headline { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px; }
+.campaign-progress-headline h3 { margin:0; color:var(--f-text); font-size:clamp(22px,3vw,30px); font-weight:600; letter-spacing:-.025em; }
+.campaign-progress-totals { margin-top:14px; color:var(--f-text-secondary); font-size:14px; line-height:1.8; font-variant-numeric:tabular-nums; }
+.campaign-execution-bar,.strategy-execution-bar { display:block; width:100%; height:8px; border:0; border-radius:8px; overflow:hidden; background:var(--f-border); accent-color:var(--f-accent-text); }
+.campaign-execution-bar::-webkit-progress-bar,.strategy-execution-bar::-webkit-progress-bar { background:var(--f-border); border-radius:8px; }
+.campaign-execution-bar::-webkit-progress-value,.strategy-execution-bar::-webkit-progress-value { background:var(--f-accent-text); border-radius:8px; }
+.campaign-execution-bar::-moz-progress-bar,.strategy-execution-bar::-moz-progress-bar { background:var(--f-accent-text); border-radius:8px; }
+.strategy-execution-bar { height:4px; margin-bottom:20px; }
 .strategy-progress-lane { min-width:0; padding:20px; border:1px solid var(--f-border); border-radius:12px; background:var(--f-bg); }
 .strategy-progress-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
 .strategy-progress-heading h3 { margin:0; font-size:16px; font-weight:600; overflow-wrap:anywhere; }
@@ -17,4 +26,4 @@
 .stage-progress-note { margin:10px 0; color:var(--f-text-muted); font-size:12px; line-height:1.6; }
 .strategy-progress-lane > button { min-height:38px; margin-top:4px; }
 [data-theme="light"] .execution-state[data-state="error"], [data-theme="light"] .execution-stage-track li[data-state="error"] { color:#9c3939; }
-@media(max-width:560px) { .strategy-progress-lane { padding:16px; } .campaign-progress { gap:12px; } }
+@media(max-width:560px) { .strategy-progress-lane,.campaign-progress-rollup { padding:16px; } .campaign-progress { gap:12px; } .campaign-progress-totals { font-size:13px; } }

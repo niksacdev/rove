@@ -9,10 +9,9 @@ compare their outputs immediately, then repeat campaigns to measure improvement.
 
 ## Latest entry: try a task, then build a campaign
 
-In the desktop trial sidebar, **Settings** follows **Sample cases**, separated by
-a divider. It uses the same button treatment as the other sidebar destinations.
-On views and narrow screens without this sidebar, the existing workspace Settings
-control remains available. Changing views preserves the in-progress trial draft.
+**Settings** is a gear at the top right of every workspace. The trial sidebar
+contains recent comparisons, All saved trials and Sample cases. Changing views
+preserves the in-progress trial draft.
 
 The customer's first action is the familiar chat runner: enter the task, provide an
 image and optional URDF, and choose the set of strategies to compare. Execution
@@ -534,7 +533,7 @@ that work through consistent action controls and readable observations.
   change and explicitly saves it into the campaign draft before running.
 - **Baseline:** saved results selected as the comparison reference. The Results
   view retains baseline selection and details; the browser shows a compact badge.
-- **Trial workspace:** Settings follows Sample cases with a divider. Neutral
+- **Trial workspace:** Settings is available from the global top-right gear. Neutral
   charcoal surfaces and a restrained action accent distinguish controls from
   connection and outcome status. Sample cases emphasizes observation previews.
 
@@ -600,3 +599,72 @@ Open a failed trial / Change model for a recorded stage failure, or Review an
 unscored trial / Review success metrics for missing assessments. Expanded evidence
 identifies tasks and attempt seeds. Saving a model revision still requires preview
 and human approval; running it remains a separate action.
+
+### Plan, judge and watch execution
+
+Configure shows a live planned-trial calculation directly below the campaign
+name: cases × strategies × repeats. It updates with selections; invalid repeat
+counts do not display a misleading total. The server preview still decides
+whether the campaign can actually run.
+
+Success criteria answer three questions in visible controls: what the output
+must demonstrate, what evidence is being assessed, and who checks it. Each
+criterion names its assessment method. Expert review leaves acceptance pending
+until ratings exist; configured verification uses the selected verifier and still
+requires valid evidence. Runtime and repeated-trial metrics describe the
+recorded attempts and confirmed assessments. They do not turn a proposed action
+into evidence of physical completion. Template drafts are labelled separately
+from AI-generated suggestions.
+
+Run switches to an execution workspace with a campaign rollup and per-strategy
+progress. Completed execution, errors and cancellation remain distinct from
+assessment outcomes. The saved setup is available on demand below progress;
+foreground completion opens Results through the existing route.
+
+```mermaid
+flowchart LR
+  C[Configure: live trial calculation] --> S[Success: criteria, evidence and judge]
+  S --> P[Preview and approve launch]
+  P --> R[Campaign and strategy progress]
+  R --> O[Results and evidence]
+  R --> D[Saved configuration on demand]
+```
+
+### Results and history
+
+Results stay scoped to the selected campaign. Overview shows Passed, Failed and
+Not scored counts and strategy charts. Execution errors and missing expert ratings
+are explained separately; Review trials opens the Trials tab. Scoring details
+contains exact criteria, measurements and baseline comparisons. Back to campaigns
+returns to the browser. Campaign history is a separate page that shows the selected
+campaign's connected iterations and configuration changes.
+
+Saved trials use the same full-width list pattern as Campaigns. Task, strategy,
+assessment, execution status, date, time and a short ID distinguish repeated
+attempts. View results opens evidence without re-execution; Back preserves the
+source filter and page. The trial runner shows eight recent comparisons in a
+320-pixel sidebar, with older comparisons still accessible. No observation
+thumbnail is invented when the local history record has no managed image reference.
+
+```mermaid
+flowchart LR
+  B[Campaigns] --> O[Overview: outcomes and strategy charts]
+  O --> T[Trials: inspect errors, outputs and reviews]
+  O --> S[Scoring details and baseline comparison]
+  B --> H[History: connected campaign iterations]
+  B --> I[Improve: findings and reviewed changes]
+  Q[Saved trials] --> E[Selected trial evidence]
+  E --> Q
+```
+
+Static pages and assets revalidate with the local server. Asset URLs are versioned
+together during this transition to prevent an old row renderer loading under a new
+list header. This changes frontend delivery only; SQLite records are retained.
+
+An optional local assistant is configured as `local-assistant` in `rove.yaml`.
+Start a compatible OpenAI-style local server on port 1234 with
+`qwen/qwen3-vl-8b` available, then launch ROVE with
+`ROVE_ASSISTANT_ENDPOINT=local-assistant rove serve --port 5010`.
+The Copilot SDK remains the assistant runtime. Task/annotation drafting was verified
+through the local API; images are not passed to this drafting path. Connection and
+schema validity do not establish suggestion quality. Drafts always require review.

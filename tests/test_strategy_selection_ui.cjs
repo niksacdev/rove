@@ -70,9 +70,9 @@ test("multiple selections survive steps, drive preview payload and invalidate pr
   el("caseList").querySelector('input[data-case-id="case-r1"]').click(); el("confirmCasePicker").click(); await pause();
   set("campaignContract", "rules", "change");
   w.document.querySelector('[data-journey-step="run"]').click();
-  assert.match(el("runSummary").textContent, /1 cases × 2 strategies × 4 repetitions = 8 trials/);
+  assert.match(el("runSummary").textContent, /1 case × 2 strategies × 4 repeats = 8 planned trials/);
   assert.match(el("runSummary").textContent, /Vision and planner, Direct VLA/);
-  assert.match(el("campaignBudget").textContent, /1 cases × 2 strategies × 4 repeats = 8 planned trials/);
+  assert.match(el("campaignCalculation").textContent, /1 case × 2 strategies × 4 repeats = 8 planned trials/);
   el("previewCampaign").click(); await pause();
   assert.deepEqual(calls.find(call => call.url === "/api/campaigns/preview").body.strategies, ["alpha", "beta"]);
   assert.equal(el("startBaseline").disabled, false);
@@ -81,7 +81,7 @@ test("multiple selections survive steps, drive preview payload and invalidate pr
   choose("alpha");
   assert.equal(el("startBaseline").disabled, true);
   assert.equal(el("campaignMeasures").childElementCount, 0);
-  assert.match(el("runSummary").textContent, /1 cases × 1 strategy × 4 repetitions = 4 trials/);
+  assert.match(el("runSummary").textContent, /1 case × 1 strategy × 4 repeats = 4 planned trials/);
   assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases"), false);
 });
 

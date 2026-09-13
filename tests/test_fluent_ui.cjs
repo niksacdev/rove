@@ -15,7 +15,7 @@ for(const [theme,t] of Object.entries({dark,light}))test(`${theme} workspace tex
   assert.ok(contrast(t["--f-border-strong"],t["--f-surface"])>=3,"field boundary");
 });
 test("every workspace loads the shared Foundry component layer after page styles",()=>{
-  for(const page of ["index","datasets","benchmarks","history"]){
+  for(const page of ["index","datasets","benchmarks","history","campaign-history"]){
     const dom=new JSDOM(fs.readFileSync(`frontend/${page}.html`,"utf8"));
     const links=[...dom.window.document.querySelectorAll('link[rel="stylesheet"]')];
     assert.match(links.at(-1).getAttribute("href"),/^\/static\/fluent.css\?/);

@@ -24,6 +24,7 @@ let configData = null; // full rove.yaml as JSON
 let sampleIndex = 0;
 let historyFilterText = "";
 let historyFilterStrategy = "";
+let historyVisibleCount = 8;
 let latencyBudgetMs = null; // loaded from /api/config
 let stageBudgets = {}; // per-stage budgets { perceive: 3000, plan: 3000, act: 3000, verify: 1000 }
 
@@ -1384,7 +1385,11 @@ function getFilteredHistory() {
     if (entry.mock) return false;
     if (historyFilterText) {
       var q = historyFilterText.toLowerCase();
-      if (entry.task.toLowerCase().indexOf(q) === -1) return false;
+      var searchable = [entry.task, entry.id].concat((entry.strategyIds || []).map(function(sid) {
+        var strategy = strategies.find(function(item) { return item.id === sid; });
+        return sid + " " + (strategy ? strategy.display_name : "");
+      })).join(" ").toLowerCase();
+      if (searchable.indexOf(q) === -1) return false;
     }
     if (historyFilterStrategy) {
       if (entry.strategyIds.indexOf(historyFilterStrategy) === -1) return false;
@@ -1398,22 +1403,23 @@ function renderHistory() {
 
   // Filter bar
   var filterBar = document.createElement("div");
-  filterBar.className = "px-2 pb-2 space-y-1.5";
+  filterBar.className = "history-filters";
 
   // Search input
   var searchWrap = document.createElement("div");
-  searchWrap.className = "relative";
-  var searchIcon = document.createElement("span");
-  searchIcon.className = "absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500";
-  searchIcon.textContent = "\uD83D\uDD0D";
+  searchWrap.className = "history-search";
+  var searchIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  searchIcon.setAttribute("viewBox", "0 0 24 24"); searchIcon.setAttribute("fill", "none"); searchIcon.setAttribute("stroke", "currentColor"); searchIcon.setAttribute("stroke-width", "1.7"); searchIcon.setAttribute("aria-hidden", "true");
+  var searchPath = document.createElementNS("http://www.w3.org/2000/svg", "path"); searchPath.setAttribute("d", "M21 21l-5.5-5.5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0"); searchIcon.appendChild(searchPath);
   searchWrap.appendChild(searchIcon);
   var searchInput = document.createElement("input");
   searchInput.type = "text";
-  searchInput.placeholder = "Search...";
+  searchInput.placeholder = "Search tasks, strategies or IDs";
+  searchInput.setAttribute("aria-label", "Search recent runs by task, strategy or ID");
   searchInput.className = "history-filter-input";
   searchInput.value = historyFilterText;
   searchInput.addEventListener("input", function() {
-    historyFilterText = searchInput.value;
+    historyFilterText = searchInput.value; historyVisibleCount = 8;
     renderHistoryItems();
   });
   searchWrap.appendChild(searchInput);
@@ -1422,6 +1428,7 @@ function renderHistory() {
   // Strategy dropdown
   var stratSelect = document.createElement("select");
   stratSelect.className = "history-filter-select";
+  stratSelect.setAttribute("aria-label", "Filter recent runs by strategy");
   var allOpt = document.createElement("option");
   allOpt.value = "";
   allOpt.textContent = "All strategies";
@@ -1438,7 +1445,7 @@ function renderHistory() {
     stratSelect.appendChild(opt);
   });
   stratSelect.addEventListener("change", function() {
-    historyFilterStrategy = stratSelect.value;
+    historyFilterStrategy = stratSelect.value; historyVisibleCount = 8;
     renderHistoryItems();
   });
   filterBar.appendChild(stratSelect);
@@ -1468,80 +1475,47 @@ function renderHistoryItems() {
     return;
   }
 
-  filtered.slice().reverse().forEach(function(entry) {
+  // Merge order is not chronological: imported server entries may arrive after newer local runs.
+  filtered = filtered.slice().sort(function(a, b) { return (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0); });
+  var count = document.createElement("p"); count.className = "history-count";
+  count.textContent = "Showing " + Math.min(historyVisibleCount, filtered.length) + " of " + filtered.length + " recent runs";
+  container.appendChild(count);
+  filtered.slice(0, historyVisibleCount).forEach(function(entry) {
     var idx = runHistory.indexOf(entry);
-    var item = document.createElement("div");
-    item.className = "history-item sidebar-item flex flex-col gap-1 px-3 py-2 rounded-md cursor-pointer text-[12px]";
-    item.setAttribute("role", "button");
-    item.setAttribute("tabindex", "0");
-    if (idx === activeHistoryIndex) {
-      item.classList.add("active", "bg-f-surface");
-    }
-
-    // Top row: dot + task + time + delete
-    var topRow = document.createElement("div");
-    topRow.className = "flex items-center gap-2";
-
-    // Status dot
-    var dot = document.createElement("span");
-    var dotColor = entry.status === "running" ? "bg-teal-500 pulse-purple" :
-                   entry.status === "completed" ? "bg-green-500" : "bg-red-500";
-    dot.className = "w-2 h-2 rounded-full shrink-0 " + dotColor;
-    dot.setAttribute("aria-hidden", "true");
-    topRow.appendChild(dot);
-
-    // Task text (truncated)
-    var textSpan = document.createElement("span");
-    textSpan.className = "text-gray-300 truncate flex-1";
-    textSpan.textContent = entry.task.length > 25 ? entry.task.substring(0, 25) + "..." : entry.task;
-    textSpan.title = entry.task;
-    topRow.appendChild(textSpan);
-
-    // Time
-    var timeSpan = document.createElement("span");
-    timeSpan.className = "text-[10px] text-gray-600 shrink-0";
-    var ts = typeof entry.timestamp === "string" ? new Date(entry.timestamp) : entry.timestamp;
-    var h = ts.getHours().toString().padStart(2, "0");
-    var m = ts.getMinutes().toString().padStart(2, "0");
-    timeSpan.textContent = h + ":" + m;
-    topRow.appendChild(timeSpan);
-
-    // Delete button (visible on hover)
-    var delBtn = document.createElement("button");
-    delBtn.className = "history-delete";
-    delBtn.textContent = "\u00d7";
-    delBtn.title = "Remove from history";
-    delBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      deleteHistoryEntry(idx);
-    });
-    topRow.appendChild(delBtn);
-
-    item.appendChild(topRow);
-
-    // Strategy tags row
-    var tagsRow = document.createElement("div");
-    tagsRow.className = "flex flex-wrap gap-1 ml-4";
-    entry.strategyIds.forEach(function(sid) {
-      var strat = strategies.find(function(s) { return s.id === sid; });
-      var displayName = strat ? strat.display_name : sid;
-      var tag = document.createElement("span");
-      tag.className = "text-[9px] px-1.5 py-0.5 rounded bg-f-elevated text-gray-500 truncate max-w-[80px]";
-      tag.textContent = displayName;
-      tag.title = displayName;
-      tagsRow.appendChild(tag);
-    });
-    item.appendChild(tagsRow);
-
-    item.addEventListener("click", function() {
-      showHistoryEntry(idx);
-    });
-    item.addEventListener("keydown", function(e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showHistoryEntry(idx); }
-    });
-
+    var item = document.createElement("div"); item.className = "history-item";
+    var open = document.createElement("button"); open.type = "button"; open.className = "history-open";
+    if (idx === activeHistoryIndex) { item.classList.add("active"); open.setAttribute("aria-current", "true"); }
+    var task = document.createElement("span"); task.className = "history-task";
+    task.textContent = entry.task || "Task not recorded"; task.title = task.textContent; open.appendChild(task);
+    var strategy = document.createElement("span"); strategy.className = "history-strategies";
+    strategy.textContent = (entry.strategyIds || []).map(function(sid) { var config = strategies.find(function(value) { return value.id === sid; }); return config ? config.display_name : sid; }).join(" · ") || "Strategy not recorded";
+    strategy.title = strategy.textContent; open.appendChild(strategy);
+    var time = document.createElement("time"); time.className = "history-time";
+    var timestamp = new Date(entry.timestamp);
+    if (entry.timestamp && Number.isFinite(timestamp.getTime())) { time.dateTime = timestamp.toISOString(); time.textContent = timestamp.toLocaleString(undefined, {year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}); }
+    else time.textContent = "Time not recorded";
+    open.appendChild(time);
+    var metadata = document.createElement("span"); metadata.className = "history-metadata";
+    var status = document.createElement("span"); status.className = "history-execution";
+    var execution = {running: "Running", completed: "Completed", error: "Error", cancelled: "Cancelled", interrupted: "Interrupted", failed: "Failed"}[entry.status] || "Unknown";
+    status.textContent = "Execution: " + execution; status.dataset.status = execution.toLowerCase(); metadata.appendChild(status);
+    var identity = document.createElement("span"); identity.className = "history-id";
+    identity.textContent = entry.id ? "Run " + String(entry.id).slice(0, 8) : "ID not recorded";
+    if (entry.id) identity.title = "Run " + entry.id;
+    metadata.appendChild(identity); open.appendChild(metadata);
+    open.addEventListener("click", function() { showHistoryEntry(idx); }); item.appendChild(open);
+    // Preserve the existing remove-from-history action separately from opening a run.
+    var remove = document.createElement("button"); remove.type = "button"; remove.className = "history-delete"; remove.textContent = "×";
+    remove.title = "Remove from run history"; remove.setAttribute("aria-label", "Remove from run history for " + (entry.task || entry.id || "this run"));
+    remove.addEventListener("click", function() { deleteHistoryEntry(idx); }); item.appendChild(remove);
     container.appendChild(item);
   });
+  if (filtered.length > historyVisibleCount) {
+    var more = document.createElement("button"); more.type = "button"; more.className = "history-more";
+    more.textContent = "Show " + Math.min(8, filtered.length - historyVisibleCount) + " older runs";
+    more.addEventListener("click", function() { var previous = historyVisibleCount; historyVisibleCount += 8; renderHistoryItems(); var next = container.querySelectorAll(".history-open")[previous]; if (next) next.focus(); }); container.appendChild(more);
+  }
+
 }
 
 function deleteHistoryEntry(idx) {

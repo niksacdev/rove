@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROVE · Campaign history</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
+    catch { document.documentElement.dataset.theme = "dark"; }
+  </script>
+  <link rel="stylesheet" href="/static/styles.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/navigation.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/campaign-trajectory.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/campaign-history.css?v=foundry-7">
+  <script src="/static/navigation.js?v=foundry-7" defer></script>
+  <script src="/static/campaign-trajectory.js?v=foundry-7" defer></script>
+  <script src="/static/campaign-history.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/fluent.css?v=foundry-7">
+</head>
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header id="roveNav" data-section="results"></header>
+  <main id="main" class="campaign-history-page">
+    <a class="history-page-action" href="/static/benchmarks.html">← Back to Campaigns</a>
+    <div class="campaign-history-heading">
+      <div><h1>Campaign history</h1><p id="campaignHistoryName" class="campaign-history-name"></p></div>
+      <div class="campaign-history-actions">
+        <a id="historyViewResults" class="history-page-action" hidden>View results</a>
+        <button id="refreshCampaignHistory" class="history-page-action secondary" type="button" disabled>Refresh</button>
+      </div>
+    </div>
+    <p id="campaignHistoryStatus" role="status" aria-live="polite">Loading campaign history…</p>
+    <section id="campaignHistoryTimeline" aria-label="Saved campaign iterations" aria-busy="true"></section>
+  </main>
+</body>
+</html>

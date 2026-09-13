@@ -207,14 +207,23 @@ if (typeof document !== "undefined") (() => {
     anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); openCase(id, true); });
     return anchor;
   }
+  $("campaignResultActions").prepend($("campaignHistoryLink"));
   $("caseReuseSlot").append($("caseReusePanel"));
   $("assistantConfigureSlot").append($("assistantPanel"));
 
   const savedRules = node("details"); savedRules.append(node("summary", "Use previously saved scoring rules"), $("campaignContract").closest("label")); $("savedMetricsSlot").append(savedRules);
-  for (const item of [$("scoringAdvanced"), $("verifierEndpointLabel"), $("scopeHint"), $("contractJson").closest("details"), $("targetMetric").closest("details"), $("saveContract")]) $("moreScoringOptions").append(item);
-  $("saveContract").setAttribute("form","contractForm");
-  for(const field of $("moreScoringOptions").querySelectorAll("input,select,textarea")) field.setAttribute("form","contractForm");
-  for (const id of ["contractName", "successScope", "evidenceMode", "assessmentMethod"]) {$("scoringAdvanced").append($(id).closest("label"));$(id).setAttribute("form","contractForm");}
+  $("campaignContract").setAttribute("form","baselineForm");
+  for(const id of ["successScope","evidenceMode"]) $("scopeControls").append($(id).closest("label"));
+  $("assessmentScope").append($("scopeHint"));
+  $("scoringAdvanced").append($("assessmentMethod").closest("label"),$("verifierEndpointLabel"),$("gradingNotice"));
+  $("moreScoringOptions").append($("contractName").closest("label"));
+  for(const content of [$("targetMetric").closest("details"),$("contractJson").closest("details")]) {
+    const section=node("section",null,"metrics-advanced-section");section.append(node("h3",content.querySelector("summary").textContent));
+    for(const child of [...content.children])if(child.tagName!=="SUMMARY")section.append(child);
+    content.remove();$("moreScoringOptions").append(section);
+  }
+  $("moreScoringOptions").append($("saveContract"));$("saveContract").setAttribute("form","contractForm");
+  for(const field of $("moreScoringOptions").querySelectorAll("input,select,textarea"))field.setAttribute("form","contractForm");
   for (const anchor of document.querySelectorAll("[data-journey-step]")) anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); goStep(anchor.dataset.journeyStep); });
   for (const control of document.querySelectorAll("[data-go-step]")) control.addEventListener("click", () => goStep(control.dataset.goStep));
   $("reuseReviewed").addEventListener("click", () => { $("caseReusePanel").open = true; $("caseReusePanel").scrollIntoView({block: "start"}); });
@@ -397,15 +406,17 @@ if (typeof document !== "undefined") (() => {
     else if (state.selected.size) { context.append(node("strong", `${state.selected.size} selected case revisions`)); const list = node("ul"); for (const item of state.selected.values()) list.append(node("li", `${item.name} · revision ${item.revision || caseId(item)}`)); context.append(list); }
     else context.append(node("p", "No cases selected. Return to Cases to select inputs or use a saved dataset.", "notice"));
     const strategies = state.selectedStrategyIds.map(id => state.strategies.find(item => item.id === id)).filter(Boolean), contract = activeContract();
-    $("runSummary").replaceChildren(node("strong", $("campaignName").value || "Untitled campaign"), node("p", `${count} cases × ${strategies.length} ${strategies.length === 1 ? "strategy" : "strategies"} × ${Number($("campaignRepeats").value) || 0} repetitions = ${count * strategies.length * (Number($("campaignRepeats").value) || 0)} trials.`), node("p", `${strategies.length === 1 ? "Strategy" : "Strategies"}: ${strategies.map(item => item.display_name || item.id).join(", ") || "Not selected"}`), node("p", `Scoring rules: ${contract?.name || "Not confirmed"}`));
+    const repeats=Number($("campaignRepeats").value), validRepeats=Number.isInteger(repeats) && repeats>=1 && repeats<=1000;
+    const calculation=validRepeats ? `${count} ${count===1?"case":"cases"} × ${strategies.length} ${strategies.length===1?"strategy":"strategies"} × ${repeats} ${repeats===1?"repeat":"repeats"} = ${count*strategies.length*repeats} planned trials` : "Enter a whole number of repeats from 1 to 1,000 to calculate planned trials.";
+    $("campaignCalculation").textContent=calculation;$("campaignCalculation").classList.toggle("invalid",!validRepeats);
+    $("runSummary").replaceChildren(node("strong", $("campaignName").value || "Untitled campaign"), node("p",calculation), node("p", `${strategies.length === 1 ? "Strategy" : "Strategies"}: ${strategies.map(item => item.display_name || item.id).join(", ") || "Not selected"}`), node("p", `Scoring rules: ${contract?.name || "Not confirmed"}`));
     if (contract) { const rubric = node("details"); rubric.append(node("summary", "Review exact scoring criteria")); for (const criterion of contract.criteria || []) rubric.append(node("p", criterion.description)); for (const [id, value] of Object.entries(contract.case_expectations || {})) { rubric.append(node("h4", state.selected.get(id)?.name || id), node("p", value, "detail-instruction muted")); } $("runSummary").append(rubric); }
 
     $("continueConfigure").disabled = !count;
     $("freezeContract").value = $("campaignContract").value;
     $("selectionCount").textContent = `${state.selected.size} selected`;
-    const repeats = Number($("campaignRepeats").value);
     $("selectedCaseCount").textContent = `${count} cases`;
-    $("campaignBudget").textContent = `${count} cases × ${strategies.length} ${strategies.length === 1 ? "strategy" : "strategies"} × ${repeats || 0} repeats = ${count * strategies.length * (repeats || 0)} planned trials${state.frozenDataset ? ` from saved dataset ${state.frozenDataset.name}` : ""}. Preview the available measures before launch.`;
+    $("campaignBudget").textContent = validRepeats ? "Define success criteria next, then review the exact configuration before running." : calculation;
   }
   function selectionChanged() { if (state.generatedContractId && $("campaignContract").value === state.generatedContractId) $("campaignContract").value = ""; state.criteriaDirty = true; state.frozenDataset = null; state.freezeMembers = null; invalidateCampaign(); invalidateFreeze(); $("freezePreview").textContent = "Selection changed. Preview exact case and review revisions again."; updateSelected(); }
   function updateSelected() {
@@ -580,6 +591,7 @@ if (typeof document !== "undefined") (() => {
   }
   async function openCase(id, push = false) {
     const version = ++state.detailVersion; state.caseId = id; state.reviewEdit = null;
+    if(state.step === "review") { state.resultTab="trials"; selectResultTab("trials"); $("reviewWorkspaceSlot").hidden=false; }
     if (push) { if (state.step === "run") goStep("cases", false); writeRoute(); }
     updateSelected(); $("caseInspector").setAttribute("aria-busy", "true"); $("caseInspector").replaceChildren(node("p", "Loading case and review history…", "muted"));
     try {
@@ -684,7 +696,15 @@ if (typeof document !== "undefined") (() => {
     // Refreshing evidence must not replace an explicitly selected historical snapshot
     // with the catalog head. The saved object is immutable and already fetched by ID.
     const retainedBaseline = state.campaignId === id && state.namedBaseline?.campaign_id === id && state.namedBaseline.strategy_id === $("baselineStrategy").value ? state.namedBaseline : null;
-    $("resultsPanel").append($("comparisonResults"));
+    $("resultsPanel").append($("comparisonResults"),$("advancedComparisons"));
+    $("advancedComparisons").hidden=true;
+    $("reviewStep").append($("reviewWorkspaceSlot"));
+    if(state.campaignId!==id) state.resultTab="overview";
+    $("resultCampaignPicker").hidden=Boolean(id);
+    $("currentCampaignContext").hidden=!id;
+    $("currentCampaignContext").textContent=id ? "Loading campaign…" : "";
+    $("campaignHistoryLink").hidden=!id;
+    $("campaignHistoryLink").href=id ? `/static/campaign-history.html?campaign=${encodeURIComponent(id)}` : "/static/benchmarks.html";
     const version = ++state.campaignVersion; state.campaignId = id; state.reviewCampaign = null; state.baselineNew = false; state.reviewCampaignContract = null; $("resultCampaign").value = id || ""; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true; $("comparisonAction").hidden = true;
     if (push) { goStep("review", false); writeRoute(); }
     state.namedBaseline = null;
@@ -695,22 +715,47 @@ if (typeof document !== "undefined") (() => {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (version !== state.campaignVersion) return;
       const campaign = detail.campaign; const selectedOption=[...$("resultCampaign").options].find(option=>option.value===id); if(selectedOption)selectedOption.textContent=`${campaign.spec.name} · ${campaign.status}`; state.reviewCampaign = campaign; state.reviewCampaignContract = campaign.contract_id || null; $("campaignResults").replaceChildren();
-      $("campaignResults").append(node("p", `${campaign.spec.name} · ${campaign.status} · ${date(campaign.created_at)}`, "muted"));
-      const charts = node("div"); charts.id = "campaignOutcomeCharts"; $("campaignResults").append(charts);
-      if (window.RoveCampaignResults) window.RoveCampaignResults.render(charts, result.summary, campaign); else renderSummary(result.summary, charts);
-      const analysis = node("section", null, "ai-outcome-summary"); analysis.id = "campaignAiSummary"; $("campaignResults").append(analysis); if (state.step === "review") renderOutcomeSummary(id, analysis, version);
-      if (window.RoveCampaignTrajectory) { const timeline=node("section",null,"campaign-timeline-panel"); timeline.id="campaignTimeline"; $("campaignResults").append(timeline); window.RoveCampaignTrajectory.mount(timeline,id); }
-      const trialInspection = node("details"); trialInspection.id = "trialInspection"; trialInspection.append(node("summary", `Inspect trials (${result.trials?.length || 0})`));
-      const details = node("details"); details.id = "resultDetails"; details.append(node("summary", "Metrics, scoring and provenance")); renderSummary(result.summary, details);
-      $("campaignResults").append(trialInspection, details);
+      $("currentCampaignContext").textContent=`${campaign.spec.name} · ${campaign.status} · ${date(campaign.created_at)}`;
+      const tabs=node("div",null,"results-tabs");tabs.setAttribute("role","tablist");tabs.setAttribute("aria-label","Campaign results");
+      const overview=node("section");overview.id="resultOverview";
+      const trialInspection=node("section");trialInspection.id="trialInspection";
+      const details=node("section");details.id="resultDetails";
+      for(const [name,title,panel] of [["overview","Overview",overview],["trials",`Trials (${result.trials?.length || 0})`,trialInspection],["scoring","Scoring details",details]]) {
+        panel.dataset.resultPanel=name;panel.setAttribute("role","tabpanel");panel.setAttribute("aria-labelledby",`resultTab-${name}`);
+        const tab=button(title,()=>selectResultTab(name));tab.id=`resultTab-${name}`;tab.dataset.resultTab=name;tab.setAttribute("role","tab");tab.setAttribute("aria-controls",panel.id);
+        tab.addEventListener("keydown",event=>{const keys=["ArrowLeft","ArrowRight","Home","End"];if(!keys.includes(event.key))return;event.preventDefault();const all=[...tabs.children],index=all.indexOf(tab),next=event.key==="Home"?0:event.key==="End"?all.length-1:(index+(event.key==="ArrowRight"?1:-1)+all.length)%all.length;all[next].click();all[next].focus();});
+        tabs.append(tab);
+      }
+      $("campaignResults").append(tabs,overview,trialInspection,details);
+      const charts = node("div"); charts.id = "campaignOutcomeCharts"; overview.append(charts);
+      if (window.RoveCampaignResults) window.RoveCampaignResults.render(charts, result.summary, campaign, {trials:result.trials}); else renderSummary(result.summary, charts);
+      const analysis = node("section", null, "ai-outcome-summary"); analysis.id = "campaignAiSummary"; overview.append(analysis); if (state.step === "review") renderOutcomeSummary(id, analysis, version);
+      renderSummary(result.summary, details);
+      details.append($("advancedComparisons"),$("comparisonResults"));
+      $("advancedComparisons").hidden=false;
+      trialInspection.append($("reviewWorkspaceSlot"));
+      selectResultTab(state.resultTab || "overview");
       details.append(link("Open full report", `/api/campaigns/${encodeURIComponent(id)}/report?format=html`), objectDetails("Assessment source, coverage and review revisions", result.assessments));
       if (campaign.contract?.criteria?.some(criterion => criterion.assessment === "human_review")) details.append(node("p", "Human-review criteria use expert ratings of each output. A model's success statement does not fill missing reviews.", "notice"));
+      const columns=node("div",null,"campaign-trial-columns");columns.setAttribute("aria-hidden","true");
+      for(const title of ["Task","Strategy","Assessment","Actions"])columns.append(node("span",title));
+      trialInspection.insertBefore(columns,$("reviewWorkspaceSlot"));
+      const trialList=node("ul",null,"campaign-trial-list");trialInspection.insertBefore(trialList,$("reviewWorkspaceSlot"));
       for (const trial of result.trials || []) {
-        const taskName = campaign.spec.tasks.find(entry => entry.id === trial.task_id)?.task || trial.task_id;
-        const item = node("div", null, "compact-actions"); item.append(node("span", `${taskName} · ${trial.strategy_id} · repetition ${Number(trial.seed) + 1}: ${trial.outcome}`, "muted")); if (trial.trial_id) item.append(link("Inspect trial", `/static/history.html?trial=${encodeURIComponent(trial.trial_id)}`));
-        const task = campaign.spec.tasks.find(entry => entry.id === trial.task_id); const revision = campaign.case_revision_ids?.find(value => value === trial.task_id) || task?.case_revision_id;
-        if (revision) item.append(caseLink("Review case", revision)); trialInspection.append(item);
+        const task=campaign.spec.tasks.find(entry=>entry.id===trial.task_id),taskName=task?.task || trial.task_id;
+        const item=node("li",null,"campaign-trial-row"),identity=node("div",null,"campaign-trial-task");
+        const repeatIndex=(campaign.spec.seeds || []).indexOf(trial.seed);
+        identity.append(node("strong",taskName),node("span",repeatIndex>=0?`Repeat ${repeatIndex+1}`:`Seed ${trial.seed}`,"muted"));
+        const strategy=node("span",campaign.strategy_definitions?.[trial.strategy_id]?.display_name || trial.strategy_id,"campaign-trial-strategy");
+        const outcome=node("div",null,"campaign-trial-outcome");outcome.append(node("strong",({pass:"Passed",fail:"Failed",unknown:"Not scored"})[trial.outcome] || "Not scored"));
+        if(trial.execution)outcome.append(node("span",`Execution: ${trial.execution.replaceAll("_"," ")}`,"muted"));
+        const actions=node("div",null,"campaign-trial-actions");
+        if(trial.trial_id){const view=link("View results",`/static/history.html?trial=${encodeURIComponent(trial.trial_id)}`);view.className="secondary";view.setAttribute("aria-label",`View results: ${taskName}, ${trial.strategy_id}`);actions.append(view);}
+        const revision=campaign.case_revision_ids?.find(value=>value===trial.task_id) || task?.case_revision_id;
+        if(revision){const review=caseLink("Review case",revision);review.className="secondary";actions.append(review);}
+        item.append(identity,strategy,outcome,actions);trialList.append(item);
       }
+      if(!result.trials?.length)trialInspection.insertBefore(node("p","No trial results have been recorded yet.","muted"),$("reviewWorkspaceSlot"));
       $("baselineStrategy").replaceChildren(...select(null, (campaign.spec.strategies || []).map(value => [value, campaign.strategy_definitions?.[value]?.display_name || value])).childNodes);
       if (retainedBaseline && campaign.spec.strategies?.includes(retainedBaseline.strategy_id)) {
         state.namedBaseline = retainedBaseline;
@@ -724,11 +769,18 @@ if (typeof document !== "undefined") (() => {
       if (campaign.baseline) {
         const comparisonPanel=node("details");comparisonPanel.id="baselineComparisonPanel";comparisonPanel.append(node("summary","Compare with saved baseline"));
         const strategy=select("comparisonStrategy",campaign.spec.strategies.map(sid=>[sid,campaign.strategy_definitions?.[sid]?.display_name || sid]),campaign.spec.strategies.find(sid=>sid!==campaign.baseline.strategy_id) || campaign.spec.strategies[0]);
-        const content=node("div");comparisonPanel.append(label("Candidate strategy",strategy),content);$("campaignResults").append(comparisonPanel);
+        const content=node("div");comparisonPanel.append(label("Candidate strategy",strategy),content);details.append(comparisonPanel);
         async function updateComparison(){const selected=strategy.value;try{const comparison=await request(`/api/campaigns/${encodeURIComponent(id)}/comparison?candidate_strategy_id=${encodeURIComponent(selected)}`);if(version!==state.campaignVersion || selected!==strategy.value)return;renderComparison(comparison);content.append($("comparisonResults"));}catch(error){content.replaceChildren(node("p",error.message,"error-text"));}}
         strategy.addEventListener("change",updateComparison);await updateComparison();
       }
     } catch (error) { if (version === state.campaignVersion) $("campaignResults").replaceChildren(node("p", error.message, "error-text"), button("Retry results", () => openCampaign(id))); }
+  }
+  $("campaignResults").addEventListener("rove:inspect-campaign-trials",()=>{selectResultTab("trials");$("resultTab-trials")?.focus();});
+  function selectResultTab(name) {
+    state.resultTab=name;
+    for(const tab of document.querySelectorAll("[data-result-tab]")) {const active=tab.dataset.resultTab===name;tab.setAttribute("aria-selected",String(active));tab.tabIndex=active?0:-1;}
+    for(const panel of document.querySelectorAll("[data-result-panel]"))panel.hidden=panel.dataset.resultPanel!==name;
+    $("reviewWorkspaceSlot").hidden=name!=="trials" || !state.caseId;
   }
   function invalidateAblation() { state.ablationPreview = null; state.ablationOperation = null; $("runAblation").disabled = true; $("ablationPreview").textContent = "Preview to confirm that conditions match and inspect recorded differences."; }
   function ablationPayload() { if (!state.namedBaseline || state.namedBaseline.campaign_id !== state.campaignId || state.namedBaseline.strategy_id !== $("baselineStrategy").value) throw new Error("Set this strategy result as a baseline, or select a saved baseline before comparing."); if (!$("candidateStrategy").value) throw new Error("Choose a candidate strategy to compare with the baseline."); return {baseline_revision_id: state.namedBaseline.revision_id, baseline_strategy_id: $("baselineStrategy").value, candidate_strategy_id: $("candidateStrategy").value, name: $("ablationName").value.trim(), intended_change: $("intendedChange").value.trim()}; }
@@ -1042,7 +1094,7 @@ if (typeof document !== "undefined") (() => {
       const edit=button("Edit",()=>{card.dataset.editing="true";editor.hidden=false;row.hidden=true;input.focus();});edit.setAttribute("aria-label",`Edit criterion ${index+1}`);
       function closeEdit(){delete card.dataset.editing;editor.hidden=true;row.hidden=false;edit.focus();}
       editor.append(button("Save change",()=>{if(!input.value.trim()){input.setCustomValidity("Describe this criterion.");input.reportValidity();return;}input.setCustomValidity("");copy.textContent=input.value.trim();input.value=copy.textContent;input.dispatchEvent(new Event("change",{bubbles:true}));closeEdit();}),button("Cancel",()=>{input.value=copy.textContent;closeEdit();}));
-      row.append(number,copy,edit);card.append(row,editor,node("small",criterion.assessment==="configured_verifier"?`Verified by ${criterion.endpoint}`:"Expert review","muted"));container.append(card);
+      row.append(number,copy,edit);card.append(row,editor,node("small",criterion.assessment==="configured_verifier"?`Checked by configured verifier: ${criterion.endpoint || "endpoint not recorded"}`:"Checked by an expert: a reviewer rates this criterion","muted"));container.append(card);
     }
     $("successCriteria").closest("label").hidden = true;
     for (const [id, expectation] of Object.entries(contract.case_expectations || {})) if (state.selected.has(id) && (!preserveExpectations || !state.expectations.has(id))) state.expectations.set(id, expectation);
@@ -1053,7 +1105,7 @@ if (typeof document !== "undefined") (() => {
     }
     if (state.selected.size) container.append(cases);
     const measures=$("suggestedMeasures"); measures.replaceChildren();
-    for (const metric of contract.metrics || []) { const card=node("div",null,"suggested-measure");card.append(node("strong",metricLabel(metric)),node("span",metric==="pipeline_latency"?"Recorded automatically":"Uses the confirmed assessment"));measures.append(card); }
+    for (const metric of contract.metrics || []) { const card=node("div",null,"suggested-measure");card.append(node("strong",metricLabel(metric)),node("span",({task_success:"Fraction of trials accepted by the required checks. Unassessed trials remain explicit.",pass_at_k:"Chance of at least one accepted attempt in k repeats of the same case and strategy.",pass_pow_k:"Consistency across k repeated attempts on the same case and strategy.",pipeline_latency:"Time spent running the pipeline, recorded automatically. This is not physical task completion time.",constraint_outcomes:"Acceptance of required constraints where the evaluator provides evidence.",episode_completion_time:"Elapsed episode time from recorded execution evidence.",autonomous_completion:"Completion without intervention, when the episode evidence records it.",recovery:"Recovery outcomes where a disturbance and subsequent response are recorded."})[metric] || "Reported only when the configured evaluator supplies the required measurement."));measures.append(card); }
     const needsReview=(contract.criteria || []).some(criterion=>criterion.assessment==="human_review");
     $("gradingNotice").textContent=needsReview ? "Expert review is required for these criteria. Acceptance stays pending until the required ratings are recorded." : "Configured verification stages assess these criteria. Missing or invalid evidence remains unassessed.";
     scopeHint(); $("verifierEndpointLabel").hidden=$("assessmentMethod").value!=="configured_verifier";
@@ -1076,8 +1128,9 @@ if (typeof document !== "undefined") (() => {
       if(signature!==metricsContextSignature() || draftVersion!==(state.draftVersion||0)){ $("metricDraftStatus").textContent="Your configuration changed. Generate suggestions for the current selection.";return; }
       applyMetricContract(result.contract); state.metricsEdited=false;state.metricDraftContext=metricsContextSignature();state.metricDraftEvidence=result.evidence_fingerprint;
       $("campaignContract").value="";invalidateCampaign();
-      $("metricDraftSource").textContent=result.source==="ai"?"Agent-drafted success metrics":(result.assistant_configured ?? result.assistant_available)?"Suggested metrics":"Suggested metrics · AI unavailable";
-      $("metricDraftStatus").textContent=result.source==="ai"?result.rationale:`${(result.assistant_configured ?? result.assistant_available) ? "AI suggestions could not be generated." : "The assistant is not connected."} Review these task-based suggestions before confirming.`;
+      $("metricDraftSource").textContent=result.source==="ai"?"Agent-drafted success metrics":"Task-based draft";
+      $("metricDraftStatus").textContent=result.source==="ai"?result.rationale:"Drafted from your task and available evidence. Review each criterion before running.";
+      $("metricsConnectionStatus").textContent=result.source==="ai"?"An AI assistant proposed these criteria; you approve the final rules.":`AI suggestions unavailable. ${(result.assistant_configured ?? result.assistant_available)?"The configured assistant could not generate suggestions.":"The assistant is not connected."} These criteria use task-based templates.`;
       if(result.source==="ai")$("metricDraftStatus").append(node("span"," Review these criteria against the observations before confirming."));
       $("contractPanel").open=true;
     } catch(error){if(version===state.metricDraftVersion){$("metricDraftSource").textContent="Suggestions unavailable";$("metricDraftStatus").textContent=`Could not prepare suggestions: ${error.message}. You can edit and confirm criteria below.`;}}
@@ -1086,11 +1139,17 @@ if (typeof document !== "undefined") (() => {
   $("continueMetrics").addEventListener("click",()=>goStep("metrics"));
   $("regenerateMetrics").addEventListener("click",()=>draftMetrics(true));
   async function renderOutcomeSummary(id, container, version) {
-    container.replaceChildren(node("span","Interpreting results","ai-source"),node("h3","What do these results mean?"),node("p","Preparing a summary from recorded outcomes and trial evidence…","muted"));
+    function renderUnavailableSummary(reason) {
+      container.classList.add("ai-summary-unavailable");
+      container.replaceChildren(node("p","AI explanation unavailable. "+reason,"muted"),button("Retry summary",()=>renderOutcomeSummary(id,container,version)),link("Assistant settings","/?view=strategies"));
+    }
+    container.classList.remove("ai-summary-unavailable");
+    container.replaceChildren(node("p","Preparing an AI explanation from recorded outcomes…","muted"));
     try {
       const result=await post(`/api/campaigns/${encodeURIComponent(id)}/outcome-summary`,{});
       if(version!==state.campaignVersion || !container.isConnected)return;
-      container.replaceChildren(node("span",result.source==="ai"?"AI outcome summary":(result.assistant_configured ?? result.assistant_available)?"Recorded outcome summary":"Recorded outcome summary · AI unavailable","ai-source"),node("h3",result.headline));
+      if(result.source!=="ai") { renderUnavailableSummary(result.warnings?.some(warning=>warning.includes("not completed")) ? "An AI explanation can be requested when this campaign finishes." : "Recorded outcomes remain available above."); return; }
+      container.replaceChildren(node("span","AI outcome summary","ai-source"),node("h3",result.headline));
       const list=node("ul");
       for(const finding of result.findings || []) {
         const item=node("li",finding.text);
@@ -1099,11 +1158,10 @@ if (typeof document !== "undefined") (() => {
       }
       container.append(list);
       if(result.next_steps?.length){const next=node("details");next.append(node("summary","Suggested next steps"));for(const action of result.next_steps)next.append(node("p",typeof action==="string"?action:action.text));container.append(next);}
-      if(result.source!=="ai")container.append(node("p",result.warnings?.some(warning=>warning.includes("not completed")) ? "AI interpretation will be available after the campaign finishes." : (result.assistant_configured ?? result.assistant_available) ? "AI interpretation could not be generated. Showing recorded outcomes." : "The assistant is not connected. Showing recorded outcomes.","chart-note"));
-      if(result.source==="ai")container.append(node("p","AI interpretation of saved aggregates and trial outcomes. Inspect the evidence before acting on suggestions.","chart-note"));
+      container.append(node("p","AI interpretation of saved aggregates and trial outcomes. Inspect the evidence before acting on suggestions.","chart-note"));
       if(result.warnings?.length) { const details=node("details"); details.append(node("summary","Assistant status")); for(const warning of result.warnings)details.append(node("p",warning)); container.append(details); }
       container.append(button("Refresh summary",()=>renderOutcomeSummary(id,container,version)));
-    } catch(error){if(version===state.campaignVersion && container.isConnected)container.replaceChildren(node("h3","AI summary unavailable"),node("p","Your measured outcomes are shown above. The assistant could not prepare a summary.","muted"),button("Retry summary",()=>renderOutcomeSummary(id,container,version)));}
+    } catch(error){if(version===state.campaignVersion && container.isConnected)renderUnavailableSummary("Recorded outcomes remain available above.");}
   }
 
   window.refreshStrategyCatalog = refreshStrategyCatalog;
@@ -1112,13 +1170,13 @@ if (typeof document !== "undefined") (() => {
     try {
       if ($("generatedCriteria").querySelector("[data-editing=true]")) throw new Error("Save or cancel your criterion edit before continuing.");
       if (!$("campaignContract").value) { if (!await saveCurrentContract()) return; }
-      state.preparingRun = true; $("liveTrialsPanel").hidden = true; $("runLaunchActions").hidden = false; $("runConfirmationHeading").textContent = "Ready to run?"; goStep("run"); await previewCampaign();
+      state.preparingRun = true; $("runConfigDisclosure").open=true;$("runConfigSummary").hidden=true;$("runEditActions").hidden=false;$("runStep").insertBefore($("runConfigDisclosure"),$("liveTrialsPanel")); $("liveTrialsPanel").hidden = true; $("runLaunchActions").hidden = false; $("runConfirmationHeading").textContent = "Ready to run?"; goStep("run"); await previewCampaign();
     } catch (error) { goStep("metrics"); tell(error.message, true); $("contractPanel").open = true; ($("generatedCriteria").querySelector("textarea") || $("successCriteria")).focus(); }
     finally { $("prepareRun").disabled = false; }
   });
   for (const id of ["assessmentMethod", "verifierEndpoint"]) $(id).addEventListener("change", () => { state.gradingOverride=true;
     $("gradingNotice").textContent=$("assessmentMethod").value==="human_review" ? "All criteria will use expert review. Acceptance stays pending until the required ratings are recorded." : "All criteria will use the selected verification endpoint. Missing or invalid evidence remains unassessed.";
-    for(const description of $("generatedCriteria").querySelectorAll(".suggested-criterion small")) description.textContent=$("assessmentMethod").value==="human_review" ? "Expert review" : `Verified by ${$("verifierEndpoint").value || "selected endpoint"}`;
+    for(const description of $("generatedCriteria").querySelectorAll(".suggested-criterion small")) description.textContent=$("assessmentMethod").value==="human_review" ? "Checked by an expert: a reviewer rates this criterion" : `Checked by configured verifier: ${$("verifierEndpoint").value || "select an endpoint"}`;
   });
   for (const id of ["targetMetric", "targetOperator", "targetThreshold"]) for (const type of ["input","change"]) $(id).addEventListener(type,()=>{state.targetEdited=true;});
   for (const id of ["annotationEndpoint", "annotationKey", "annotationTarget"]) for (const type of ["input","change"]) $(id).addEventListener(type,()=>{state.bindingEdited=true;});
@@ -1157,14 +1215,15 @@ if (typeof document !== "undefined") (() => {
   }
   async function refreshLiveTrials() {
     clearTimeout(liveTimer); if (!state.campaignId || state.step !== "run" || state.preparingRun || document.hidden) return;
-    const id = state.campaignId, version = ++state.liveVersion; $("liveTrialsPanel").hidden = false; $("runConfirmationHeading").textContent = "Campaign configuration"; $("runLaunchActions").hidden = true;
+    const id = state.campaignId, version = ++state.liveVersion; $("liveTrialsPanel").hidden = false;
+    $("runConfigSummary").hidden=false;$("runEditActions").hidden=true;$("runStep").append($("runConfigDisclosure"));if(state.liveDisclosureCampaign!==id){state.liveDisclosureCampaign=id;$("runConfigDisclosure").open=false;} $("runConfirmationHeading").textContent = "Campaign configuration"; $("runLaunchActions").hidden = true;
     try {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (id !== state.campaignId || version !== state.liveVersion) return;
       const campaign = detail.campaign, summary = result.summary;
       if (["running","pending","queued","cancelling"].includes(campaign.status)) state.autoResultsCampaign=id;
       $("workspaceTitle").textContent = "Campaign trials";
-      $("liveTrialStatus").textContent = `${campaign.spec.name} · ${campaign.status} · ${summary.completed_trials || 0} / ${summary.planned_trials || 0} trials recorded. Expert-reviewed outcomes remain pending until rated.`;
+      $("liveTrialStatus").textContent = `${campaign.spec.name} · ${campaign.status}`;
       const container = $("liveTrials");
       if (state.liveCardCampaign !== id) { state.liveCardCampaign = id; state.liveTrialCards = new Map(); state.progressEvents = new Map(); container.replaceChildren(); }
       $("runSummary").replaceChildren(node("strong", campaign.spec.name), node("p", `${summary.planned_trials || 0} planned trials across ${campaign.spec.tasks.length} cases.`), node("p", `Strategies: ${(campaign.spec.strategies || []).map(id => campaign.strategy_definitions?.[id]?.display_name || campaign.config?.strategies?.[id]?.display_name || id).join(", ")}`), node("p", `Scoring rules: ${campaign.contract?.name || campaign.contract_id || "See campaign report"}`));

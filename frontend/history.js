@@ -125,11 +125,11 @@ if (typeof document !== "undefined") (() => {
         anchor.className = "trial-link trial-action secondary"; anchor.dataset.trialId = trial.id;
         const view = trialPresentation(trial);
         anchor.setAttribute("aria-label",`View results: ${trialTitle(trial)}`);
-        const task=node("div",null,"trial-task");task.append(node("strong",trialTitle(trial),"trial-title"),node("span",trial.source || "Unknown source","muted trial-source"));
+        const task=node("div",null,"trial-task");task.append(node("strong",trialTitle(trial),"trial-title"),node("span",`${({quick:"Standalone trial",campaign:"Campaign trial",legacy:"Imported trial"})[trial.source] || "Trial"} · ${trial.id.slice(0,8)}`,"muted trial-source"));
         const strategy=node("span",trialStrategy(trial),"trial-strategy");
-        const outcome=node("div",null,"trial-outcome");outcome.append(badge(view.verdict,view.verdict),node("span",trial.status || "Unknown execution","trial-execution"));
+        const outcome=node("div",null,"trial-outcome");outcome.append(badge(({pass:"Passed",fail:"Failed",unknown:"Not scored"})[view.verdict],view.verdict),node("span",`Execution: ${trial.status || "unknown"}`,"trial-execution"));
         const created=node("time",null,"trial-created"),parsed=new Date(trial.created_at);
-        if(trial.created_at && Number.isFinite(parsed.getTime())) {created.textContent=parsed.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});created.dateTime=parsed.toISOString();created.title=date(trial.created_at);created.setAttribute("aria-label",`Created ${date(trial.created_at)}`);} else created.textContent="Time not recorded";
+        if(trial.created_at && Number.isFinite(parsed.getTime())) {created.textContent=parsed.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});created.append(node("span",parsed.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"}),"trial-time muted"));created.dateTime=parsed.toISOString();created.title=date(trial.created_at);created.setAttribute("aria-label",`Created ${date(trial.created_at)}`);} else created.textContent="Time not recorded";
         item.append(task,strategy,outcome,created);
         anchor.addEventListener("click", event => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

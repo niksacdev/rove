@@ -60,11 +60,13 @@ test("Results opens history first with shared navigation, explicit review routes
   assert.equal(document.getElementById("advancedConfiguration").open, false);
   assert.deepEqual(calls.map(c => c.url), ["/api/campaigns", "/api/baselines", "/api/campaigns/campaign-a"]);
   const links = [...document.querySelectorAll(".campaign a")];
-  assert.deepEqual(links.map(a => a.textContent), ["View results", "HTML report", "JSON", "CSV", "Improve"]);
+  assert.deepEqual(links.map(a => a.textContent), ["View results", "History", "HTML report", "JSON", "CSV", "Improve"]);
   assert.equal(links[0].getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.equal(links[4].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
-  assert.match(links[1].getAttribute("href"), /report\?format=html$/);
-  assert.equal(links[1].rel, "noopener");
+  assert.equal(links[1].getAttribute("href"), "/static/campaign-history.html?campaign=campaign-a");
+  assert.equal(links[1].className, links[0].className);
+  assert.equal(links[5].getAttribute("href"), "/static/datasets.html?improve=campaign-a");
+  assert.match(links[2].getAttribute("href"), /report\?format=html$/);
+  assert.equal(links[2].rel, "noopener");
   const exports = document.querySelector(".campaign-exports");
   assert.equal(exports.open, false);
   assert.equal(exports.querySelector("summary").textContent, "Export");
@@ -84,6 +86,7 @@ test("legacy campaign links focus the exact card and preserve untrusted labels a
   assert.equal(card.querySelector("h3").textContent, row.name);
   assert.equal(card.querySelector("img"), null);
   assert.equal(card.querySelector("a").getAttribute("href"), "/static/datasets.html?step=review&campaign=part%2Fa%3Fb");
+  assert.equal(card.querySelector('a[aria-label^="History for"]').getAttribute("href"), "/static/campaign-history.html?campaign=part%2Fa%3Fb");
   assert.ok(calls.some(c => c.url === "/api/campaigns/part%2Fa%3Fb"));
   assert.equal(calls.filter(c => c.options?.method).length, 0);
 });
@@ -165,7 +168,7 @@ test("history and per-card failures preserve useful result links and recover wit
   await flush();
   const card = page.document.querySelector(".campaign");
   assert.match(card.querySelector(".progress").textContent, /Trial counts unavailable/);
-  assert.equal(card.querySelectorAll("a").length, 5);
+  assert.equal(card.querySelectorAll("a").length, 6);
   failList = true;
   page.document.getElementById("refreshHistory").click(); await flush();
   assert.equal(page.document.querySelector(".campaign"), card);

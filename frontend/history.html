@@ -8,13 +8,13 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=foundry-5">
-  <link rel="stylesheet" href="/static/history.css?v=foundry-5">
-  <link rel="stylesheet" href="/static/navigation.css?v=foundry-5">
-  <script src="/static/navigation.js?v=foundry-5" defer></script>
-  <script src="/static/history-traces.js?v=trial-first-4"></script>
-  <script src="/static/history.js?v=trial-first-4" defer></script>
-  <link rel="stylesheet" href="/static/fluent.css?v=foundry-5">
+  <link rel="stylesheet" href="/static/styles.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/history.css?v=foundry-7">
+  <link rel="stylesheet" href="/static/navigation.css?v=foundry-7">
+  <script src="/static/navigation.js?v=foundry-7" defer></script>
+  <script src="/static/history-traces.js?v=foundry-7"></script>
+  <script src="/static/history.js?v=foundry-7" defer></script>
+  <link rel="stylesheet" href="/static/fluent.css?v=foundry-7">
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -25,7 +25,7 @@
     <nav class="workspace-tabs" aria-label="Results"><a href="/static/benchmarks.html">Campaigns</a><a href="/static/history.html" aria-current="page">Trials</a></nav>
     <div class="history-layout">
       <section id="trialBrowser" class="history-list-panel" aria-label="Saved trials">
-        <div class="trial-commandbar"><p id="listStatus" class="muted" role="status" aria-live="polite"></p><label class="filter-label" for="sourceFilter">Source</label><select id="sourceFilter"><option value="">All trials</option><option value="quick">Quick evaluations</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>
+        <div class="trial-commandbar"><p id="listStatus" class="muted" role="status" aria-live="polite"></p><label class="filter-label" for="sourceFilter">Source</label><select id="sourceFilter"><option value="">All trials</option><option value="quick">Standalone trials</option><option value="campaign">Campaigns</option><option value="legacy">Imported history</option></select><button id="refreshTrials" type="button" class="secondary">Refresh</button></div>
         <div class="trial-columns" aria-hidden="true"><span>Task</span><span>Strategy</span><span>Outcome / execution</span><span>Created</span><span>Actions</span></div>
         <ul id="trialList" class="trial-list" aria-label="Saved trials"></ul>
         <div class="pagination"><button type="button" id="previousPage" class="secondary" disabled>Previous</button><span id="pageLabel" class="muted"></span><button type="button" id="nextPage" class="secondary" disabled>Next</button></div>

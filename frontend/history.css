@@ -26,7 +26,8 @@ button:disabled { opacity: .5; cursor: default; }
 .trial-row { min-height:72px; padding:16px; background:var(--f-surface); border-bottom:1px solid var(--f-border); }
 .trial-row:hover { background:var(--f-elevated); }
 .trial-task,.trial-strategy,.trial-outcome,.trial-created { min-width:0; overflow-wrap:anywhere; font-size:14px; line-height:20px; }
-.trial-title { display:block; font-weight:600; }
+.trial-title { display:block; font-weight:600; font-size:16px; line-height:24px; }
+.trial-time { display:block; margin-top:4px; }
 .trial-source { display:block; margin-top:4px; }
 .trial-outcome { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .trial-execution { font-size:12px; color:var(--f-text-muted); }

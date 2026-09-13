@@ -10,7 +10,7 @@ async function workspace(query = "", options = {}) {
   const contracts = options.contracts || [{id: "contract", name: "Plan quality", criteria: []}];
   let summary = options.summary || {completed_trials: 1, planned_trials: 3, tasks: [{passed: 0, failed: 0, unknown: 1}], strategies: []};
   let campaignStatus = options.campaignStatus || "completed";
-  let campaignTrials = [{task_id: "case-r1", trial_id: "trial", strategy_id: "strategy", seed: 0, outcome: "unknown"}];
+  let campaignTrials = options.campaignTrials || [{task_id: "case-r1", trial_id: "trial", strategy_id: "strategy", seed: 0, outcome: "unknown"}];
   const pause = () => new Promise(resolve => setTimeout(resolve, 15));
   w.HTMLElement.prototype.scrollIntoView = () => {};
   w.HTMLDialogElement.prototype.showModal = function() {this.open = true;};
@@ -108,7 +108,7 @@ test("campaign and legacy case deep links restore context and history clears sta
 test("saved dataset reuse stays in Cases and Run retains exact revision and accessible scoring controls", async () => {
   const {dom, w, el, pause, set, step} = await workspace("", {empty: true});
   try {
-    assert.equal(el("importPanel").open, false); el("showImport").click(); assert.equal(el("importPanel").open, true); assert.equal(el("caseReusePanel").closest("[data-workflow-panel]").id, "reviewStep");
+    assert.equal(el("importPanel").open, false); el("showImport").click(); assert.equal(el("importPanel").open, true); assert.equal(el("caseReusePanel").closest("[data-workflow-panel]").id, "casesStep");
     set("freezeContract", "contract", "change"); assert.equal(el("campaignContract").value, "contract");
     [...el("datasetList").querySelectorAll("button")].find(b => b.textContent === "Use these cases").click(); await pause();
     assert.equal(el("casesStep").hidden, false); assert.match(el("runContext").textContent, /Reviewed set.*dataset-r1/);
@@ -351,7 +351,7 @@ test("Run confirms strategy and exact scoring rules, then lazily exposes recorde
     el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
     el("prepareRun").click(); await pause();
     assert.match(el("runSummary").textContent, /Warehouse pilot/);
-    assert.match(el("runSummary").textContent, /1 cases × 1 strategy × 3 repetitions = 3 trials/);
+    assert.match(el("runSummary").textContent, /1 case × 1 strategy × 3 repeats = 3 planned trials/);
     assert.match(el("runSummary").textContent, /Strategy: Mock strategy/);
     assert.match(el("runSummary").textContent, /Scoring rules: Grasp planning acceptance/);
     const criteria = el("runSummary").querySelector("details"); assert.equal(criteria.open, false);
@@ -378,7 +378,9 @@ test("Run confirms strategy and exact scoring rules, then lazily exposes recorde
 test("Review refreshes completed campaign assessments after Run and saved Run uses recorded configuration", async () => {
   const {dom, el, step, calls, pause, completeCampaign} = await workspace("?step=run&campaign=campaign");
   try {
-    assert.match(el("liveTrialStatus").textContent, /1 \/ 3 trials recorded/);
+    assert.match(el("liveTrialStatus").textContent, /Baseline · completed/);
+    assert.equal(el("runConfigDisclosure").open,false);assert.equal(el("runConfigSummary").hidden,false);assert.equal(el("runEditActions").hidden,true);
+    assert.equal(el("runConfigDisclosure").previousElementSibling.id,"liveTrialsPanel");
     assert.match(el("runSummary").textContent, /Baseline/);
     assert.match(el("runSummary").textContent, /3 planned trials across 1 cases/);
     assert.match(el("runSummary").textContent, /Strategies: strategy/);
@@ -386,7 +388,7 @@ test("Review refreshes completed campaign assessments after Run and saved Run us
     assert.equal(el("runLaunchActions").hidden, true, "saved campaign entry does not present another launch action");
     completeCampaign();
     el("refreshLiveTrials").click(); await pause();
-    assert.match(el("liveTrialStatus").textContent, /3 \/ 3 trials recorded/);
+    assert.match(el("liveTrialStatus").textContent, /Baseline · completed/);
     step("review"); await pause();
     assert.equal(el("trialInspection").querySelectorAll('a[href*="history.html?trial="]').length, 3);
     assert.match(el("campaignResults").textContent, /Unknown or pending3/);
@@ -473,7 +475,7 @@ test("template metrics honestly identify AI unavailability and configuration cha
   const {dom, w, el, step, pick, set, pause, calls} = await workspace("", {metricSource: "template"});
   try {
     await pick(); step("configure"); set("campaignStrategy", "strategy", "change"); step("metrics"); await pause();
-    assert.match(el("metricDraftSource").textContent, /AI unavailable/); assert.doesNotMatch(el("metricDraftSource").textContent, /Agent-drafted/);
+    assert.equal(el("metricDraftSource").textContent,"Task-based draft"); assert.match(el("metricsConnectionStatus").textContent,/AI suggestions unavailable/); assert.doesNotMatch(el("metricDraftSource").textContent, /Agent-drafted/);
     const criterion = el("generatedCriteria").querySelector("textarea[data-criterion-id]"); criterion.value = "User-approved clearance"; criterion.dispatchEvent(new w.Event("input", {bubbles: true}));
     el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
     assert.ok(el("campaignContract").value);
@@ -502,16 +504,21 @@ test("slow metric drafts cannot overwrite edits or changed campaign context", as
   }
 });
 
-test("Results lead with recorded charts, followed by AI evidence links, while detailed trials stay collapsed", async () => {
+test("Results show an outcome overview with separate trials and scoring tabs", async () => {
   const summary = {planned_trials: 3, completed_trials: 3, strategies: [{strategy_id: "strategy", pass_at_k: [{k: 1, value: .5}], pass_pow_k: [{k: 1, value: .5}], latency_p95_ms: 45}], tasks: [{strategy_id: "strategy", passed: 1, failed: 1, unknown: 1}]};
   const {dom, el, calls} = await workspace("?step=review&campaign=campaign", {summary, outcomeSummary: {source: "ai", headline: "One placement still needs assessment", findings: [{text: "The plan keeps a safe approach", trial_ids: ["trial"]}], next_steps: ["Review the remaining trial"]}});
   try {
-    assert.equal(el("campaignResults").children[1].id, "campaignOutcomeCharts");
-    assert.equal(el("campaignResults").children[2].id, "campaignAiSummary");
+    assert.equal(el("resultOverview").children[0].id, "campaignOutcomeCharts");
+    assert.equal(el("resultOverview").children[1].id, "campaignAiSummary");
     assert.match(el("campaignOutcomeCharts").textContent, /Outcomes by strategy/); assert.match(el("campaignOutcomeCharts").textContent, /Pipeline latency/);
     assert.match(el("campaignAiSummary").textContent, /AI outcome summary/);
     assert.equal(el("campaignAiSummary").querySelector("a").getAttribute("href"), "/static/history.html?trial=trial");
-    assert.equal(el("trialInspection").open, false); assert.equal(el("resultDetails").open, false);
+    assert.equal(el("trialInspection").hidden, true); assert.equal(el("resultDetails").hidden, true);
+    assert.equal(el("resultCampaignPicker").hidden,true);assert.match(el("currentCampaignContext").textContent,/Baseline/);
+    assert.equal(el("campaignHistoryLink").getAttribute("href"),"/static/campaign-history.html?campaign=campaign");assert.equal(el("campaignTimeline"),null);
+    el("resultTab-trials").click();assert.equal(el("trialInspection").hidden,false);assert.equal(el("resultOverview").hidden,true);
+    el("resultTab-scoring").click();assert.equal(el("resultDetails").hidden,false);assert.equal(el("resultTab-scoring").getAttribute("aria-selected"),"true");
+    assert.equal(el("advancedComparisons").closest('[role="tabpanel"]').id,"resultDetails");
     assert.equal(calls.filter(isMutation).length, 0);
   } finally { dom.window.close(); }
 });
@@ -519,7 +526,7 @@ test("Results lead with recorded charts, followed by AI evidence links, while de
 test("assistant summary failure leaves recorded outcome charts usable and offers retry", async () => {
   const {dom, el, calls, pause} = await workspace("?step=review&campaign=campaign", {summaryFail: true});
   try {
-    assert.match(el("campaignAiSummary").textContent, /AI summary unavailable/);
+    assert.match(el("campaignAiSummary").textContent, /AI explanation unavailable/);
     assert.match(el("campaignOutcomeCharts").textContent, /Outcomes by strategy/);
     const prior = calls.filter(call => call.url.endsWith("/outcome-summary")).length;
     el("campaignAiSummary").querySelector("button").click(); await pause();
@@ -772,4 +779,71 @@ test("improvement cards identify the problem and route named evidence without ex
     assert.equal(page.el("metricsStep").hidden,false);
     assert.equal(page.calls.some(call=>call.url==="/api/campaigns/from-cases"||call.url==="/api/evaluate"),false);
   } finally {page.dom.window.close();}
+});
+
+test("Configure calculator tracks selected cases, strategies and valid repeats independently of preview messages",async()=>{
+  const cases=[{id:"case-r1",case_revision_id:"case-r1",name:"One",task:"Pick one",conditions:{}},{id:"case-r2",case_revision_id:"case-r2",name:"Two",task:"Pick two",conditions:{}}];
+  const page=await workspace("",{cases,strategies:[{id:"one",display_name:"First"},{id:"two",display_name:"Second"}]});
+  const {dom,w,el,pick,step,set}=page;
+  try {
+    await pick(["case-r1","case-r2"]);step("configure");
+    el("strategyCards").querySelectorAll("input")[0].click();el("strategyCards").querySelectorAll("input")[1].click();
+    assert.equal(el("campaignCalculation").textContent,"2 cases × 2 strategies × 3 repeats = 12 planned trials");
+    set("campaignRepeats","4");assert.match(el("campaignCalculation").textContent,/= 16 planned trials$/);
+    el("campaignBudget").textContent="Preview complete";assert.match(el("campaignCalculation").textContent,/= 16 planned trials$/);
+    for(const invalid of ["1.5","-1","0","1001",""]) {set("campaignRepeats",invalid);assert.match(el("campaignCalculation").textContent,/whole number/);assert.doesNotMatch(el("campaignCalculation").textContent,/=/);}
+    set("campaignRepeats","3");el("strategyCards").querySelector("input").click();assert.match(el("campaignCalculation").textContent,/2 cases × 1 strategy × 3 repeats = 6/);
+    step("cases");[...el("selectedCases").querySelectorAll("button")].find(button=>button.textContent==="Remove").click();
+    assert.match(el("campaignCalculation").textContent,/1 case × 1 strategy × 3 repeats = 3/);
+  }finally{dom.window.close();}
+});
+
+test("success criteria surface scope, evidence and checking methods while preserving saved per-criterion methods",async()=>{
+  const mixed={...metricContract,id:"mixed-visible",criteria:[{id:"expert",description:"Expert checks intent",assessment:"human_review",required:true},{id:"verifier",description:"Check recorded constraint",assessment:"configured_verifier",endpoint:"grader",required:true}]};
+  const {dom,w,el,pick,step,set,pause}=await workspace("",{contracts:[mixed]});
+  try {
+    await pick();step("configure");set("campaignStrategy","strategy","change");set("campaignContract",mixed.id,"change");step("metrics");await pause();
+    for(const id of ["successScope","evidenceMode","assessmentMethod"]){const control=el(id);assert.equal(control.form.id,"contractForm");for(const disclosure of [...w.document.querySelectorAll("details")].filter(item=>item.contains(control)))assert.equal(disclosure.open,true);}
+    assert.match(el("generatedCriteria").textContent,/Checked by an expert/);assert.match(el("generatedCriteria").textContent,/Checked by configured verifier: grader/);
+    assert.match(el("gradingNotice").textContent,/pending until.*ratings/);assert.match(el("scopeHint").textContent,/does not establish observed robot task success/);
+    assert.equal(el("reportMeasures").tagName,"SECTION");assert.match(el("reportMeasures").textContent,/at least one accepted attempt/);assert.match(el("reportMeasures").textContent,/not physical task completion time/);
+    assert.equal(el("moreScoringOptions").querySelector("details"),null);
+    set("assessmentMethod","configured_verifier","change");assert.equal(el("verifierEndpointLabel").hidden,false);assert.match(el("gradingNotice").textContent,/All criteria.*verification/);
+  }finally{dom.window.close();}
+});
+
+test("Results tabs respond to outcome actions and keyboard, retain selection on refresh, and expose case reviews only from trials",async()=>{
+  const {dom,w,el,pause,calls}=await workspace("?step=review&campaign=campaign");
+  try {
+    assert.equal(el("reviewWorkspaceSlot").hidden,true);
+    el("campaignOutcomeCharts").dispatchEvent(new w.CustomEvent("rove:inspect-campaign-trials",{bubbles:true}));
+    assert.equal(el("trialInspection").hidden,false);assert.equal(w.document.activeElement.id,"resultTab-trials");
+    el("resultTab-trials").dispatchEvent(new w.KeyboardEvent("keydown",{key:"ArrowRight",bubbles:true}));
+    assert.equal(el("resultDetails").hidden,false);assert.equal(w.document.activeElement.id,"resultTab-scoring");
+    el("refreshCampaigns").click();await pause();assert.equal(el("resultDetails").hidden,false);
+    el("resultTab-trials").click();[...el("trialInspection").querySelectorAll("a")].find(a=>a.textContent==="Review case").click();await pause();
+    assert.equal(el("reviewWorkspaceSlot").hidden,false);assert.equal(el("caseInspection").open,true);
+    el("resultTab-overview").click();assert.equal(el("reviewWorkspaceSlot").hidden,true);
+    assert.equal(el("caseReusePanel").closest('[data-workflow-panel]').id,"casesStep");
+    assert.equal(calls.filter(isMutation).length,0);
+  }finally{dom.window.close();}
+});
+
+test("standalone Results can choose a campaign without displaying empty campaign history actions",async()=>{
+  const {dom,el}=await workspace("?step=review");
+  try{assert.equal(el("resultCampaignPicker").hidden,false);assert.equal(el("campaignHistoryLink").hidden,true);}finally{dom.window.close();}
+});
+
+
+test("campaign Trials use readable aligned rows and real results/review buttons in a single campaign toolbar",async()=>{
+  const {dom,el,pause}=await workspace("?step=review&campaign=campaign",{campaignTrials:[{task_id:"case-r1",trial_id:"trial",strategy_id:"strategy",seed:1,outcome:"unknown",execution:"error"}]});
+  try {
+    el("resultTab-trials").click();const row=el("trialInspection").querySelector(".campaign-trial-row");
+    assert.equal(row.tagName,"LI");assert.equal(row.children.length,4);assert.match(row.querySelector(".campaign-trial-task").textContent,/Place in bin.*Repeat 2/);
+    assert.match(row.querySelector(".campaign-trial-outcome").textContent,/Not scored.*Execution: error/);
+    const actions=row.querySelectorAll(".campaign-trial-actions > a.secondary");assert.equal(actions.length,2);
+    assert.equal(actions[0].textContent,"View results");assert.equal(actions[0].getAttribute("href"),"/static/history.html?trial=trial");
+    actions[1].click();await pause();assert.equal(el("reviewWorkspaceSlot").hidden,false);assert.equal(el("caseInspection").open,true);
+    assert.equal(el("campaignHistoryLink").parentElement.id,"campaignResultActions");assert.equal(el("openBaselineDialog").parentElement.id,"campaignResultActions");
+  }finally{dom.window.close();}
 });

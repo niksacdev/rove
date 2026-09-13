@@ -45,6 +45,7 @@ jobs:
           node --check frontend/datasets.js
           node --check frontend/campaign-results.js
           node --check frontend/campaign-trajectory.js
+          node --check frontend/campaign-history.js
           node --check frontend/campaign-progress.js
           node --check frontend/stage-renderers.js
           node --check frontend/trial-output.js
