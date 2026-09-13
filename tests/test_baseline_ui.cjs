@@ -1,6 +1,7 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path");
 const {JSDOM} = require("jsdom");
+const isMutation = call => call.method !== "GET" && !call.url.endsWith("/outcome-summary");
 async function baselineWorkspace(options = {}) {
   const root = path.resolve(__dirname, "../frontend");
   const dom = new JSDOM(fs.readFileSync(path.join(root, "datasets.html"), "utf8"), {url: `http://localhost/static/datasets.html?step=review&campaign=A${options.baselineId ? `&baseline=${options.baselineId}` : ""}`, runScripts: "outside-only"});
@@ -23,6 +24,7 @@ async function baselineWorkspace(options = {}) {
     } else if (/^\/api\/baselines\/[^/]+\/revisions$/.test(url)) value = {revisions: [...revisions, ...baselines].filter(item => url.split("/")[3] === item.id)};
     else if (url.startsWith("/api/baselines/")) value = revisions.find(item => url.endsWith(item.revision_id)) || baselines.find(item => url.endsWith(item.id) || url.endsWith(item.revision_id));
     else if (/^\/api\/campaigns\/[AB]$/.test(url)) value = {campaign: campaigns[url.at(-1)]};
+    else if (url.endsWith("/outcome-summary")) value = {source: "recorded", headline: "No assessments", findings: [], next_steps: []};
     else if (url.endsWith("/assessments")) value = {summary: {completed_trials: 2, planned_trials: 2, tasks: [], strategies: []}, assessments: {}, trials: []};
     else if (url.endsWith("/ablation-preview")) value = {ready: true, planned_trials: 2, comparison: {comparable: true, reasons: [], differences: []}};
     else throw new Error(`Unexpected request ${method} ${url}`);
@@ -43,7 +45,7 @@ test("completed campaign is not a baseline until explicitly saved, then comparis
     assert.equal(el("baselineReferenceBadge").textContent, "Not set as baseline");
     assert.equal(el("saveNamedBaseline").disabled, false);
     assert.equal(el("showComparison").disabled, true);
-    assert.equal(calls.filter(item => item.method !== "GET").length, 0);
+    assert.equal(calls.filter(isMutation).length, 0);
     assert.equal(el("namedBaselineName").value, "Warehouse baseline campaign · alpha");
     await save();
     const mutation = calls.find(item => item.method === "POST" && item.url === "/api/baselines");
@@ -82,13 +84,13 @@ test("saved reference selection opens its actual campaign and strategy without w
     set("resultCampaign", "A"); await pause();
     assert.equal(el("baselineReferenceBadge").textContent, "Not set as baseline");
     assert.doesNotMatch(el("baselineReferenceIdentity").textContent, /other-r3/);
-    assert.equal(calls.filter(item => item.method !== "GET").length, 0);
+    assert.equal(calls.filter(isMutation).length, 0);
   } finally { w.close(); }
 });
 
 test("running campaign cannot be marked as a baseline", async () => {
   const {w, el, save, calls} = await baselineWorkspace({running: true});
-  try { assert.equal(el("saveNamedBaseline").disabled, true); await save(); assert.equal(calls.filter(item => item.method !== "GET").length, 0); assert.equal(el("baselineReferenceBadge").textContent, "Not set as baseline"); }
+  try { assert.equal(el("saveNamedBaseline").disabled, true); await save(); assert.equal(calls.filter(isMutation).length, 0); assert.equal(el("baselineReferenceBadge").textContent, "Not set as baseline"); }
   finally { w.close(); }
 });
 
@@ -100,7 +102,7 @@ test("baseline deep link selects the exact saved strategy, not the campaign's fi
     assert.match(el("baselineReferenceSummary").textContent, /Beta release.*revision 2/);
     assert.match(el("baselineReferenceIdentity").textContent, /beta-r2/);
     assert.equal(el("showComparison").disabled, false);
-    assert.equal(calls.filter(item => item.method !== "GET").length, 0);
+    assert.equal(calls.filter(isMutation).length, 0);
   } finally { w.close(); }
 });
 
@@ -123,6 +125,6 @@ test("review refresh retains an explicitly selected older baseline revision and 
     set("resultCampaign", "B"); await pause();
     assert.doesNotMatch(el("baselineReferenceIdentity").textContent, /release-r1/);
     assert.equal(el("baselineReferenceBadge").textContent, "Not set as baseline");
-    assert.equal(calls.filter(item => item.method !== "GET" && !item.url.endsWith("/ablation-preview")).length, 0);
+    assert.equal(calls.filter(item => isMutation(item) && !item.url.endsWith("/ablation-preview")).length, 0);
   } finally { w.close(); }
 });

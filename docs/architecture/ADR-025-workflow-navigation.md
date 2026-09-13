@@ -1,6 +1,6 @@
 # ADR-025: Organize navigation around the evaluation journey
 
-**Status:** Accepted and implemented locally; desktop mock journey verified, 390px gallery verified in light and dark themes.
+**Status:** Accepted and implemented; five-stage mock campaign and narrow Results layout verified locally. Live AI and hardware validation excluded.
 **Date:** 2026-09-12
 **Product contract:** [Campaign workspace](../product/user-journey.md).
 
@@ -22,8 +22,9 @@ needs reusable strategy and endpoint configuration. The shared goal remains:
 
 Use **Start, Evaluate, Results** as primary destinations, with **Settings** visually
 separate on the right. Evaluate is one campaign workspace with **Cases → Configure →
-Run → Review results**. Settings maintains reusable strategies/connections; Configure
-selects those strategies and defines the current campaign's success criteria.
+Success metrics → Run → Results**. Settings maintains reusable strategies/connections;
+Configure selects them and Success metrics establishes the assessment. The separate
+metrics stage is a presentation boundary over the existing success contract.
 
 ```mermaid
 flowchart TD
@@ -32,9 +33,11 @@ flowchart TD
     N --> R["Results"]
     N -. Right utility .-> U["Settings"]
     E --> C["Cases: add new / select existing"]
-    C --> F["Configure: strategies, success, optional chat"]
-    F --> L["Run campaign: confirmation and trials"]
-    L --> V["Review results"]
+    C --> F["Configure: select strategies"]
+    F --> M["Success metrics: review criteria and AI drafts"]
+    M --> L["Run campaign: each strategy and its trials"]
+    L --> V["Results: graphs and optional AI summary"]
+    V --> I["Inspect trials: saved evidence"]
     R --> T["Saved trial evidence"]
     R -. Exact campaign ID .-> V
     U -. Available strategies .-> F
@@ -60,7 +63,8 @@ changed strategy revision is a configuration operation governed by
 assistant helps configure this same evaluation, using existing host validation and
 confirmation boundaries. It cannot create expert judgments or silently start work.
 
-Run shows the configuration and planned count before launch. A trial is one attempt
+Run shows the configuration and planned count before launch, then per-strategy
+progress with nested trial evidence. A trial is one attempt
 at one case with one strategy; pipeline stages are nested execution evidence. Show
 that identity during execution and preserve it through results and trace inspection.
 Use **Save case collection** and **Add to an existing collection** for dataset actions.
@@ -84,8 +88,9 @@ changes do not alter semantics or substitute color for labels and status text.
 
 ## Compatibility and state
 
-Retain existing pages, API routes and saved case/campaign/trial IDs. Add a Configure
-stage route within the existing workspace. Results returns to
+Retain existing pages, API routes and saved case/campaign/trial IDs. Add a Success
+metrics stage route within the existing workspace; preserve the existing Configure,
+Run and Review deep links. Results returns to
 `/static/datasets.html?step=review&campaign=ID`. Settings uses the existing root
 strategy/model/settings views. Legacy quick-run and sample-library URLs remain usable,
 but new case browse actions stay within the campaign. No new Experiment/Session entity
@@ -125,7 +130,45 @@ configuration staleness and trial evidence inspection. The
 [journey specification](../product/user-journey.md#acceptance-and-delivery-evidence)
 records that coverage and the desktop three-trial mock journey. The 390px case gallery was checked in light and dark themes: bounded scrolling, visible search and category controls, image cards and a fixed selection footer.
 
-Campaign progress polls every two seconds while active and visible. Inline stage events
+Campaign progress polls every two seconds while active and visible; active trials also
+feed recorded stage events to the strategy overview. Expanded inline stage events
 and recorded output load on disclosure expansion or explicit refresh, with a bounded
 200-event view and a route to the full inspector. This does not claim token streaming.
 The [older dashboard journey](../ux/dashboard-user-journey.md) remains historical.
+
+## Five-stage refinement: assessment and explanation boundaries
+
+Separating Success metrics makes the customer approve what will be measured before
+execution. Optional AI assistance can draft assessment settings and later explain
+results, using the existing host-validation boundary. It does not become the campaign
+scheduler or authoritative scorer. No new database, trial entity or execution engine
+is introduced by this refinement.
+
+```mermaid
+flowchart LR
+    D[Cases and chosen strategies] --> A[Optional assistant draft]
+    A --> U[User reviews success metrics]
+    U --> H[Existing validated success contract]
+    H --> E[Existing campaign engine and trial store]
+    E --> S[Authoritative assessment summary]
+    S --> G[Outcome and reliability charts]
+    S --> X[Optional AI explanation]
+    G --> T[Inspect retained trial evidence]
+    X --> T
+```
+
+Results leads with charts derived from the assessment summary, then a compact optional
+AI explanation, followed by expandable trial inspection. Pass/fail/unknown counts,
+execution completion and evidence coverage remain distinct. Curves preserve per-strategy
+and per-case sampling boundaries; unresolved bounds are not confidence intervals.
+Missing robotics metrics stay unavailable, and output acceptance is not promoted to
+physical completion. Narrative explanations cannot mutate results or manufacture
+causal claims. All manual setup, reports and evidence remain usable without a provider.
+
+The five-stage refinement has local regression coverage and browser evidence: an
+isolated campaign with one case, two mock strategies and three repetitions retained
+six completed trials, while Results correctly showed all six as unassessed. Per-strategy
+stages were visible, trial inspection began collapsed, and the 390px Results page had
+no horizontal overflow. The [journey evidence](../product/user-journey.md#five-stage-browser-verification-13-september-2026)
+records scope and limitations. Assistant generation is tested with a fake runtime;
+these checks do not validate live model behavior or physical robot performance.

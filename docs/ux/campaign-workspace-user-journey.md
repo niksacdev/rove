@@ -1,6 +1,6 @@
 # User journey: campaign workspace
 
-**Status:** Implemented with local regression coverage and desktop mock journey verification; 390px gallery verified in light and dark themes.
+**Status:** Five-stage workspace implemented and checked with a six-trial local mock campaign and a narrow Results layout. Live AI and hardware validation excluded.
 
 The current journey and persona requirements are maintained in the
 [campaign workspace specification](../product/user-journey.md). This replaces the
@@ -18,9 +18,11 @@ The user reported confusion and frustration rather than confidence in the evalua
 
 ```mermaid
 flowchart LR
-    A[Add customer case or choose gallery cases] --> C[Select strategies and explain success]
-    C --> R[Run campaign: execute identified trials]
-    R --> V[Review results: inspect saved evidence]
+    A[Cases: add or select customer cases] --> C[Configure: choose strategies]
+    C --> M[Success metrics: review criteria and AI drafts]
+    M --> R[Run: progress for each strategy and trial]
+    R --> V[Results: charts and optional AI explanation]
+    V --> I[Inspect trials: saved evidence]
     V --> B[Set as baseline: save comparison reference]
     B --> P[Preview changed strategy]
     P --> X[Start comparison campaign: new trials]
@@ -40,3 +42,20 @@ Measure completion of the full journey with isolated mock trials, not only navig
 assertions. Verify the user can identify what will run, what counts as a trial and what
 evidence supports success before accepting the redesign. The detailed acceptance list
 and actual delivery evidence belong in the canonical specification above.
+
+## Assessment and results refinement
+
+A separate Success metrics stage gives the engineer a clear moment to agree expected
+outcomes and the evidence needed to judge them. AI drafts are proposals for review,
+not expert ratings. Results answers the researcher's immediate comparison question
+with per-strategy outcome and reliability charts before presenting optional explanatory
+prose. Trial evidence, measurements and grading remain available behind **Inspect trials**.
+Show unknown outcomes explicitly; unavailable evidence must not become a confident score.
+The platform persona can keep using the same configured strategies and assistant runtime.
+
+Acceptance requires five-stage keyboard/navigation behavior, per-strategy progress,
+chart/count consistency and usable reports with the assistant unavailable. Verification
+of this refinement includes a six-trial mock campaign with all unassessed outcomes
+correctly retained and a 390px Results view without horizontal overflow. Earlier gallery
+checks remain separate evidence. Generation behavior has fake-runtime coverage; live
+AI generation was not tested.

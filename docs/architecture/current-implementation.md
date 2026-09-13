@@ -1,6 +1,6 @@
 # Current Implementation
 
-**Checked:** 12 September 2026, against the customer evaluation workflow and
+**Checked:** 13 September 2026, against the customer evaluation workflow and
 original T01–T12 acceptance, with live provider validation excluded by request.
 Local follow-up adds preserved recording selections, native trace ancestry, causal
 synthetic episodes, explicit annotation bindings and named baselines. The
@@ -23,20 +23,24 @@ PR #21. User feedback found that route consistency left the workflow unclear: ca
 selection, contracts, chat, datasets and execution still competed for attention.
 
 The accepted amendment is **Start, Evaluate, Results**, with **Settings** separately
-on the right. Evaluate becomes **Cases → Configure → Run → Review results**. It
+on the right. The latest accepted refinement is **Cases → Configure → Success metrics
+→ Run → Results**, implemented with local regression and mock browser verification. It
 uses an image/task gallery dialog and selected-case cards, existing strategies from
 configuration, plain-language success criteria with draft suggestions, and an optional
-assistant in Configure. Run exposes the planned trial count and each recorded trial's
+assistant with the campaign context. Success metrics separates assessment agreement
+from strategy selection. Run exposes the planned trial count and each recorded trial's
 case, strategy and attempt identity. Dataset actions use case-collection wording;
 adding to a collection requires a new revision retaining its earlier membership.
 
-The amendment is implemented locally with DOM behavior regression coverage. Run
+The five-stage amendment extends the existing DOM behavior regression coverage with
+metrics drafting/confirmation, strategy progress and graph-first Results checks. Run
 confirms the selected strategy and exact scoring criteria. Case expectations are keyed
 by immutable case revision in the saved contract; scoring edits and late save responses
 cannot silently activate an outdated preview. Saved collection cards load their actual
 members, and adding cases preserves the old revision and its review references.
 
-Active campaign progress polls every two seconds while the Run page is visible. Inline
+Active campaign progress polls every two seconds while the Run page is visible, and
+active trial events update each strategy overview. Inline
 pipeline details fetch recorded stages/output on expansion and manual refresh, showing
 up to 200 events with a full-inspector link. They do not stream tokens. Tests cover these
 paths alongside draft preservation, search/selection, deep links and no execution from
@@ -49,6 +53,36 @@ establish model quality or physical robot performance.
 The [campaign workspace](../product/user-journey.md) and
 [ADR-025](ADR-025-workflow-navigation.md) define the requirements and evidence checklist.
 Existing API, recording and scoring contracts remain authoritative below.
+
+The five-stage refinement adds an individual progress overview for each chosen
+strategy. Results leads with assessment-derived charts, then a compact optional AI
+explanation and expandable **Inspect trials** evidence. Passed/failed/unknown counts,
+execution status and assessment coverage remain separate. Unavailable metrics are
+not converted to zero; unresolved pass@k/pass^k bounds are not confidence intervals.
+
+The implemented insight endpoints reuse the configured assistant runtime in read-only
+mode. `/api/campaigns/metrics-draft` produces a reviewable success-contract draft from
+tasks and annotations, with source and evidence fingerprints. It does not perform
+image inspection or write SME judgments. `/api/campaigns/{id}/outcome-summary` explains
+retained assessment data without changing it. The `campaign_insights` cache table in
+existing `campaigns.sqlite3` keys explanations to the full assessed campaign/trials,
+assistant configuration, SDK/CLI versions and prompt version. Only valid completed-
+campaign AI interpretations are persisted; templates remain retryable. Evidence changes
+during generation cause a regeneration error. Concurrent requests coalesce in process.
+The model receives bounded saved aggregates and trial outcome anchors, not raw traces.
+Credentials and inline media are sanitized; reference annotations remain task context.
+Missing/failing providers and incomplete campaigns have distinct template explanations.
+The source is [`insights.py`](../../src/rove/benchmarks/insights.py), its
+[API router](../../src/rove/api/insights.py) and the shared
+[assistant configuration](../../src/rove/runtime/assistant.py). Fake-runtime tests in
+[`test_campaign_insights.py`](../../tests/test_campaign_insights.py) verify draft and
+summary boundaries without live inference.
+
+The isolated five-stage browser campaign `0dcb416a21a755b2be325b61b061df0c` ran two mock
+strategy revisions on one case with three repetitions. Six persisted executions had
+six unassessed outcomes in the graphs, with recorded strategy stages and collapsed
+trial inspection. The 390px Results view had no horizontal overflow. This evidence
+establishes local workflow behavior, not live assistant or hardware performance.
 
 Creation uses **Create a campaign**, and **Run campaign** is an execution action on that
 record. **Review results** loads recorded evidence. Baseline creation names a completed

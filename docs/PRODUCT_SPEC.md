@@ -114,7 +114,7 @@ creates a reusable case; later campaigns schedule fresh attempts separately.
 
 Primary navigation is **Start · Evaluate · Results**, with **Settings** separately
 on the right. Settings maintains reusable strategies, models/connections and preferences.
-Evaluate is a single campaign workspace: **Cases → Configure → Run → Review results**.
+Evaluate is a single campaign workspace: **Cases → Configure → Success metrics → Run → Results**.
 
 Cases offers **Add new**, **Select existing** and **Import cases**. Add new opens a
 single-case dialog. The existing library groups Cases and Datasets in one bounded
@@ -124,20 +124,27 @@ images. Selected cases appear as compact editable cards with expandable expectat
 available metadata or an explicit assistant, but remain labelled drafts. Suggested
 content cannot create a human judgment or turn an initial image into completion evidence.
 
-Configure selects one or several available strategies and presents editable,
-plain-language success criteria. Advanced contract JSON stays in collapsed details.
+Configure selects one or several available strategies. **Success metrics** is a
+dedicated stage for editable criteria, expected report measures and evidence needs.
+Its optional assistant drafts criteria from task and annotation context for review;
+it does not claim to have inspected image bytes. Advanced contract JSON stays collapsed.
 Existing strategies can be compared within one campaign on the same case set. A
 component ablation saves a new revision of a baseline strategy and compares that
 candidate under the same recorded assessment conditions. The optional assistant's
-chat helps configure the same evaluation here. The manual path
-works without it; both use the same validated preview and explicit launch boundary.
+chat helps prepare the same evaluation. Progressive assistance offers assessment
+drafts in Success metrics and an explanation of retained outcomes in Results. The
+manual path works without it; both use validated previews and explicit launch.
 
 Run confirms case count, strategy selection, repetitions, criteria and execution limits.
 It explains the total: **cases × strategies × repetitions = planned trials**. During
-execution, each recorded trial shows its case, strategy and attempt identity. Campaign
-progress polls every two seconds while visible; expanding pipeline details or pressing
+execution, each selected strategy has visible progress and nested trials showing
+case, strategy and attempt identity. Campaign
+progress and active trial stage updates poll while visible; expanding pipeline details or pressing
 Refresh fetches recorded stage events and output. This does not imply token streaming.
-Review reads saved report measures, trials, traces and expert assessments. **Set as
+Results leads with per-strategy outcome and reliability charts, followed by an optional
+AI outcome summary and **Inspect trials** details for outputs, traces and expert
+assessments. Unknown outcomes and unavailable measures remain explicit; an explanation
+cannot alter scores or claim physical completion without evidence. **Set as
 baseline** names and saves one completed campaign strategy as the reference; Results
 shows a **Baseline** badge only for persisted references. Versioning and pinning stay
 secondary. **Compare a strategy change** prepares a matching candidate; only **Start
@@ -153,8 +160,12 @@ Results returns to the exact campaign or trial through saved identities. Local s
 changes retain draft selections and never execute work. Legacy URLs remain usable.
 Use warm neutral/slate surfaces with restrained teal accents, readable controls,
 keyboard focus and a connection status that never obscures the task input. This
-redesign is implemented locally with revised behavior tests, a desktop three-trial mock
-journey and narrow-shell checks in both themes. The 390px case gallery was also verified in both themes. See the [campaign workspace](product/user-journey.md) and
+earlier workspace was verified with revised behavior tests, a desktop three-trial mock
+journey and a 390px gallery in both themes. The separate metrics stage, progressive AI
+assistance, strategy progress overview and graph-first Results were then checked with
+a separate six-trial mock campaign and a 390px Results layout. Unknown assessments
+remained visible after execution completed. Assistant behavior has fake-runtime
+regression coverage; live AI generation and hardware performance were not validated. See the [campaign workspace](product/user-journey.md) and
 [ADR-025](architecture/ADR-025-workflow-navigation.md) for requirements and validation.
 
 ## 5. Create datasets and validate cases
