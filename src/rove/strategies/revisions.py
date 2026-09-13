@@ -188,7 +188,13 @@ def overlay(config, config_path: Path):
         if identity in strategies:
             raise RevisionConflict(f"Strategy revision ID conflicts with configuration: {identity}")
         try:
-            strategies[identity] = validate_definition(record["definition"], config)
+            restored = validate_definition(record["definition"], config)
+            if (
+                record.get("kind") == "historical_snapshot"
+                and fingerprint(restored, config) != record["runtime_fingerprint"]
+            ):
+                continue
+            strategies[identity] = restored
         except ValueError:
             # Keep the source configuration usable when a referenced endpoint is removed.
             continue
@@ -201,6 +207,13 @@ def list_revisions(config_path: Path, config) -> list[dict]:
         try:
             strategy = validate_definition(record["definition"], config)
             current = fingerprint(strategy, config)
+            if (
+                record.get("kind") == "historical_snapshot"
+                and current != record["runtime_fingerprint"]
+            ):
+                raise ValueError(
+                    "Historical endpoint/default configuration changed; source revision is unavailable"
+                )
             result.append(
                 {
                     **record,
@@ -261,6 +274,83 @@ def save(config_path: Path, request: RevisionSave) -> dict:
             )
         except sqlite3.IntegrityError as error:
             raise RevisionConflict("This immutable strategy revision already exists") from error
+    reset_config_cache()
+    load_config(config_path)
+    return result
+
+
+def restore_snapshot(config_path: Path, *, source: dict, definition: dict, frozen: dict) -> dict:
+    """Save a selectable historical definition only against unchanged runtime inputs.
+
+    This explicit user action restores configuration, not an execution. Endpoint
+    credentials remain in the live configuration and are excluded from identity.
+    """
+    from rove.models.config import load_config, reset_config_cache
+
+    config = load_config(config_path)
+    strategy = validate_definition(definition, config)
+    historical = {
+        "definition": strategy.model_dump(mode="json"),
+        "endpoints": {
+            key: frozen.get("endpoints", {}).get(key) for key in strategy.endpoint_refs()
+        },
+        "defaults": frozen.get("defaults"),
+    }
+    expected = content_hash(sanitize(historical))
+    current = fingerprint(strategy, config)
+    if expected != current:
+        raise RevisionConflict(
+            "Historical endpoint or default configuration changed; restore those components or choose an explicit new strategy"
+        )
+    identity = "snapshot_" + expected[:24]
+    result = {
+        "strategy_id": identity,
+        "parent_id": source["id"],
+        "parent_fingerprint": expected,
+        "definition": strategy.model_dump(mode="json"),
+        "endpoint_fingerprints": {
+            key: content_hash(sanitize(frozen["endpoints"][key]))
+            for key in strategy.endpoint_refs()
+        },
+        "runtime_fingerprint": expected,
+        "preview_hash": expected,
+        "differences": [],
+        "kind": "historical_snapshot",
+        "source": source,
+    }
+    path = catalog_path(config_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with closing(sqlite3.connect(path, timeout=10)) as db, db:
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS strategy_revisions (strategy_id TEXT PRIMARY KEY,operation_id TEXT NOT NULL UNIQUE,request_hash TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL)"
+        )
+        db.execute("BEGIN IMMEDIATE")
+        previous = db.execute(
+            "SELECT payload FROM strategy_revisions WHERE strategy_id=?", (identity,)
+        ).fetchone()
+        if previous:
+            saved = json.loads(previous[0])
+            if (
+                saved["runtime_fingerprint"] != expected
+                or saved["definition"] != result["definition"]
+            ):
+                raise RevisionConflict(
+                    "Historical strategy identifier conflicts with an existing revision"
+                )
+            return saved
+        if identity in config.strategies:
+            raise RevisionConflict("Historical strategy identifier conflicts with configuration")
+        result["created_at"] = now()
+        db.execute(
+            "INSERT INTO strategy_revisions VALUES (?,?,?,?,?)",
+            (
+                identity,
+                "restore-" + expected,
+                expected,
+                canonical_json(result),
+                result["created_at"],
+            ),
+        )
     reset_config_cache()
     load_config(config_path)
     return result

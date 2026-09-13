@@ -524,7 +524,7 @@ function setRootChrome(view) {
 
 function initTopNav() {
   document.addEventListener("click", function(event) {
-    var link = event.target.closest("a[data-root-view], #roveNav a");
+    var link = event.target.closest("a[data-root-view], #roveNav a, #roveFooter a");
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     var target = new URL(link.href, location.href);
     if (target.origin !== location.origin || target.pathname !== "/") return;
@@ -969,12 +969,12 @@ async function renderExamplesView() {
 
   var menuSubtitle = document.createElement("p");
   menuSubtitle.className = "text-[10px] text-gray-500 mb-4";
-  menuSubtitle.textContent = "Try a quick run, or open a versioned case to define success and run a campaign.";
+  menuSubtitle.textContent = "Choose an observation and task for your first trial.";
   menu.appendChild(menuSubtitle);
   var workspaceLink = document.createElement("a");
   workspaceLink.href = "/static/datasets.html";
   workspaceLink.className = "block text-xs text-f-purple mb-4";
-  workspaceLink.textContent = "Open Cases workspace →";
+  workspaceLink.textContent = "Create a campaign from cases →";
   menu.appendChild(workspaceLink);
   var scopeNote = document.createElement("p");
   scopeNote.className = "text-[10px] text-gray-500 mb-4";
@@ -1074,7 +1074,14 @@ async function renderExamplesView() {
       });
 
       groups[sceneType].forEach(function(ex) {
-        grid.appendChild(createSampleCaseCard(ex, API_BASE));
+        var sampleCard = createSampleCaseCard(ex, API_BASE);
+        var trialLink = sampleCard.querySelector("a");
+        if (trialLink) {
+          trialLink.href = "/?view=quick&case=" + encodeURIComponent(ex.case_revision_id);
+          trialLink.setAttribute("aria-label", "Use in a trial: " + ex.task);
+          trialLink.querySelectorAll("span").forEach(function(label) { if (label.textContent === "Select case →") label.textContent = "Use in a trial →"; });
+        }
+        grid.appendChild(sampleCard);
       });
 
       section.appendChild(header);
@@ -1732,6 +1739,10 @@ function showHistoryEntry(idx) {
     chatArea.appendChild(container);
     activeTabId = showSid;
   }
+  if (entry.status === "completed") {
+    Object.keys(tabData).forEach(function(sid) { renderTrialCampaignActions(entry, tabData[sid].el, sid); });
+    if (ids.length > 1 && summaryEl) renderTrialCampaignActions(entry, summaryEl);
+  }
 }
 
 // ---- localStorage persistence ----
@@ -1803,6 +1814,8 @@ function restoreHistory() {
             status: se.status || "completed",
             results: {},
             summaryResults: {},
+            trialIds: se.trial_ids || {},
+            completedStrategyIds: [],
           };
           // Convert server results to client format
           if (se.results) {
@@ -1812,6 +1825,7 @@ function restoreHistory() {
               : Object.values(se.results);
             resultItems.forEach(function(sr) {
               var sid = sr.strategy_id || sr.display_name || "default";
+              if (!sr.error && !(sr.stages || []).some(function(stage) { return stage.status === "error"; })) entry.completedStrategyIds.push(sid);
               entry.results[sid] = {
                 stages: (sr.stages || []).map(function(stg) {
                   return {
@@ -3242,6 +3256,25 @@ var COMPARE_RENDERERS = {
   verify: cmpRenderVerify,
 };
 
+// Saved trial identity is supplied by the completed server response, never the evaluation ID.
+function renderTrialCampaignActions(entry, container, onlyStrategy) {
+  if (!container) return;
+  container.querySelectorAll(":scope > .trial-next-step").forEach(function(element) { element.remove(); });
+  var ids = (entry.completedStrategyIds || []).filter(function(sid) { return (!onlyStrategy || sid === onlyStrategy) && typeof entry.trialIds?.[sid] === "string" && entry.trialIds[sid]; });
+  if (!ids.length) return;
+  var card = document.createElement("section"); card.className = "trial-next-step";
+  var heading = document.createElement("h3"); heading.textContent = "Keep testing this task";
+  var hint = document.createElement("p"); hint.textContent = "Use the saved observation and strategy to build a repeatable campaign."; card.append(heading, hint);
+  ids.forEach(function(sid) {
+    var row = document.createElement("div"); row.className = "trial-next-step-actions";
+    var strategy = strategies.find(function(item) { return item.id === sid; });
+    if (ids.length > 1) { var name = document.createElement("strong"); name.textContent = strategy?.display_name || sid; row.appendChild(name); }
+    var add = document.createElement("a"); add.className = "trial-campaign-link"; add.textContent = "Add to campaign"; add.href = "/static/datasets.html?trial=" + encodeURIComponent(entry.trialIds[sid]); add.setAttribute("aria-label", "Add " + (strategy?.display_name || sid) + " trial to a campaign");
+    var trace = document.createElement("a"); trace.textContent = "Inspect saved trial"; trace.href = "/static/history.html?trial=" + encodeURIComponent(entry.trialIds[sid]); row.append(add, trace); card.appendChild(row);
+  });
+  container.appendChild(card);
+}
+
 // ---- SSE connection ----
 function connectSSE(evalId) {
   if (currentEventSource) currentEventSource.close();
@@ -3470,8 +3503,14 @@ function connectSSE(evalId) {
       try {
         var completeData = JSON.parse(e.data);
         if (historyEntry) {
+          historyEntry.trialIds = completeData.trial_ids || {};
+          historyEntry.completedStrategyIds = (completeData.results || []).filter(function(result) { return !result.error && !(result.stages || []).some(function(stage) { return stage.status === "error"; }); }).map(function(result) { return result.strategy_id; });
           if (completeData.provenance) historyEntry.provenance = completeData.provenance;
           if (completeData.insights) historyEntry.insights = completeData.insights;
+        }
+        if (historyEntry) {
+          Object.keys(tabData).forEach(function(sid) { renderTrialCampaignActions(historyEntry, tabData[sid].el, sid); });
+          if (summaryEl) renderTrialCampaignActions(historyEntry, summaryEl);
         }
         // Render provenance + insights into summary tab or active container
         var insightsTarget = summaryEl;

@@ -9,9 +9,12 @@ async function workspace(query = "", options = {}) {
   const w = dom.window, calls = [], cases = options.cases || [{case_id: "case", case_revision_id: "case-r1", id: "case-r1", name: "Pick red part", task: "Place in bin", revision: 1, image_asset: {sha256: "a".repeat(64)}, conditions: {eval_category: "placement"}, readiness: {assessment: "unreviewed"}}];
   const contracts = options.contracts || [{id: "contract", name: "Plan quality", criteria: []}];
   let summary = options.summary || {completed_trials: 1, planned_trials: 3, tasks: [{passed: 0, failed: 0, unknown: 1}], strategies: []};
+  let campaignStatus = options.campaignStatus || "completed";
   let campaignTrials = [{task_id: "case-r1", trial_id: "trial", strategy_id: "strategy", seed: 0, outcome: "unknown"}];
   const pause = () => new Promise(resolve => setTimeout(resolve, 15));
   w.HTMLElement.prototype.scrollIntoView = () => {};
+  w.HTMLDialogElement.prototype.showModal = function() {this.open = true;};
+  w.HTMLDialogElement.prototype.close = function() {this.open = false; this.dispatchEvent(new w.Event("close"));};
   w.fetch = async (url, opts = {}) => {
     const method = opts.method || "GET", body = opts.body ? JSON.parse(opts.body) : null; calls.push({url, method, body}); let value;
     if (url === "/api/assistant/status") value = {available: false, reason: "Not configured"};
@@ -31,14 +34,15 @@ async function workspace(query = "", options = {}) {
     else if (url === "/api/success-contracts") value = {contracts};
     else if (url.startsWith("/api/datasets?")) value = {datasets: [{id: "dataset-r1", name: "Reviewed set", contract_id: "contract", members: [{case_revision_id: "case-r1", disposition: "included"}]}]};
     else if (url === "/api/datasets/dataset-r1") { if (options.datasetWait) await options.datasetWait; value = {id: "dataset-r1", name: "Reviewed set", contract_id: "contract", members: [{case_revision_id: "case-r1", disposition: "included"}]}; }
-    else if (url === "/api/strategies") value = {strategies: [{id: "strategy", display_name: "Mock strategy", perceive: "mock-vision", plan: "mock-planner"}]};
+    else if (url === "/api/strategies") { if(options.strategyWait) await options.strategyWait; value = {strategies: options.strategies || [{id: "strategy", display_name: "Mock strategy", perceive: "mock-vision", plan: "mock-planner"}]}; }
     else if (url === "/api/baselines") value = {baselines: []};
     else if (url === "/api/campaigns") value = [{id: "campaign", name: "Baseline", status: "completed"}];
     else if (url === "/api/campaigns/metrics-draft") { if (options.metricWait) await options.metricWait; value = {contract: metricContract, source: options.metricSource || "ai", rationale: "Based on the selected placement case", evidence_fingerprint: "case-evidence-r1"}; }
     else if (url.endsWith("/outcome-summary")) { if (options.summaryFail) throw Error("Assistant unavailable"); value = options.outcomeSummary || {source: "recorded", headline: "Assessments remain pending", findings: [], next_steps: []}; }
     else if (url === "/api/campaigns/preview") value = {ready: !options.blocked, blockers: options.blocked ? ["Episode outcome requires recorded evidence"] : [], planned_trials: 3, metrics: [{name: "task_success", status: "needs_review", reason: "SME review required"}]};
     else if (url === "/api/campaigns/from-cases") value = {id: "campaign", planned_trials: 3};
-    else if (url === "/api/campaigns/campaign") value = {campaign: {id: "campaign", contract_id: "contract", spec: {name: "Baseline", seeds: [0, 1, 2], strategies: ["strategy"], tasks: [{id: "case-r1", case_revision_id: "case-r1", task: "Place in bin"}]}, status: "completed"}, summary};
+    else if (url.endsWith("/campaign-draft") || url.endsWith("/improvement-draft")) { if(options.seedWait) await options.seedWait; if(options.seedFailure) throw Error("Source unavailable"); value = options.seed; }
+    else if (url === "/api/campaigns/campaign") { if(options.campaignWait) await options.campaignWait; value = {campaign: {id: "campaign", contract_id: "contract", spec: {name: "Baseline", seeds: [0, 1, 2], strategies: ["strategy"], tasks: [{id: "case-r1", case_revision_id: "case-r1", task: "Place in bin"}]}, status: campaignStatus}, summary}; }
     else if (url === "/api/campaigns/campaign/assessments") value = {summary, assessments: {}, trials: campaignTrials};
     else throw Error(`Unexpected request: ${method} ${url}`);
     return {ok: true, status: 200, json: async () => value};
@@ -62,7 +66,7 @@ async function workspace(query = "", options = {}) {
     summary = {...summary, completed_trials: 3, tasks: [{passed: 0, failed: 0, unknown: 3}]};
     campaignTrials = [0, 1, 2].map(seed => ({task_id: "case-r1", trial_id: seed ? `trial-${seed}` : "trial", strategy_id: "strategy", seed, outcome: "unknown"}));
   };
-  return {dom, w, el, step, calls, pause, set, route, pick, completeCampaign};
+  return {dom, w, el, step, calls, pause, set, route, pick, completeCampaign, status: value => {campaignStatus = value;}};
 }
 
 test("step navigation retains input selections, unsaved forms and a valid launch preview", async () => {
@@ -80,7 +84,7 @@ test("step navigation retains input selections, unsaved forms and a valid launch
     step("review"); assert.equal(el("caseWorkspace").parentElement.id, "reviewWorkspaceSlot"); assert.match(el("reviewRationale").value, /must survive/);
     step("run"); assert.equal(el("campaignName").value, "My controlled baseline"); assert.equal(el("startBaseline").disabled, false);
     el("baselineForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
-    assert.equal(el("runStep").hidden, false); assert.match(w.location.search, /step=run/); assert.match(w.location.search, /campaign=campaign/);
+    assert.equal(el("reviewStep").hidden, false); assert.match(w.location.search, /step=review/); assert.match(w.location.search, /campaign=campaign/);
     assert.match(el("liveTrials").textContent, /Trial trial/);
     step("review"); await pause();
     assert.equal(calls.filter(call => call.method === "POST" && call.url === "/api/campaigns/from-cases").length, 1);
@@ -238,9 +242,8 @@ test("editing expected outcomes cannot silently launch against previously select
     step("cases"); const expectation = el("selectedCases").querySelector("textarea"); expectation.value = "Require a newly specified clearance constraint.";
     expectation.dispatchEvent(new w.Event("input", {bubbles: true}));
     step("configure"); el("prepareRun").click(); await pause();
-    assert.equal(el("startBaseline").disabled, true, "edited criteria require confirmation before another launch");
-    assert.equal(el("campaignContract").value, "");
-    el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
+    assert.equal(el("startBaseline").disabled, false, "Review and run saves the current visible criteria before previewing");
+    assert.ok(el("campaignContract").value);
     const saved = calls.filter(call => call.method === "POST" && call.url === "/api/success-contracts").at(-1);
     assert.match(saved.body.case_expectations["case-r1"], /newly specified clearance/);
     assert.equal(calls.filter(call => call.url === "/api/campaigns/from-cases").length, 0);
@@ -271,8 +274,7 @@ test("editing confirmed scoring controls invalidates launch and preserves the ne
     assert.equal(el("startBaseline").disabled, true, "a changed visible criterion must invalidate the old preview");
     step("cases"); step("configure");
     assert.equal(el("successCriteria").value, "Report occlusion before proposing any grasp.", "stage changes preserve manually edited scoring text");
-    el("prepareRun").click(); await pause(); assert.equal(el("startBaseline").disabled, true);
-    el("contractForm").dispatchEvent(new w.Event("submit", {bubbles: true, cancelable: true})); await pause();
+    el("prepareRun").click(); await pause(); assert.equal(el("startBaseline").disabled, false);
     const saved = calls.filter(call => call.url === "/api/success-contracts" && call.method === "POST").at(-1);
     assert.equal(saved.body.criteria[0].description, "Report occlusion before proposing any grasp.");
     el("prepareRun").click(); await pause(); assert.equal(el("startBaseline").disabled, false);
@@ -452,7 +454,7 @@ test("five-step workflow drafts task-specific metrics without saving or running 
     const draft = calls.find(call => call.url === "/api/campaigns/metrics-draft");
     assert.deepEqual(draft.body.case_revision_ids, ["case-r1"]); assert.deepEqual(draft.body.strategies, ["strategy"]); assert.deepEqual(draft.body.seeds, [0, 1]);
     assert.equal(el("metricDraftSource").textContent, "Agent-drafted success metrics");
-    assert.match(el("generatedCriteria").textContent, /Safe plan|safe plan/);
+    assert.match(el("generatedCriteria").textContent, /Explain a safe placement plan/);
     const criterion = el("generatedCriteria").querySelector("textarea[data-criterion-id]");
     assert.equal(criterion.value, metricContract.criteria[0].description);
     assert.equal(el("campaignContract").value, ""); assert.equal(calls.filter(isMutation).length, 0);
@@ -584,4 +586,160 @@ test("an explicit grading-method change applies to all criteria and clearing tar
     for (const criterion of save.body.criteria) {assert.equal(criterion.assessment, "configured_verifier"); assert.equal(criterion.endpoint, "new-grader");}
     assert.deepEqual(save.body.campaign_targets, []); assert.deepEqual(save.body.annotation_bindings, []);
   } finally { dom.window.close(); }
+});
+
+test("individual criteria edit with Save or Cancel while Review and run is the single default confirmation", async () => {
+  const {dom, w, el, step, pick, set, pause, calls} = await workspace();
+  try {
+    await pick(); step("configure"); set("campaignStrategy", "strategy", "change"); step("metrics"); await pause();
+    const card = el("generatedCriteria").querySelector(".suggested-criterion"), input = card.querySelector("textarea"), editor = card.querySelector(".criterion-editor");
+    const click = label => [...card.querySelectorAll("button")].find(button => button.textContent === label).click();
+    assert.equal(editor.hidden, true); assert.equal(el("moreScoringOptions").open, false);
+    assert.equal(el("saveContract").closest("details").id, "moreScoringOptions");
+    assert.equal(el("saveContract").form.id, "contractForm"); assert.equal(el("assessmentMethod").form.id, "contractForm");
+    click("Edit"); assert.equal(editor.hidden, false); assert.equal(w.document.activeElement, input);
+    input.value = "Discarded draft"; click("Cancel"); assert.equal(input.value, metricContract.criteria[0].description); assert.equal(editor.hidden, true);
+    assert.equal(calls.filter(isMutation).length, 0);
+    click("Edit"); input.value = "A bounded safe approach to the blue bin";
+    el("prepareRun").click(); await pause(); assert.equal(el("metricsStep").hidden, false);
+    assert.equal(calls.filter(isMutation).length, 0, "unsaved inline editor cannot be committed implicitly");
+    click("Save change"); assert.equal(editor.hidden, true); assert.match(card.querySelector(".criterion-copy").textContent, /bounded safe approach/);
+    el("prepareRun").click(); await pause();
+    const save = calls.find(call => call.url === "/api/success-contracts" && call.method === "POST"); assert.ok(save);
+    assert.match(save.body.criteria[0].description, /bounded safe approach/);
+    const preview = calls.find(call => call.url === "/api/campaigns/preview"); assert.ok(preview); assert.equal(preview.body.contract_id, el("campaignContract").value);
+    assert.equal(el("runStep").hidden, false); assert.equal(el("startBaseline").disabled, false);
+    assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases"), false);
+  } finally {dom.window.close();}
+});
+
+function seedFixture(type) {
+  return {source: {type, id: type === "trial" ? "trial-source" : "campaign-source", snapshot_sha256: "frozen-source-sha"}, case_revision_ids: ["case-r1"], strategies: ["strategy"], defaults: {name: "Saved source comparison", seeds: [7, 11], ks: [1, 2], timeout_s: 37}, contract_id: "contract", contract: {...metricContract, id: "contract"}, source_strategies: [{id: "original-strategy", selected_id: "strategy"}], recommendations: [{strategy_id: "original-strategy", source: "recorded_failure", stage: "plan", text: "Investigate the recorded plan failure"}], blockers: [], warnings: ["Source trial is a reference, not another measured attempt."]};
+}
+
+test("trial and campaign seeds prepopulate immutable inputs and retain source, seeds and scoring through explicit launch", async () => {
+  for (const type of ["trial", "campaign"]) {
+    const seed = seedFixture(type), {dom, w, el, step, calls, pause} = await workspace(type === "trial" ? "?trial=trial-source" : "?improve=campaign-source", {seed, contracts: [seed.contract]});
+    try {
+      assert.match(el("selectedCases").textContent, /Pick red part/);
+      assert.equal(el("campaignName").value, seed.defaults.name); assert.equal(el("campaignRepeats").value, "2"); assert.equal(el("campaignTimeout").value, "37");
+      assert.equal(el("strategyCards").querySelector("input").checked, true); assert.equal(el("campaignContract").value, "contract");
+      if (type === "trial") {
+        assert.match(el("improvementIntro").textContent, /Case, robot and strategy added from your trial/);
+        assert.doesNotMatch(el("improvementIntro").textContent, /Investigate the recorded plan failure/);
+        assert.equal(el("improvementIntro").querySelector("h2"), null);
+      } else {
+        assert.match(el("improvementIntro").textContent, /Investigate the recorded plan failure/);
+        let revisionSource; el("createCampaignStrategyRevision").addEventListener("click",()=>{revisionSource=el("campaignStrategy").value;});
+        [...el("improvementIntro").querySelectorAll("button")].find(button=>button.textContent==="Test a plan change").click();
+        assert.equal(revisionSource,"strategy","source-stage recommendation maps to its restored strategy definition");
+      }
+      assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases" || call.url === "/api/evaluate"), false);
+      const draft = calls.find(call => call.url.endsWith(type === "trial" ? "/campaign-draft" : "/improvement-draft")); assert.ok(draft);
+      if(type === "trial") assert.ok(draft.body.operation_id);
+      step("metrics"); el("prepareRun").click(); await pause();
+      const preview = calls.find(call => call.url === "/api/campaigns/preview"); assert.ok(preview);
+      assert.deepEqual(preview.body.source, seed.source); assert.deepEqual(preview.body.seeds, [7, 11]); assert.deepEqual(preview.body.ks, [1, 2]);
+      el("baselineForm").dispatchEvent(new w.Event("submit", {bubbles:true,cancelable:true})); await pause();
+      const launch = calls.find(call => call.url === "/api/campaigns/from-cases"); assert.ok(launch);
+      assert.deepEqual(launch.body.source, seed.source); assert.deepEqual(launch.body.case_revision_ids, ["case-r1"]); assert.deepEqual(launch.body.seeds, [7, 11]);
+    } finally {dom.window.close();}
+  }
+});
+
+test("foreground active campaign opens Results when finished; completed deep links and background responses do not redirect", async () => {
+  const options = {campaignStatus: "running"}, page = await workspace("?step=run&campaign=campaign", options);
+  try {
+    assert.equal(page.el("runStep").hidden, false);
+    page.status("completed"); page.el("refreshLiveTrials").click(); await page.pause();
+    assert.equal(page.el("reviewStep").hidden, false);
+    await page.route("?step=run&campaign=campaign"); assert.equal(page.el("runStep").hidden, false, "explicit inspection of an already completed run stays on Run");
+  } finally {page.dom.window.close();}
+  const backgroundOptions = {campaignStatus: "running"}, background = await workspace("?step=run&campaign=campaign", backgroundOptions);
+  try {
+    let release; backgroundOptions.campaignWait = new Promise(resolve => {release = resolve;});
+    background.el("refreshLiveTrials").click();
+    Object.defineProperty(background.w.document, "hidden", {configurable: true, value: true}); background.w.document.dispatchEvent(new background.w.Event("visibilitychange"));
+    background.status("completed"); release(); await background.pause();
+    assert.equal(background.el("runStep").hidden, false, "completion received after hiding the window must not navigate it");
+    assert.equal(background.calls.some(call => call.url.endsWith("/outcome-summary")), false);
+  } finally {background.dom.window.close();}
+});
+
+test("baseline creation is an explicit Results dialog, not another permanent form in the result journey", async () => {
+  const {dom, el, calls} = await workspace("?step=review&campaign=campaign");
+  try {
+    assert.equal(el("baselineDialog").open, false);
+    assert.equal(el("namedBaselinePanel").closest("dialog").id, "baselineDialog");
+    assert.equal(el("openBaselineDialog").disabled, false);
+    el("openBaselineDialog").click(); assert.equal(el("baselineDialog").open, true);
+    el("closeBaselineDialog").click(); assert.equal(el("baselineDialog").open, false);
+    assert.equal(calls.filter(isMutation).length, 0);
+  } finally {dom.window.close();}
+});
+
+test("trial draft retry reuses its operation identity and a blocked source cannot launch", async () => {
+  const options = {seed: {...seedFixture("trial"), blockers: ["Saved endpoint no longer exists"]}, seedFailure: true}, page = await workspace("?trial=trial-source", options);
+  try {
+    assert.match(page.el("improvementIntro").textContent, /Could not prepare this campaign/);
+    options.seedFailure = false; page.el("improvementIntro").querySelector("button").click(); await page.pause();
+    const drafts = page.calls.filter(call => call.url.endsWith("/campaign-draft")); assert.equal(drafts.length, 2); assert.equal(drafts[0].body.operation_id, drafts[1].body.operation_id);
+    assert.match(page.el("improvementIntro").textContent, /Saved endpoint no longer exists/);
+    page.step("metrics"); await page.pause(); page.el("prepareRun").click(); await page.pause();
+    assert.equal(page.el("startBaseline").disabled, true);
+    assert.equal(page.calls.some(call => call.url === "/api/campaigns/from-cases"), false);
+    assert.equal(page.calls.some(call => call.url === "/api/campaigns/preview"), false);
+  } finally {page.dom.window.close();}
+});
+
+test("late saved-input responses do not replace a draft or pull the user back from another step", async () => {
+  for (const phase of ["initial catalogs", "seed response"]) {
+    let release; const gate = new Promise(resolve => {release = resolve;});
+    const options = {seed: seedFixture("campaign"), ...(phase === "initial catalogs" ? {strategyWait: gate} : {seedWait: gate})};
+    const page = await workspace("?improve=campaign-source", options);
+    try {
+      page.step("configure"); page.set("campaignName", "Keep my new draft"); release(); await page.pause(); await page.pause();
+      assert.equal(page.el("configureStep").hidden, false, `${phase} completion must not navigate`);
+      assert.equal(page.el("campaignName").value, "Keep my new draft");
+      assert.equal(page.el("selectedCases").querySelectorAll("article").length, 0);
+      assert.equal(page.calls.some(call => call.url === "/api/campaigns/from-cases"), false);
+      if(phase === "initial catalogs") assert.equal(page.calls.some(call => call.url.endsWith("/improvement-draft")), false, "navigation during initial loading requires explicit saved-input loading");
+    } finally {release(); page.dom.window.close();}
+  }
+});
+
+test("a drifted source remains blocked until the user explicitly chooses an available strategy", async () => {
+  const seed = {...seedFixture("trial"), strategies: [], blockers: ["Original endpoint has changed"]};
+  const {dom, el, step, pause, calls} = await workspace("?trial=trial-source", {seed, contracts: [seed.contract]});
+  try {
+    assert.match(el("improvementIntro").textContent, /Original endpoint has changed/);
+    step("run"); el("previewCampaign").click(); await pause();
+    assert.equal(el("startBaseline").disabled, true); assert.equal(calls.some(call => call.url === "/api/campaigns/preview"), false);
+    step("configure"); el("strategyCards").querySelector("input").click();
+    step("metrics"); await pause(); el("prepareRun").click(); await pause();
+    const preview = calls.find(call => call.url === "/api/campaigns/preview"); assert.ok(preview);
+    assert.deepEqual(preview.body.strategies, ["strategy"]); assert.deepEqual(preview.body.source, seed.source);
+    assert.equal(calls.some(call => call.url === "/api/campaigns/from-cases"), false);
+  } finally {dom.window.close();}
+});
+
+test("improvement retains a single exact baseline revision and requires an explicit choice among multiple references", async () => {
+  const first = {id: "baseline", revision_id: "baseline-r1", name: "Original acceptance", revision: 1}, newer = {...first, revision_id: "baseline-r2", revision: 2};
+  for (const baselines of [[first], [first, newer]]) {
+    const seed = {...seedFixture("campaign"), baselines}, {dom, w, el, step, set, pause, calls} = await workspace("?improve=campaign-source", {seed, contracts: [seed.contract]});
+    try {
+      assert.equal(el("improvementBaseline").value, baselines.length === 1 ? "baseline-r1" : "");
+      step("metrics"); el("prepareRun").click(); await pause();
+      let preview = calls.filter(call => call.url === "/api/campaigns/preview").at(-1); assert.ok(preview);
+      assert.equal(preview.body.baseline_revision_id, baselines.length === 1 ? "baseline-r1" : undefined);
+      if(baselines.length > 1) {
+        step("cases"); set("improvementBaseline", "baseline-r1", "change");
+        assert.equal(el("startBaseline").disabled, true, "changed comparison reference invalidates launch preview");
+        step("metrics"); el("prepareRun").click(); await pause();
+        preview = calls.filter(call => call.url === "/api/campaigns/preview").at(-1); assert.equal(preview.body.baseline_revision_id, "baseline-r1");
+      }
+      el("baselineForm").dispatchEvent(new w.Event("submit", {bubbles:true,cancelable:true})); await pause();
+      assert.equal(calls.find(call => call.url === "/api/campaigns/from-cases").body.baseline_revision_id, "baseline-r1");
+    } finally {dom.window.close();}
+  }
 });

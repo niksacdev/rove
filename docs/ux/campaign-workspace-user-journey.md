@@ -59,3 +59,24 @@ of this refinement includes a six-trial mock campaign with all unassessed outcom
 correctly retained and a 390px Results view without horizontal overflow. Earlier gallery
 checks remain separate evidence. Generation behavior has fake-runtime coverage; live
 AI generation was not tested.
+
+## Trial-first entry and Improve loop
+
+The latest user correction makes chat the first experience: select the model/pipeline,
+provide task, image and optional URDF, then inspect saved trial results. **Add to
+campaign** carries those inputs into case/strategy selection. The customer reviews
+three to five editable criteria, confirms execution and arrives automatically at
+Results after completion. From the campaign browser, **Improve** opens a populated
+workflow with recommendations visible on its first page.
+
+Preserve the original trial as an exploratory reference, never an extra campaign
+attempt. Name the baseline's reference strategy explicitly when several were tested.
+Adding cases expands coverage and changes comparison conditions; missing judgments
+need review before they motivate model changes. The [latest journey](../product/user-journey.md#latest-entry-try-a-task-then-build-a-campaign)
+and [ADR-027](../architecture/ADR-027-trial-to-campaign-improvement.md) define the implemented flow and local handoff/asset/strategy regression coverage.
+The full loop is now browser-verified with a retained Panda URDF, three editable
+template criteria, automatic Results, a saved baseline and a repeat Improve campaign.
+The exact reference matched with zero component changes and pending expert outcomes.
+Cases and criterion editing showed no horizontal overflow at 390px. This mock-only
+check does not establish model improvement, live AI quality or hardware performance.
+Earlier six-trial browser evidence remains a separate campaign-workspace check.

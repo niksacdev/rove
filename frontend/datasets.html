@@ -8,22 +8,24 @@
     try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; }
     catch { document.documentElement.dataset.theme = "dark"; }
   </script>
-  <link rel="stylesheet" href="/static/styles.css?v=ai-campaign-workflow-1">
-  <link rel="stylesheet" href="/static/history.css?v=ai-campaign-workflow-1">
-  <link rel="stylesheet" href="/static/datasets.css?v=ai-campaign-workflow-1">
-  <link rel="stylesheet" href="/static/campaign-progress.css?v=ai-campaign-workflow-1">
-  <link rel="stylesheet" href="/static/stage-renderers.css?v=ai-campaign-workflow-1">
-  <link rel="stylesheet" href="/static/navigation.css?v=ai-campaign-workflow-1">
-  <script src="/static/navigation.js?v=ai-campaign-workflow-1" defer></script>
-  <script src="/static/case-import.js?v=ai-campaign-workflow-1" defer></script>
-  <script src="/static/stage-renderers.js?v=ai-campaign-workflow-1" defer></script>
-  <script src="/static/trial-output.js?v=ai-campaign-workflow-1" defer></script>
-  <script src="/static/campaign-progress.js?v=ai-campaign-workflow-1" defer></script>
-  <link rel="stylesheet" href="/static/campaign-results.css?v=ai-workflow-1">
-  <script src="/static/campaign-results.js?v=ai-workflow-1" defer></script>
-  <script src="/static/datasets.js?v=ai-campaign-workflow-1" defer></script>
-  <link rel="stylesheet" href="/static/strategy-revisions.css?v=ai-campaign-workflow-1">
-  <script src="/static/strategy-revisions.js?v=ai-campaign-workflow-1" defer></script>
+  <link rel="stylesheet" href="/static/styles.css?v=trial-first-4">
+  <link rel="stylesheet" href="/static/history.css?v=trial-first-4">
+  <link rel="stylesheet" href="/static/datasets.css?v=trial-first-4">
+  <link rel="stylesheet" href="/static/campaign-progress.css?v=trial-first-4">
+  <link rel="stylesheet" href="/static/stage-renderers.css?v=trial-first-4">
+  <link rel="stylesheet" href="/static/navigation.css?v=trial-first-4">
+  <script src="/static/navigation.js?v=trial-first-4" defer></script>
+  <script src="/static/case-import.js?v=trial-first-4" defer></script>
+  <script src="/static/stage-renderers.js?v=trial-first-4" defer></script>
+  <script src="/static/trial-output.js?v=trial-first-4" defer></script>
+  <script src="/static/campaign-progress.js?v=trial-first-4" defer></script>
+  <link rel="stylesheet" href="/static/campaign-results.css?v=trial-first-4">
+  <script src="/static/campaign-results.js?v=trial-first-4" defer></script>
+  <link rel="stylesheet" href="/static/campaign-trajectory.css?v=trial-first-4">
+  <script src="/static/campaign-trajectory.js?v=trial-first-4" defer></script>
+  <script src="/static/datasets.js?v=trial-first-4" defer></script>
+  <link rel="stylesheet" href="/static/strategy-revisions.css?v=trial-first-4">
+  <script src="/static/strategy-revisions.js?v=trial-first-4" defer></script>
 </head>
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
@@ -33,6 +35,7 @@
     <nav class="journey" aria-label="Evaluation steps"><a href="?step=cases" data-journey-step="cases"><span>1</span><div>Cases<small>Choose what to test</small></div></a><a href="?step=configure" data-journey-step="configure"><span>2</span><div>Configure<small>Strategy &amp; success</small></div></a><a href="?step=metrics" data-journey-step="metrics"><span>3</span><div>Success metrics</div></a><a href="?step=run" data-journey-step="run"><span>4</span><div>Run campaign<small>Follow each trial</small></div></a><a href="?step=review" data-journey-step="review"><span>5</span><div>Review results<small>Evidence &amp; comparisons</small></div></a></nav>
     <div class="step-heading"><h2 id="stepHeading" tabindex="-1">Prepare your cases</h2><p id="stepDescription" class="muted">Choose observations and instructions for a repeatable evaluation.</p></div>
     <p id="message" role="status" aria-live="polite"></p>
+    <section id="improvementIntro" class="improvement-intro" hidden aria-label="Improve this campaign"></section>
     <section id="casesStep" data-workflow-panel="cases" aria-label="Prepare cases">
     <div class="step-actions"><button type="button" id="showImport">Add a case</button><button type="button" class="secondary" id="selectExisting">Select existing</button><button type="button" class="secondary" id="showBulkImport">Import cases</button></div>
     <section id="selectedCasesPanel" class="workspace-panel"><div class="panel-heading"><h2>Cases in this campaign</h2><span id="selectedCaseCount" class="badge">0 cases</span></div><div id="selectedCases"></div><div class="form-actions"><button type="button" id="continueConfigure" data-go-step="configure">Choose strategies →</button></div></section>
@@ -89,10 +92,10 @@
     </section>
     <section id="metricsStep" data-workflow-panel="metrics" aria-label="Success metrics" hidden>
       <div class="metrics-assistance"><div><span id="metricDraftSource" class="ai-source">Campaign success</span><p id="metricDraftStatus" role="status">Choose your cases and strategies. ROVE will propose what to measure.</p></div><button id="regenerateMetrics" type="button" class="secondary">Regenerate suggestions</button></div>
-      <div id="suggestedMeasures" class="suggested-measures"></div>
+
       <div id="metricsContext"></div>
       <details id="contractPanel" open>
-        <summary>What does success look like?</summary><p class="muted">Start from the expected outcomes on your case cards. Edit the criteria, then confirm them before running. These become the saved scoring rules for this campaign.</p>
+        <summary>Success criteria for your campaign</summary><p class="criteria-intro">Review these proposed criteria. Edit any item before running.</p>
         <form id="contractForm"><div id="generatedCriteria"></div><p id="gradingNotice" class="notice">Expert review is selected. ROVE records outputs, latency and reliability measures; acceptance stays pending until an expert rates the trials.</p>
           <div class="form-grid"><label>Scoring rules name<input id="contractName" value="Plan acceptance v1" required maxlength="160"></label><label>What are you assessing?<select id="successScope"><option value="plan_quality">Plan quality</option><option value="scene_understanding">Scene understanding</option><option value="episode_outcome">Recorded episode outcome</option></select></label><label>Evidence source<select id="evidenceMode"><option value="candidate_output">This agent's output</option><option value="recorded_episode">Existing recorded episode</option><option value="synthetic_rollout">Synthetic rollout</option></select></label><label>Grading method<select id="assessmentMethod"><option value="human_review">Expert review of outputs</option><option value="configured_verifier">Configured verification stage</option></select></label><label class="full-width">What must a successful output demonstrate?<textarea id="successCriteria" required rows="2" placeholder="Identify the correct part and propose a sequence that respects the workspace constraints."></textarea></label></div>
           <details id="scoringAdvanced"><summary>Change assessment method or use recorded robot evidence</summary></details><label id="verifierEndpointLabel" hidden>Configured verifier endpoint ID<input id="verifierEndpoint" placeholder="Endpoint used by the selected strategy verify stage"></label>
@@ -102,43 +105,27 @@
           <button type="submit" id="saveContract">Confirm scoring rules</button>
         </form>
       </details>
-      <div id="savedMetricsSlot"></div><div class="form-actions"><button id="prepareRun" type="button">Review and run →</button></div>
+      <details id="reportMeasures"><summary>Measures in your report</summary><div id="suggestedMeasures" class="suggested-measures"></div></details><details id="moreScoringOptions"><summary>Scoring settings</summary><div id="savedMetricsSlot"></div></details><div class="form-actions"><button id="prepareRun" type="button">Review and run →</button></div>
     </section>
     <section id="runStep" data-workflow-panel="run" aria-label="Run campaign trials" hidden>
       <div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Edit configuration</button></div>
-      <section class="workspace-panel"><h2 id="runConfirmationHeading">Ready to run?</h2><p class="intro">A trial is one complete strategy execution on one case. Perceive, plan, act and verify are stages within that trial.</p><div id="runSummary" class="run-summary"></div><div id="campaignMeasures" class="metric-preview"></div><div id="runLaunchActions" class="form-actions"><button id="previewCampaign" type="button" class="secondary">Check configuration</button><button id="startBaseline" type="submit" form="baselineForm" disabled>Start campaign</button></div><p id="campaignStatus" role="status" aria-live="polite"></p></section>
-      <section id="liveTrialsPanel" class="workspace-panel" hidden><div class="panel-heading"><h2>Campaign trials</h2><button id="refreshLiveTrials" class="secondary" type="button">Refresh</button></div><p id="liveTrialStatus" role="status"></p><div id="strategyProgress" class="campaign-progress" aria-label="Execution by strategy"></div><h3>Trial outputs and evidence</h3><div id="liveTrials"></div><div class="form-actions"><button class="secondary" data-go-step="review" type="button">Review results →</button></div></section>
+      <section class="workspace-panel"><h2 id="runConfirmationHeading">Ready to run?</h2><p class="intro">A trial is one complete strategy execution on one case. Perceive, plan, act and verify are stages within that trial.</p><div id="runSummary" class="run-summary"></div><div id="campaignMeasures" class="metric-preview"></div><div id="runLaunchActions" class="form-actions"><button id="previewCampaign" type="button" class="secondary">Check configuration</button><button id="startBaseline" type="submit" form="baselineForm" disabled>Run campaign</button></div><p id="campaignStatus" role="status" aria-live="polite"></p></section>
+      <section id="liveTrialsPanel" class="workspace-panel" hidden><div class="panel-heading"><h2>Campaign trials</h2><button id="refreshLiveTrials" class="secondary" type="button">Refresh</button></div><p id="liveTrialStatus" role="status"></p><div id="strategyProgress" class="campaign-progress" aria-label="Execution by strategy"></div><details id="liveTrialDetails"><summary>Inspect individual trials</summary><div id="liveTrials"></div></details><div class="form-actions"><button class="secondary" data-go-step="review" type="button">View partial results →</button></div></section>
     </section>
     <section id="reviewStep" data-workflow-panel="review" aria-label="Review results" hidden>
 
     <section id="resultsPanel" class="workspace-panel" aria-labelledby="resultsHeading">
       <div class="panel-heading"><h2 id="resultsHeading">Campaign results</h2><button id="refreshCampaigns" type="button" class="secondary">Refresh results</button></div>
       <label class="saved-campaign-picker">Campaign<select id="resultCampaign"><option value="">Choose a campaign</option></select></label>
-      <div id="campaignResults"><p class="muted">Open a baseline to inspect assessed outcomes and prepare one controlled change.</p></div>
-      <section id="namedBaselinePanel" class="baseline-reference" aria-labelledby="baselineReferenceHeading">
-        <div class="baseline-reference-heading"><h3 id="baselineReferenceHeading">Baseline</h3><span id="baselineReferenceBadge" class="badge">Not set as baseline</span></div>
-        <p id="baselineReferenceSummary" class="muted">Choose a completed campaign, then save its strategy result as your reference for future comparisons.</p>
-        <label>Reference strategy<select id="baselineStrategy" form="ablationForm" required></select></label>
-        <div id="baselineReferenceIdentity" class="baseline-identity"></div>
-        <form id="namedBaselineForm">
-          <div class="form-actions"><button type="submit" id="saveNamedBaseline" disabled>Set as baseline</button></div>
-          <p id="namedBaselineStatus" role="status" class="muted"></p>
-          <details id="baselineOptions"><summary>Baseline name, saved references and revisions</summary>
-            <label>Use a saved baseline<select id="namedBaseline"><option value="">Choose a saved baseline</option></select></label>
-            <div class="form-grid"><label>Baseline name<input id="namedBaselineName" maxlength="160" required></label><label class="checkbox-label"><input id="namedBaselinePinned" type="checkbox" checked>Pin for future comparisons</label></div>
-            <div class="form-actions"><button type="submit" id="saveBaselineRevision" class="secondary" hidden>Save a new revision</button><button type="button" id="newNamedBaseline" class="secondary">Save as a separate baseline</button></div>
-            <div id="namedBaselineDetails"></div>
-          </details>
-        </form>
-      </section>
-      <section id="comparisonAction" class="next-action" hidden><h3>Test a strategy change</h3><p>Set a baseline above, then compare a changed strategy with that saved result. ROVE keeps the cases and scoring rules fixed and runs new trials to measure whether the change helped.</p><button type="button" id="showComparison">Compare a strategy change</button></section>
+      <div id="campaignResultActions" class="result-primary-actions"><button type="button" id="openBaselineDialog" disabled>Set as baseline</button><button type="button" id="improveCampaign" class="secondary" disabled>Improve this campaign</button><span id="currentBaselineLabel" class="muted"></span></div><div id="campaignResults"><p class="muted">Open a baseline to inspect assessed outcomes and prepare one controlled change.</p></div>
+<details id="advancedComparisons"><summary>Advanced comparison controls</summary>      <section id="comparisonAction" class="next-action" hidden><h3>Test a strategy change</h3><p>Set a baseline above, then compare a changed strategy with that saved result. ROVE keeps the cases and scoring rules fixed and runs new trials to measure whether the change helped.</p><button type="button" id="showComparison">Compare a strategy change</button></section>
       <details id="ablationPanel" hidden>
         <summary>Compare a changed strategy with the baseline</summary>
         <p class="muted">Select a candidate already defined in your configuration. Preview its differences, then explicitly start a new comparison campaign on the same cases, scoring rules and repetitions. Opening this panel does not run the pipeline.</p>
         <div class="form-actions"><button id="createCandidateStrategyRevision" type="button" class="secondary">Create a candidate from this strategy</button></div><p id="candidateRevisionMessage" role="status" class="muted"></p>
         <div id="baselineComparisonIdentity" class="baseline-identity"></div><form id="ablationForm"><div class="form-grid"><label>Candidate strategy<select id="candidateStrategy" required><option value="">Choose a candidate</option></select></label><label>Candidate campaign name<input id="ablationName" value="Candidate ablation" required maxlength="160"></label><label>Intended change<input id="intendedChange" placeholder="For example: use a different planning model" maxlength="2000"></label></div><div id="ablationPreview" class="notice">Preview to confirm that conditions match and see every recorded difference.</div><div class="form-actions"><button id="previewAblation" type="button" class="secondary">Preview comparison</button><button id="runAblation" type="submit" disabled>Start comparison campaign</button></div></form>
       </details>
-      <div id="comparisonResults"></div><div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Configure another campaign</button><a href="/static/benchmarks.html">All results →</a></div>
+</details>      <div id="comparisonResults"></div><div class="step-actions"><button type="button" class="secondary" data-go-step="configure">← Configure another campaign</button><a href="/static/benchmarks.html">All results →</a></div>
     </section>
     <div id="reviewWorkspaceSlot"></div><div id="caseReuseSlot"></div>
     <div class="step-actions"><button type="button" class="secondary" id="reuseReviewed">Save reviewed cases to a dataset →</button></div>
@@ -169,6 +156,23 @@
         <div class="pagination"><button id="previousCases" class="secondary" type="button" disabled>Previous</button><span id="casePageLabel" class="muted"></span><button id="refreshCases" type="button" class="secondary">Refresh</button><button id="nextCases" class="secondary" type="button" disabled>Next</button></div>
       </section>
 <section id="datasetLibrary" hidden><h2>Saved datasets</h2><p class="muted">A dataset is a saved group of cases with their scoring rules.</p><div id="datasetList"></div></section><div class="dialog-bottom" id="casePickerActions"><span id="pickerSelection" role="status">0 cases selected</span><button type="button" id="confirmCasePicker">Add selected cases</button></div></dialog>
+<dialog id="baselineDialog" aria-labelledby="baselineReferenceHeading"><div class="dialog-top"><button type="button" id="closeBaselineDialog" class="secondary">Close</button></div>      <section id="namedBaselinePanel" class="baseline-reference" aria-labelledby="baselineReferenceHeading">
+        <div class="baseline-reference-heading"><h3 id="baselineReferenceHeading">Baseline</h3><span id="baselineReferenceBadge" class="badge">Not set as baseline</span></div>
+        <p id="baselineReferenceSummary" class="muted">Choose a completed campaign, then save its strategy result as your reference for future comparisons.</p>
+        <label>Reference strategy<select id="baselineStrategy" form="ablationForm" required></select></label>
+        <div id="baselineReferenceIdentity" class="baseline-identity"></div>
+        <form id="namedBaselineForm">
+          <div class="form-actions"><button type="submit" id="saveNamedBaseline" disabled>Set as baseline</button></div>
+          <p id="namedBaselineStatus" role="status" class="muted"></p>
+          <details id="baselineOptions"><summary>Baseline name, saved references and revisions</summary>
+            <label>Use a saved baseline<select id="namedBaseline"><option value="">Choose a saved baseline</option></select></label>
+            <div class="form-grid"><label>Baseline name<input id="namedBaselineName" maxlength="160" required></label><label class="checkbox-label"><input id="namedBaselinePinned" type="checkbox" checked>Pin for future comparisons</label></div>
+            <div class="form-actions"><button type="submit" id="saveBaselineRevision" class="secondary" hidden>Save a new revision</button><button type="button" id="newNamedBaseline" class="secondary">Save as a separate baseline</button></div>
+            <div id="namedBaselineDetails"></div>
+          </details>
+        </form>
+      </section>
+</dialog>
   </main>
 </body>
 </html>

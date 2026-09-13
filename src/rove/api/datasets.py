@@ -10,8 +10,9 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from rove.benchmarks.assistant_workflow import AblationDraft, prepare_ablation
 from rove.benchmarks.baselines import BaselineInput, BaselineStore
-from rove.benchmarks.comparison import compare_campaigns
+from rove.benchmarks.comparison import saved_comparison
 from rove.benchmarks.metrics import summarize
+from rove.benchmarks.seeds import TrialSeedRequest, campaign_seed, trial_seed
 from rove.benchmarks.store import CampaignStore
 from rove.benchmarks.workflow import LaunchRequest, assessed_trials, create_campaign, prepare_launch
 from rove.datasets.service import ConflictError, DatasetService
@@ -62,6 +63,16 @@ def create_dataset_router(root: Path, launch) -> APIRouter:
             return promote_quick_trial(
                 root, trial_id, operation_id=payload.get("operation_id"), name=payload.get("name")
             )
+
+    @router.post("/api/trials/{trial_id}/campaign-draft")
+    async def seed_from_trial(trial_id: str, request: TrialSeedRequest):
+        with errors():
+            return trial_seed(root, trial_id, request)
+
+    @router.post("/api/campaigns/{campaign_id}/improvement-draft")
+    async def seed_from_campaign(campaign_id: str):
+        with errors():
+            return campaign_seed(root, campaign_id)
 
     @router.get("/api/cases")
     async def cases(
@@ -273,38 +284,8 @@ def create_dataset_router(root: Path, launch) -> APIRouter:
             return {"id": campaign_id, "planned_trials": preview["planned_trials"]}
 
     @router.get("/api/campaigns/{candidate_id}/comparison")
-    async def comparison(candidate_id: str):
+    async def comparison(candidate_id: str, candidate_strategy_id: str | None = None):
         with errors():
-            store = CampaignStore(root)
-            candidate = store.get(candidate_id)
-            reference = candidate.get("baseline")
-            if not reference:
-                raise ValueError("This campaign has no baseline reference")
-            baseline = store.get(reference["campaign_id"])
-            base_trials, base_assessments = assessed_trials(
-                root, baseline, store.trials(baseline["id"])
-            )
-            if reference.get("revision_id"):
-                named = BaselineStore(root).get(reference["revision_id"])
-                base_trials = named["trial_outcomes"]
-                base_assessments = named["assessments"]
-            candidate_trials, candidate_assessments = assessed_trials(
-                root, candidate, store.trials(candidate_id)
-            )
-            result = compare_campaigns(
-                baseline,
-                base_trials,
-                candidate,
-                candidate_trials,
-                reference["strategy_id"],
-                candidate["spec"]["strategies"][0],
-            )
-            return {
-                **result,
-                "baseline_trials": base_trials,
-                "candidate_trials": candidate_trials,
-                "baseline_assessments": base_assessments,
-                "candidate_assessments": candidate_assessments,
-            }
+            return saved_comparison(root, candidate_id, candidate_strategy_id)
 
     return router

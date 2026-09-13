@@ -7,20 +7,22 @@ async function composer(options = {}) {
   const w = dom.window, calls = [];
   w.lucide = {createIcons(){}}; w.HTMLElement.prototype.scrollIntoView = () => {};
   w.URL.createObjectURL = () => "blob:observation";
-  w.EventSource = class {addEventListener(){} close(){}};
+  const streams = [];
+  w.EventSource = class { constructor(){this.listeners = {}; streams.push(this);} addEventListener(type, listener){this.listeners[type] = listener;} close(){} emit(type, data){this.listeners[type]?.({data: JSON.stringify(data)});} };
   const item = {id: "case-r1", case_id: "case", name: "Block on tray", task: "Place the block in the tray", revision: 1, image_asset: {sha256: "a".repeat(64)}, candidate_context: {robot: "panda", proprioception: [0, 1], constraints: ["Avoid cup"]}, reference_data: {eval_qa: {answer: "private answer"}, expected_subtasks: ["private plan"]}};
   w.fetch = async (url, request = {}) => {
     const route = new URL(url, w.location.href).pathname; calls.push({route, method: request.method || "GET", body: request.body});
     if (route === "/api/cases/case-r1") return {ok: !options.missing, json: async () => item};
     if (route.startsWith("/api/trial-assets/")) return {ok: true, blob: async () => new w.Blob(["image"], {type: "image/png"})};
     if (route.endsWith("panda.urdf")) return {ok: !options.noRobot, blob: async () => new w.Blob(['<robot name="panda"/>'], {type: "application/xml"})};
+    if (route === "/api/examples") return {ok: true, json: async () => ({examples: [{task: "Place the block", filename: "block.png", import_status: "imported", case_revision_id: "case-r1", eval_category: "atomic"}]})};
     if (route === "/api/evaluate") return {ok: true, json: async () => ({eval_id: "evaluation", trial_ids: {mock: "trial"}, strategies: ["mock"]})};
     return {ok: true, json: async () => route.includes("history") ? [] : route === "/api/strategies" ? {strategies: [{id: "mock", display_name: "Mock", perceive: "mock-vlm", verify: "mock-vlm"}]} : route === "/api/models" ? {models: []} : {defaults: {}, endpoints: {}, strategies: {}}};
   };
-  w.eval(source("navigation.js")); w.eval(source("stage-renderers.js"));
-  w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning};");
+  w.eval(source("navigation.js")); w.eval(source("sample-cases.js") + ";window.createSampleCaseCard = createSampleCaseCard;"); w.eval(source("stage-renderers.js"));
+  w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning,showHistoryEntry};");
   const pause = () => new Promise(resolve => setTimeout(resolve, 40)); await pause();
-  return {w, calls, el: id => w.document.getElementById(id), pause};
+  return {w, calls, streams, el: id => w.document.getElementById(id), pause};
 }
 
 test("saved case opens original composer with observation, instruction and supported robot, without executing", async () => {
@@ -70,4 +72,45 @@ test("unavailable robot remains unattached, while unavailable case reports error
   const second = await composer({missing: true});
   try { assert.equal(second.w.caseRunnerTest.savedCase, null); assert.match(second.el("trialCaseContext").textContent, /No case was loaded or executed/); assert.equal(second.calls.some(call => call.method === "POST"), false); }
   finally { second.w.close(); }
+});
+
+test("completed saved trial offers Add to campaign with exact durable ID; followup survives reopening without rerun", async () => {
+  const {w, calls, streams, el, pause} = await composer();
+  try {
+    el("strategyGrid").querySelector('[data-strategy-id="mock"]').click(); el("evalBtn").click(); await pause();
+    assert.equal(w.document.querySelector(".trial-campaign-link"), null, "a running trial is not offered for reuse");
+    streams[0].emit("strategy_complete", {strategy_id: "mock", total_latency_ms: 123, success: false});
+    assert.equal(w.document.querySelector(".trial-campaign-link"), null, "strategy events precede durable completion");
+    streams[0].emit("complete", {trial_ids: {mock: "trial/a?revision=1"}, results: [{strategy_id: "mock", success: false, stages: [{stage: "verify", status: "completed"}]}]});
+    const followup = el("tab-content-mock").querySelector(".trial-campaign-link");
+    assert.equal(followup.textContent, "Add to campaign");
+    assert.equal(followup.getAttribute("href"), "/static/datasets.html?trial=trial%2Fa%3Frevision%3D1");
+    assert.equal(new URL(el("tab-content-mock").querySelector('.trial-next-step-actions a:last-child').href).searchParams.get("trial"), "trial/a?revision=1");
+    assert.equal(calls.filter(call => call.method === "POST").length, 1, "followup rendering neither saves a campaign nor reruns");
+    w.caseRunnerTest.showHistoryEntry(0);
+    assert.equal(el("tab-content-mock").querySelector(".trial-campaign-link").getAttribute("href"), followup.getAttribute("href"));
+    assert.equal(calls.filter(call => call.method === "POST").length, 1);
+  } finally { w.close(); }
+});
+
+test("execution error or missing persisted trial identity never fabricates a campaign reuse link", async () => {
+  for (const result of [{trial_ids: {}, results: [{strategy_id: "mock", stages: []}]}, {trial_ids: {mock: "failed-trial"}, results: [{strategy_id: "mock", stages: [{stage: "act", status: "error"}]}]}]) {
+    const {w, streams, el, pause} = await composer();
+    try {
+      el("strategyGrid").querySelector('[data-strategy-id="mock"]').click(); el("evalBtn").click(); await pause();
+      streams[0].emit("complete", result);
+      assert.equal(w.document.querySelector(".trial-campaign-link"), null);
+    } finally { w.close(); }
+  }
+});
+
+test("trial sample gallery opens the original composer with a versioned case rather than skipping into campaign setup", async () => {
+  const {w, el, calls, pause} = await composer();
+  try {
+    w.document.querySelector('#quickWelcome [data-root-view="examples"]').click(); await pause();
+    const sample = el("examplesView").querySelector('article a');
+    assert.equal(sample.getAttribute("href"), "/?view=quick&case=case-r1");
+    assert.match(sample.textContent, /Use in a trial/);
+    assert.equal(calls.some(call => call.method === "POST"), false);
+  } finally { w.close(); }
 });

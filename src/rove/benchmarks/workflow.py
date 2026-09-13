@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from rove.benchmarks.models import CampaignSpec, fingerprint
 from rove.benchmarks.runner import prepare
+from rove.benchmarks.seeds import SeedSource, validate_source
 from rove.benchmarks.store import CampaignStore
 from rove.datasets.service import DatasetService
 from rove.models.config import RoveConfig
@@ -16,6 +17,7 @@ from rove.models.config import RoveConfig
 class LaunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(default="Customer evaluation", min_length=1, max_length=160)
+    revision: str = Field(default="customer-evaluation", min_length=1, max_length=160)
     case_revision_ids: list[str] = Field(default_factory=list, max_length=1000)
     dataset_revision_id: str | None = None
     contract_id: str = Field(min_length=1, max_length=128)
@@ -24,9 +26,11 @@ class LaunchRequest(BaseModel):
     ks: list[int] = Field(default=[1, 3], min_length=1, max_length=100)
     timeout_s: float = Field(default=120, ge=1, le=3600, allow_inf_nan=False)
     operation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    source: SeedSource | None = None
+    baseline_revision_id: str | None = Field(default=None, min_length=1, max_length=128)
 
     @model_validator(mode="after")
-    def source(self):
+    def selection_source(self):
         if bool(self.case_revision_ids) == bool(self.dataset_revision_id):
             raise ValueError("Choose exact case revisions or a frozen dataset")
         if len(set(self.case_revision_ids)) != len(self.case_revision_ids):
@@ -65,6 +69,10 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
             }
         )
         extras = dict(case.get("candidate_context") or {})
+        if robot := extras.get("robot_asset"):
+            from rove.datasets.robot_assets import robot_asset_path
+
+            robot_asset_path(service.trials, robot)
         recorded = case.get("recorded_evidence") or {}
         if recorded:
             extras["episode"] = recorded.get("episode", recorded)
@@ -88,14 +96,21 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
     spec = CampaignSpec(
         name=request.name,
         suite_version=request.dataset_revision_id or fingerprint(ids),
-        revision="customer-evaluation",
+        revision=request.revision,
         strategies=request.strategies,
         tasks=tasks,
         seeds=request.seeds,
         ks=request.ks,
         timeout_s=request.timeout_s,
     )
+    source = (
+        validate_source(root, request.source, ids, config, request.strategies)
+        if request.source
+        else None
+    )
     payload = prepare(spec, config)
+    if source:
+        payload["source"] = source
     payload.update(
         contract_id=request.contract_id,
         contract=contract,
@@ -111,6 +126,39 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
             }
         ),
     )
+    comparisons = []
+    if request.baseline_revision_id:
+        from rove.benchmarks.baselines import BaselineStore
+        from rove.benchmarks.comparison import compare_campaigns
+        from rove.trials.snapshots import content_hash
+
+        if not request.source or request.source.type != "campaign":
+            raise ValueError(
+                "A saved baseline requires its source campaign in this improvement draft"
+            )
+        saved = BaselineStore(root).get(request.baseline_revision_id)
+        baseline = CampaignStore(root).get(request.source.id)
+        if (
+            saved["revision_id"] != request.baseline_revision_id
+            or saved["campaign_id"] != request.source.id
+            or saved["strategy_id"] not in baseline["spec"]["strategies"]
+            or saved["campaign_hash"] != content_hash(baseline)
+        ):
+            raise ValueError("Saved baseline revision does not match this exact source campaign")
+        payload["baseline"] = {
+            "campaign_id": request.source.id,
+            "strategy_id": saved["strategy_id"],
+            "revision_id": saved["revision_id"],
+        }
+        comparisons = [
+            {
+                "candidate_strategy_id": identity,
+                **compare_campaigns(
+                    baseline, saved["trial_outcomes"], payload, [], saved["strategy_id"], identity
+                ),
+            }
+            for identity in request.strategies
+        ]
     blockers = []
     strategies = []
     criteria = contract["criteria"]
@@ -272,6 +320,8 @@ def prepare_launch(root: Path, request: LaunchRequest, config: RoveConfig) -> tu
         "strategies": strategies,
         "metrics": metrics,
         "evidence_note": note,
+        "baseline": payload.get("baseline"),
+        "comparisons": comparisons,
     }
 
 

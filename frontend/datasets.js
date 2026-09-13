@@ -153,11 +153,12 @@ if (typeof document !== "undefined") (() => {
   const select = (id, options, value) => { const element = node("select"); if (id) element.id = id; for (const [key, text] of options) { const option = node("option", text); option.value = key; element.append(option); } if (value != null) element.value = value; return element; };
   const label = (text, control) => { const element = node("label", text); element.append(control); return element; };
   const button = (text, action, style = "secondary") => { const element = node("button", text, style); element.type = "button"; element.addEventListener("click", action); return element; };
+  const initialLocation=location.href;
   state.step = "cases";
   Object.assign(state, {expectations: new Map(), pickerSelected: null, strategies: [], selectedStrategyIds: [], search: "", category: "", liveVersion: 0});
-  const stepCopy = {cases: ["What should your agent be able to do?", "A case pairs a task with its observation and test conditions."], configure: ["Choose the strategies to compare", "Use the same cases to compare your pipelines."], metrics: ["What does success look like?", "Review the proposed criteria and measures before running."], run: ["Run your campaign", "One case × one strategy × one repetition = one trial. Follow each trial, then inspect its evidence."], review: ["Campaign outcomes", "Compare performance, understand the evidence, then inspect any trial."]};
+  const stepCopy = {cases: ["What should your agent be able to do?", "A case pairs a task with its observation and test conditions."], configure: ["Choose the strategies to compare", "Use the same cases to compare your pipelines."], metrics: ["Success criteria", "Determined for your campaign. Review or edit before running."], run: ["Run your campaign", "One case × one strategy × one repetition = one trial. Follow each trial, then inspect its evidence."], review: ["Campaign outcomes", "Compare performance, understand the evidence, then inspect any trial."]};
   function writeRoute() {
-    const url = new URL(location.href); url.searchParams.set("step", state.step);
+    const url = new URL(location.href); url.searchParams.set("step", state.step); if(state.campaignId){url.searchParams.delete("trial");url.searchParams.delete("improve");}
     for (const [key, value] of [["campaign", state.campaignId], ["case", state.caseId]]) { if (value) url.searchParams.set(key, value); else url.searchParams.delete(key); }
     if (url.href !== location.href) history.pushState({}, "", url);
   }
@@ -175,6 +176,7 @@ if (typeof document !== "undefined") (() => {
     const slot = $(state.step === "review" ? "reviewWorkspaceSlot" : "casesWorkspaceSlot");
     if ($("caseWorkspace").parentElement !== slot) slot.append($("caseWorkspace"));
     $("stepHeading").textContent = stepCopy[state.step][0]; $("stepDescription").textContent = stepCopy[state.step][1];
+    $("improvementIntro").hidden = (!state.seedDraft && !state.seedCancelled) || state.step !== "cases";
     if (state.step === "configure") prepareCriteriaDraft();
     if (state.step === "metrics") { prepareCriteriaDraft(); draftMetrics(); }
     if (state.step === "run" && state.campaignId && !state.preparingRun) refreshLiveTrials();
@@ -203,7 +205,10 @@ if (typeof document !== "undefined") (() => {
   $("assistantConfigureSlot").append($("assistantPanel"));
 
   const savedRules = node("details"); savedRules.append(node("summary", "Use previously saved scoring rules"), $("campaignContract").closest("label")); $("savedMetricsSlot").append(savedRules);
-  for (const id of ["contractName", "successScope", "evidenceMode", "assessmentMethod"]) $("scoringAdvanced").append($(id).closest("label"));
+  for (const item of [$("scoringAdvanced"), $("verifierEndpointLabel"), $("scopeHint"), $("contractJson").closest("details"), $("targetMetric").closest("details"), $("saveContract")]) $("moreScoringOptions").append(item);
+  $("saveContract").setAttribute("form","contractForm");
+  for(const field of $("moreScoringOptions").querySelectorAll("input,select,textarea")) field.setAttribute("form","contractForm");
+  for (const id of ["contractName", "successScope", "evidenceMode", "assessmentMethod"]) {$("scoringAdvanced").append($(id).closest("label"));$(id).setAttribute("form","contractForm");}
   for (const anchor of document.querySelectorAll("[data-journey-step]")) anchor.addEventListener("click", event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); goStep(anchor.dataset.journeyStep); });
   for (const control of document.querySelectorAll("[data-go-step]")) control.addEventListener("click", () => goStep(control.dataset.goStep));
   $("reuseReviewed").addEventListener("click", () => { $("caseReusePanel").open = true; $("caseReusePanel").scrollIntoView({block: "start"}); });
@@ -308,6 +313,8 @@ if (typeof document !== "undefined") (() => {
     if (!bound(state.namedBaseline)) state.namedBaseline = null;
     if (!state.namedBaseline && !state.baselineNew) state.namedBaseline = state.namedBaselines.find(bound) || null;
     const saved = state.namedBaseline, complete = campaign?.status === "completed" && campaign.spec.strategies.includes(strategy);
+    $("openBaselineDialog").disabled=!complete; $("improveCampaign").disabled=campaign?.status!=="completed"; $("currentBaselineLabel").textContent=saved ? `Baseline: ${campaign.strategy_definitions?.[strategy]?.display_name || strategy}` : "";
+    $("openBaselineDialog").textContent=saved ? "View baseline" : "Set as baseline";
     $("baselineReferenceBadge").textContent = saved ? "Baseline" : "Not set as baseline";
     $("baselineReferenceBadge").className = `badge${saved ? " baseline-saved" : ""}`;
     $("baselineReferenceSummary").textContent = saved ? `${saved.name} · revision ${saved.revision}. This saved reference preserves the assessments at the time it was set.` : complete ? "Use this completed strategy result as the reference for future comparisons. It becomes a baseline only when you save it." : "Choose a completed campaign before setting its strategy result as a baseline.";
@@ -363,7 +370,7 @@ if (typeof document !== "undefined") (() => {
       const payload = {name: $("namedBaselineName").value.trim() || `${campaign.spec.name} · ${strategy}`.slice(0, 160), pinned: $("namedBaselinePinned").checked, campaign_id: campaign.id, strategy_id: strategy, operation_id: state.baselineOperation, ...(current ? {expected_head_revision_id: current.revision_id} : {})};
       const result = await post(current ? `/api/baselines/${encodeURIComponent(current.id)}` : "/api/baselines", payload, current ? "PATCH" : "POST");
       state.namedBaselines = [result, ...state.namedBaselines.filter(item => item.id !== result.id)];
-      if (state.campaignId === campaign.id && $("baselineStrategy").value === strategy) { state.namedBaseline = result; state.baselineNew = false; renderBaselineReference(); await loadNamedBaselines(result.id); $("namedBaselineStatus").textContent = `Baseline saved: ${result.name}, revision ${result.revision}. Later reviews do not change this reference.`; }
+      if (state.campaignId === campaign.id && $("baselineStrategy").value === strategy) { state.namedBaseline = result; state.baselineNew = false; renderBaselineReference(); await loadNamedBaselines(result.id); $("baselineDialog").close(); $("namedBaselineStatus").textContent = `Baseline saved: ${result.name}, revision ${result.revision}. Later reviews do not change this reference.`; }
       else await loadNamedBaselines();
     } catch (error) { $("namedBaselineStatus").textContent = error.message; }
     finally { state.baselineSaving = false; renderBaselineReference(); }
@@ -449,7 +456,15 @@ if (typeof document !== "undefined") (() => {
     }
     if (preview.evidence_note) container.append(node("p", preview.evidence_note, "notice full-width"));
   }
-  function currentCampaign() { return buildCampaign({name: $("campaignName").value, caseIds: [...state.selected.keys()], datasetId: state.frozenDataset?.id, contractId: $("campaignContract").value, strategyIds: [...state.selectedStrategyIds], repeats: $("campaignRepeats").value, timeout: $("campaignTimeout").value}); }
+  function currentCampaign() { const payload=buildCampaign({name: $("campaignName").value, caseIds: [...state.selected.keys()], datasetId: state.frozenDataset?.id, contractId: $("campaignContract").value, strategyIds: [...state.selectedStrategyIds], repeats: $("campaignRepeats").value, timeout: $("campaignTimeout").value});
+    if(state.seedDraft) {
+      if(!state.seedReady || (state.seedDraft.blockers?.length && !state.seedSelectionReviewed))throw new Error("Resolve the source configuration issues before running.");
+      payload.source=state.seedDraft.source;
+      if(state.seedBaselineRevision)payload.baseline_revision_id=state.seedBaselineRevision;
+      if(Number($("campaignRepeats").value)===state.seedDraft.defaults.seeds.length) {payload.seeds=[...state.seedDraft.defaults.seeds];payload.ks=[...state.seedDraft.defaults.ks];}
+    }
+    return payload;
+  }
   async function previewCampaign() {
     $("previewCampaign").disabled = true; $("startBaseline").disabled = true;
     try {
@@ -458,6 +473,7 @@ if (typeof document !== "undefined") (() => {
       if (JSON.stringify(currentCampaign()) !== signature) return;
       state.campaignPreview = {payload, signature, preview}; state.campaignOperation = crypto.randomUUID();
       metricsPreview($("campaignMeasures"), preview);
+      if(preview.comparisons) for(const item of preview.comparisons) {const comparison=item.comparison || item;$("campaignMeasures").append(node("p",`${item.strategy_id || item.candidate_strategy_id}: ${comparison.comparable ? "Conditions match the saved baseline." : "Changed assessment conditions: " + (comparison.reasons || []).join("; ")}`,comparison.comparable?"comparison-context":"notice full-width"));}
       $("campaignBudget").textContent = `${preview.planned_trials} planned trials. ${preview.ready ? "Configuration is ready." : "Resolve the blockers before running."}`;
       for (const blocker of preview.blockers || []) $("campaignMeasures").append(node("p", typeof blocker === "string" ? blocker : JSON.stringify(blocker), "error-text full-width"));
       $("startBaseline").disabled = !preview.ready;
@@ -600,11 +616,11 @@ if (typeof document !== "undefined") (() => {
       const card = node("div", null, "dataset-card"); card.append(node("h3", dataset.name), node("p", `${(dataset.members || []).filter(member => member.disposition === "included").length} cases · ${date(dataset.created_at)}`, "muted"), use); $("datasetList").append(card);
     }
   }
-  async function loadCampaigns(selectedId) {
+  async function loadCampaigns(selectedId, navigate = true) {
     const campaigns = await request("/api/campaigns"); state.campaigns = campaigns;
     const selected = selectedId || $("resultCampaign").value;
     $("resultCampaign").replaceChildren(...select(null, [["", "Choose a campaign"], ...campaigns.map(item => [item.id, `${item.name} · ${item.status}`])], selected).childNodes); $("resultCampaign").value = selected;
-    if (selectedId) { await openCampaign(selectedId); goStep("review"); }
+    if (selectedId) { await openCampaign(selectedId, navigate); if(navigate) goStep("review"); }
   }
   function displayMeasure(value, unit) {
     if (value == null) return "unavailable";
@@ -662,6 +678,7 @@ if (typeof document !== "undefined") (() => {
     // Refreshing evidence must not replace an explicitly selected historical snapshot
     // with the catalog head. The saved object is immutable and already fetched by ID.
     const retainedBaseline = state.campaignId === id && state.namedBaseline?.campaign_id === id && state.namedBaseline.strategy_id === $("baselineStrategy").value ? state.namedBaseline : null;
+    $("resultsPanel").append($("comparisonResults"));
     const version = ++state.campaignVersion; state.campaignId = id; state.reviewCampaign = null; state.baselineNew = false; state.reviewCampaignContract = null; $("resultCampaign").value = id || ""; state.baselineOperation = null; invalidateAblation(); $("comparisonResults").replaceChildren(); $("ablationPanel").hidden = true; $("comparisonAction").hidden = true;
     if (push) { goStep("review", false); writeRoute(); }
     state.namedBaseline = null;
@@ -676,6 +693,7 @@ if (typeof document !== "undefined") (() => {
       const charts = node("div"); charts.id = "campaignOutcomeCharts"; $("campaignResults").append(charts);
       if (window.RoveCampaignResults) window.RoveCampaignResults.render(charts, result.summary, campaign); else renderSummary(result.summary, charts);
       const analysis = node("section", null, "ai-outcome-summary"); analysis.id = "campaignAiSummary"; $("campaignResults").append(analysis); if (state.step === "review") renderOutcomeSummary(id, analysis, version);
+      if (window.RoveCampaignTrajectory) { const timeline=node("section",null,"campaign-timeline-panel"); timeline.id="campaignTimeline"; $("campaignResults").append(timeline); window.RoveCampaignTrajectory.mount(timeline,id); }
       const trialInspection = node("details"); trialInspection.id = "trialInspection"; trialInspection.append(node("summary", `Inspect trials (${result.trials?.length || 0})`));
       const details = node("details"); details.id = "resultDetails"; details.append(node("summary", "Metrics, scoring and provenance")); renderSummary(result.summary, details);
       $("campaignResults").append(trialInspection, details);
@@ -687,21 +705,30 @@ if (typeof document !== "undefined") (() => {
         const task = campaign.spec.tasks.find(entry => entry.id === trial.task_id); const revision = campaign.case_revision_ids?.find(value => value === trial.task_id) || task?.case_revision_id;
         if (revision) item.append(caseLink("Review case", revision)); trialInspection.append(item);
       }
-      $("baselineStrategy").replaceChildren(...select(null, (campaign.spec.strategies || []).map(value => [value, value])).childNodes);
+      $("baselineStrategy").replaceChildren(...select(null, (campaign.spec.strategies || []).map(value => [value, campaign.strategy_definitions?.[value]?.display_name || value])).childNodes);
       if (retainedBaseline && campaign.spec.strategies?.includes(retainedBaseline.strategy_id)) {
         state.namedBaseline = retainedBaseline;
         $("baselineStrategy").value = retainedBaseline.strategy_id;
       } else $("baselineStrategy").value = campaign.spec.strategies?.[0] || "";
       renderBaselineReference();
       const baselineRoute = new URLSearchParams(location.search).get("baseline");
-      if (baselineRoute === "setup") { $("namedBaselinePanel").scrollIntoView({block: "center"}); $("saveNamedBaseline").focus(); }
+      if (baselineRoute === "setup") { if(!$("baselineDialog").open) $("baselineDialog").showModal(); $("saveNamedBaseline").focus(); }
       else if (baselineRoute && state.baselineRoute !== baselineRoute) { state.baselineRoute = baselineRoute; await openNamedBaseline(baselineRoute); return; }
       $("ablationPanel").hidden = !campaign.contract_id; $("comparisonAction").hidden = !campaign.contract_id;
-      if (campaign.baseline) { const comparison = await request(`/api/campaigns/${encodeURIComponent(id)}/comparison`); if (version === state.campaignVersion) renderComparison(comparison); }
+      if (campaign.baseline) {
+        const comparisonPanel=node("details");comparisonPanel.id="baselineComparisonPanel";comparisonPanel.append(node("summary","Compare with saved baseline"));
+        const strategy=select("comparisonStrategy",campaign.spec.strategies.map(sid=>[sid,campaign.strategy_definitions?.[sid]?.display_name || sid]),campaign.spec.strategies.find(sid=>sid!==campaign.baseline.strategy_id) || campaign.spec.strategies[0]);
+        const content=node("div");comparisonPanel.append(label("Candidate strategy",strategy),content);$("campaignResults").append(comparisonPanel);
+        async function updateComparison(){const selected=strategy.value;try{const comparison=await request(`/api/campaigns/${encodeURIComponent(id)}/comparison?candidate_strategy_id=${encodeURIComponent(selected)}`);if(version!==state.campaignVersion || selected!==strategy.value)return;renderComparison(comparison);content.append($("comparisonResults"));}catch(error){content.replaceChildren(node("p",error.message,"error-text"));}}
+        strategy.addEventListener("change",updateComparison);await updateComparison();
+      }
     } catch (error) { if (version === state.campaignVersion) $("campaignResults").replaceChildren(node("p", error.message, "error-text"), button("Retry results", () => openCampaign(id))); }
   }
   function invalidateAblation() { state.ablationPreview = null; state.ablationOperation = null; $("runAblation").disabled = true; $("ablationPreview").textContent = "Preview to confirm that conditions match and inspect recorded differences."; }
   function ablationPayload() { if (!state.namedBaseline || state.namedBaseline.campaign_id !== state.campaignId || state.namedBaseline.strategy_id !== $("baselineStrategy").value) throw new Error("Set this strategy result as a baseline, or select a saved baseline before comparing."); if (!$("candidateStrategy").value) throw new Error("Choose a candidate strategy to compare with the baseline."); return {baseline_revision_id: state.namedBaseline.revision_id, baseline_strategy_id: $("baselineStrategy").value, candidate_strategy_id: $("candidateStrategy").value, name: $("ablationName").value.trim(), intended_change: $("intendedChange").value.trim()}; }
+  $("openBaselineDialog").addEventListener("click",()=>$("baselineDialog").showModal());
+  $("closeBaselineDialog").addEventListener("click",()=>$("baselineDialog").close());
+  $("improveCampaign").addEventListener("click",()=>{location.href=`/static/datasets.html?improve=${encodeURIComponent(state.campaignId)}`;});
   $("showComparison").addEventListener("click", () => { $("ablationPanel").open = true; $("candidateStrategy").focus(); });
   $("previewAblation").addEventListener("click", async () => {
     $("previewAblation").disabled = true; $("runAblation").disabled = true;
@@ -794,8 +821,9 @@ if (typeof document !== "undefined") (() => {
     } catch (error) { $("caseSaveStatus").textContent = error.message; }
     finally { restoreControls(); state.caseSaving = false; }
   });
-  $("contractForm").addEventListener("submit", async event => {
-    event.preventDefault(); $("saveContract").disabled = true; const draftVersion = state.draftVersion || 0;
+  async function saveCurrentContract() {
+    if ($("generatedCriteria").querySelector("[data-editing=true]")) throw new Error("Save or cancel your criterion edit before continuing.");
+    $("saveContract").disabled = true; const draftVersion = state.draftVersion || 0;
     try {
       let payload = buildContract({json: $("contractJson").value, targetMetric: $("targetMetric").value, targetOperator: $("targetOperator").value, targetThreshold: $("targetThreshold").value, annotationEndpoint: $("annotationEndpoint").value, annotationKey: $("annotationKey").value, annotationTarget: $("annotationTarget").value, name: $("contractName").value, scope: $("successScope").value, evidenceMode: $("evidenceMode").value, assessment: $("assessmentMethod").value, criteria: $("successCriteria").value, endpoint: $("verifierEndpoint").value});
       if (state.metricDraftContract && !$("contractJson").value.trim()) {
@@ -811,9 +839,10 @@ if (typeof document !== "undefined") (() => {
         payload={...state.metricDraftContract,name:payload.name,scope:payload.scope,evidence_mode:payload.evidence_mode,criteria,metrics:[...new Set([...(state.metricDraftContract.metrics || []), ...payload.metrics])],campaign_targets:state.targetEdited ? payload.campaign_targets || [] : state.metricDraftContract.campaign_targets || [],annotation_bindings:state.bindingEdited ? payload.annotation_bindings || [] : state.metricDraftContract.annotation_bindings || []};
       }
       if (!$("contractJson").value.trim()) payload.case_expectations = Object.fromEntries([...state.selected].map(([id, item]) => [id, state.expectations.get(id) || suggestedExpectation(item)]));
-      const contract = await post("/api/success-contracts", payload); state.generatedContractId = contract.id; await loadContracts(contract.id); if ((state.draftVersion || 0) !== draftVersion) { $("campaignContract").value = ""; invalidateCampaign(); tell("Earlier scoring rules were saved, but your draft changed while saving. Confirm the current rules before running."); return; } state.confirmedMetricContext=metricsContextSignature(); state.appliedContractId=contract.id; state.metricsEdited=false; invalidateCampaign(); invalidateFreeze(); state.freezeMembers = null; $("contractPanel").open = false; $("metricDraftSource").textContent="Confirmed success metrics"; $("metricDraftStatus").textContent="Your scoring rules are saved. Continue to review and run."; tell("Scoring rules confirmed. Continue to review the run and its expected measures.");
-    } catch (error) { tell(error.message, true); } finally { $("saveContract").disabled = false; }
-  });
+      const contract = await post("/api/success-contracts", payload); state.generatedContractId = contract.id; await loadContracts(contract.id); if ((state.draftVersion || 0) !== draftVersion) { $("campaignContract").value = ""; invalidateCampaign(); tell("Earlier scoring rules were saved, but your draft changed while saving. Confirm the current rules before running."); return; } state.confirmedMetricContext=metricsContextSignature(); state.appliedContractId=contract.id; state.metricsEdited=false; invalidateCampaign(); invalidateFreeze(); state.freezeMembers = null; $("contractPanel").open = true; $("metricDraftSource").textContent="Confirmed success metrics"; $("metricDraftStatus").textContent="Your scoring rules are saved. Continue to review and run."; tell("Scoring rules saved."); return contract;
+    } finally { $("saveContract").disabled = false; }
+  }
+  $("contractForm").addEventListener("submit", async event => { event.preventDefault(); try { await saveCurrentContract(); } catch(error) { tell(error.message,true); } });
   $("baselineForm").addEventListener("submit", async event => {
     event.preventDefault(); $("startBaseline").disabled = true;
     try {
@@ -821,7 +850,7 @@ if (typeof document !== "undefined") (() => {
       const campaign = await post("/api/campaigns/from-cases", {...preview.payload, operation_id: state.campaignOperation});
       $("campaignStatus").replaceChildren(node("span", `Campaign started: ${campaign.planned_trials} planned trials. `), link("Open report", `/api/campaigns/${encodeURIComponent(campaign.id)}/report?format=html`), document.createTextNode(" · "), link("Inspect recorded trials", `/static/history.html?source=campaign`));
       state.campaignPreview = null; tell("Campaign started. Each complete pipeline execution is saved as a trial below.");
-      state.preparingRun = false; await loadCampaigns(campaign.id); goStep("run"); await refreshLiveTrials(); $("liveTrialsPanel").scrollIntoView({block: "start"});
+      state.autoResultsCampaign=campaign.id; state.preparingRun = false; await loadCampaigns(campaign.id, false); goStep("run"); await refreshLiveTrials(); $("liveTrialsPanel").scrollIntoView({block: "start"});
     } catch (error) { tell(error.message, true); $("startBaseline").disabled = !state.campaignPreview?.preview.ready; }
   });
   $("freezeForm").addEventListener("submit", async event => {
@@ -934,7 +963,7 @@ if (typeof document !== "undefined") (() => {
           if (state.selectedStrategyIds.length >= 20) { checkbox.checked = false; tell("Choose no more than 20 strategies for one campaign.", true); return; }
           state.selectedStrategyIds.push(strategy.id);
         } else if (!checkbox.checked) state.selectedStrategyIds = state.selectedStrategyIds.filter(id => id !== strategy.id);
-        $("campaignStrategy").value = state.selectedStrategyIds[0] || "";
+        $("campaignStrategy").value = state.selectedStrategyIds[0] || ""; state.seedSelectionReviewed=true;
         invalidateCampaign(); renderStrategy();
         [...$("strategyCards").querySelectorAll("input")].find(input => input.value === strategy.id)?.focus();
       });
@@ -953,7 +982,7 @@ if (typeof document !== "undefined") (() => {
     summary.append(node("p", selectedIds.size ? "Every selected strategy runs on every case with the same repetitions and scoring rules. Each attempt becomes a separate trial for comparison." : "Choose one or more strategies. A campaign can compare models, complete agents and pipeline revisions on the same cases.", "muted"));
   }
   // Compatibility for saved tooling that sets the original single-selection control.
-  function legacyStrategySelection() {
+  function legacyStrategySelection() { state.seedSelectionReviewed=true;
     state.selectedStrategyIds = $("campaignStrategy").value ? [$("campaignStrategy").value] : [];
     invalidateCampaign(); renderStrategy();
   }
@@ -968,6 +997,7 @@ if (typeof document !== "undefined") (() => {
     state.strategies = page.strategies;
     const ids = new Set(state.strategies.map(item => item.id));
     state.selectedStrategyIds = state.selectedStrategyIds.filter(id => ids.has(id));
+    if(newId)state.seedSelectionReviewed=true;
     if (newId && ids.has(newId) && !selectCandidateOnly && !state.selectedStrategyIds.includes(newId)) {
       if (state.selectedStrategyIds.length >= 20) tell("Revision saved. Deselect a strategy before adding it to this campaign.", true);
       else state.selectedStrategyIds.push(newId);
@@ -982,7 +1012,7 @@ if (typeof document !== "undefined") (() => {
   }
   function metricsContextPayload() {
     const repeats = Number($("campaignRepeats").value);
-    return {name: $("campaignName").value.trim(), ...(state.frozenDataset ? {dataset_revision_id: state.frozenDataset.id} : {case_revision_ids: [...state.selected.keys()]}), strategies: [...state.selectedStrategyIds], seeds: Array.from({length: Number.isInteger(repeats) && repeats > 0 && repeats <= 1000 ? repeats : 0}, (_, index) => index), timeout_s: Number($("campaignTimeout").value), case_expectations: Object.fromEntries([...state.expectations].filter(([id]) => state.selected.has(id)))};
+    return {name: $("campaignName").value.trim(), ...(state.frozenDataset ? {dataset_revision_id: state.frozenDataset.id} : {case_revision_ids: [...state.selected.keys()]}), strategies: [...state.selectedStrategyIds], seeds: state.seedDraft && repeats===state.seedDraft.defaults.seeds.length ? [...state.seedDraft.defaults.seeds] : Array.from({length: Number.isInteger(repeats) && repeats > 0 && repeats <= 1000 ? repeats : 0}, (_, index) => index), timeout_s: Number($("campaignTimeout").value), case_expectations: Object.fromEntries([...state.expectations].filter(([id]) => state.selected.has(id)))};
   }
   function metricsContextSignature() { return JSON.stringify([metricsContextPayload(), state.strategies.filter(item => state.selectedStrategyIds.includes(item.id))]); }
   function applyMetricContract(contract, preserveExpectations = true) {
@@ -997,9 +1027,14 @@ if (typeof document !== "undefined") (() => {
     $("verifierEndpoint").value = contract.criteria[0]?.endpoint || "";
     $("successCriteria").value = contract.criteria[0]?.description || ""; $("contractJson").value = "";
     const container = $("generatedCriteria"); container.replaceChildren();
-    for (const criterion of contract.criteria || []) {
-      const card = node("div", null, "suggested-criterion"), input = node("textarea"); input.rows = 2; input.value = criterion.description; input.required = true; input.maxLength = 2000; input.dataset.criterionId = criterion.id;
-      card.append(label(criterion.id.replaceAll("_", " "), input),node("small",criterion.assessment === "configured_verifier" ? `Verified by ${criterion.endpoint}` : "Expert review", "muted")); container.append(card);
+    for (const [index,criterion] of (contract.criteria || []).entries()) {
+      const card=node("div",null,"suggested-criterion"), row=node("div",null,"criterion-row"), copy=node("p",criterion.description,"criterion-copy"), number=node("span",index+1,"criterion-number");
+      const input=node("textarea"); input.rows=3; input.value=criterion.description; input.maxLength=2000; input.dataset.criterionId=criterion.id; input.setAttribute("aria-label",`Criterion ${index+1}`);
+      const editor=node("div",null,"criterion-editor");editor.hidden=true;editor.append(input);
+      const edit=button("Edit",()=>{card.dataset.editing="true";editor.hidden=false;row.hidden=true;input.focus();});edit.setAttribute("aria-label",`Edit criterion ${index+1}`);
+      function closeEdit(){delete card.dataset.editing;editor.hidden=true;row.hidden=false;edit.focus();}
+      editor.append(button("Save change",()=>{if(!input.value.trim()){input.setCustomValidity("Describe this criterion.");input.reportValidity();return;}input.setCustomValidity("");copy.textContent=input.value.trim();input.value=copy.textContent;input.dispatchEvent(new Event("change",{bubbles:true}));closeEdit();}),button("Cancel",()=>{input.value=copy.textContent;closeEdit();}));
+      row.append(number,copy,edit);card.append(row,editor,node("small",criterion.assessment==="configured_verifier"?`Verified by ${criterion.endpoint}`:"Expert review","muted"));container.append(card);
     }
     $("successCriteria").closest("label").hidden = true;
     for (const [id, expectation] of Object.entries(contract.case_expectations || {})) if (state.selected.has(id) && (!preserveExpectations || !state.expectations.has(id))) state.expectations.set(id, expectation);
@@ -1067,7 +1102,8 @@ if (typeof document !== "undefined") (() => {
   $("prepareRun").addEventListener("click", async () => {
     $("prepareRun").disabled = true;
     try {
-      if (!$("campaignContract").value) throw new Error("Confirm your success metrics before running.");
+      if ($("generatedCriteria").querySelector("[data-editing=true]")) throw new Error("Save or cancel your criterion edit before continuing.");
+      if (!$("campaignContract").value) { if (!await saveCurrentContract()) return; }
       state.preparingRun = true; $("liveTrialsPanel").hidden = true; $("runLaunchActions").hidden = false; $("runConfirmationHeading").textContent = "Ready to run?"; goStep("run"); await previewCampaign();
     } catch (error) { goStep("metrics"); tell(error.message, true); $("contractPanel").open = true; ($("generatedCriteria").querySelector("textarea") || $("successCriteria")).focus(); }
     finally { $("prepareRun").disabled = false; }
@@ -1080,6 +1116,7 @@ if (typeof document !== "undefined") (() => {
   for (const id of ["annotationEndpoint", "annotationKey", "annotationTarget"]) for (const type of ["input","change"]) $(id).addEventListener(type,()=>{state.bindingEdited=true;});
   $("contractForm").addEventListener("input", () => { state.metricsEdited = true; $("campaignContract").value = ""; invalidateCampaign(); });
   $("contractForm").addEventListener("change", () => { state.metricsEdited = true; $("campaignContract").value = ""; invalidateCampaign(); });
+  for(const type of ["input","change"]) $("moreScoringOptions").addEventListener(type,event=>{if(event.target.id==="campaignContract")return;state.metricsEdited=true;$("campaignContract").value="";invalidateCampaign();});
   let liveTimer;
   async function loadCampaignStageEvents(row) {
     if (!row.trial_id) return;
@@ -1106,7 +1143,7 @@ if (typeof document !== "undefined") (() => {
     const eventPages = Object.fromEntries(state.progressEvents || []);
     const lanes = window.RoveCampaignProgress.buildStrategyProgress(campaign, trials, eventPages);
     window.RoveCampaignProgress.render($("strategyProgress"), lanes, id => {
-      const entry = state.liveTrialCards?.get(id); if (!entry?.stages) return;
+      const entry = state.liveTrialCards?.get(id); if (!entry?.stages) return; $("liveTrialDetails").open=true;
       entry.stages.open = true; entry.card.scrollIntoView({block: "start", behavior: "smooth"}); entry.stages.querySelector("summary")?.focus();
     });
   }
@@ -1117,6 +1154,7 @@ if (typeof document !== "undefined") (() => {
       const [detail, result] = await Promise.all([request(`/api/campaigns/${encodeURIComponent(id)}`), request(`/api/campaigns/${encodeURIComponent(id)}/assessments`)]);
       if (id !== state.campaignId || version !== state.liveVersion) return;
       const campaign = detail.campaign, summary = result.summary;
+      if (["running","pending","queued","cancelling"].includes(campaign.status)) state.autoResultsCampaign=id;
       $("workspaceTitle").textContent = "Campaign trials";
       $("liveTrialStatus").textContent = `${campaign.spec.name} · ${campaign.status} · ${summary.completed_trials || 0} / ${summary.planned_trials || 0} trials recorded. Expert-reviewed outcomes remain pending until rated.`;
       const container = $("liveTrials");
@@ -1156,6 +1194,7 @@ if (typeof document !== "undefined") (() => {
         renderCampaignProgress(campaign, result.trials || []);
       }
       if (["running", "pending", "queued", "cancelling"].includes(campaign.status)) liveTimer = setTimeout(refreshLiveTrials, 2000);
+      else if(state.autoResultsCampaign===id && state.step==="run" && !document.hidden) { state.autoResultsCampaign=null; goStep("review"); }
     } catch (error) { $("liveTrialStatus").textContent = `Progress unavailable: ${error.message}. Your campaign continues on the server. Retry with Refresh.`; }
   }
   async function loadTrialProgress(id, container, task) {
@@ -1177,9 +1216,78 @@ if (typeof document !== "undefined") (() => {
       container.append(button("Refresh this trial", () => loadTrialProgress(id, container, task)));
     } catch (error) { if (container.isConnected && container.dataset.loadVersion === version) container.replaceChildren(node("p", error.message, "error-text"), button("Retry trial progress", () => loadTrialProgress(id, container, task))); }
   }
+  function renderImprovementIntro(seed) {
+    const panel=$("improvementIntro");panel.replaceChildren();panel.hidden=state.step!=="cases";
+    panel.classList.toggle("trial-seed-note",seed.source.type==="trial");
+    if(seed.source.type==="trial") {
+      panel.append(node("p","Case, robot and strategy added from your trial."),link("View source trial",`/static/history.html?trial=${encodeURIComponent(seed.source.id)}`));
+      if(seed.warnings?.length){const details=node("details");details.append(node("summary","Saved input details"));for(const warning of seed.warnings)details.append(node("p",warning));panel.append(details);}
+      for(const blocker of seed.blockers || [])panel.append(node("p",blocker,"error-text"));return;
+    }
+    panel.append(node("span",seed.source.type==="trial"?"FROM YOUR TRIAL":"IMPROVE A CAMPAIGN","ai-source"),node("h2",seed.source.type==="trial"?"Build on this trial":"Where to improve"));
+    panel.append(node("p",seed.source.type==="trial"?"Your case, robot and strategy are ready. Add cases or strategies, then choose success criteria.":"Start from the same cases and settings. Test one change at a time to see what helped.","muted"));
+    const advice=node("div"); advice.id="improvementAdvice";
+    for(const item of (seed.recommendations || []).slice(0,3)) {
+      const card=node("article",null,"improvement-suggestion");card.append(node("p",item.text));
+      const sourceStrategy=seed.source_strategies?.find(row=>row.id===item.strategy_id);const selectedStrategy=sourceStrategy?.selected_id || (seed.strategies.includes(item.strategy_id)?item.strategy_id:null);
+      if(item.source==="recorded_failure" && selectedStrategy && ["perceive","plan","act","verify"].includes(item.stage)) card.append(button(`Test a ${item.stage} change`,()=>{goStep("configure");$("campaignStrategy").value=selectedStrategy;$("createCampaignStrategyRevision").click();}));
+      for(const trial of (item.trial_ids || []).slice(0,2))card.append(link(item.source==="missing_assessment"?"Review trial evidence":"Inspect trial",`/static/history.html?trial=${encodeURIComponent(trial)}`));
+      advice.append(card);
+    }
+    panel.append(advice);
+    if(seed.source.type==="campaign") {
+      if(seed.baselines?.length) {
+        const chosen=select("improvementBaseline",[["","No saved reference"],...seed.baselines.map(item=>[item.revision_id,`${item.name} · revision ${item.revision || 1}`])],state.seedBaselineRevision || "");
+        chosen.addEventListener("change",()=>{state.seedBaselineRevision=chosen.value || null;invalidateCampaign();});panel.append(label("Compare against baseline",chosen),node("p","Recommendations use current reviews. Comparisons use the saved baseline assessments.","comparison-context"));
+      } else panel.append(node("p","No baseline is saved yet. This campaign will be a new result you can compare later.","muted"));
+      const comparison=node("p","Keep cases, scoring and repetitions fixed for a controlled ablation. Adding cases measures expanded coverage.","comparison-context");comparison.id="improvementComparisonNote";panel.append(comparison);
+      panel.append(link("View original results",`/static/datasets.html?step=review&campaign=${encodeURIComponent(seed.source.id)}`));
+      const contents=node("section",null,"improvement-ai");contents.append(node("p","Preparing an interpretation of the recorded outcomes…","muted"));panel.append(contents);
+      post(`/api/campaigns/${encodeURIComponent(seed.source.id)}/outcome-summary`,{}).then(result=>{
+        if(!contents.isConnected)return;
+        contents.replaceChildren(node("span",result.source==="ai"?"AI recommendations":"Recorded findings","ai-source"),node("h3",result.headline));
+        for(const finding of (result.findings || []).slice(0,3)) { const item=node("p",finding.text); for(const id of finding.trial_ids || [])item.append(document.createTextNode(" "),link("Inspect trial",`/static/history.html?trial=${encodeURIComponent(id)}`));contents.append(item); }
+        if(result.source==="ai")for(const step of (result.next_steps || []).slice(0,3))contents.append(node("p",step));
+        else contents.append(node("p","AI interpretation is unavailable; these findings use saved measurements.","muted"));
+      }).catch(()=>{if(contents.isConnected)contents.replaceChildren(node("p","Interpretation could not load. The recorded suggestions above remain available."));});
+    }
+    for(const warning of seed.warnings || [])panel.append(node("p",warning,"muted"));
+    for(const blocker of seed.blockers || [])panel.append(node("p",blocker,"error-text"));
+  }
+  async function loadSeedDraft(type,id) {
+    const panel=$("improvementIntro"); panel.hidden=false;panel.replaceChildren(node("h2","Preparing your campaign…"));
+    const version=state.draftVersion || 0, route=location.href, loadVersion=state.seedLoadVersion=(state.seedLoadVersion || 0)+1;
+    try {
+      let operation;
+      if(type==="trial") { const key=`rove:campaign-draft:${id}`;try{operation=sessionStorage.getItem(key);if(!operation){operation=crypto.randomUUID();sessionStorage.setItem(key,operation);}}catch{operation=crypto.randomUUID();} }
+      const seed=await post(type==="trial"?`/api/trials/${encodeURIComponent(id)}/campaign-draft`:`/api/campaigns/${encodeURIComponent(id)}/improvement-draft`,type==="trial"?{operation_id:operation}:{});
+      const [cases,dataset]=await Promise.all([Promise.all(seed.case_revision_ids.map(revision=>request(`/api/cases/${encodeURIComponent(revision)}`))),seed.dataset_revision_id?request(`/api/datasets/${encodeURIComponent(seed.dataset_revision_id)}`):null]);
+      if(loadVersion!==state.seedLoadVersion || route!==location.href || version!==(state.draftVersion || 0))throw new Error("Your draft or navigation changed while loading. Retry when ready to replace it with the saved inputs.");
+      const beforeRefresh=state.draftVersion || 0; await refreshStrategyCatalog();
+      if(loadVersion!==state.seedLoadVersion || route!==location.href || (state.draftVersion || 0)!==beforeRefresh+1)throw new Error("Your draft changed while loading. Retry to use the saved configuration.");
+      document.body.dataset.seeded="true";state.seedDraft=seed;state.seedBaselineRevision=seed.baselines?.length===1?seed.baselines[0].revision_id:null;state.seedSelectionReviewed=false;state.seedCancelled=false;state.campaignId=null;state.confirmedMetricContext=null;state.metricDraftContract=null;state.appliedContractId=null;state.metricsEdited=false;state.selected=new Map(cases.map(item=>[caseId(item),item]));state.expectations=new Map();
+      state.selectedStrategyIds=[...seed.strategies];$("campaignStrategy").value=seed.strategies[0] || "";
+      $("campaignName").value=seed.defaults.name;$("campaignRepeats").value=seed.defaults.seeds.length;$("campaignTimeout").value=seed.defaults.timeout_s;
+      state.frozenDataset=dataset;
+      if(seed.contract) { if(!state.contracts.some(item=>item.id===seed.contract.id))state.contracts.push(seed.contract);$("campaignContract").replaceChildren(...select(null,contractOptions(),seed.contract_id).childNodes);$("campaignContract").value=seed.contract_id;applyMetricContract(seed.contract,false);state.appliedContractId=seed.contract_id; }
+      else $("campaignContract").value="";
+      invalidateCampaign();updateSelected();renderStrategy();goStep("cases");renderImprovementIntro(seed);
+      state.seedReady=true;
+    } catch(error) { if(loadVersion!==state.seedLoadVersion)return; state.seedReady=false;state.seedCancelled=true;panel.hidden=state.step!=="cases"; panel.replaceChildren(node("h2","Could not prepare this campaign"),node("p",error.message,"error-text"),button("Retry",()=>loadSeedDraft(type,id))); }
+  }
+  async function initialRoute() {
+    const query=new URLSearchParams(location.search);
+    if((query.has("trial") || query.has("improve")) && location.href!==initialLocation) {
+      state.seedCancelled=true;const panel=$("improvementIntro");panel.hidden=state.step!=="cases";panel.replaceChildren(node("p","Continue from your saved inputs when you are ready."),button("Load saved inputs",()=>loadSeedDraft(query.has("trial")?"trial":"campaign",query.get("trial") || query.get("improve"))));return;
+    }
+    if(query.has("trial"))return loadSeedDraft("trial",query.get("trial"));
+    if(query.has("improve"))return loadSeedDraft("campaign",query.get("improve"));
+    return restoreRoute();
+  }
+
   $("refreshLiveTrials").addEventListener("click", refreshLiveTrials);
   document.addEventListener("visibilitychange", () => { if (document.hidden) clearTimeout(liveTimer); else if (state.step === "run") refreshLiveTrials(); });
   window.addEventListener("popstate", () => restoreRoute().catch(error => tell(error.message, true)));
   goStep(new URLSearchParams(location.search).get("step") || (new URLSearchParams(location.search).has("campaign") ? "review" : "cases"), false, false); updateBudget(); loadAssistantStatus();
-  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), loadNamedBaselines(), refreshStrategyCatalog()]).then(restoreRoute).catch(error => tell(error.message, true));
+  Promise.all([loadCases(), loadContracts(), loadDatasets(), loadCampaigns(), loadNamedBaselines(), refreshStrategyCatalog()]).then(initialRoute).catch(error => tell(error.message, true));
 })();

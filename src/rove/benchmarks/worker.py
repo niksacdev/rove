@@ -55,7 +55,14 @@ async def execute(request: dict, config_path: Path) -> dict:
     config_path.write_text(yaml.safe_dump(config))
     reset_config_cache()
     load_config(config_path)
-    manager = RunManager(AdapterRegistry(), max_concurrent=1)
+    task = request["task"]
+    robot = ((task.get("example") or {}).get("extras") or {}).get("robot_asset")
+    urdf_path = None
+    if robot:
+        from rove.datasets.robot_assets import robot_asset_path
+
+        urdf_path = str(robot_asset_path(TrialStore(Path(request["trial_root"])), robot))
+    manager = RunManager(AdapterRegistry(), max_concurrent=1, urdf_path=urdf_path)
 
     async def ignore_event(*_args):
         pass

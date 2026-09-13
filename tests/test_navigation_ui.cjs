@@ -11,14 +11,17 @@ for (const [file, section] of [["index.html","start"],["datasets.html","evaluate
       w.document.documentElement.dataset.theme = "dark";
       w.eval(read("navigation.js"));
       const links = [...w.document.querySelectorAll('#roveNav nav a')];
-      assert.deepEqual(links.map(a=>[a.textContent,a.getAttribute('href')]), [["Evaluate","/static/datasets.html"],["Results","/static/benchmarks.html"]]);
-      const active = w.document.querySelectorAll("#roveNav [aria-current=page]");
+      assert.deepEqual(links.map(a=>[a.textContent,a.getAttribute('href')]), [["Evaluate","/?view=quick"],["Campaigns","/static/benchmarks.html"]]);
+      const active = w.document.querySelectorAll("#roveNav [aria-current=page], #roveFooter [aria-current=page]");
       assert.equal(active.length,1);
       assert.equal(active[0].dataset.navSection,section);
-      const settings = w.document.querySelector(".rove-utilities .rove-settings");
+      const settings = w.document.querySelector("#roveFooter .rove-settings");
       assert.equal(settings.getAttribute("href"), "/?view=strategies");
       assert.equal(settings.textContent,"Settings");
       assert.equal(settings.closest("nav"),null);
+      assert.equal(w.document.querySelectorAll(".rove-settings").length,1);
+      assert.equal(w.document.querySelector("#roveNav .rove-settings"),null);
+      assert.equal(w.document.body.lastElementChild.id,"roveFooter");
       Object.defineProperty(w, "localStorage", {get(){throw Error("Unavailable storage");}});
       w.document.querySelector('#themeToggle').click();
       assert.equal(w.document.documentElement.dataset.theme,"light");
@@ -39,12 +42,13 @@ test("root journey routes configuration and quick runs without losing an in-prog
     assert.equal(el("quickSidebar").hidden,true);
     // The original runner stays discoverable alongside repeatable campaigns.
     assert.match(w.document.querySelector('.start-actions [data-root-view="quick"]').textContent, /Run a trial/);
-    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/?view=quick");
+    assert.equal(w.document.querySelector('.start-actions .start-primary').getAttribute("href"),"/?view=quick");
+    assert.equal(w.document.querySelector('.start-actions .start-secondary').getAttribute("href"),"/static/benchmarks.html");
     w.testRoot.switchView("quick");
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);
     el("taskInput").value="Keep this task while checking endpoints";
-    w.document.querySelector('#roveNav [data-nav-section="configure"]').click();
+    w.document.querySelector('#roveFooter [data-nav-section="configure"]').click();
     assert.equal(w.location.search,"?view=strategies");
     assert.equal(el("quickComposer").hidden,true);
     assert.equal(el("configureHeading").hidden,false);
@@ -87,4 +91,16 @@ test("campaign creation actions and destination use one name", () => {
   const dom = new JSDOM(fs.readFileSync(path.join(root, "frontend/datasets.html"), "utf8"));
   assert.equal(dom.window.document.getElementById("workspaceTitle").textContent, "Create a campaign");
   dom.window.close();
+});
+
+test("trial sidebar exposes full button-style library destinations with icons and readable labels", () => {
+  const dom = new JSDOM(read("index.html"));
+  try {
+    const library = dom.window.document.querySelector('#quickSidebar nav[aria-label="Trial library"]');
+    const actions = [...library.querySelectorAll("a.sidebar-action")];
+    assert.deepEqual(actions.map(action => [action.textContent.trim(), action.getAttribute("href")]), [["All saved trials", "/static/history.html?source=quick"], ["Sample cases", "/?view=examples"]]);
+    for(const action of actions) assert.equal(action.querySelector("svg").getAttribute("aria-hidden"),"true");
+    assert.equal(actions[1].dataset.rootView,"examples");
+    assert.equal(library.querySelector("button"),null,"destinations keep native link semantics");
+  } finally {dom.window.close();}
 });

@@ -172,3 +172,15 @@ stages were visible, trial inspection began collapsed, and the 390px Results pag
 no horizontal overflow. The [journey evidence](../product/user-journey.md#five-stage-browser-verification-13-september-2026)
 records scope and limitations. Assistant generation is tested with a fake runtime;
 these checks do not validate live model behavior or physical robot performance.
+
+## Trial-first entry amendment
+
+The latest user journey restores the chat runner as the first trial experience and
+connects saved trial results to **Add to campaign**. Campaign comparison still uses
+the staged workspace described here. **Improve** in the campaign browser reopens a
+populated draft with evidence-based recommendations; navigation alone never executes.
+[ADR-027](ADR-027-trial-to-campaign-improvement.md) defines source trial/asset identity,
+reference-strategy semantics and comparison boundaries. Its implementation has local regression coverage and a verified mock browser loop
+from chat trial through promotion, three-trial campaign, saved baseline and Improve.
+Cases and criterion editing were checked at 390px. Earlier campaign-only evidence
+retains its narrower scope; live AI and hardware were not part of these checks.

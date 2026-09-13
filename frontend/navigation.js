@@ -2,8 +2,8 @@
 (function () {
   "use strict";
   const items = [
-    ["evaluate", "Evaluate", "/static/datasets.html"],
-    ["results", "Results", "/static/benchmarks.html"],
+    ["evaluate", "Evaluate", "/?view=quick"],
+    ["results", "Campaigns", "/static/benchmarks.html"],
   ];
   function rootView(search) {
     const view = new URLSearchParams(search).get("view");
@@ -13,7 +13,7 @@
     return ["strategies", "models", "settings"].includes(view) ? "configure" : view === "home" ? "start" : "evaluate";
   }
   function setActive(section) {
-    document.querySelectorAll("#roveNav [data-nav-section]").forEach(link => {
+    document.querySelectorAll("#roveNav [data-nav-section], #roveFooter [data-nav-section]").forEach(link => {
       if (link.dataset.navSection === section) link.setAttribute("aria-current", "page");
       else link.removeAttribute("aria-current");
     });
@@ -40,7 +40,9 @@
     settings.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9.2 3-.7 2.2-1.7 1L4.5 6l-2 3.5L4 11.2v1.7l-1.5 1.6 2 3.5 2.3-.2 1.7 1 .7 2.2h4l.7-2.2 1.7-1 2.3.2 2-3.5-1.5-1.6v-1.7l1.5-1.7L18 6l-2.3.2-1.7-1L13.3 3Z"/><circle cx="11.2" cy="12" r="3"/></svg><span>Settings</span>';
     const theme = document.createElement("button"); theme.type = "button"; theme.id = "themeToggle"; theme.className = "rove-theme";
     theme.addEventListener("click", () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
-    utilities.append(settings, theme);
+    utilities.append(theme);
+    const footer = document.createElement("footer"); footer.id = "roveFooter"; footer.className = "rove-footer"; footer.setAttribute("aria-label", "Workspace settings"); footer.append(settings);
+    document.body.classList.add("rove-shell"); document.body.appendChild(footer);
     host.replaceChildren(brand, nav, utilities);
     setActive(host.dataset.section || sectionForView(rootView(location.search))); themeLabel();
   }

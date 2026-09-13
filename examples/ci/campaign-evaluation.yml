@@ -1,0 +1,93 @@
+# Example only: copy to .github/workflows after choosing a trusted data artifact/config.
+name: ROVE campaign evaluation
+on:
+  workflow_dispatch:
+    inputs:
+      approved_run_id:
+        description: Workflow run ID containing the explicitly approved rove-state artifact
+        required: true
+      source_campaign_id:
+        description: Completed source campaign in the restored store
+        required: true
+      baseline_revision_id:
+        description: Exact immutable baseline revision from that campaign
+        required: true
+      candidate_strategy:
+        description: Candidate strategy ID in the checked-out configuration
+        required: true
+      config_path:
+        description: Checked-in ROVE config (provider credentials must stay in environment)
+        default: rove.yaml
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ROVE_STORE: evaluation-store
+      ROVE_REPORTS: reports
+      SOURCE_CAMPAIGN: ${{ inputs.source_campaign_id }}
+      BASELINE_REVISION: ${{ inputs.baseline_revision_id }}
+      CANDIDATE_STRATEGY: ${{ inputs.candidate_strategy }}
+      ROVE_CONFIG: ${{ inputs.config_path }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+      - name: Install locked local dependencies
+        run: uv sync --frozen --extra data --extra kinematics
+      - name: Restore the explicitly selected study artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          APPROVED_RUN_ID: ${{ inputs.approved_run_id }}
+        run: |
+          gh run download "$APPROVED_RUN_ID" --name rove-state --dir restored-state
+          uv run --frozen rove exchange import restored-state/rove-state.zip --store "$ROVE_STORE"
+      - name: Prepare a candidate from saved cases and criteria
+        run: |
+          mkdir -p reports
+          uv run --frozen rove campaign improve "$SOURCE_CAMPAIGN" --store "$ROVE_STORE" --config "$ROVE_CONFIG" --output reports/source-draft.json
+          uv run --frozen python examples/ci/prepare_request.py reports/source-draft.json reports/request.json --baseline "$BASELINE_REVISION" --strategy "$CANDIDATE_STRATEGY"
+          uv run --frozen rove campaign preview reports/request.json --store "$ROVE_STORE" --config "$ROVE_CONFIG" --output reports/preview.json
+      - name: Run and enforce declared evaluation targets
+        run: |
+          uv run --frozen rove campaign run reports/request.json --store "$ROVE_STORE" --config "$ROVE_CONFIG" --revision "$GITHUB_SHA" --operation-id "gha-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --output "$ROVE_REPORTS" --require-targets > reports/run.json
+      - name: Retain timeline and exact reference comparison
+        if: always()
+        run: |
+          if [ -s reports/run.json ]; then
+            CAMPAIGN_ID=$(uv run --frozen python -c 'import json; print(json.load(open("reports/run.json"))["id"])')
+            uv run --frozen rove campaign timeline "$CAMPAIGN_ID" --store "$ROVE_STORE" --output reports/timeline.json
+            uv run --frozen rove campaign compare "$CAMPAIGN_ID" --strategy "$CANDIDATE_STRATEGY" --store "$ROVE_STORE" --output reports/comparison.json
+          fi
+      - name: Export durable study state for a later explicitly selected run
+        if: always()
+        run: |
+          if [ -f "$ROVE_STORE/campaigns.sqlite3" ]; then
+            mkdir -p state-artifact
+            uv run --frozen rove exchange export state-artifact/rove-state.zip --store "$ROVE_STORE"
+          fi
+      - name: Publish reports even when an evaluation gate fails
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rove-reports
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Publish study state separately
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rove-state
+          path: state-artifact/rove-state.zip
+          if-no-files-found: warn
+          retention-days: 14

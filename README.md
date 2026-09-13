@@ -119,9 +119,24 @@ credentials and compatible checkpoints.
   checkpoint requirements before downloading weights. These are not exercised
   by the lightweight CI suite.
 
-Use `/docs` for the implemented HTTP API. `rove serve` and `rove benchmark` are supported CLI commands;
-there is no published-package guarantee, batch `rove evaluate` command, or
-`rove.evaluate()` convenience function yet.
+Use `/docs` for the implemented HTTP API. From this source checkout, compare your
+observation against two configured strategies without opening the dashboard:
+
+```bash
+uv run --frozen rove trial run --task "Pick up the bracket" --image observation.png \
+  --strategy mock-consistent --strategy mock-variable --config examples/benchmarks/rove.yaml
+```
+
+Supply your own `observation.png`; add `--urdf robot.urdf` to retain a robot description.
+Each strategy produces its own saved trial. Campaigns retain cases, criteria and
+repetitions; **Improve** creates a linked iteration whose timeline shows what changed
+and whether outcomes are comparable. Unknown assessments remain unknown.
+
+See the [CLI capability guide](docs/product/cli-ui-parity.md),
+[iteration architecture](docs/architecture/ADR-027-trial-to-campaign-improvement.md)
+and [manual GitHub Actions example](examples/ci/README.md) for scripted data/review
+management, baselines, report gates and restored study history. These commands are
+verified in this checkout; an older published package may not contain them.
 
 ## What a useful comparison needs
 
@@ -149,8 +164,9 @@ Copilot SDK for ROVE-owned agents while preserving direct evaluation of customer
 agents, VLMs and VLAs.
 The linked [architecture decisions](docs/architecture/README.md) include diagrams,
 trade-offs and implementation status. The local customer workflow is implemented;
-general video/trajectory ingestion, action-dependent rollout, cloud exporters and
-aggregate campaign targets remain future work.
+general video ingestion and production cloud exporters remain future work. Bounded
+recording imports, action-dependent synthetic trials and aggregate targets are implemented
+with local validation; live providers and physical robot execution remain unvalidated.
 
 ## Development
 

@@ -78,7 +78,9 @@ function campaignCard(campaign) {
     const report = campaignLink(`/api/campaigns/${encoded}/report?format=html`, "Open report", "report-link");
     report.target = "_blank"; report.rel = "noopener";
     const setBaseline = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}&baseline=setup`, "Set as baseline", "baseline-action");
-    actions.append(review, report, setBaseline);
+    const improve = campaignLink(`/static/datasets.html?improve=${encoded}`, "Improve", "improve-link");
+    improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
+    actions.append(review, improve, report, setBaseline);
     const exports = document.createElement("div"); exports.className = "campaign-exports";
     const exportLabel = document.createElement("span"); exportLabel.textContent = "Export:";
     exports.append(exportLabel);
@@ -86,7 +88,7 @@ function campaignCard(campaign) {
     const control = document.createElement("button"); control.className = "secondary"; control.type = "button";
     actions.append(control);
     card.append(heading, detail, progress, baselineDetails, actions, exports);
-    entry = {card, title, detail, progress, control, baselineBadge, baselineDetails, setBaseline, summaryLoaded: false};
+    entry = {card, title, detail, progress, control, baselineBadge, baselineDetails, setBaseline, improve, summaryLoaded: false};
     campaignCards.set(id, entry);
     $("history").append(card);
   }
@@ -107,6 +109,8 @@ function campaignCard(campaign) {
     row.append(name, strategy); entry.baselineDetails.append(row);
   }
   entry.setBaseline.hidden = campaign.status !== "completed" || baselines.length > 0;
+  entry.improve.hidden = campaign.status !== "completed";
+  entry.improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
   entry.control.hidden = campaign.status === "completed";
   const action = ["running", "pending"].includes(campaign.status) ? "cancel" : "resume";
   entry.control.textContent = action === "cancel" ? "Cancel campaign" : "Resume remaining trials";

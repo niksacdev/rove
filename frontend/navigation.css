@@ -8,11 +8,11 @@
 .rove-nav nav a:hover { color: var(--f-text); background: var(--f-elevated, var(--f-bg)); }
 .rove-nav nav a[aria-current="page"] { color: var(--f-text); background: var(--f-bg); border-color: var(--f-border-strong, var(--f-border)); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .rove-nav .rove-utilities { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.rove-nav .rove-settings, .rove-nav .rove-theme { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; box-sizing: border-box; padding: 9px 12px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--f-text-secondary); text-decoration: none; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.rove-footer .rove-settings, .rove-nav .rove-theme { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; box-sizing: border-box; padding: 9px 12px; background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--f-text-secondary); text-decoration: none; font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .rove-nav .rove-theme { border-color: var(--f-border); font-size: 12px; }
-.rove-nav .rove-settings:hover, .rove-nav .rove-theme:hover, .rove-nav .rove-settings[aria-current="page"] { color: var(--f-text); background: var(--f-surface); border-color: var(--f-border); }
+.rove-footer .rove-settings:hover, .rove-nav .rove-theme:hover, .rove-footer .rove-settings[aria-current="page"] { color: var(--f-text); background: var(--f-surface); border-color: var(--f-border); }
 [data-theme="light"] .rove-brand svg { color: #0f766e; }
-.rove-nav a:focus-visible, .rove-nav button:focus-visible, .workspace-tabs a:focus-visible, .workspace-tabs button:focus-visible { outline: 2px solid #70bdb4; outline-offset: 3px; }
+.rove-footer a:focus-visible, .rove-nav a:focus-visible, .rove-nav button:focus-visible, .workspace-tabs a:focus-visible, .workspace-tabs button:focus-visible { outline: 2px solid #70bdb4; outline-offset: 3px; }
 .workspace-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0 0 24px; align-self: auto; border-bottom: 1px solid var(--f-border); }
 .workspace-tabs a, .workspace-tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 15px; min-height: 44px; text-decoration: none; color: var(--f-text-muted); font: inherit; font-size: 13px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; cursor: pointer; }
 .workspace-tabs [aria-current], .workspace-tabs [aria-selected="true"] { color: var(--f-text); border-bottom-color: #289488; background: none; }
@@ -24,7 +24,15 @@
   .rove-nav nav { order: 3; flex: 0 0 100%; box-sizing: border-box; }
   .rove-nav nav a { flex: 1; padding: 0 12px; min-height: 42px; }
   .rove-nav .rove-utilities { gap: 4px; }
-  .rove-nav .rove-settings { padding: 8px; }
   .rove-nav .rove-theme { padding: 8px; }
 }
-@media (max-width: 360px) { .rove-nav { padding: 12px; } .rove-nav .rove-settings span { display: none; } }
+@media (max-width: 360px) { .rove-nav { padding: 12px; } }
+
+/* A reserved footer keeps Settings below the workspace, never over its inputs. */
+body.rove-shell { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; }
+body.rove-shell > main { width:100%; box-sizing:border-box; }
+.rove-footer { flex-shrink:0; display:flex; justify-content:flex-end; align-items:center; min-height:60px; box-sizing:border-box; padding:8px 36px; margin-top:auto; border-top:1px solid var(--f-border); background:var(--f-bg); }
+.rove-footer .rove-settings { min-height:42px; padding:9px 14px; background:var(--f-surface); border-color:var(--f-border); font-weight:500; }
+.rove-footer .rove-settings svg { flex-shrink:0; }
+@media(max-width:760px) { .rove-footer { padding:8px 20px; } }
+@media(max-width:360px) { .rove-footer { padding:8px 12px; } }
