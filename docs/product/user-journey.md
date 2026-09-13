@@ -559,3 +559,32 @@ recorded findings. Optional local VLA compatibility is documented in the
 [local inference guide](../research/vla_local_inference_guide.md).
 
 See [ADR-029](../architecture/ADR-029-workspace-interaction-consistency.md).
+
+## Foundry-inspired workspace
+
+Azure AI Foundry is the visual reference for ROVE's AI evaluation workspace.
+Robotics developers retain the immediate trial composer; evaluation owners get
+a scannable campaign list and drill into outcomes and evidence. Platform teams
+reach strategies and connections through Settings. These personas use the same
+neutral surfaces, purple action accent, readable step navigation and consistent
+fields and dialogs in either saved theme.
+
+Campaign rows show name, status, recorded trials and creation date, with View
+results, Export and Improve controls. Narrow layouts retain all information in
+stacked rows. Color emphasizes selection and action; outcome status retains its
+separate meaning. Reports use matching typography and surfaces while remaining
+standalone exports. This is a shared CSS adaptation of Fluent guidance, not a
+new framework or an Azure resource-management workflow.
+
+```mermaid
+flowchart LR
+  D[Robotics developer] --> T[Compare strategies in a trial]
+  O[Evaluation owner] --> C[Browse campaigns]
+  C --> R[View results and inspect evidence]
+  C --> I[Review an improvement]
+  I --> A[Approve a strategy revision]
+  A --> T
+  P[Platform team] --> S[Settings: strategies and connections]
+```
+
+Implementation and validation: [ADR-030](../architecture/ADR-030-foundry-visual-language.md).

@@ -67,10 +67,12 @@ function campaignCard(campaign) {
     const card = document.createElement("article");
     card.className = "campaign"; card.dataset.campaignId = id; card.tabIndex = -1;
     const heading = document.createElement("div"); heading.className = "campaign-title";
-    const title = document.createElement("h3"), detail = document.createElement("small");
+    const title = document.createElement("h3");
+    const statusLabel = document.createElement("span"); statusLabel.className = "campaign-status"; statusLabel.dataset.column = "Status";
+    const createdLabel = document.createElement("time"); createdLabel.className = "campaign-created"; createdLabel.dataset.column = "Created";
     const baselineBadge = document.createElement("span"); baselineBadge.className = "baseline-badge"; baselineBadge.textContent = "Baseline"; baselineBadge.hidden = true;
     heading.append(title, baselineBadge);
-    const progress = document.createElement("p"); progress.className = "progress";
+    const progress = document.createElement("p"); progress.className = "progress campaign-trials"; progress.dataset.column = "Trials";
     progress.textContent = "Loading trial counts…";
     const actions = document.createElement("div"); actions.className = "campaign-actions";
     const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "View results", "campaign-action");
@@ -89,17 +91,25 @@ function campaignCard(campaign) {
     actions.append(review, exports, improve);
     const control = document.createElement("button"); control.className = "campaign-action secondary"; control.type = "button";
     actions.append(control);
-    const overview = document.createElement("div"); overview.className = "campaign-overview";
-    overview.append(heading, detail, progress);
-    card.append(overview, actions);
-    entry = {card, title, detail, progress, control, baselineBadge, improve, summaryLoaded: false};
+    card.append(heading, statusLabel, progress, createdLabel, actions);
+    entry = {card, title, statusLabel, createdLabel, progress, control, baselineBadge, improve, summaryLoaded: false};
     campaignCards.set(id, entry);
     $("history").append(card);
   }
   entry.title.textContent = campaign.name || "Untitled campaign";
   const created = new Date(campaign.created_at);
   const status = String(campaign.status || "Status unavailable");
-  entry.detail.textContent = `${status.charAt(0).toUpperCase() + status.slice(1)} · ${Number.isNaN(created.getTime()) ? "Date unavailable" : created.toLocaleString()}`;
+  entry.statusLabel.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  entry.statusLabel.dataset.status = status;
+  const validDate = campaign.created_at != null && campaign.created_at !== "" && !Number.isNaN(created.getTime());
+  entry.createdLabel.textContent = validDate ? created.toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"}) : "Date unavailable";
+  if (validDate) {
+    entry.createdLabel.dateTime = created.toISOString();
+    entry.createdLabel.title = created.toLocaleString();
+    entry.createdLabel.setAttribute("aria-label", `Created ${created.toLocaleString()}`);
+  } else {
+    entry.createdLabel.removeAttribute("datetime"); entry.createdLabel.removeAttribute("title"); entry.createdLabel.removeAttribute("aria-label");
+  }
   const baselines = savedBaselines?.filter(b => b && b.campaign_id === id && typeof b.id === "string" && b.id && typeof b.strategy_id === "string" && b.strategy_id) || [];
   entry.baselineBadge.hidden = baselines.length === 0;
   entry.card.classList.toggle("is-baseline", baselines.length > 0);

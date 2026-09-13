@@ -256,8 +256,8 @@ test("multiple saved strategies retain a single baseline indicator and results d
   assert.equal(page.document.querySelector(".baseline-badge").hidden, false);
   assert.equal(page.document.querySelector(".baseline-name"), null);
   assert.equal(page.document.querySelector(".campaign-actions > a").getAttribute("href"), "/static/datasets.html?step=review&campaign=campaign-a");
-  assert.equal(page.document.querySelector(".campaign small").textContent.includes("v1"), false);
-  assert.match(page.document.querySelector(".campaign small").textContent, /^Completed/);
+  assert.equal(page.document.querySelector(".campaign-status").textContent.includes("v1"), false);
+  assert.match(page.document.querySelector(".campaign-status").textContent, /^Completed/);
   assert.equal(page.calls.some(call => call.options?.method), false);
 });
 
@@ -272,4 +272,21 @@ test("campaign Improve action retains exact source and is offered only after exe
   rows[1].status = "completed"; const timer = [...timers.values()][0]; timer.callback(); await flush();
   cards = [...document.querySelectorAll(".campaign")]; assert.equal(cards[1].querySelector(".improve-link").hidden, false);
   assert.equal(calls.filter(call => call.options?.method).length, 0);
+});
+
+test("campaign list exposes aligned status, trial count and creation time without losing full timestamp", async t => {
+  const page = setup(t, {campaigns:[{...campaign,created_at:"2026-09-13T11:42:00Z"}]}); await flush();
+  const card=page.document.querySelector(".campaign");
+  assert.deepEqual([...card.children].map(child=>child.className),["campaign-title","campaign-status","progress campaign-trials","campaign-created","campaign-actions"]);
+  assert.equal(page.document.querySelector(".campaign-columns").getAttribute("aria-hidden"),"true");
+  assert.equal(card.querySelector(".campaign-status").textContent,"Completed");
+  assert.equal(card.querySelector(".campaign-status").dataset.status,"completed");
+  const created=card.querySelector("time");assert.equal(created.dateTime,"2026-09-13T11:42:00.000Z");assert.ok(created.title);assert.match(created.getAttribute("aria-label"),/^Created /);
+  assert.match(card.querySelector(".campaign-trials").textContent,/3 \/ 3 trials/);
+  assert.equal(page.calls.some(call=>call.options?.method),false);
+});
+
+test("unavailable campaign creation date does not emit a fabricated timestamp", async t => {
+  const page=setup(t,{campaigns:[{...campaign,created_at:"not-a-date"}]});await flush();
+  const created=page.document.querySelector(".campaign-created");assert.equal(created.textContent,"Date unavailable");assert.equal(created.hasAttribute("datetime"),false);
 });
