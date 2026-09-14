@@ -32,6 +32,11 @@ failure may support a controlled component-change hypothesis. AI explanation is
 optional and labeled by source. Changes and reruns require human approval; a trace
 alone cannot prove that a proposed change will improve a robot's performance.
 
+If AI explanation is not configured, **Configure assistant** opens **Settings →
+Assistant**. Save an existing assistant endpoint, test its connection, then use
+**Return to campaign results**. Runtime availability alone does not prove the model
+can respond. Endpoint selection persists locally; environment overrides remain visible.
+
 The CLI exposes the same records without the dashboard:
 
 ```sh

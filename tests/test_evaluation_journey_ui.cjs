@@ -17,7 +17,7 @@ async function workspace(query = "", options = {}) {
   w.HTMLDialogElement.prototype.close = function() {this.open = false; this.dispatchEvent(new w.Event("close"));};
   w.fetch = async (url, opts = {}) => {
     const method = opts.method || "GET", body = opts.body ? JSON.parse(opts.body) : null; calls.push({url, method, body}); let value;
-    if (url === "/api/assistant/status") value = {available: false, reason: "Not configured"};
+    if (url === "/api/assistant/status") value = options.assistantStatus || {available: false, configured:false, reason: "Not configured"};
     else if (url === "/api/examples") value = {examples: []};
     else if (url.startsWith("/api/cases?")) {
       const query = new URL(url, w.location.origin).searchParams;
@@ -525,7 +525,7 @@ test("Results show an outcome overview with separate trials and scoring tabs", a
 });
 
 test("assistant summary failure leaves recorded outcome charts usable and offers retry", async () => {
-  const {dom, el, calls, pause} = await workspace("?step=review&campaign=campaign", {summaryFail: true});
+  const {dom, el, calls, pause} = await workspace("?step=review&campaign=campaign", {summaryFail: true,assistantStatus:{configured:true,available:false}});
   try {
     assert.match(el("campaignAiSummary").textContent, /AI explanation unavailable/);
     assert.match(el("campaignOutcomeCharts").textContent, /Outcomes by strategy/);
@@ -940,4 +940,16 @@ test("case deep links populate selection and calculator on every draft step",asy
    assert.equal(calls.filter(isMutation).length,0);
   }finally{dom.window.close();}
  }
+});
+
+test("unconfigured summaries link to actual Assistant settings and incomplete campaigns offer no futile retry",async()=>{
+  for(const incomplete of [false,true]){
+    const result={source:"recorded",assistant_configured:false,warnings:incomplete?["Campaign not completed"]:[]};
+    const {dom,el}=await workspace("?step=review&campaign=campaign",{outcomeSummary:result});
+    try{
+      const panel=el("campaignAiSummary");assert.equal(panel.querySelector("button"),null);
+      if(incomplete){assert.match(panel.textContent,/when this campaign finishes/);assert.equal(panel.querySelector("a"),null);}
+      else{assert.match(panel.textContent,/Connect an assistant/);const url=new URL(panel.querySelector("a").href);assert.equal(url.searchParams.get("view"),"settings");assert.equal(url.hash,"#assistant");assert.equal(url.searchParams.get("return"),"/static/datasets.html?step=review&campaign=campaign");}
+    }finally{dom.window.close();}
+  }
 });

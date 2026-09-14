@@ -1217,16 +1217,26 @@ if (typeof document !== "undefined") (() => {
   $("continueMetrics").addEventListener("click",()=>goStep("metrics"));
   $("regenerateMetrics").addEventListener("click",()=>draftMetrics(true));
   async function renderOutcomeSummary(id, container, version) {
-    function renderUnavailableSummary(reason) {
+    const requestVersion=container.dataset.summaryRequest=String(Number(container.dataset.summaryRequest || 0)+1);
+    const current=()=>version===state.campaignVersion && container.isConnected && container.dataset.summaryRequest===requestVersion;
+    const settingsUrl="/?view=settings&return="+encodeURIComponent(`/static/datasets.html?step=review&campaign=${encodeURIComponent(id)}`)+"#assistant";
+    async function renderUnavailableSummary(result, reason) {
+      let configured=result?.assistant_configured;
+      const incomplete=result?.warnings?.some(warning=>warning.includes("not completed"));
+      if(configured==null && !incomplete){try{const status=await request("/api/assistant/status");configured=status.configured ?? status.available;}catch{configured=null;}}
+      if(!current())return;
       container.classList.add("ai-summary-unavailable");
-      container.replaceChildren(node("p","AI explanation unavailable. "+reason,"muted"),button("Retry summary",()=>renderOutcomeSummary(id,container,version)),link("Assistant settings","/?view=strategies"));
+      const message=incomplete?"An AI explanation can be requested when this campaign finishes.":configured===false?"Connect an assistant to explain these results. Your recorded outcomes and scores are already available above.":"AI explanation unavailable. "+reason;
+      container.replaceChildren(node("p",message,"muted"));
+      if(!incomplete && configured!==false)container.append(button("Retry summary",()=>renderOutcomeSummary(id,container,version)));
+      if(!incomplete)container.append(link(configured===false?"Configure assistant":"Assistant settings",settingsUrl));
     }
     container.classList.remove("ai-summary-unavailable");
     container.replaceChildren(node("p","Preparing an AI explanation from recorded outcomes…","muted"));
     try {
       const result=await post(`/api/campaigns/${encodeURIComponent(id)}/outcome-summary`,{});
-      if(version!==state.campaignVersion || !container.isConnected)return;
-      if(result.source!=="ai") { renderUnavailableSummary(result.warnings?.some(warning=>warning.includes("not completed")) ? "An AI explanation can be requested when this campaign finishes." : "Recorded outcomes remain available above."); return; }
+      if(!current())return;
+      if(result.source!=="ai") { await renderUnavailableSummary(result,"The configured assistant could not produce an explanation. Recorded outcomes remain available above."); return; }
       container.replaceChildren(node("span","AI outcome summary","ai-source"),node("h3",result.headline));
       const list=node("ul");
       for(const finding of result.findings || []) {
@@ -1239,7 +1249,7 @@ if (typeof document !== "undefined") (() => {
       container.append(node("p","AI interpretation of saved outcomes and stage evidence. Inspect the evidence before acting on suggestions.","chart-note"));
       if(result.warnings?.length) { const details=node("details"); details.append(node("summary","Assistant status")); for(const warning of result.warnings)details.append(node("p",warning)); container.append(details); }
       container.append(button("Refresh summary",()=>renderOutcomeSummary(id,container,version)));
-    } catch(error){if(version===state.campaignVersion && container.isConnected)renderUnavailableSummary("Recorded outcomes remain available above.");}
+    } catch(error){if(current())await renderUnavailableSummary(null,"Recorded outcomes remain available above.");}
   }
 
   window.refreshStrategyCatalog = refreshStrategyCatalog;

@@ -20,7 +20,7 @@ for (const [file, section] of [["index.html","start"],["datasets.html","results"
         assert.equal(w.document.querySelector("#roveNav [aria-current=page]").dataset.navSection,section,"legacy step names cannot switch the selected resource");
       }
       const settings = w.document.querySelector("#roveNav .rove-utilities .rove-settings");
-      assert.equal(settings.getAttribute("href"), "/?view=strategies");
+      assert.equal(settings.getAttribute("href"), "/?view=settings");
       assert.equal(settings.getAttribute("aria-label"),"Settings");
       assert.equal(settings.title,"Settings");
       assert.ok(settings.querySelector("svg"));
@@ -40,7 +40,7 @@ test("root journey routes clean configuration and restores active comparison vie
   const dom = new JSDOM(read("index.html"), {url:"http://localhost/",runScripts:"outside-only",pretendToBeVisual:true}), w = dom.window, calls=[];
   w.lucide={createIcons(){}};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
-  w.fetch=async(url,options={})=>{calls.push({url,method:options.method||"GET"});return {ok:true,json:async()=>url.includes("history")?[]:url.includes("strategies")?{strategies:[]}:url.includes("endpoints")?{endpoints:[]}:url.includes("models")?{models:[]}:{defaults:{},endpoints:{},strategies:{}}};};
+  w.fetch=async(url,options={})=>{calls.push({url,method:options.method||"GET"});return {ok:true,json:async()=>url.includes("assistant/settings")?{endpoints:[],configured:false}:url.includes("assistant/status")?{available:false,configured:false}:url.includes("history")?[]:url.includes("strategies")?{strategies:[]}:url.includes("endpoints")?{endpoints:[]}:url.includes("models")?{models:[]}:{defaults:{},endpoints:{},strategies:{}}};};
   try {
     w.eval(read("navigation.js"));w.eval(read("stage-renderers.js"));w.eval(read("strategy-table.js")); w.eval(read("app.js") + ";window.testRoot={setupTabs,setRunning,restoreEvaluation,switchView};"); await pause();
     const el=id=>w.document.getElementById(id);
@@ -61,7 +61,7 @@ test("root journey routes clean configuration and restores active comparison vie
     assert.equal(w.document.querySelector("#quickSidebar .rove-settings"),null);
     w.testRoot.switchView("quick");
     w.document.querySelector('#roveNav [data-nav-section="configure"]').click();
-    assert.equal(w.location.search,"?view=strategies");
+    assert.equal(w.location.search,"?view=settings");
     assert.equal(el("quickComposer").hidden,true);
     assert.equal(el("configureHeading").hidden,false);
     assert.equal(w.document.querySelector("#roveNav .rove-settings").getAttribute("aria-current"),"page");
@@ -69,7 +69,7 @@ test("root journey routes clean configuration and restores active comparison vie
     assert.equal(w.location.search,"?view=models");
     assert.equal(w.document.querySelector('#configureHeading [aria-current]').textContent,"Endpoints");
     w.history.back(); await pause();
-    assert.equal(w.location.search,"?view=strategies");
+    assert.equal(w.location.search,"?view=settings");
     w.history.back(); await pause();
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);

@@ -12,7 +12,7 @@ import asyncio
 import hmac
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import uuid4
@@ -37,7 +37,11 @@ from rove.benchmarks.store import CampaignStore
 from rove.benchmarks.workflow import LaunchRequest, assessed_trials, prepare_launch
 from rove.datasets.service import DatasetService
 from rove.models.config import load_config
-from rove.runtime.assistant import assistant_settings
+from rove.runtime.assistant import (
+    assistant_settings,
+    assistant_settings_view,
+    save_assistant_selection,
+)
 from rove.runtime.copilot import CopilotRuntime, RuntimeTool
 from rove.trials.snapshots import canonical_json, content_hash, sanitize
 from rove.trials.store import TrialStore, now
@@ -64,6 +68,14 @@ class AssistantContext(Arguments):
 class AskRequest(Arguments):
     message: str = Field(min_length=1, max_length=8000)
     context: AssistantContext = Field(default_factory=AssistantContext)
+
+
+class AssistantSelection(Arguments):
+    endpoint_id: Identifier | None
+
+
+class ConnectionProof(Arguments):
+    connection: Literal["ok"]
 
 
 class ConfirmRequest(Arguments):
@@ -129,7 +141,65 @@ def create_assistant_router(
     proposals: dict[str, Proposal] = {}
 
     def settings():
-        return assistant_settings(config_loader=config_loader, endpoint_id=endpoint_id)
+        return assistant_settings(root=root, config_loader=config_loader, endpoint_id=endpoint_id)
+
+    def settings_view():
+        return assistant_settings_view(
+            root=root, config_loader=config_loader, endpoint_id=endpoint_id
+        )
+
+    @router.get("/api/assistant/settings")
+    async def get_settings():
+        return settings_view()
+
+    @router.put("/api/assistant/settings")
+    async def put_settings(request: AssistantSelection):
+        try:
+            save_assistant_selection(
+                request.endpoint_id, root=root, config_loader=config_loader, endpoint_id=endpoint_id
+            )
+        except PermissionError as error:
+            raise HTTPException(409, str(error)) from None
+        except ValueError:
+            raise HTTPException(422, "Choose an existing copilot_agent endpoint") from None
+        return settings_view()
+
+    @router.post("/api/assistant/test")
+    async def test_connection():
+        view = settings_view()
+        result = {
+            "available": False,
+            "provider_tested": False,
+            "endpoint_id": view["effective_endpoint_id"],
+            "reason": view["status_reason"],
+        }
+        if not view["configured"]:
+            return result
+        try:
+            # Pin this request to the displayed selection if another client saves concurrently.
+            configured_settings = assistant_settings(
+                root=root, config_loader=config_loader, endpoint_id=view["effective_endpoint_id"]
+            )
+            runtime_settings = replace(
+                configured_settings,
+                timeout_seconds=min(configured_settings.timeout_seconds, 30),
+                system_message='Return only this JSON object: {"connection":"ok"}.',
+            )
+            runtime = runtime_factory(runtime_settings, tools=())
+            if not await runtime.health_check():
+                return {**result, "reason": "The configured Copilot runtime is unavailable."}
+            # Explicit user-requested provider call. No customer records, attachments or tools.
+            async with asyncio.timeout(40):
+                output = await runtime.run_stage(
+                    "assist", "", 'Return only {"connection":"ok"}.', {}
+                )
+            ConnectionProof.model_validate({k: v for k, v in output.items() if k != "_runtime"})
+        except Exception:
+            return {
+                **result,
+                "reason": "The provider did not return a valid test response. Check its availability and endpoint configuration.",
+            }
+        return {**result, "available": True, "provider_tested": True, "reason": None}
 
     @router.get("/api/assistant/status")
     async def status():
@@ -145,6 +215,8 @@ def create_assistant_router(
             )
         return {
             "available": available,
+            "runtime_available": available,
+            "provider_tested": False,
             "reason": reason,
             "capabilities": [
                 "read_evidence",

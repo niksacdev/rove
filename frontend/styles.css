@@ -349,3 +349,11 @@ body[data-quick-step] .root-main { overflow-y:auto; }
 #trialOutputNavigation .strategy-tab { min-height:44px; font-size:14px; }
 #trialOutputNavigation [data-tab-id="__summary__"] { position:sticky; left:0; z-index:1; background:var(--f-bg); box-shadow:1px 0 0 var(--f-border); }
 #trialOutputNavigation :focus-visible { outline:2px solid var(--f-accent-text); outline-offset:-2px; }
+#assistant.assistant-settings { margin:24px 0 32px;padding:24px;border:1px solid var(--f-border);border-radius:var(--f-radius-panel,6px);background:var(--f-surface); }
+#assistant h2 {font-size:20px;line-height:28px;margin:0 0 12px;}#assistant h2:focus {outline:none;}
+#assistant p,#assistant label {font-size:16px;line-height:25px;margin:12px 0;color:var(--f-text-secondary);}
+#assistant label {display:block;color:var(--f-text);font-weight:600;}
+#assistant select {width:100%;min-height:40px;padding:8px 12px;background:var(--f-bg);color:var(--f-text);border:1px solid var(--f-border-strong);border-radius:var(--f-radius-control,4px);font-size:16px;}
+#assistant .assistant-settings-actions {display:flex;gap:12px;flex-wrap:wrap;margin:20px 0;}
+#assistant button,#assistantReturnToCampaign {display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;font-size:14px;color:var(--f-text);background:var(--f-surface);border:1px solid var(--f-border-strong);border-radius:var(--f-radius-control,4px);}
+#assistant #saveAssistantSettings {background:var(--f-accent);border-color:var(--f-accent);color:white;}#assistant button:disabled {opacity:.5;cursor:not-allowed;}
