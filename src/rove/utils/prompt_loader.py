@@ -126,20 +126,37 @@ class PromptManager:
             stage_lines.append("--- ACT stage output ---")
             stage_lines.append(f"Action type: {action.get('action_type', 'N/A')}")
             stage_lines.append(f"Num steps: {action.get('num_steps', 'N/A')}")
-            stage_lines.append(f"Confidence: {action.get('confidence', 'N/A')}")
+            probe = action.get("execution_eligible") is False
+            stage_lines.append(
+                "Confidence: unavailable"
+                if probe
+                else f"Confidence: {action.get('confidence', 'N/A')}"
+            )
+            if probe:
+                stage_lines.append(
+                    "Observation probe only: action coordinates and units are unknown. "
+                    "These outputs are ineligible for robot execution, simulation or dynamics. "
+                    "Do not infer physical task success or gripper events."
+                )
+                for assumption in action.get("input_assumptions", []):
+                    stage_lines.append(f"Input assumption: {assumption}")
 
             # Include trajectory summary for plausibility analysis
             actions = action.get("actions", [])
             if actions and isinstance(actions[0], list):
-                dof_labels = ["dx", "dy", "dz", "rx", "ry", "rz", "grip"]
+                dof_labels = (
+                    ["dx", "dy", "dz", "rx", "ry", "rz", "grip"]
+                    if not probe and action.get("action_space", "eef_delta") == "eef_delta"
+                    else []
+                )
                 num_dof = len(actions[0])
                 header = ", ".join(
-                    dof_labels[i] if i < len(dof_labels) else f"d{i}" for i in range(num_dof)
+                    dof_labels[i] if i < len(dof_labels) else f"action_{i}" for i in range(num_dof)
                 )
                 total_steps = action.get("num_steps", len(actions))
 
                 # Gripper events are the primary evidence for manipulation tasks
-                gripper_events = action.get("gripper_events", [])
+                gripper_events = [] if probe else action.get("gripper_events", [])
                 if gripper_events:
                     stage_lines.append(f"Trajectory: {total_steps} steps, {num_dof}-DOF ({header})")
                     stage_lines.append("")
@@ -155,7 +172,12 @@ class PromptManager:
                 else:
                     stage_lines.append(
                         f"Trajectory: {total_steps} steps, {num_dof}-DOF"
-                        f" ({header}). No gripper events detected."
+                        f" ({header}). "
+                        + (
+                            "Gripper semantics unavailable."
+                            if probe
+                            else "No gripper events detected."
+                        )
                     )
 
                 # Show sample steps for reference
@@ -257,8 +279,11 @@ class PromptManager:
                     "Return an 'action_plausibility' object with float 0-1 or null: "
                     "bounds_check, smoothness, gripper_consistency, plan_alignment, "
                     "workspace_reachability, task_completion_plausibility, "
-                    "dynamics_consistency, safety_assessment, evidence_quality, reasoning. "
-                    "Set fields to null when you lack evidence to assess them."
+                    "dynamics_consistency, safety_assessment. "
+                    "Set those numeric fields to null when you lack evidence to assess them. "
+                    "The separate evidence_quality field must be a STRING: 'hard', 'estimated', "
+                    "'perception_only', or 'unknown'; use 'unknown' when evidence is unavailable. "
+                    "The reasoning field must be a STRING explaining the assessment and limitations."
                 )
             else:
                 stage_lines.append(

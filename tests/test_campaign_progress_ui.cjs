@@ -148,5 +148,14 @@ test("Run loads real active stage feedback automatically, incrementally retries 
   el("strategyProgress").querySelector("button").click(); await pause();
   assert.equal(el("liveTrials").querySelector("details").open, true);
   assert.ok(calls.some(call => call.url === "/api/trials/trial"));
+  const trace=el("liveTrials").querySelector('a[href*="trial=trial"]');
+  assert.equal(trace.hash,"#traces");assert.equal(trace.target,"_blank");
+  assert.ok(el("campaignProgressNavigation"));
+  el("backToCampaignProgress").click();
+  assert.equal(el("liveTrialDetails").open,false);
+  assert.equal(w.document.activeElement,el("strategyProgress"));
+  assert.match(el("strategyProgress").textContent,/Current pipeline.*Candidate pipeline/s);
+  el("strategyProgress").querySelector("button").click();await pause();
+  assert.equal(el("liveTrialDetails").open,true,"another inspection remains reachable from all strategies");
   assert.equal(calls.some(call => call.method !== "GET" && !call.url.endsWith("/outcome-summary")), false);
 });

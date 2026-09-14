@@ -10,7 +10,7 @@
   <title>ROVE — Robot Observation &amp; Vision Evaluation</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=trial-flow-9">
+  <link rel="stylesheet" href="/static/styles.css?v=runtime-traces-10">
   <link rel="stylesheet" href="/static/stage-renderers.css?v=workspace-8">
   <link rel="stylesheet" href="/static/navigation.css?v=workspace-8">
   <link rel="stylesheet" href="/static/start.css?v=workspace-8">
@@ -85,7 +85,10 @@
         <section id="quickResultsPanel" data-quick-panel="results" hidden><h2 tabindex="-1">Comparison results</h2><p id="quickResultsSummary">Run your selected strategies to inspect their outputs and evidence.</p><button type="button" id="quickStartAnother" class="secondary">Start another comparison</button></section>
       </section>
       <!-- Sub-tab bar (hidden until evaluation runs) -->
-      <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist"></div>
+      <section id="trialOutputNavigation" hidden aria-label="Strategy comparison navigation">
+        <div class="trial-output-toolbar"><span>Strategy comparison</span><a id="quickTrialInspect" hidden target="_blank" rel="noopener">Inspect trial &amp; traces ↗</a></div>
+        <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist" aria-label="Strategy outputs"></div>
+      </section>
 
       <!-- Content scroll area -->
       <div id="chatArea" class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
@@ -203,10 +206,10 @@
   </dialog>
 
   <script src="/static/sample-cases.js?v=workspace-8"></script>
-  <script src="/static/stage-renderers.js?v=workspace-8"></script>
+  <script src="/static/stage-renderers.js?v=probe-evidence-1"></script>
   <script src="/static/tooltips.js"></script>
   <script src="/static/strategy-table.js?v=workspace-8"></script>
-  <script src="/static/app.js?v=trial-flow-9"></script>
+  <script src="/static/app.js?v=runtime-traces-12"></script>
 
 </body>
 </html>

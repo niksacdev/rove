@@ -82,6 +82,46 @@ test("both original runner and campaigns load the one shared stage implementatio
   assert.match(read("trial-output.js"), /RoveStageRenderers.renderStageOutput/);
 });
 
+test("probe actions use neutral labels and disclose assumptions without executing semantics", t => {
+  const {w,output}=viewer(t);
+  w.RoveStageRenderers.renderAct(output,{action_type:"trajectory",actions:[[1,2,3,4,5,6,7]],
+    execution_eligible:false,action_space:"eef_delta",gripper_index:6,
+    input_assumptions:["Zero state is not measured robot state","<img src=x onerror=bad>"]});
+  const columns=[...output.querySelector(".rich-trajectory-table").firstElementChild.children].map(node=>node.textContent);
+  assert.deepEqual(columns,["#","action 1","action 2","action 3","action 4","action 5","action 6","action 7"]);
+  assert.match(output.textContent,/cannot be used for execution, simulation or dynamics/);
+  assert.match(output.textContent,/Zero state is not measured/);
+  assert.equal(output.querySelector("img"),null);
+});
+
+test("action columns follow recorded EEF and joint spaces and keep missing spaces neutral", t => {
+  const {w,output}=viewer(t);
+  for(const [space,expected] of [
+    [null,["action 1","action 2","action 3"]],
+    [undefined,["action 1","action 2","action 3"]],
+    ["eef_delta",["dx","dy","grip"]],
+    ["ee_delta",["dx","dy","grip"]],
+    ["eef_absolute",["x","y","grip"]],
+    ["joint_position",["joint 1","joint 2","grip"]],
+    ["joint_delta",["dJoint 1","dJoint 2","grip"]],
+  ]) {
+    output.replaceChildren();w.RoveStageRenderers.renderAct(output,{actions:[[1,2,3]],action_space:space,gripper_index:2});
+    assert.deepEqual([...output.querySelector(".rich-trajectory-table").firstElementChild.children].slice(1).map(node=>node.textContent),expected);
+  }
+});
+
+test("unknown plausibility quality cannot become perception-only or inferred MuJoCo evidence", t => {
+  const {w,output}=viewer(t);
+  for(const quality of ["unknown",null,undefined,"unrecognized"]) {
+    output.replaceChildren();w.RoveStageRenderers.renderVerify(output,{action_plausibility:{evidence_quality:quality,bounds_check:0.7,reasoning:"Input state is unavailable"}});
+    assert.match(output.textContent,/Evidence quality is unknown/);
+    assert.ok([...output.querySelectorAll("span")].some(node=>node.textContent==="Unknown"));
+    assert.doesNotMatch(output.textContent,/Perception Only|MuJoCo Dynamics|Enable MuJoCo/);
+  }
+  output.replaceChildren();w.RoveStageRenderers.renderVerify(output,{action_plausibility:{evidence_quality:"perception_only"}});
+  assert.match(output.textContent,/Perception Only/);
+});
+
 
 test("real parallel agent-loop trace shows only orchestrator stages, not internal perception or simulator reset", () => {
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/parallel_agent_loop_stage_events.json"), "utf8"));

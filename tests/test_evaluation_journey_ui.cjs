@@ -762,6 +762,21 @@ test("improvement retains a single exact baseline revision and requires an expli
   }
 });
 
+test("execution issues link evidence without offering a model quality change", async () => {
+  const seed=seedFixture("campaign");
+  seed.recommendations=[{strategy_id:"original-strategy",source:"execution_issue",stage:"plan",title:"Planning could not finish",text:"Repair execution before comparing model quality.",affected_trials:1,total_trials:1,evidence:[{trial_id:"trial-error",task:"Pick red block",error:"Endpoint unavailable"}]}];
+  const page=await workspace("?improve=campaign-source",{seed});
+  try {
+    const card=page.el("improvementAdvice").querySelector("article");
+    assert.match(card.textContent,/Repair execution before comparing model quality/);
+    const action=card.querySelector(".improvement-actions a");
+    assert.equal(action.textContent,"Inspect execution issue");
+    assert.equal(new URL(action.href).searchParams.get("trial"),"trial-error");
+    assert.equal([...card.querySelectorAll("button")].some(button=>button.textContent.includes("model")),false);
+    assert.equal(page.calls.some(call=>call.url==="/api/campaigns/from-cases"),false);
+  } finally {page.dom.window.close();}
+});
+
 test("improvement cards identify the problem and route named evidence without executing", async () => {
   const seed=seedFixture("campaign");
   seed.recommendations=[{strategy_id:"original-strategy",source:"missing_assessment",stage:"verify",title:"Review unscored trials",text:"These outputs need a review.",affected_trials:2,total_trials:3,trial_ids:["trial-a","trial-b"],evidence:[{trial_id:"trial-a",task:"Place <b>bowl</b>",seed:7},{trial_id:"trial-b",task:"Pick mug",seed:11}]}];

@@ -298,6 +298,8 @@ class EvaluationPipeline:
     def _validate_sim_actions(self, prediction):
         from rove.adapters.synthetic_sim import SyntheticSimAdapter
 
+        if prediction.execution_eligible is False:
+            raise ValueError("Observation-probe actions are ineligible for simulator execution")
         if isinstance(self.sim, SyntheticSimAdapter) and (
             prediction.action_type != "trajectory"
             or prediction.action_space != ActionSpace.EEF_DELTA
@@ -1640,6 +1642,8 @@ class EvaluationPipeline:
         self, ctx: PipelineContext, action_pred: ActionPrediction
     ) -> str | None:
         """Compute dynamics analysis, returning skip reason if skipped."""
+        if action_pred.execution_eligible is False:
+            return "Observation-probe actions are ineligible for dynamics analysis"
         from rove.adapters.forward_kinematics import analyze_trajectory
 
         dynamics, reason = analyze_trajectory(

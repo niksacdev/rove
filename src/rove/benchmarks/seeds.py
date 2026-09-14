@@ -94,20 +94,75 @@ def _recommendations(trials, strategies, tasks=None):
         "verify": "Verification",
         "sim": "Simulation",
     }
+
+    def probe_output(trial):
+        return any(
+            stage.get("stage") == "act"
+            and (stage.get("output") or {}).get("execution_eligible") is False
+            for stage in (trial.get("result") or {}).get("stages", [])
+        )
+
     for sid in strategies:
         rows = [trial for trial in trials if trial.get("strategy_id") == sid]
+
+        def evaluation_issue(trial):
+            if probe_output(trial):
+                return True
+            if trial.get("execution") in {"error", "timeout"}:
+                return True
+            for stage in (trial.get("result") or {}).get("stages", []):
+                if stage.get("stage") != "verify":
+                    continue
+                output = stage.get("output") or {}
+                if output.get("verdict_valid") is False:
+                    return True
+                if any(
+                    check.get("required")
+                    and (
+                        check.get("execution") != "completed"
+                        or (check.get("result") or {}).get("verdict") == "unknown"
+                    )
+                    for check in output.get("check_results", [])
+                ):
+                    return True
+            return False
+
+        issues = [trial for trial in rows if evaluation_issue(trial)]
         unresolved = [
             trial
             for trial in rows
-            if trial.get("outcome") == "unknown"
-            and trial.get("execution") not in {"error", "timeout"}
+            if trial.get("outcome") == "unknown" and not evaluation_issue(trial)
         ]
         failures = [
             trial
             for trial in rows
-            if trial.get("outcome") == "fail" or trial.get("execution") in {"error", "timeout"}
+            if trial.get("outcome") == "fail" and not evaluation_issue(trial)
         ]
         groups = []
+        if issues:
+            probes_only = all(probe_output(trial) for trial in issues)
+            stages = {(trial.get("result") or {}).get("failure_stage") for trial in issues}
+            stage = next(iter(stages)) if len(stages) == 1 else None
+            stage = stage if stage in stage_names else None
+            groups.append(
+                (
+                    stage,
+                    "execution_issue",
+                    issues,
+                    "Review observation probe inputs"
+                    if probes_only
+                    else f"{stage_names[stage]} could not finish"
+                    if stage
+                    else "Repair incomplete evaluation evidence",
+                    "Inspect the probe's assumptions and supply checkpoint-compatible measured state, camera views "
+                    "and action semantics before assessing model quality. Missing inputs are not evidence "
+                    "that a different action model will improve performance."
+                    if probes_only
+                    else "Inspect the recorded error, runtime configuration and required checks. Repair execution or "
+                    "obtain valid assessment evidence before comparing model quality; this is not evidence "
+                    "that replacing a model will improve task performance.",
+                )
+            )
         if failures:
             stages = Counter((trial.get("result") or {}).get("failure_stage") for trial in failures)
             stages = Counter(
@@ -162,7 +217,7 @@ def _recommendations(trials, strategies, tasks=None):
                     "No trials were recorded for this strategy. Review its configuration and run the campaign.",
                 )
             )
-        elif not failures and not unresolved:
+        elif not failures and not unresolved and not issues:
             groups.append(
                 (
                     None,

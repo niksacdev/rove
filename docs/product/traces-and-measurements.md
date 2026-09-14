@@ -3,7 +3,8 @@
 **Status:** Durable trial events, managed stage/episode evidence, bounded range
 inspection, producer-clock lanes and paired baseline/candidate traces are implemented
 locally. Missing adapter telemetry and cross-clock synchronization remain explicit.
-Live-provider and hosted monitoring validation is specification-only.
+Local Qwen stage traces have been exercised. Hosted monitoring and cloud-provider
+validation remain separate.
 
 A score should lead directly to the attempt that produced it. A robotics team needs
 to see the inputs, agent outputs, relevant calls, measurements and grading decision
@@ -15,6 +16,30 @@ evaluation record, alongside outcomes and configuration identity.
 | Robotics Researcher | Which cases changed between baseline and candidate, and which outputs or measurements explain the difference? |
 | ML Engineer on a Manipulation Team | Why was this customer case rejected, incomplete or found to violate a declared constraint? |
 | Platform / AI Infrastructure Team | Which configured endpoint, version and call produced this output, and which usage or timing information was actually recorded? |
+
+## Open evidence during an evaluation
+
+In a trial comparison, select a strategy under **All strategies**, then choose
+**Inspect trial & traces**. Its saved inspector opens separately, retaining the live
+comparison. The inspector loads the exact trial timeline, stage outputs, errors and
+available measurements. Use **All strategies** to switch back to the comparison;
+campaign progress provides the same return from an individual execution.
+
+From campaign Results, open **Inspect trials**, then the relevant trial. The campaign
+**Improve** path uses saved stage failures, durations and verifier/check evidence to
+propose a next step. Runtime errors suggest repairing execution; a recorded stage
+failure may support a controlled component-change hypothesis. AI explanation is
+optional and labeled by source. Changes and reruns require human approval; a trace
+alone cannot prove that a proposed change will improve a robot's performance.
+
+The CLI exposes the same records without the dashboard:
+
+```sh
+rove trial trace TRIAL_ID
+rove trial events TRIAL_ID
+rove campaign summary CAMPAIGN_ID
+rove campaign improve CAMPAIGN_ID
+```
 
 ## Follow an Outcome to Its Evidence
 

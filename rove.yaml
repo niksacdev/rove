@@ -139,6 +139,36 @@ endpoints:
       Flow matching with SmolVLM backbone. Ideal for edge deployment.
       Requires proprioception (current joint state) as input.
 
+  smolvla-observation-probe:
+    type: vla
+    adapter: local_lerobot
+    display_name: "SmolVLA · Image-only probe"
+    deployment_type: local
+    max_concurrent: 1
+    config:
+      model_id: "lerobot/smolvla_base"
+      runtime_python: ".rove/runtimes/lerobot/.venv/bin/python"
+      checkpoint_path: ".rove/runtimes/lerobot/checkpoints/smolvla"
+      checkpoint_revision: "c83c3163b8ca9b7e67c509fffd9121e66cb96205" # pragma: allowlist secret — public revision
+      manifest_sha256: "fb20b7aba0205e25fc1dc95b6f34bc0a1616a14931f9d5a1160737729e815e4f" # pragma: allowlist secret — asset hash
+      runtime_versions:
+        torch: "2.11.0"
+        lerobot: "0.6.1"
+        transformers: "5.5.4"
+        safetensors: "0.8.0"
+      tokenizer_path: ".rove/runtimes/lerobot/tokenizers/smolvla"
+      input_mode: observation_probe
+      device: mps
+      chunk_size: 10
+      runtime_timeout_s: 300
+      vla_capabilities:
+        native_action_dim: 6
+        supported_robot_types: null
+    notes: >
+      Experimental offline inference in a separate local environment. Missing robot
+      state is explicitly zero-filled for this probe only. Action coordinates and
+      physical task success are unknown; no robot control or dynamics validation.
+
   pi05-libero:
     type: vla
     adapter: local_lerobot
@@ -307,6 +337,35 @@ strategies:
     plan: qwen3-vl-8b
     verify: bing-grounding-agent
     tags: [scene, plan, vlm, local]
+
+  # Explicit local comparisons: no Foundry agent or cloud credentials required.
+  scene_detect_local:
+    display_name: "Scene Detection · Local Qwen"
+    description: "Qwen3-VL describes the scene and checks its output locally; no robot execution"
+    perceive: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    verify_mode: precompute
+    tags: [scene, vlm, local]
+
+  scene_plan_local:
+    display_name: "Scene + Plan · Local Qwen"
+    description: "Qwen3-VL describes, plans and checks its output locally; no robot execution"
+    perceive: qwen3-vl-8b
+    plan: qwen3-vl-8b
+    verify: qwen3-vl-8b
+    verify_mode: precompute
+    tags: [scene, plan, vlm, local]
+
+  smolvla_probe_local:
+    display_name: "SmolVLA probe · Local Qwen review"
+    description: "Inspect real SmolVLA outputs from an image-only probe; missing state and views remain explicit, no physical success claim"
+    perceive: qwen3-vl-8b
+    act: smolvla-observation-probe
+    verify: qwen3-vl-8b
+    verify_mode: precompute
+    pipeline_mode: sequential
+    compute_dynamics: false
+    tags: [vla, smolvla, local, experimental, observation-probe]
 
   # --- VLA Evaluation (agent_loop: verifier calls perceive + dynamics as tools) ---
   vla_pi05:

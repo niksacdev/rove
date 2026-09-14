@@ -30,11 +30,12 @@ No cloud account or model download is needed for the mock demo.
 git clone https://github.com/niksacdev/rove.git
 cd rove
 uv sync --frozen --python 3.12 --extra dev --extra data --extra kinematics
-uv run --frozen rove serve
+uv run --no-sync rove serve
 # Open http://127.0.0.1:5001
 ```
 
-Choose a gallery image, select **Mock (Test)**, and click **Evaluate**. Inspect
+Choose a sample case, select **Mock (Test)**, open **Review & run**, then click
+**Run trials**. Inspect
 stage outputs, evidence confidence, missing checks, and comparison results.
 Mock outputs demonstrate the workflow; they do not measure a robot's ability.
 
@@ -120,18 +121,25 @@ box. Other configurations are examples and require your own running endpoints,
 credentials and compatible checkpoints.
 
 - OpenAI-compatible vision endpoints: configure provider URL and model ID.
-- Azure: install `--extra azure`; set credentials through the environment and
-  `AZURE_AI_FOUNDRY_ENDPOINT` for your own Foundry project.
-- LeRobot policies: experimental `--extra smolvla` has unresolved upstream dependency
-  advisories (see SECURITY.md); it is outside the supported setup. Consult adapter support and
-  checkpoint requirements before downloading weights. These are not exercised
-  by the lightweight CI suite.
+- Local Scene: run Qwen3-VL in LM Studio and choose **Scene Detection · Local Qwen**
+  or **Scene + Plan · Local Qwen**. These explicit variants use Qwen for verification
+  and need no Foundry agent; output review is not observed robot completion.
+- Azure: run `uv sync --frozen --extra azure --inexact`; set credentials through
+  the environment, `AZURE_AI_FOUNDRY_ENDPOINT` and `AZURE_AI_FOUNDRY_AGENT_NAME`
+  for your own Foundry project and agent. Start with `uv run --no-sync rove serve`
+  to preserve installed optional runtime dependencies.
+- LeRobot policies: use the [experimental isolated runtime](examples/runtime/lerobot/README.md)
+  for trusted local SmolVLA/Pi0.5 checkpoints. It keeps native policy dependencies
+  separate from ROVE. **SmolVLA probe · Local Qwen review** is an explicitly labeled
+  image-only probe; it cannot establish robot task success or run dynamics.
+  Known dependency advisories remain; review the runtime limits before use.
+  Pi0.5 also requires authorized access to its tokenizer.
 
 Use `/docs` for the implemented HTTP API. From this source checkout, compare your
 observation against two configured strategies without opening the dashboard:
 
 ```bash
-uv run --frozen rove trial run --task "Pick up the bracket" --image observation.png \
+uv run --no-sync rove trial run --task "Pick up the bracket" --image observation.png \
   --strategy mock-consistent --strategy mock-variable --config examples/benchmarks/rove.yaml
 ```
 

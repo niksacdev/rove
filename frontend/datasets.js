@@ -815,7 +815,7 @@ if (typeof document !== "undefined") (() => {
       details.append($("advancedComparisons"),$("comparisonResults"));
       $("advancedComparisons").hidden=!campaign.contract_id;
       trialInspection.append($("reviewWorkspaceSlot"));
-      selectResultTab(state.resultTab || "overview");
+      selectResultTab(location.hash==="#trialInspection"?"trials":state.resultTab || "overview");
       details.append(link("Open full report", `/api/campaigns/${encodeURIComponent(id)}/report?format=html`), objectDetails("Assessment source, coverage and review revisions", result.assessments));
       if (campaign.contract?.criteria?.some(criterion => criterion.assessment === "human_review")) details.append(node("p", "Human-review criteria use expert ratings of each output. A model's success statement does not fill missing reviews.", "notice"));
       const columns=node("div",null,"campaign-trial-columns");columns.setAttribute("aria-hidden","true");
@@ -987,7 +987,7 @@ if (typeof document !== "undefined") (() => {
     try {
       const preview = state.campaignPreview; if (!preview || preview.signature !== JSON.stringify(currentCampaign()) || !preview.preview.ready) throw new Error("Preview the current configuration before launching.");
       const campaign = await post("/api/campaigns/from-cases", {...preview.payload, operation_id: state.campaignOperation});
-      $("campaignStatus").replaceChildren(node("span", `Campaign started: ${campaign.planned_trials} planned trials. `), link("Open report", `/api/campaigns/${encodeURIComponent(campaign.id)}/report?format=html`), document.createTextNode(" · "), link("Inspect recorded trials", `/static/history.html?source=campaign`));
+      $("campaignStatus").replaceChildren(node("span", `Campaign started: ${campaign.planned_trials} planned trials. `), link("Open report", `/api/campaigns/${encodeURIComponent(campaign.id)}/report?format=html`), document.createTextNode(" · "), link("Inspect recorded trials", `/static/datasets.html?step=review&campaign=${encodeURIComponent(campaign.id)}#trialInspection`));
       state.campaignPreview = null; tell("Campaign started. Each complete pipeline execution is saved as a trial below.");
       state.autoResultsCampaign=campaign.id; state.preparingRun = false; await loadCampaigns(campaign.id, false); goStep("run"); await refreshLiveTrials(); $("liveTrialsPanel").scrollIntoView({block: "start"});
     } catch (error) { tell(error.message, true); $("startBaseline").disabled = !state.campaignPreview?.preview.ready; }
@@ -1236,7 +1236,7 @@ if (typeof document !== "undefined") (() => {
       }
       container.append(list);
       if(result.next_steps?.length){const next=node("details");next.append(node("summary","Suggested next steps"));for(const action of result.next_steps)next.append(node("p",typeof action==="string"?action:action.text));container.append(next);}
-      container.append(node("p","AI interpretation of saved aggregates and trial outcomes. Inspect the evidence before acting on suggestions.","chart-note"));
+      container.append(node("p","AI interpretation of saved outcomes and stage evidence. Inspect the evidence before acting on suggestions.","chart-note"));
       if(result.warnings?.length) { const details=node("details"); details.append(node("summary","Assistant status")); for(const warning of result.warnings)details.append(node("p",warning)); container.append(details); }
       container.append(button("Refresh summary",()=>renderOutcomeSummary(id,container,version)));
     } catch(error){if(version===state.campaignVersion && container.isConnected)renderUnavailableSummary("Recorded outcomes remain available above.");}
@@ -1288,6 +1288,12 @@ if (typeof document !== "undefined") (() => {
   }
   function renderCampaignProgress(campaign, trials) {
     if (!window.RoveCampaignProgress) return;
+    if(!$("campaignProgressNavigation")){
+      const navigation=node("div",null,"campaign-progress-navigation");navigation.id="campaignProgressNavigation";
+      const back=button("Back to all strategies",()=>{ $("liveTrialDetails").open=false;const progress=$("strategyProgress");progress.tabIndex=-1;progress.scrollIntoView({block:"start",behavior:"smooth"});progress.focus({preventScroll:true}); });
+      back.id="backToCampaignProgress";navigation.append(back,node("span","Inspecting trial output"));
+      $("liveTrialDetails").insertBefore(navigation,$("liveTrialDetails").children[1] || null);
+    }
     const eventPages = Object.fromEntries(state.progressEvents || []);
     const lanes = window.RoveCampaignProgress.buildStrategyProgress(campaign, trials, eventPages);
     window.RoveCampaignProgress.render($("strategyProgress"), lanes, id => {
@@ -1319,7 +1325,8 @@ if (typeof document !== "undefined") (() => {
           const card = node("article", null, "live-trial-card"), title = node("h3"), detail = node("p", null, "muted"); card.append(title, detail);
           entry = {card, title, detail, task};
           if (trial.trial_id) {
-            card.append(node("p", `Trial ${trial.trial_id}`, "record-id"), link("Inspect full trace and evidence →", `/static/history.html?trial=${encodeURIComponent(trial.trial_id)}`));
+            const trace=link("Inspect trial & traces ↗", `/static/history.html?trial=${encodeURIComponent(trial.trial_id)}#traces`);trace.className="secondary";trace.target="_blank";trace.rel="noopener";trace.setAttribute("aria-label","Inspect trial and traces (opens in a new tab)");
+            card.append(node("p", `Trial ${trial.trial_id}`, "record-id"),trace);
             const stages = node("details"); stages.dataset.trialId = trial.trial_id; stages.append(node("summary", "Pipeline progress and output")); const content = node("div"); stages.append(content);
             entry.stages = stages; entry.content = content; stages.addEventListener("toggle", () => { if (stages.open) loadTrialProgress(trial.trial_id, content, entry.task); }); card.append(stages);
           } else card.append(node("p", "Queued · trial evidence will appear when execution starts.", "muted"));
@@ -1391,7 +1398,7 @@ if (typeof document !== "undefined") (() => {
       const error=evidenceRows.find(row=>row.error)?.error;
       if(error) { const problem=node("details",null,"improvement-error");problem.append(node("summary","Recorded error"),node("pre",error));card.append(problem); }
       const actions=node("div",null,"improvement-actions");
-      if(first) actions.append(link(item.source==="missing_assessment"?"Review an unscored trial":item.source==="recorded_failure"||item.source==="recorded_outcome"?"Open a failed trial":"View a passing trial",`/static/history.html?trial=${encodeURIComponent(first.trial_id)}`));
+      if(first) actions.append(link(item.source==="missing_assessment"?"Review an unscored trial":item.source==="execution_issue"?"Inspect execution issue":item.source==="recorded_failure"||item.source==="recorded_outcome"?"Open a failed trial":"View a passing trial",`/static/history.html?trial=${encodeURIComponent(first.trial_id)}`));
       if(item.source==="recorded_failure" && selectedStrategy && stageLabels[item.stage]) actions.append(button(`Change ${stageLabels[item.stage]} model`,()=>{
         goStep("configure");$("campaignStrategy").value=selectedStrategy;
         const opener=$("createCampaignStrategyRevision");opener.dataset.recommendedStage=item.stage;opener.click();delete opener.dataset.recommendedStage;

@@ -6,6 +6,8 @@ from rove.models.verification import EvaluatorContext, EvaluatorResult
 
 
 def analyze_trajectory(urdf_path, action, metadata):
+    if action and action.get("execution_eligible") is False:
+        return None, "Observation-probe actions are ineligible for dynamics analysis"
     if not urdf_path:
         return None, "No URDF provided — upload a URDF or use a dataset with robot metadata"
     if not action or not action.get("actions"):

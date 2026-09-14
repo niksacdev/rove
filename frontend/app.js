@@ -25,6 +25,8 @@ let runningEvaluationId = null;
 let strategies = [];
 let selectedStrategyIds = new Set();
 let activeTabId = null;
+let quickActiveTrialIds = {};
+let outputScrollVersion = 0;
 let tabData = {};
 let summaryResults = {}; // { [sid]: { status, success, latency_ms, currentStage, stageStatuses: {perceive,plan,act,verify} } }
 let summaryEl = null; // DOM element for summary tab content
@@ -469,6 +471,13 @@ function quickDraftDirty() {
 function quickCaseReady() {return Boolean(taskInput.value.trim() && selectedFile && !loadingCaseVersion);}
 function quickConfigurationReady() {return quickCaseReady() && selectedStrategyIds.size>0 && selectedStrategyIds.size<=20 && Array.from(selectedStrategyIds).every(id=>strategies.some(strategy=>strategy.id===id));}
 function quickHasResults() {return Object.keys(tabData).length>0 && !isRunning;}
+function updateOutputNavigation() {
+  const visible=["quick","evaluation"].includes(currentView) && (isRunning || quickStep==="results") && Object.keys(tabData).length>0;
+  document.getElementById("trialOutputNavigation").hidden=!visible;
+  const inspect=document.getElementById("quickTrialInspect"),id=quickActiveTrialIds[activeTabId];
+  inspect.hidden=!id;
+  if(id){inspect.href="/static/history.html?trial="+encodeURIComponent(id)+"#traces";inspect.setAttribute("aria-label","Inspect selected trial and traces (opens in a new tab)");}else inspect.removeAttribute("href");
+}
 function quickInternalDestination(target) {
   if(target.origin!==location.origin || target.pathname!=="/")return false;
   return ["quick","examples"].includes(window.RoveNavigation.rootView(target.search));
@@ -508,6 +517,13 @@ function renderQuickReview() {
   quickReviewedSignature=quickDraftSignature();
 }
 function initQuickWorkspace() {
+  tabBar.addEventListener("keydown",event=>{
+    const tabs=Array.from(tabBar.querySelectorAll('[role="tab"]')),index=tabs.indexOf(event.target);
+    if(index<0 || !["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
+    event.preventDefault();
+    const next=event.key==="Home"?0:event.key==="End"?tabs.length-1:(index+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;
+    tabs[next].click();tabs[next].focus({preventScroll:true});tabs[next].scrollIntoView({block:"nearest",inline:"nearest"});
+  });
   document.getElementById("quickCaseComposer").append(document.getElementById("quickComposer"));
   document.getElementById("quickStrategySelection").append(document.getElementById("configPanel"));
   document.getElementById("quickRunAction").append(evalBtn);evalBtn.textContent="Run trials";evalBtn.setAttribute("aria-label","Run trials");evalBtn.title="Run the reviewed comparison";
@@ -540,6 +556,7 @@ function updateQuickWorkspace() {
   document.getElementById("quickContinueConfigure").disabled=isRunning || !ready;
   document.getElementById("quickContinueReview").disabled=isRunning || !configured;
   document.getElementById("quickStartAnother").disabled=isRunning;
+  updateOutputNavigation();
   if(!visible){chatArea.hidden=false;return;}
   document.body.dataset.quickStep=quickStep;
   for(const control of document.querySelectorAll("#quickJourney [data-quick-step]")) {
@@ -551,6 +568,7 @@ function updateQuickWorkspace() {
   document.getElementById("quickRunAction").hidden=isRunning || quickStep!=="run";
   document.getElementById("quickReviewSummary").hidden=isRunning;
   const outputs=isRunning || quickStep==="results";chatArea.hidden=!outputs;
+  if(!outputs)chatArea.style.minHeight="";
   tabBar.classList.toggle("hidden",!outputs || !(Object.keys(tabData).length>1 || summaryEl));
   const snapshot=outputs&&quickRunSnapshot,count=snapshot?snapshot.strategies.length:selectedStrategyIds.size;
   document.getElementById("quickTrialCount").textContent=`${snapshot||selectedFile?1:0} case × ${count} ${count===1?"strategy":"strategies"} × 1 attempt = ${snapshot||selectedFile?count:0} ${count===1?"trial":"trials"}`;
@@ -1711,6 +1729,7 @@ function showHistoryEntry(idx) {
     return;
   }
   activeHistoryIndex = idx;
+  quickActiveTrialIds = entry.trialIds || {};
 
   // If this is the currently running/active evaluation, just restore the view
   if (entry.status === "running" && Object.keys(tabData).length > 0) {
@@ -1718,6 +1737,7 @@ function showHistoryEntry(idx) {
     renderHistoryItems();
     return;
   }
+  restoreRecordedStageStatuses(entry);
 
   // Clear sidebar nav active state
   document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
@@ -1764,7 +1784,7 @@ function showHistoryEntry(idx) {
     sIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
     summaryTab.appendChild(sIcon);
     var sLabel = document.createElement("span");
-    sLabel.textContent = "Summary";
+    sLabel.textContent = "All strategies";
     summaryTab.appendChild(sLabel);
     summaryTab.addEventListener("click", function() { switchTab("__summary__"); });
     tabBar.appendChild(summaryTab);
@@ -1891,14 +1911,33 @@ function showHistoryEntry(idx) {
 }
 
 // ---- localStorage persistence ----
+function restoreRecordedStageStatuses(entry) {
+  entry.summaryResults=entry.summaryResults || {};
+  for(const [sid,result] of Object.entries(entry.results || {})){
+    const summary=entry.summaryResults[sid] || {status:entry.status,success:result.success,latency_ms:result.totalLatencyMs};
+    summary.stageStatuses={};summary.recordedStages=true;summary.currentStage=null;
+    for(const stage of result.stages || []){
+      if(!stage.stage)continue;
+      summary.stageStatuses[stage.stage]=stage.status || "not recorded";
+      if(stage.status==="running")summary.currentStage=stage.stage;
+    }
+    entry.summaryResults[sid]=summary;
+  }
+}
 
 function saveHistory() {
   try {
-    // Trim to max entries
-    while (runHistory.length > HISTORY_MAX) {
-      runHistory.shift();
-      if (activeHistoryIndex > 0) activeHistoryIndex--;
+    // Server history can arrive newest first; insertion order is not chronology.
+    // Keep the visible entry and live stream target even when they are older.
+    const activeEntry=runHistory[activeHistoryIndex];
+    const retained=new Set(runHistory.filter(entry=>entry===activeEntry || entry.id===runningEvaluationId));
+    const timestamp=entry=>{const value=Date.parse(entry.timestamp);return Number.isFinite(value)?value:-Infinity;};
+    for(const entry of runHistory.slice().sort((a,b)=>timestamp(b)-timestamp(a))){
+      if(retained.size>=HISTORY_MAX)break;
+      retained.add(entry);
     }
+    runHistory=runHistory.filter(entry=>retained.has(entry));
+    activeHistoryIndex=activeEntry?runHistory.indexOf(activeEntry):-1;
     // Filter out mock-only evaluations — don't persist test runs
     var nonMock = runHistory.filter(function(e) { return !e.mock; });
     // Truncate raw_response fields to save space
@@ -1988,7 +2027,7 @@ function restoreHistory() {
                 failureCategory: sr.failure_category || null,
               };
               entry.summaryResults[sid] = {
-                status: sr.success != null ? "completed" : "error",
+                status: sr.error || (sr.stages || []).some(stage=>stage.status==="error") ? "error" : entry.status,
                 success: sr.verdict_valid === false ? null : sr.success,
                 latency_ms: sr.total_latency_ms,
                 currentStage: null,
@@ -2004,7 +2043,9 @@ function restoreHistory() {
           // Pass through provenance and insights
           if (se.provenance) entry.provenance = se.provenance;
           if (se.insights) entry.insights = se.insights;
+          restoreRecordedStageStatuses(entry);
           runHistory.push(entry);
+          existingIds.add(se.eval_id);
           added = true;
         }
       });
@@ -2232,6 +2273,7 @@ evalBtn.addEventListener("click", async function() {
 
     // Track in history
     addToHistory(body.eval_id, task, ids);
+    quickActiveTrialIds=body.trial_ids || {};updateOutputNavigation();
 
     connectSSE(body.eval_id);
   } catch (e) {
@@ -2243,6 +2285,7 @@ evalBtn.addEventListener("click", async function() {
 
 // ---- Tab management ----
 function setupTabs(strategyIds) {
+  quickActiveTrialIds={};
   tabBar.textContent = "";
   tabData = {};
   activeTabId = null;
@@ -2294,6 +2337,7 @@ function setupTabs(strategyIds) {
     var strat1 = strategies.find(function(s) { return s.id === sid; });
     tabData[sid] = { el: container, typingEl: null, stages: {}, status: "running", pipelineMode: (strat1 && strat1.pipeline_mode) || "sequential" };
     activeTabId = sid;
+    updateOutputNavigation();
     return;
   }
 
@@ -2311,7 +2355,7 @@ function setupTabs(strategyIds) {
   summaryIcon.className = "w-3.5 h-3.5 inline-block mr-1 align-middle";
   summaryTab.appendChild(summaryIcon);
   var summaryLabel = document.createElement("span");
-  summaryLabel.textContent = "Summary";
+  summaryLabel.textContent = "All strategies";
   summaryTab.appendChild(summaryLabel);
   summaryTab.addEventListener("click", function() { switchTab("__summary__"); });
   tabBar.appendChild(summaryTab);
@@ -2371,6 +2415,7 @@ function setupTabs(strategyIds) {
   activeTabId = "__summary__";
   chatArea.appendChild(summaryEl);
   updateSummaryTable(strategyIds);
+  updateOutputNavigation();
   lucide.createIcons({ nodes: [tabBar] });
 }
 
@@ -2389,7 +2434,7 @@ function createTabContainer(sid) {
 }
 
 function switchTab(sid) {
-  if (sid === activeTabId) return;
+  outputScrollVersion++;
 
   document.querySelectorAll(".strategy-tab").forEach(function(t) {
     var isActive = t.getAttribute("data-tab-id") === sid;
@@ -2422,8 +2467,15 @@ function switchTab(sid) {
     targetEl.classList.remove("hidden");
   }
   activeTabId = sid;
-
-  scrollToBottom();
+  updateOutputNavigation();
+  // Inspection starts at its heading; the comparison navigation remains in view.
+  chatArea.scrollTop=0;
+  const main=document.querySelector(".root-main"),navigation=document.getElementById("trialOutputNavigation");
+  // Reserve enough output space for the root scroller to move the setup header
+  // above the viewport; otherwise flex shrink leaves no scroll range to use.
+  chatArea.style.minHeight=Math.max(240,main.clientHeight-navigation.offsetHeight)+"px";
+  main.scrollTop=Math.max(0,main.scrollTop+navigation.getBoundingClientRect().top-main.getBoundingClientRect().top);
+  targetEl?.focus({preventScroll:true});
 }
 
 function updateTabStatus(sid, status, latencyMs) {
@@ -2484,7 +2536,9 @@ function updateSummaryTable(strategyIds) {
     var rowColor = strategyColorMap[sid] || "#0f766e";
     row.className = "grid grid-cols-[1fr_80px_70px_110px_80px_140px] gap-2 px-4 py-2.5 border-b border-f-border/50 items-center cursor-pointer hover:bg-f-elevated/50 transition-colors";
     row.style.borderLeft = "3px solid " + rowColor;
+    row.setAttribute("role", "button");row.tabIndex=0;row.setAttribute("aria-label", "Inspect " + displayName + " progress and output");
     row.addEventListener("click", function() { switchTab(sid); });
+    row.addEventListener("keydown",function(event){if(event.key==="Enter" || event.key===" "){event.preventDefault();switchTab(sid);}});
 
     // Strategy name with color dot
     var nameCell = document.createElement("div");
@@ -2556,9 +2610,11 @@ function updateSummaryTable(strategyIds) {
     // Stage progress dots
     var dotsCell = document.createElement("div");
     dotsCell.className = "flex items-center gap-2";
-    ["perceive", "plan", "act", "verify"].forEach(function(stage) {
+    const stages=sr.recordedStages?Object.keys(sr.stageStatuses || {}):["perceive", "plan", "act", "verify"];
+    if(!stages.length){const unavailable=document.createElement("span");unavailable.className="text-xs text-gray-500";unavailable.textContent="No stages recorded";dotsCell.appendChild(unavailable);}
+    stages.forEach(function(stage) {
       var stageStatus = sr.stageStatuses ? sr.stageStatuses[stage] : undefined;
-      if (stageStatus === "skipped") return;
+      if (stageStatus === "skipped" && !sr.recordedStages) return;
       var dotWrap = document.createElement("div");
       dotWrap.className = "flex items-center gap-1";
       var dot = document.createElement("span");
@@ -2566,8 +2622,9 @@ function updateSummaryTable(strategyIds) {
       if (stageStatus === "running") dot.classList.add("running");
       else if (stageStatus === "completed") dot.classList.add("done");
       else if (stageStatus === "error") dot.classList.add("error");
-      dot.setAttribute("title", stage + ": " + (stageStatus || "pending"));
-      dot.setAttribute("aria-label", stage + " " + (stageStatus || "pending"));
+      const stageLabel=stageStatus==="skipped"?"not run":stageStatus || (sr.recordedStages?"not recorded":"pending");
+      dot.setAttribute("title", stage + ": " + stageLabel);
+      dot.setAttribute("aria-label", stage + " " + stageLabel);
       dotWrap.appendChild(dot);
       var dotLabel = document.createElement("span");
       dotLabel.className = "text-[10px] text-gray-600";
@@ -3525,6 +3582,7 @@ function connectSSE(evalId) {
     if (e.data) {
       try {
         var completeData = JSON.parse(e.data);
+        quickActiveTrialIds=completeData.trial_ids || {};updateOutputNavigation();
         if(completeData.trial_ids && Object.keys(completeData.trial_ids).length && quickRunSnapshot?.signature)quickSavedSignature=quickRunSnapshot.signature;
         if (historyEntry) {
           historyEntry.trialIds = completeData.trial_ids || {};
@@ -3601,7 +3659,9 @@ function setRunning(val) {
 }
 
 function scrollToBottom() {
+  const version=outputScrollVersion;
   requestAnimationFrame(function() {
+    if(version!==outputScrollVersion)return;
     if(quickStep==="results" && (currentView==="quick"||currentView==="evaluation"))return;
     chatArea.scrollTop = chatArea.scrollHeight;
   });

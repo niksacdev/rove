@@ -100,11 +100,12 @@ class AzureFoundryAgentAdapter:
         self.model_id = model_id
         cfg = config or {}
         self.display_name = cfg.get("display_name", "Foundry Agent")
-        self._project_endpoint = cfg.get(
-            "project_endpoint",
-            os.environ.get("AZURE_AI_FOUNDRY_ENDPOINT", ""),
+        self._project_endpoint = cfg.get("project_endpoint") or os.environ.get(
+            "AZURE_AI_FOUNDRY_ENDPOINT", ""
         )
         self._agent_name = cfg.get("agent_name", "")
+        if self._agent_name in ("", "your-agent-name"):
+            self._agent_name = os.environ.get("AZURE_AI_FOUNDRY_AGENT_NAME", "")
         self._prompts = prompt_manager or PromptManager()
 
         # Lazy-initialized
@@ -124,9 +125,10 @@ class AzureFoundryAgentAdapter:
             from azure.identity.aio import DefaultAzureCredential
         except ImportError as err:
             raise ImportError(
-                "Azure AI Foundry SDK not installed. "
-                "Install with: pip install rove-eval[azure]\n"
-                "Required: azure-ai-projects>=2.0.0b3, azure-identity>=1.19.0, openai>=1.0.0"
+                "Azure AI Foundry SDK could not be imported in this Python environment. "
+                "From a source checkout run: uv sync --frozen --extra azure --inexact. "
+                "For a packaged installation run: pip install 'rove-eval[azure]'. "
+                f"Import cause: {type(err).__name__}: {err}"
             ) from err
 
         if not self._project_endpoint:
@@ -151,7 +153,10 @@ class AzureFoundryAgentAdapter:
         await self._ensure_client()
 
         if not self._agent_name:
-            raise RuntimeError("agent_name not configured. Set 'agent_name' in rove.yaml config.")
+            raise RuntimeError(
+                "Foundry agent name not configured. Set 'agent_name' in rove.yaml "
+                "or AZURE_AI_FOUNDRY_AGENT_NAME in the server environment."
+            )
 
         try:
             agent = await self._ai_client.agents.get(self._agent_name)
@@ -325,7 +330,7 @@ class AzureFoundryAgentAdapter:
     async def health_check(self) -> bool:
         """Check if the adapter can connect to Azure AI Foundry."""
         try:
-            await self._ensure_client()
-            return True
+            await self._ensure_agent()
+            return bool(self._agent_model)
         except Exception:
             return False

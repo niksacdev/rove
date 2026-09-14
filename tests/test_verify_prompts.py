@@ -128,3 +128,36 @@ class TestRenderVerify:
         msg = pm.render_verify_system()
         assert "plausibility" in msg
         assert "JSON" in msg
+
+
+def test_action_assessment_metadata_has_string_contract():
+    prompt = get_prompt_manager().render_verify(
+        "pick", {"completed_stages": ["act"], "action": {"actions": [[0.0] * 6]}}
+    )
+    assert "safety_assessment, evidence_quality, reasoning" not in prompt
+    assert "evidence_quality field must be a STRING" in prompt
+    assert "reasoning field must be a STRING" in prompt
+    assert '"bounds_check": float 0-1 or null' in prompt
+
+
+def test_probe_prompt_preserves_unknown_action_semantics_and_assumptions():
+    prompt = get_prompt_manager().render_verify(
+        "pick",
+        {
+            "completed_stages": ["act"],
+            "action": {
+                "actions": [[0.1] * 7],
+                "execution_eligible": False,
+                "action_space": "eef_delta",
+                "confidence": 0,
+                "input_assumptions": ["Measured state was not supplied."],
+                "gripper_events": [{"step": 1, "action": "close", "grip_value": 0.1}],
+            },
+        },
+    )
+    assert "action_0, action_1" in prompt
+    assert "dx, dy" not in prompt
+    assert "Confidence: unavailable" in prompt
+    assert "Measured state was not supplied." in prompt
+    assert "Gripper events in trajectory" not in prompt
+    assert "ineligible for robot execution, simulation or dynamics" in prompt

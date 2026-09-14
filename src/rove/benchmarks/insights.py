@@ -27,7 +27,7 @@ from rove.runtime.copilot import CLI_VERSION, SDK_VERSION, CopilotRuntime
 from rove.trials.snapshots import canonical_json, content_hash, sanitize
 from rove.trials.store import now
 
-PROMPT_VERSION = "campaign-insights-v2"
+PROMPT_VERSION = "campaign-insights-v3"
 MAX_CONTEXT_BYTES = 256_000
 Identifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[\w.-]+$")]
 BASE_METRICS = ["task_success", "pass_at_k", "pass_pow_k", "pipeline_latency"]
@@ -119,7 +119,7 @@ class SummaryResponse(SummaryOutput):
     configuration_url: str
     generated_at: str
     interpretation_only: Literal[True]
-    interpretation_scope: Literal["saved_aggregates_and_trial_outcomes"]
+    interpretation_scope: Literal["saved_aggregates_and_stage_evidence"]
     provenance: InsightProvenance
 
 
@@ -139,6 +139,65 @@ def bounded(value):
             "Use a smaller case selection; no cases or evidence were silently omitted."
         )
     return cleaned
+
+
+def trial_evidence(trial):
+    """Project saved stage evidence without sending raw outputs, prompts or events."""
+
+    def fields(value, names):
+        return {key: value[key] for key in names if key in value} if isinstance(value, dict) else {}
+
+    def assessment(value):
+        result = fields(value, ("verdict", "evidence_quality", "evidence_refs"))
+        if isinstance(value, dict):
+            result["measurements"] = [
+                fields(item, ("name", "value", "unit", "quality", "evidence_refs"))
+                for item in value.get("measurements", [])
+                if isinstance(item, dict)
+            ]
+        return result
+
+    result = trial.get("result") or {}
+    if not isinstance(result, dict):
+        result = {}
+    evidence = {"failure_stage": result.get("failure_stage"), "stages": []}
+    for index, stage in enumerate(result.get("stages", [])):
+        if not isinstance(stage, dict):
+            continue
+        row = fields(stage, ("stage", "status", "model_id", "latency_ms", "error", "phase"))
+        row["index"] = index
+        output = stage.get("output") or {}
+        if not isinstance(output, dict):
+            output = {}
+        runtime = fields(
+            output.get("_runtime"),
+            ("model", "role", "telemetry_coverage", "native_capture", "event_count"),
+        )
+        row["runtime"] = runtime or {"telemetry_coverage": "not_recorded_in_stage_result"}
+        if stage.get("stage") == "act":
+            row.update(
+                fields(
+                    output,
+                    ("execution_eligible", "input_assumptions", "action_space", "gripper_index"),
+                )
+            )
+        if stage.get("stage") == "verify":
+            row.update(
+                fields(output, ("verdict_valid", "evaluator_version", "aggregation_version"))
+            )
+            row["assessment"] = assessment(output.get("evaluator_result"))
+            row["checks"] = [
+                {
+                    **fields(
+                        check, ("endpoint", "role", "required", "execution", "evaluator_version")
+                    ),
+                    "assessment": assessment(check.get("result")),
+                }
+                for check in output.get("check_results", [])
+                if isinstance(check, dict)
+            ]
+        evidence["stages"].append(row)
+    return evidence
 
 
 class InsightStore:
@@ -421,20 +480,23 @@ class CampaignInsights:
         # remains in the trial viewer; fingerprints cover it without inflating the prompt.
         trial_rows = [
             {
-                k: t.get(k)
-                for k in (
-                    "trial_id",
-                    "task_id",
-                    "strategy_id",
-                    "seed",
-                    "outcome",
-                    "execution",
-                    "latency_ms",
-                    "assessment_ids",
-                    "assessment_set_hash",
-                    "configured_outcome",
-                    "error",
-                )
+                **{
+                    k: t.get(k)
+                    for k in (
+                        "trial_id",
+                        "task_id",
+                        "strategy_id",
+                        "seed",
+                        "outcome",
+                        "execution",
+                        "latency_ms",
+                        "assessment_ids",
+                        "assessment_set_hash",
+                        "configured_outcome",
+                        "error",
+                    )
+                },
+                "stage_evidence": trial_evidence(t),
             }
             for t in trials
         ]
@@ -454,6 +516,14 @@ class CampaignInsights:
         purpose = (
             "Explain a saved robotics campaign using only supplied evidence anchors. "
             "Do not calculate new scores or invent measurements, causal explanations, reviews or physical outcomes. "
+            "Saved stage evidence supplies failure_stage, stage status, latency, model identity, configured checks "
+            "and measurements where recorded. It is not a full event trace or raw model output. "
+            "A failing stage identifies where execution stopped, not the root cause or proof of model quality. "
+            "For runtime errors, timeouts, invalid verdicts or missing required checks, recommend inspecting or "
+            "repairing the evaluation/runtime and obtaining valid evidence before comparing model quality. "
+            "Do not recommend replacing a model solely because its endpoint failed or evidence is missing. "
+            "Keep human contract outcomes separate from configured verifier assessments. Preserve measurement "
+            "units and observed/estimated/synthetic/unknown quality. Missing telemetry is unavailable, never zero. "
             "Unresolved human review is not a failure or success. Mention missing evidence and sampling limits. "
             "Return headline, findings [{text,trial_ids,evidence_refs}], next_steps. "
             "Each finding must cite at least one exact supplied anchors key; trial IDs must exist in supplied trials. "
@@ -520,7 +590,7 @@ class CampaignInsights:
             "configuration_url": "/?view=models",
             "generated_at": now(),
             "interpretation_only": True,
-            "interpretation_scope": "saved_aggregates_and_trial_outcomes",
+            "interpretation_scope": "saved_aggregates_and_stage_evidence",
             "provenance": provenance(source, settings),
         }
         # Failed/unconfigured attempts are retryable; only validated AI documents are cached.

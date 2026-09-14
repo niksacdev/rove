@@ -56,6 +56,51 @@ Multiple strategies require an explicit reference choice. The campaign browser's
 **Improve** action opens a draft with source context and recommendations on the first
 page; it never runs on navigation.
 
+## Inspectable telemetry and bounded interpretation
+
+The trial inspector owns the durable event list, producer-clock trace lanes,
+configured checks, measurements, preserved outputs and frozen configuration.
+`/static/history.html?trial=ID#traces` opens the exact saved trial, focuses its trace
+section and loads recorded lanes once. Add `compare=OTHER_ID` to inspect two saved
+traces. Opening these links performs reads only; it does not repeat an evaluation.
+An ordinary trial visit keeps trace loading optional. Missing or partial traces
+remain explicit, and unknown durations or usage are never converted to zero.
+
+```mermaid
+flowchart LR
+    T[Saved trial outcomes and stage results] --> P[Allowlisted evidence projection]
+    T --> V[Trial inspector and trace lanes]
+    P --> A[Bounded campaign explanation]
+    A --> F[Findings cite exact trial anchors]
+    F --> V
+    T --> D[Deterministic improvement suggestions]
+    D --> R{Valid assessment or execution issue?}
+    R -->|Execution or missing evidence| I[Inspect runtime and repair evaluation]
+    R -->|Valid assessed failure| H[Prepare a change as a testable hypothesis]
+    H --> C[Existing campaign preview and confirmation]
+```
+
+Campaign explanations include saved stage status, failure stage, model identity,
+latency, verifier validity, configured checks and measurements with their recorded
+units, quality and evidence references. Runtime coverage is included only when
+preserved in the stage result; its absence does not imply the durable journal is
+empty. Raw prompts, outputs, grader details and event journals are excluded from
+the model context. The existing 256 KB context limit refuses oversized explanations
+rather than silently omitting trials. Source fingerprints cover stage evidence;
+prompt revision `campaign-insights-v3` separates these explanations from older caches.
+
+The AI supplies interpretation, not causal diagnosis, scoring or executable changes.
+Runtime errors, timeouts, invalid verdicts and missing required checks produce an
+`execution_issue` recommendation to repair the evaluation before comparing quality.
+They do not offer a model replacement action. A recorded failing stage identifies
+where the pipeline stopped, not why a model failed. Human contract assessments stay
+separate from configured verifier results; synthetic or estimated evidence cannot
+prove observed physical completion.
+
+Regression coverage includes exact trace routing, paired links, lazy loading,
+retryable trace failures, stale navigation, bounded evidence projection, private
+output exclusion and the execution-versus-quality recommendation distinction.
+
 ## Comparability
 
 ```mermaid

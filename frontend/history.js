@@ -97,7 +97,8 @@ if (typeof document !== "undefined") (() => {
   function browseTrials(push=false, focus=false) {
     const previous=state.selected; state.selected=null;state.currentTrial=null;++state.detailVersion;state.events=[];
     $("trialDetailView").hidden=true;$("trialBrowser").hidden=false;$("inspector").setAttribute("aria-busy","false");markSelected();
-    if(push) {const url=new URL(location.href);url.searchParams.delete("trial");url.searchParams.delete("compare");history.pushState({},"",url);}
+    state.openTraceRoute = null;
+    if(push) {const url=new URL(location.href);url.searchParams.delete("trial");url.searchParams.delete("compare");url.hash="";history.pushState({},"",url);}
     if(focus) {const selected=[...$("trialList").querySelectorAll(".trial-link")].find(item=>item.dataset.trialId===previous);(selected || $("refreshTrials")).focus();}
   }
   function markSelected() {
@@ -270,6 +271,7 @@ if (typeof document !== "undefined") (() => {
       container.append(archive);
     }
     const tracePanel = section("Trace lanes and comparison");
+    tracePanel.id = "traces"; tracePanel.tabIndex = -1; tracePanel.dataset.trialId = trial.id;
     tracePanel.append(node("p", "Compare activity relative to each producer clock. Side-by-side traces help investigate behavior; they do not establish equivalent evaluation conditions.", "muted"));
     const traceControls = node("div", null, "trace-controls"), load = node("button", "Load trace lanes", "secondary"); load.type = "button";
     const comparison = node("select"); comparison.setAttribute("aria-label", "Compare with another saved trial");
@@ -296,6 +298,14 @@ if (typeof document !== "undefined") (() => {
       finally { load.disabled = false; }
     });
     traceControls.append(comparison, load); tracePanel.append(traceControls, message, panes); container.append(tracePanel);
+    let traceRouteOpened = false;
+    state.openTraceRoute = () => {
+      if (traceRouteOpened || location.hash !== "#traces" || state.selected !== trial.id || !tracePanel.isConnected || new URLSearchParams(location.search).get("trial") !== trial.id) return;
+      traceRouteOpened = true;
+      tracePanel.focus({preventScroll: true}); tracePanel.scrollIntoView?.({block: "start"});
+      load.click();
+    };
+    queueMicrotask(() => state.openTraceRoute?.());
     if (view.stages.length) {
       const stages = section("Pipeline stages");
       for (const [stageIndex, stage] of view.stages.entries()) {
@@ -398,6 +408,7 @@ if (typeof document !== "undefined") (() => {
     if (id) selectTrial(id);
     else browseTrials();
   });
+  window.addEventListener("hashchange", () => state.openTraceRoute?.());
   $("exportExchange").addEventListener("click", async () => {
     const button = $("exportExchange"), status = $("exportStatus");
     button.disabled = true; status.textContent = "Preparing verified workspace export…";

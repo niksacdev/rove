@@ -29,9 +29,9 @@ __all__ = [
 import hashlib
 import sys
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from rove.models.verification import CheckConfig, CheckResult, EvaluatorResult
 
@@ -238,6 +238,11 @@ class ActionPrediction(BaseModel):
     action_space: ActionSpace | None = None  # coordinate frame
     gripper_index: int | None = None  # which dim is gripper
     raw_action_dim: int | None = None  # native dim before slicing (32 for pi0.5)
+    # Explicit opt-out for observation probes; None preserves legacy adapter behavior.
+    execution_eligible: bool | None = Field(default=None, strict=True)
+    input_assumptions: list[Annotated[str, Field(min_length=1, max_length=2000)]] = Field(
+        default_factory=list, max_length=30
+    )
 
 
 class SimObservation(BaseModel):
@@ -299,6 +304,12 @@ class ActionPlausibility(BaseModel, extra="allow"):
         None  # 0-1, composite: torque + collision + singularity safety
     )
     evidence_quality: str = ""  # "hard", "estimated", "perception_only"
+
+    @field_validator("evidence_quality", mode="before")
+    @classmethod
+    def unknown_quality(cls, value):
+        # A model's explicit null means unavailable evidence, never a stronger grade.
+        return "unknown" if value is None else value
 
 
 class VerificationResult(BaseModel):
@@ -389,10 +400,19 @@ class PipelineContext(BaseModel):
             )
         if self.action:
             action_d = self.action.model_dump(
-                include={"action_type", "num_steps", "confidence", "actions"}
+                include={
+                    "action_type",
+                    "num_steps",
+                    "confidence",
+                    "actions",
+                    "action_space",
+                    "gripper_index",
+                    "execution_eligible",
+                    "input_assumptions",
+                }
             )
             actions = action_d.get("actions", [])
-            if actions and len(actions[0]) >= 7:
+            if actions and len(actions[0]) >= 7 and self.action.execution_eligible is not False:
                 # Summarize gripper events for the verifier
                 action_d["gripper_events"] = _extract_gripper_events(actions)
             # Cap trajectory to first/last steps to keep prompt compact
@@ -401,7 +421,12 @@ class PipelineContext(BaseModel):
                 action_d["actions_truncated"] = True
                 action_d["actions_note"] = (
                     f"Showing steps 1-5 and {len(actions) - 4}-{len(actions)} "
-                    f"of {len(actions)} total. See gripper_events for full summary."
+                    f"of {len(actions)} total."
+                    + (
+                        " See gripper_events for full summary."
+                        if "gripper_events" in action_d
+                        else ""
+                    )
                 )
             d["action"] = action_d
         if self.proprioception:
