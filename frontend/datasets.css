@@ -100,6 +100,7 @@ label, input:not([type="checkbox"]), textarea, select { font-size: 14px; }
 .run-summary { padding: 20px; background: var(--f-bg); margin: 24px 0; font-size: 16px; line-height: 1.7; border: 1px solid var(--f-border); border-radius: 8px; }
 .live-trial-card { border: 1px solid var(--f-border); background: var(--f-bg); border-radius: 8px; padding: 20px; margin-top: 14px; }
 .live-trial-card h3 { font-size: 16px; }
+.campaign-progress-navigation { position:sticky;top:0;z-index:8;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:12px 0;background:var(--f-bg);border-bottom:1px solid var(--f-border);font-size:16px; }
 #assistantPanel { margin-bottom: 24px; }
 #assistantPanel textarea { font-size: 15px; padding: 16px; min-height: 96px; }
 input[type="checkbox"] { accent-color: var(--f-purple); }

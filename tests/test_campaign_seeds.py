@@ -467,7 +467,7 @@ def test_improvement_preserves_execution_errors_alongside_missing_assessments():
         ["base"],
         [{"id": "case", "task": "Put the bowl on the plate"}],
     )
-    assert [item["source"] for item in items] == ["recorded_failure", "missing_assessment"]
+    assert [item["source"] for item in items] == ["execution_issue", "missing_assessment"]
     assert all(item["affected_trials"] == 1 and item["total_trials"] == 2 for item in items)
     assert items[0]["title"] == "Scene understanding could not finish"
     assert items[0]["evidence"] == [
@@ -480,6 +480,114 @@ def test_improvement_preserves_execution_errors_alongside_missing_assessments():
     ]
     assert items[1]["trial_ids"] == ["unscored"]
     assert items[1]["evidence"][0]["error"] is None
+
+
+@pytest.mark.parametrize("issue", ["timeout", "invalid_verdict", "required_check"])
+def test_incomplete_evaluation_is_not_a_model_quality_recommendation(issue):
+    from rove.benchmarks.seeds import _recommendations
+
+    output = {"verdict_valid": issue != "invalid_verdict"}
+    if issue == "required_check":
+        output["check_results"] = [
+            {"required": True, "execution": "timeout", "result": {"verdict": "unknown"}}
+        ]
+    recommendations = _recommendations(
+        [
+            {
+                "strategy_id": "base",
+                "trial_id": "attempt",
+                "outcome": "fail",
+                "execution": "timeout" if issue == "timeout" else "completed",
+                "result": {
+                    "failure_stage": "verify",
+                    "stages": [{"stage": "verify", "output": output}],
+                },
+            }
+        ],
+        ["base"],
+    )
+    assert len(recommendations) == 1
+    item = recommendations[0]
+    assert item["source"] == "execution_issue"
+    assert item["trial_ids"] == ["attempt"]
+    assert "before comparing model quality" in item["text"]
+    assert "choose a different model" not in item["text"]
+
+
+def test_candidate_output_fields_and_optional_checks_do_not_invalidate_evaluation():
+    from rove.benchmarks.seeds import _recommendations
+
+    items = _recommendations(
+        [
+            {
+                "strategy_id": "base",
+                "trial_id": "attempt",
+                "outcome": "fail",
+                "execution": "completed",
+                "result": {
+                    "failure_stage": "perceive",
+                    "stages": [
+                        {"stage": "perceive", "output": {"verdict_valid": False}},
+                        {
+                            "stage": "verify",
+                            "output": {
+                                "verdict_valid": True,
+                                "check_results": [
+                                    {
+                                        "required": False,
+                                        "execution": "timeout",
+                                        "result": {"verdict": "unknown"},
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                },
+            }
+        ],
+        ["base"],
+    )
+    assert len(items) == 1
+    assert items[0]["source"] == "recorded_failure"
+    assert items[0]["stage"] == "perceive"
+    assert items[0]["trial_ids"] == ["attempt"]
+
+
+@pytest.mark.parametrize("outcome", ["pass", "fail", "unknown"])
+def test_probe_assumptions_never_recommend_replacing_model_or_claim_broader_success(outcome):
+    from rove.benchmarks.seeds import _recommendations
+
+    items = _recommendations(
+        [
+            {
+                "strategy_id": "base",
+                "trial_id": "probe",
+                "outcome": outcome,
+                "execution": "completed",
+                "result": {
+                    "failure_stage": "act",
+                    "stages": [
+                        {
+                            "stage": "act",
+                            "status": "completed",
+                            "output": {
+                                "execution_eligible": False,
+                                "input_assumptions": ["Zero state is unmeasured"],
+                                "action_space": None,
+                            },
+                        },
+                    ],
+                },
+            }
+        ],
+        ["base"],
+    )
+    assert len(items) == 1
+    assert items[0]["source"] == "execution_issue"
+    assert items[0]["title"] == "Review observation probe inputs"
+    assert "measured state" in items[0]["text"]
+    assert items[0]["trial_ids"] == ["probe"]
+    assert "harder held-out" not in items[0]["text"]
 
 
 def test_improvement_without_trials_never_claims_passed_cases():

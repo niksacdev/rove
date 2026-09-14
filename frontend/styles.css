@@ -340,3 +340,12 @@ body[data-quick-step] .root-main { overflow-y:auto; }
 #quickLeaveDialog button { min-height:40px; padding:9px 14px; border:1px solid var(--f-border-strong); border-radius:var(--f-radius-control,4px); color:var(--f-text); background:var(--f-surface); font-size:14px; }
 #quickLeaveDialog #quickLeaveStay { color:white; background:var(--f-accent); border-color:var(--f-accent); }
 #quickLeaveDialog button:focus-visible { outline:2px solid var(--f-accent-text); outline-offset:3px; }
+/* Strategy navigation stays available while inspecting a long pipeline output. */
+#trialOutputNavigation { position:sticky; top:0; z-index:12; flex-shrink:0; background:var(--f-bg); border-bottom:1px solid var(--f-border); }
+#trialOutputNavigation[hidden],#quickTrialInspect[hidden] { display:none; }
+.trial-output-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px 24px; font-size:16px; font-weight:600; }
+#quickTrialInspect { font-size:14px; font-weight:400; color:var(--f-text); padding:7px 12px; border:1px solid var(--f-border-strong); border-radius:var(--f-radius-control,4px); background:var(--f-surface); }
+#trialOutputNavigation #tabBar { align-items:stretch; padding:0 24px; }
+#trialOutputNavigation .strategy-tab { min-height:44px; font-size:14px; }
+#trialOutputNavigation [data-tab-id="__summary__"] { position:sticky; left:0; z-index:1; background:var(--f-bg); box-shadow:1px 0 0 var(--f-border); }
+#trialOutputNavigation :focus-visible { outline:2px solid var(--f-accent-text); outline-offset:-2px; }

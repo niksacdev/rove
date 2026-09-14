@@ -536,6 +536,27 @@ function renderPlan(container, o, context = {}) {
 
 function renderAct(container, o) {
   var rendered = false;
+  var probe = o.execution_eligible === false;
+  var actionSpace = probe ? null : o.action_space;
+  var knownActionSpace = ["eef_delta", "ee_delta", "eef_absolute", "joint_delta", "joint_position"].includes(actionSpace);
+  if (probe || !knownActionSpace && (o.actions || o.action_steps)) {
+    var limitation = document.createElement("p");
+    limitation.className = "text-xs text-gray-400 mb-2";
+    limitation.textContent = probe
+      ? "Observation probe only. Action coordinates and units are unknown. These outputs cannot be used for execution, simulation or dynamics."
+      : "Action coordinates and units are not recorded; columns identify values only.";
+    container.appendChild(limitation);
+    rendered = true;
+  }
+  if (Array.isArray(o.input_assumptions) && o.input_assumptions.length) {
+    var assumptions = document.createElement("ul");
+    assumptions.className = "text-xs text-gray-400 mb-2";
+    assumptions.setAttribute("aria-label", "Input assumptions");
+    o.input_assumptions.forEach(function(value) {
+      var assumption = document.createElement("li"); assumption.textContent = String(value); assumptions.appendChild(assumption);
+    });
+    container.appendChild(assumptions); rendered = true;
+  }
 
   if (o.action_type) {
     rendered = true;
@@ -581,8 +602,10 @@ function renderAct(container, o) {
     heading2.textContent = "Trajectory (" + actions.length + " step" + (actions.length > 1 ? "s" : "") + ")";
     container.appendChild(heading2);
 
-    // DOF labels for 6/7-DOF end-effector deltas
-    var dofLabels = ["dx", "dy", "dz", "rx", "ry", "rz", "grip"];
+    // Coordinate labels require a recorded action-space declaration.
+    var dofLabels = actionSpace === "eef_delta" || actionSpace === "ee_delta"
+      ? ["dx", "dy", "dz", "rx", "ry", "rz"]
+      : actionSpace === "eef_absolute" ? ["x", "y", "z", "rx", "ry", "rz"] : [];
 
     var table = document.createElement("div");
     table.className = "rich-trajectory-table mt-1 font-mono text-[10px] leading-relaxed overflow-x-auto";
@@ -599,7 +622,11 @@ function renderAct(container, o) {
       for (var d = 0; d < numDof; d++) {
         var lbl = document.createElement("span");
         lbl.className = "w-16 text-right shrink-0";
-        lbl.textContent = d < dofLabels.length ? dofLabels[d] : "d" + d;
+        lbl.textContent = !knownActionSpace ? "action " + (d + 1)
+          : Number.isInteger(o.gripper_index) && d === o.gripper_index ? "grip"
+          : d < dofLabels.length ? dofLabels[d]
+          : actionSpace === "joint_delta" ? "dJoint " + (d + 1)
+          : actionSpace === "joint_position" ? "joint " + (d + 1) : "action " + (d + 1);
         hdr.appendChild(lbl);
       }
       table.appendChild(hdr);
@@ -1044,9 +1071,8 @@ function renderVerify(container, o) {
     apHeading.appendChild(apTitle);
     // Show evidence quality badge
     var evidenceQuality = ap.evidence_quality || "";
-    var hasDynamics = evidenceQuality === "hard" || evidenceQuality === "estimated"
-      || ap.bounds_check != null || ap.dynamics_consistency != null
-      || ap.safety_assessment != null || ap.workspace_reachability != null;
+    var hasDynamics = evidenceQuality === "hard" || evidenceQuality === "estimated";
+    var unknownQuality = !["hard", "estimated", "mock", "partial", "perception_only"].includes(evidenceQuality);
     var apProvider = document.createElement("span");
     if (evidenceQuality === "hard") {
       apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
@@ -1057,9 +1083,9 @@ function renderVerify(container, o) {
     } else if (evidenceQuality === "mock" || evidenceQuality === "partial") {
       apProvider.className = "text-[9px] bg-yellow-500/15 text-yellow-400 px-1.5 py-0.5 rounded";
       apProvider.textContent = evidenceQuality === "mock" ? "Synthetic mock scores" : "Partial model evidence";
-    } else if (hasDynamics) {
-      apProvider.className = "text-[9px] bg-blue-500/15 text-blue-400 px-1.5 py-0.5 rounded";
-      apProvider.textContent = "MuJoCo Dynamics";
+    } else if (unknownQuality) {
+      apProvider.className = "text-[9px] bg-gray-500/15 text-gray-400 px-1.5 py-0.5 rounded";
+      apProvider.textContent = "Unknown";
     } else {
       apProvider.className = "text-[9px] bg-gray-500/15 text-gray-400 px-1.5 py-0.5 rounded";
       apProvider.textContent = "Perception Only";
@@ -1073,7 +1099,9 @@ function renderVerify(container, o) {
       noPhysWarn.className = "mt-1 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-md";
       var noPhysText = document.createElement("p");
       noPhysText.className = "text-[11px] text-red-400/90";
-      noPhysText.textContent = "\u26A0 No dynamics data — scores are perception-only estimates. Physics-dependent fields show as 'Not assessed'. Enable MuJoCo dynamics for physics-grounded assessment.";
+      noPhysText.textContent = unknownQuality
+        ? "Evidence quality is unknown. Recorded scores do not establish valid action semantics or physical task success. Inspect the input assumptions and supporting evidence."
+        : "No dynamics evidence is established here. These recorded assessments do not prove physical task completion; inspect their supporting evidence and assumptions.";
       noPhysWarn.appendChild(noPhysText);
       apSection.appendChild(noPhysWarn);
     }

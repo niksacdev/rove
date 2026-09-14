@@ -1,10 +1,10 @@
 # Current Implementation
 
-**Checked:** 13 September 2026, against the customer evaluation workflow and
-original T01–T12 acceptance, with live provider validation excluded by request.
-Local follow-up adds preserved recording selections, native trace ancestry, causal
-synthetic episodes, explicit annotation bindings and named baselines. The
-[delivery plan](../product/implementation-plan.md) records remaining work.
+**Checked:** 14 September 2026. The original T01–T12 review excluded live providers;
+this follow-up exercised local Qwen Scene/Plan execution and native SmolVLA inference.
+Foundry calls and Pi0.5 inference remain blocked on external configuration/access.
+[ADR-033](ADR-033-isolated-vla-runtime-and-trial-inspection.md) records the separate
+runtime, evidence boundaries and validation scope.
 
 [Workspace interaction consistency](ADR-029-workspace-interaction-consistency.md)
 adds compact campaign rows and focused, explicitly approved strategy changes.
@@ -99,7 +99,10 @@ existing `campaigns.sqlite3` keys explanations to the full assessed campaign/tri
 assistant configuration, SDK/CLI versions and prompt version. Only valid completed-
 campaign AI interpretations are persisted; templates remain retryable. Evidence changes
 during generation cause a regeneration error. Concurrent requests coalesce in process.
-The model receives bounded saved aggregates and trial outcome anchors, not raw traces.
+The model receives bounded saved aggregates, stage/model/status/timing evidence,
+allowlisted check measurements and trial anchors. Raw prompts, outputs and trace journals
+are not included. Runtime failures produce repair recommendations rather than invented
+model-quality diagnoses.
 Credentials and inline media are sanitized; reference annotations remain task context.
 Missing/failing providers and incomplete campaigns have distinct template explanations.
 The source is [`insights.py`](../../src/rove/benchmarks/insights.py), its

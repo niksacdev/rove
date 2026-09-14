@@ -14,7 +14,8 @@
 | [Robotics evidence and targets](product/robotics-evidence.md) | Action-dependent fixtures, approved annotation bindings and supplied episode measures |
 | [Named baselines and assistant](product/named-baselines-and-assistant.md) | Frozen baseline assessments and confirmed guided workflows |
 | [Preserved evidence and exchange](product/evidence-and-exchange.md) | Recording selections, clock-aware traces and portable relational tables |
-| [Live provider validation spec](product/live-provider-validation.md) | Planned provider/Azure checks; execution intentionally skipped |
+| [Experimental local VLA runtime](../examples/runtime/lerobot/README.md) | Trusted local checkpoints, native preprocessing, preparation and evidence limits |
+| [Live provider validation spec](product/live-provider-validation.md) | Provider/Azure acceptance plan; local validation scope is recorded in ADR-033 |
 | [Model assessment](product/model-landscape-2026-09.md) | September 2026 evidence on frontier agents, VLAs and evaluation scope |
 | [Current implementation](architecture/current-implementation.md) | Diagrams of the code that exists today, with source and test links |
 | [Target architecture](architecture/target-architecture.md) | Logical roles for ROVE services, Copilot-hosted agents and direct customer systems |

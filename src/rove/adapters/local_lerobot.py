@@ -37,7 +37,10 @@ class LeRobotVLAAdapter:
     """
 
     def __init__(self, model_id: str, config: dict[str, Any] | None = None):
-        if not HAS_LEROBOT:
+        cfg = config or {}
+        self._runtime_python = cfg.get("runtime_python")
+        self._runtime_config = dict(cfg)
+        if not HAS_LEROBOT and not self._runtime_python:
             raise ImportError(
                 f"The local LeRobot runtime could not import: {_LEROBOT_IMPORT_ERROR}. "
                 "It requires Python 3.12 or newer and the optional smolvla dependencies "
@@ -52,7 +55,6 @@ class LeRobotVLAAdapter:
             ) from _LEROBOT_IMPORT_ERROR
 
         self.model_id = model_id
-        cfg = config or {}
         self.display_name = cfg.get("display_name", model_id)
         self._hf_repo = cfg.get("model_id", "lerobot/smolvla_base")
         self._device = cfg.get("device", "mps")
@@ -350,6 +352,21 @@ class LeRobotVLAAdapter:
         embodiment: RobotEmbodiment | None = None,
     ) -> ActionPrediction:
         """Predict action trajectory from current observation."""
+        if self._runtime_python:
+            from rove.adapters.lerobot_process import run_worker
+
+            result = await run_worker(
+                self._runtime_python,
+                self._runtime_config,
+                {
+                    "operation": "predict",
+                    "image_base64": image_base64,
+                    "task": task,
+                    "proprioception": proprioception,
+                    "embodiment": embodiment.model_dump(mode="json") if embodiment else None,
+                },
+            )
+            return ActionPrediction.model_validate(result)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
@@ -358,6 +375,16 @@ class LeRobotVLAAdapter:
 
     async def health_check(self) -> bool:
         """Check if lerobot is available and model can be loaded."""
+        if self._runtime_python:
+            from rove.adapters.lerobot_process import run_worker
+
+            try:
+                result = await run_worker(
+                    self._runtime_python, self._runtime_config, {"operation": "health"}
+                )
+                return result.get("ready") is True
+            except (OSError, ValueError, RuntimeError, TimeoutError):
+                return False
         if not HAS_LEROBOT:
             return False
         try:

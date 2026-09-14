@@ -8,23 +8,24 @@ async function composer(options = {}) {
   w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");this.querySelector("[autofocus]")?.focus();};
   w.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");this.dispatchEvent(new w.Event("close"));};
   w.lucide = {createIcons(){}}; w.HTMLElement.prototype.scrollIntoView = () => {};
-  w.URL.createObjectURL = () => "blob:observation";
+  w.URL.createObjectURL = () => "blob:observation";w.URL.revokeObjectURL=()=>{};
   const streams = [];
   w.EventSource = class { constructor(){this.listeners = {}; streams.push(this);} addEventListener(type, listener){this.listeners[type] = listener;} close(){} emit(type, data){this.listeners[type]?.({data: JSON.stringify(data)});} };
   const item = {id: "case-r1", case_id: "case", name: "Block on tray", task: "Place the block in the tray", revision: 1, image_asset: {sha256: "a".repeat(64)}, candidate_context: {robot: "panda", proprioception: [0, 1], constraints: ["Avoid cup"]}, reference_data: {eval_qa: {answer: "private answer"}, expected_subtasks: ["private plan"]}};
   w.fetch = async (url, request = {}) => {
     const route = new URL(url, w.location.href).pathname; calls.push({route, method: request.method || "GET", body: request.body});
+    if (route === "/api/history") return {ok:true,json:async()=>options.serverHistory || []};
     if (route === "/api/cases/case-r1") return {ok: !options.missing, json: async () => item};
     if (route.startsWith("/api/trial-assets/")) return {ok: true, blob: async () => new w.Blob(["image"], {type: "image/png"})};
     if (route.endsWith("panda.urdf")) return {ok: !options.noRobot, blob: async () => new w.Blob(['<robot name="panda"/>'], {type: "application/xml"})};
     if (route === "/api/examples") return {ok: true, json: async () => ({examples: [{task: "Place the block", filename: "block.png", import_status: "imported", case_revision_id: "case-r1", eval_category: "atomic"}]})};
     if (route === "/data/legacy.png") return {ok:true,blob:async()=>{await options.legacyWait;return new w.Blob(["legacy"],{type:"image/png"});}};
     if (route === "/api/evaluate" && options.submissionFails) throw Error("Submission unavailable");
-    if (route === "/api/evaluate") return {ok: true, json: async () => ({eval_id: "evaluation", trial_ids: {mock: "trial"}, strategies: ["mock"]})};
+    if (route === "/api/evaluate") return {ok: true, json: async () => ({eval_id: "evaluation", trial_ids: options.trialIds || {mock: "trial"}, strategies: options.strategies?.map(item=>item.id) || ["mock"]})};
     return {ok: true, json: async () => route.includes("history") ? [] : route === "/api/strategies" ? {strategies: options.strategies || [{id: "mock", display_name: "Mock", perceive: "mock-vlm", verify: "mock-vlm"}]} : route === "/api/models" ? {models: []} : {defaults: {}, endpoints: {}, strategies: {}}};
   };
   w.eval(source("navigation.js")); w.eval(source("sample-cases.js") + ";window.createSampleCaseCard = createSampleCaseCard;"); w.eval(source("stage-renderers.js"));
-  w.eval(source("strategy-table.js")); w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning,showHistoryEntry,loadExample,seedHistory(entries){runHistory=entries;renderHistory();}};");
+  w.eval(source("strategy-table.js")); w.eval(source("app.js") + ";window.caseRunnerTest={get savedCase(){return selectedSavedCase;},get robot(){return selectedUrdfFile;},setRunning,showHistoryEntry,loadExample,saveHistory,get history(){return runHistory;},get activeEntry(){return runHistory[activeHistoryIndex];},seedHistory(entries,activeIndex=-1,runningId=null){runHistory=entries;activeHistoryIndex=activeIndex;runningEvaluationId=runningId;renderHistory();}};");
   const pause = () => new Promise(resolve => setTimeout(resolve, 40)); await pause();
   return {w, calls, streams, el: id => w.document.getElementById(id), pause};
 }
@@ -321,5 +322,86 @@ test("approved Settings navigation keeps a running comparison stream and draft i
     assert.match(el("taskInput").value,/Place the block/);
     w.history.pushState({},"","/?view=quick");w.dispatchEvent(new w.PopStateEvent("popstate"));
     assert.equal(el("quickResultsPanel").hidden,false);assert.equal(streams.length,1);
+  }finally{w.close();}
+});
+
+test("three-strategy inspection keeps overview navigation and exact trace destinations during execution and after completion",async()=>{
+  const strategies=["a","b","c"].map(id=>({id,display_name:`Pipeline ${id}`,perceive:"vlm",verify:"grader"}));
+  const {w,el,streams,calls,pause}=await composer({strategies,trialIds:{a:"trial/a",b:"trial-b",c:"trial-c"}});
+  try {
+    for(const {id} of strategies)el("strategyGrid").querySelector(`input[value="${id}"]`).click();
+    w.document.querySelector('#quickJourney [data-quick-step="run"]').click();el("evalBtn").click();await pause();
+    const nav=el("trialOutputNavigation"),overview=el("tabBar").querySelector('[data-tab-id="__summary__"]');
+    const main=w.document.querySelector(".root-main");
+    Object.defineProperty(main,"clientHeight",{value:640});Object.defineProperty(nav,"offsetHeight",{value:100});
+    main.getBoundingClientRect=()=>({top:60});nav.getBoundingClientRect=()=>({top:490});
+    assert.equal(nav.hidden,false);assert.equal(overview.textContent,"All strategies");
+    assert.equal(el("quickTrialInspect").hidden,true,"overview cannot claim one selected trial");
+    Object.defineProperty(el("chatArea"),"scrollHeight",{configurable:true,value:4000});
+    for(const {id} of strategies){
+      streams[0].emit("stage",{strategy_id:id,stage:"perceive",status:"completed",latency_ms:10,output:{scene_description:`Evidence ${id}`}});
+      el("chatArea").scrollTop=2500;
+      el("tabBar").querySelector(`[data-tab-id="${id}"]`).click();await pause();
+      assert.equal(nav.hidden,false);assert.equal(el("chatArea").scrollTop,0,"selecting output cancels pending bottom scroll");
+      assert.equal(el("chatArea").style.minHeight,"540px","output reserves space so the root can scroll the setup header away");
+      assert.ok(main.scrollTop>=430,"the user selection moves the strategy navigation to the root viewport top");
+      assert.match(el(`tab-content-${id}`).textContent,new RegExp(`Evidence ${id}`));
+      assert.equal(el(`tab-content-${id}`).classList.contains("hidden"),false);
+      assert.equal(el("quickTrialInspect").hash,"#traces");assert.equal(new URL(el("quickTrialInspect").href).searchParams.get("trial"),id==="a"?"trial/a":`trial-${id}`);
+      assert.equal(el("quickTrialInspect").target,"_blank","trace inspection keeps the running comparison open");
+      overview.click();assert.equal(el("tab-content-__summary__").classList.contains("hidden"),false);assert.equal(el("quickTrialInspect").hidden,true);
+    }
+    overview.dispatchEvent(new w.KeyboardEvent("keydown",{key:"End",bubbles:true}));
+    assert.equal(el("tabBar").querySelector('[aria-selected="true"]').dataset.tabId,"c");
+    streams[0].emit("complete",{trial_ids:{a:"trial/a",b:"trial-b",c:"trial-c"},results:strategies.map(({id})=>({strategy_id:id,stages:[]}))});
+    assert.equal(el("quickResultsPanel").hidden,false);assert.equal(nav.hidden,false);
+    overview.click();assert.equal(el("tab-content-__summary__").classList.contains("hidden"),false);
+    assert.equal(calls.filter(call=>call.route==="/api/evaluate").length,1,"inspection never reruns a strategy");
+    el("quickStartAnother").click();assert.equal(el("chatArea").style.minHeight,"","setup returns to its normal layout");
+    assert.match(source("styles.css"),/#trialOutputNavigation\s*\{[^}]*position:sticky/);
+  }finally{w.close();}
+});
+
+test("newest-first server history retains the latest 50 comparisons and their exact durable trial IDs",async()=>{
+  const serverHistory=Array.from({length:107},(_,index)=>({eval_id:`evaluation-${107-index}`,task:`Task ${107-index}`,timestamp:new Date(Date.UTC(2026,0,1,0,107-index)).toISOString(),status:"completed",strategy_ids:["a","b","c"],trial_ids:{a:`trial-${107-index}-a`,b:`trial-${107-index}-b`,c:`trial-${107-index}-c`},results:["a","b","c"].map(strategy_id=>({strategy_id,success:true,stages:[]}))}));
+  const {w,el}=await composer({serverHistory,strategies:["a","b","c"].map(id=>({id,display_name:id,perceive:"model"}))});
+  try{
+    const restored=JSON.parse(w.localStorage.getItem("rove-history"));
+    assert.equal(restored.length,50);assert.equal(restored.some(item=>item.id==="evaluation-107"),true);assert.equal(restored.some(item=>item.id==="evaluation-58"),true);assert.equal(restored.some(item=>item.id==="evaluation-57"),false);
+    assert.deepEqual(restored.find(item=>item.id==="evaluation-107").trialIds,{a:"trial-107-a",b:"trial-107-b",c:"trial-107-c"});
+    assert.match(el("historyItems").querySelector(".history-open").textContent,/Task 107/);
+    el("historyItems").querySelector(".history-open").click();
+    el("tabBar").querySelector('[data-tab-id="b"]').click();
+    assert.equal(new URL(el("quickTrialInspect").href).searchParams.get("trial"),"trial-107-b");
+  }finally{w.close();}
+});
+
+test("chronological history trimming preserves the selected entry and a distinct live stream target",async()=>{
+  const {w}=await composer();
+  try{
+    const entries=Array.from({length:107},(_,index)=>({id:`entry-${index}`,task:`Task ${index}`,strategyIds:["agent"],timestamp:new Date(Date.UTC(2026,0,1,0,index)).toISOString(),status:index===1?"running":"completed",trialIds:{agent:`trial-${index}`},results:{},summaryResults:{}}));
+    w.caseRunnerTest.seedHistory(entries,0,"entry-1");w.caseRunnerTest.saveHistory();
+    assert.equal(w.caseRunnerTest.history.length,50);assert.equal(w.caseRunnerTest.activeEntry,entries[0]);
+    assert.ok(w.caseRunnerTest.history.includes(entries[1]));assert.ok(w.caseRunnerTest.history.includes(entries[106]));
+    assert.equal(w.caseRunnerTest.history.includes(entries[2]),false);
+    w.caseRunnerTest.saveHistory();assert.equal(w.caseRunnerTest.activeEntry,entries[0],"repeat saves do not move selection to another comparison");
+    assert.equal(w.caseRunnerTest.history.find(entry=>entry.id==="entry-1").trialIds.agent,"trial-1");
+  }finally{w.close();}
+});
+
+test("restored summary uses recorded stage outcomes and does not invent pending stages for completed strategies",async()=>{
+  const serverHistory=[{eval_id:"saved",task:"Inspect the scene",timestamp:"2026-09-14T10:00:00Z",status:"completed",strategy_ids:["scene","unrecorded"],trial_ids:{scene:"scene-trial",unrecorded:"legacy-trial"},results:[{strategy_id:"scene",success:null,stages:[{stage:"perceive",status:"completed",output:{}},{stage:"plan",status:"skipped"}]},{strategy_id:"unrecorded",success:null,stages:[]}]}];
+  const {w,el}=await composer({serverHistory});
+  try{
+    el("historyItems").querySelector(".history-open").click();
+    const overview=el("tab-content-__summary__");
+    assert.ok(overview.querySelector('[aria-label="perceive completed"].done'));
+    assert.ok(overview.querySelector('[aria-label="plan not run"]'));
+    assert.equal(overview.querySelector('[aria-label="act pending"]'),null);assert.equal(overview.querySelector('[aria-label="verify pending"]'),null);
+    assert.match(overview.textContent,/No stages recorded/);
+    const saved=w.caseRunnerTest.history[0];assert.equal(saved.summaryResults.scene.status,"completed","missing verdict is not execution failure");
+    saved.summaryResults.scene.stageStatuses={};
+    w.caseRunnerTest.showHistoryEntry(0);
+    assert.ok(el("tab-content-__summary__").querySelector('[aria-label="perceive completed"].done'),"old browser caches are repaired from preserved stages too");
   }finally{w.close();}
 });

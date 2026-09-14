@@ -224,3 +224,43 @@ class TestFoundryAgentYAMLConfig:
         assert pi05.act == "pi05-libero"
         assert smolvla.act == "smolvla-450m"
         assert pi05.verify_mode == smolvla.verify_mode == "agent_loop"
+
+
+def test_blank_yaml_foundry_values_use_environment(monkeypatch):
+    from rove.adapters.azure_foundry_agent import AzureFoundryAgentAdapter
+
+    monkeypatch.setenv(
+        "AZURE_AI_FOUNDRY_ENDPOINT", "https://example.services.ai.azure.com/api/projects/test"
+    )
+    monkeypatch.setenv("AZURE_AI_FOUNDRY_AGENT_NAME", "robot-reviewer")
+    adapter = AzureFoundryAgentAdapter(
+        config={"project_endpoint": "", "agent_name": "your-agent-name"}
+    )
+    assert adapter._project_endpoint.endswith("/projects/test")
+    assert adapter._agent_name == "robot-reviewer"
+
+
+@pytest.mark.asyncio
+async def test_foundry_health_requires_resolvable_agent(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from rove.adapters.azure_foundry_agent import AzureFoundryAgentAdapter
+
+    adapter = AzureFoundryAgentAdapter()
+    ensure = AsyncMock(side_effect=RuntimeError("Agent is unavailable"))
+    monkeypatch.setattr(adapter, "_ensure_agent", ensure)
+    assert await adapter.health_check() is False
+    ensure.assert_awaited_once()
+
+
+def test_local_scene_variants_use_explicit_local_verifier():
+    from rove.models.config import load_config
+
+    config = load_config()
+    for key in ("scene_detect_local", "scene_plan_local"):
+        strategy = config.strategies[key]
+        assert strategy.perceive == "qwen3-vl-8b"
+        assert strategy.verify == "qwen3-vl-8b"
+        assert strategy.verify_mode == "precompute"
+        assert strategy.act is None
+    assert config.strategies["scene_detect"].verify == "bing-grounding-agent"

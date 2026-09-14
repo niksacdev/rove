@@ -431,3 +431,12 @@ class TestPipelineContextRobotEmbodiment:
         ctx = PipelineContext(task="test", robot_embodiment=emb)
         assert ctx.robot_embodiment is not None
         assert ctx.robot_embodiment.robot_type == "panda"
+
+
+def test_null_plausibility_evidence_quality_remains_unknown():
+    result = ActionPlausibility(evidence_quality=None, safety_assessment=None)
+    assert result.evidence_quality == "unknown"
+    assert result.safety_assessment is None
+    assert (
+        ActionPlausibility(evidence_quality="perception_only").evidence_quality == "perception_only"
+    )

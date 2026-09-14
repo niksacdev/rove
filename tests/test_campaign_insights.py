@@ -121,7 +121,7 @@ def output_for(h):
     }
 
 
-def make_campaign(h, *, human=False):
+def make_campaign(h, *, human=False, stage_result=None):
     spec = CampaignSpec(
         name="Saved run",
         suite_version="one",
@@ -150,7 +150,11 @@ def make_campaign(h, *, human=False):
             campaign_id=cid,
             seed=seed,
         )
-        result = {"stages": [], "success": True}
+        result = (
+            copy.deepcopy(stage_result)
+            if stage_result is not None
+            else {"stages": [], "success": True}
+        )
         h["service"].trials.finish(trial_id, status="completed", result=result)
         store.save_trial(
             cid,
@@ -347,6 +351,111 @@ def test_summary_persists_across_router_restart_and_invalidates_configuration(h)
     assert h["service"].list_reviews() == []
     with CampaignStore(h["root"]).connect() as db:
         assert db.execute("SELECT count(*) FROM campaign_insights").fetchone()[0] == 2
+
+
+def test_summary_receives_bounded_stage_measurements_not_raw_output_or_journal(h):
+    saved = {
+        "failure_stage": "verify",
+        "stages": [
+            {
+                "stage": "plan",
+                "status": "completed",
+                "model_id": "planner",
+                "latency_ms": 12,
+                "output": {
+                    "plan": "PRIVATE MODEL OUTPUT",
+                    "prompt": "PRIVATE PROMPT",
+                    "_runtime": {
+                        "telemetry_coverage": "sdk_events",
+                        "event_count": 4,
+                        "messages": "PRIVATE MESSAGE",
+                    },
+                },
+            },
+            {
+                "stage": "verify",
+                "status": "completed",
+                "model_id": "grader",
+                "output": {
+                    "verdict_valid": False,
+                    "raw_response": "PRIVATE RAW RESPONSE",
+                    "evaluator_result": {
+                        "verdict": "unknown",
+                        "evidence_quality": "unknown",
+                        "evidence_refs": [],
+                        "details": {"private": "PRIVATE GRADER DETAIL"},
+                        "measurements": [
+                            {
+                                "name": "completion_time",
+                                "value": None,
+                                "unit": "s",
+                                "quality": "unknown",
+                                "evidence_refs": [],
+                            }
+                        ],
+                    },
+                    "check_results": [
+                        {
+                            "endpoint": "constraint",
+                            "required": True,
+                            "role": "constraint",
+                            "execution": "timeout",
+                            "evaluator_version": "v1",
+                            "result": {
+                                "verdict": "unknown",
+                                "evidence_quality": "unknown",
+                                "evidence_refs": ["recording-1"],
+                                "measurements": [],
+                            },
+                        }
+                    ],
+                },
+            },
+        ],
+    }
+    cid = make_campaign(h, stage_result=saved)
+    before = CampaignStore(h["root"]).trials(cid)
+    h["runtime"].output = summary_output(h, cid)
+    response = summary(h, cid).json()
+    assert response["source"] == "ai"
+    assert response["interpretation_scope"] == "saved_aggregates_and_stage_evidence"
+    context = h["runtime"].calls[-1][3]
+    evidence = context["trials"][0]["stage_evidence"]
+    assert evidence["failure_stage"] == "verify"
+    assert evidence["stages"][0]["runtime"]["event_count"] == 4
+    verify = evidence["stages"][1]
+    assert verify["verdict_valid"] is False
+    assert verify["runtime"]["telemetry_coverage"] == "not_recorded_in_stage_result"
+    assert verify["assessment"]["measurements"][0]["value"] is None
+    assert verify["assessment"]["measurements"][0]["unit"] == "s"
+    assert verify["checks"][0]["execution"] == "timeout"
+    assert verify["checks"][0]["assessment"]["evidence_refs"] == ["recording-1"]
+    tid = context["trials"][0]["trial_id"]
+    assert context["anchors"]["trial:" + tid]["stage_evidence"] == evidence
+    assert "PRIVATE" not in json.dumps(context)
+    assert "test-private-credential" not in json.dumps(context)
+    prompt = h["runtime"].instances[-1][0].system_message
+    assert "not the root cause or proof of model quality" in prompt
+    assert "Do not recommend replacing a model solely" in prompt
+    assert "Keep human contract outcomes separate" in prompt
+    assert CampaignStore(h["root"]).trials(cid) == before
+    assert h["service"].list_reviews() == []
+
+
+def test_stage_evidence_over_prompt_budget_refuses_ai_without_silent_truncation(h):
+    cid = make_campaign(
+        h,
+        stage_result={
+            "stages": [
+                {"stage": "plan", "status": "error", "error": "x" * 130000},
+            ]
+        },
+    )
+    h["runtime"].output = summary_output(h, cid)
+    result = summary(h, cid).json()
+    assert result["source"] == "template"
+    assert "exceeded its limit" in result["warnings"][0]
+    assert h["runtime"].calls == []
 
 
 def test_new_expert_review_invalidates_summary_without_reexecution(h):

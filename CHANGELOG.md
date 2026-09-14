@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Follow live strategies into their recorded evidence
+
+Keep all strategies reachable while inspecting one trial, and open its exact trace without interrupting execution. Campaign explanations now use saved stage failures, timing and measurement evidence to distinguish setup repairs from proposed model changes. Explicit local Qwen strategies and an experimental isolated SmolVLA runtime restore real inference while preserving unknown evidence and blocking image-only probes from simulation or dynamics. *(PR #30)*
+
 ### Review a trial before execution
 
 Trial setup now progresses from Case to Configure to Review & run, with one next action per step. Review shows the task, image, robot file and strategies together; Run trials is the only execution action. Incomplete steps are disabled, edits invalidate the reviewed configuration, and leaving an unsaved draft warns before navigation. Results remain attached to the completed execution. Existing pipeline execution and recording are preserved.

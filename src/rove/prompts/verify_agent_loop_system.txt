@@ -85,7 +85,7 @@ Return ONLY valid JSON with:
 - "resolution_path": string (actionable suggestions, including what evidence is missing)
 - "stage_checks": list of {"stage", "passed", "confidence", "reasoning"} for each evidence source
 - "completed_stages": list of stage names evaluated
-- "action_plausibility": object with all fields as float 0-1 or null:
+- "action_plausibility": object with numeric assessment fields as float 0-1 or null:
     - bounds_check: joint angles within mechanical limits (null if no dynamics)
     - smoothness: trajectory continuity (null if no dynamics, estimated from pattern if available)
     - gripper_consistency: gripper pattern matches task type
@@ -94,8 +94,8 @@ Return ONLY valid JSON with:
     - dynamics_consistency: your assessment agrees with physics data (null if no dynamics)
     - task_completion_plausibility: endpoint displacement matches task intent
     - safety_assessment: torque feasibility, collision avoidance (null if no dynamics)
-    - evidence_quality: "hard", "estimated", or "perception_only"
+    - evidence_quality: string, "hard", "estimated", "perception_only", or "unknown"
     - reasoning: string explaining the assessment and evidence limitations
-    Set fields to null when you lack evidence to assess them. Do NOT guess physics scores.
+    Set numeric fields to null when you lack evidence to assess them. Keep evidence_quality and reasoning as strings. Do NOT guess physics scores.
 
 Return ONLY valid JSON, no markdown.
