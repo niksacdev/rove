@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Review a trial before execution
+
+Trial setup now progresses from Case to Configure to Review & run, with one next action per step. Review shows the task, image, robot file and strategies together; Run trials is the only execution action. Incomplete steps are disabled, edits invalidate the reviewed configuration, and leaving an unsaved draft warns before navigation. Results remain attached to the completed execution. Existing pipeline execution and recording are preserved.
+
 ### Share the trial and campaign workspace
 
 Trials and Campaigns now consistently open their record browsers, with New trial and New campaign actions. Quick comparisons keep their task, image and robot description through Case, Configure, Run and Results. Both workflows use the same strategy selection table and existing execution services. Campaign name, attempts and live trial totals stay above the steps; saved campaigns show their frozen setup. Success criteria identify the pass condition and checking method, configuration checks report their status beside Run, and a new draft shows a clear empty Results state. Active-run history navigation preserves live output.

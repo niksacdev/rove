@@ -36,7 +36,7 @@ for (const [file, section] of [["index.html","start"],["datasets.html","results"
   });
 }
 
-test("root journey routes configuration and quick runs without losing an in-progress draft", async () => {
+test("root journey routes clean configuration and restores active comparison views", async () => {
   const dom = new JSDOM(read("index.html"), {url:"http://localhost/",runScripts:"outside-only",pretendToBeVisual:true}), w = dom.window, calls=[];
   w.lucide={createIcons(){}};
   w.HTMLElement.prototype.scrollIntoView=()=>{};
@@ -60,7 +60,6 @@ test("root journey routes configuration and quick runs without losing an in-prog
     assert.equal(el("quickSidebar").hidden,false);
     assert.equal(w.document.querySelector("#quickSidebar .rove-settings"),null);
     w.testRoot.switchView("quick");
-    el("taskInput").value="Keep this task while checking endpoints";
     w.document.querySelector('#roveNav [data-nav-section="configure"]').click();
     assert.equal(w.location.search,"?view=strategies");
     assert.equal(el("quickComposer").hidden,true);
@@ -74,7 +73,7 @@ test("root journey routes configuration and quick runs without losing an in-prog
     w.history.back(); await pause();
     assert.equal(w.location.search,"?view=quick");
     assert.equal(el("quickComposer").hidden,false);
-    assert.equal(el("taskInput").value,"Keep this task while checking endpoints");
+    assert.equal(el("taskInput").value,"");
     // Real tab initialization replaces the chat DOM: persistent routes must survive it.
     w.testRoot.setupTabs(["mock"]); w.testRoot.setRunning(true); w.testRoot.restoreEvaluation();
     const output=el("tab-content-mock"); assert.ok(output);

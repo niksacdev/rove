@@ -10,7 +10,7 @@
   <title>ROVE — Robot Observation &amp; Vision Evaluation</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/styles.css?v=trial-flow-9">
   <link rel="stylesheet" href="/static/stage-renderers.css?v=workspace-8">
   <link rel="stylesheet" href="/static/navigation.css?v=workspace-8">
   <link rel="stylesheet" href="/static/start.css?v=workspace-8">
@@ -77,12 +77,12 @@
       <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>New trial</h1><p>Give your agent an observation and a task. Inspect what it does.</p></div><a href="/static/history.html" class="start-secondary">Back to trials</a></div></div>
 
       <section id="quickWorkspace" hidden aria-label="Trial workspace">
-        <div class="quick-workspace-commandbar"><p id="quickTrialCount" role="status">One case · choose strategies to compare</p><div id="quickRunAction"></div></div>
-        <nav id="quickJourney" aria-label="Trial steps"><button type="button" data-quick-step="case" aria-current="step">Case</button><button type="button" data-quick-step="configure">Configure</button><button type="button" data-quick-step="run">Run</button><button type="button" data-quick-step="results">Results</button></nav>
-        <section id="quickCasePanel" data-quick-panel="case"><div class="quick-section-heading"><div><h2 tabindex="-1">Your case</h2><p>Describe the task and attach its observation. Refine the instruction here before comparing strategies.</p></div><button type="button" id="quickSampleCases" class="secondary">Select a sample case</button></div><div id="quickCaseComposer"></div><div class="quick-workspace-actions"><button type="button" data-quick-step="configure" class="secondary">Choose strategies</button></div></section>
-        <section id="quickConfigurePanel" data-quick-panel="configure" hidden><h2 tabindex="-1">Compare strategies on this case</h2><p>Each selected strategy executes its configured pipeline once on the same task, image and robot description. Each execution is saved as a trial.</p><div id="quickStrategySelection"></div></section>
-        <section id="quickRunPanel" data-quick-panel="run" hidden><h2 id="quickRunHeading" tabindex="-1">Ready to compare?</h2><p id="quickRunSummary"></p></section>
-        <section id="quickResultsPanel" data-quick-panel="results" hidden><h2 tabindex="-1">Comparison results</h2><p id="quickResultsSummary">Run your selected strategies to inspect their outputs and evidence.</p><button type="button" data-quick-step="case" class="secondary">Review case inputs</button></section>
+        <div class="quick-workspace-commandbar"><p id="quickTrialCount" role="status">One case · choose strategies to compare</p></div>
+        <nav id="quickJourney" aria-label="Trial steps"><button type="button" data-quick-step="case" aria-current="step">Case</button><button type="button" data-quick-step="configure">Configure</button><button type="button" data-quick-step="run">Review &amp; run</button><button type="button" data-quick-step="results">Results</button></nav>
+        <section id="quickCasePanel" data-quick-panel="case"><div class="quick-section-heading"><div><h2 tabindex="-1">Your case</h2><p>Describe the task and attach its observation. Refine the instruction here before comparing strategies.</p></div><button type="button" id="quickSampleCases" class="secondary">Select a sample case</button></div><div id="quickCaseComposer"></div><div class="quick-workspace-actions"><button type="button" id="quickContinueConfigure" data-quick-step="configure" class="quick-primary">Continue to Configure</button></div></section>
+        <section id="quickConfigurePanel" data-quick-panel="configure" hidden><h2 tabindex="-1">Compare strategies on this case</h2><p>Each selected strategy executes its configured pipeline once on the same task, image and robot description. Each execution is saved as a trial.</p><div id="quickStrategySelection"></div><div class="quick-workspace-actions"><button type="button" id="quickContinueReview" data-quick-step="run" class="quick-primary">Review &amp; run</button></div></section>
+        <section id="quickRunPanel" data-quick-panel="run" hidden><h2 id="quickRunHeading" tabindex="-1">Review your comparison</h2><p id="quickRunSummary"></p><div id="quickReviewSummary"></div><div id="quickRunAction" class="quick-workspace-actions"></div></section>
+        <section id="quickResultsPanel" data-quick-panel="results" hidden><h2 tabindex="-1">Comparison results</h2><p id="quickResultsSummary">Run your selected strategies to inspect their outputs and evidence.</p><button type="button" id="quickStartAnother" class="secondary">Start another comparison</button></section>
       </section>
       <!-- Sub-tab bar (hidden until evaluation runs) -->
       <div id="tabBar" class="hidden shrink-0 border-b border-f-border bg-f-surface/50 px-4 flex items-end gap-0 overflow-x-auto" role="tablist"></div>
@@ -187,17 +187,26 @@
         </div>
         <div class="composer-footer"><div class="quick-connection" role="status"><span id="connectionDot" class="inline-block w-2 h-2 rounded-full bg-gray-600" aria-hidden="true"></span><span id="connectionLabel">Disconnected</span></div>
         <!-- Keyboard hint -->
-        <div class="composer-hint">Enter to run &middot; Shift + Enter for a new line</div></div>
+        <div class="composer-hint">Refine your task here, then continue to Configure</div></div>
       </div>
 
     </main>
   </div>
 
+  <dialog id="quickLeaveDialog" aria-modal="true" aria-labelledby="quickLeaveTitle" aria-describedby="quickLeaveMessage">
+    <h2 id="quickLeaveTitle">Discard unsaved changes?</h2>
+    <p id="quickLeaveMessage">Stay to keep working, or discard this draft and leave.</p>
+    <div class="quick-leave-actions">
+      <button id="quickLeaveStay" type="button" autofocus>Stay</button>
+      <button id="quickLeaveConfirm" type="button">Discard changes and leave</button>
+    </div>
+  </dialog>
+
   <script src="/static/sample-cases.js?v=workspace-8"></script>
   <script src="/static/stage-renderers.js?v=workspace-8"></script>
   <script src="/static/tooltips.js"></script>
   <script src="/static/strategy-table.js?v=workspace-8"></script>
-  <script src="/static/app.js?v=workspace-8"></script>
+  <script src="/static/app.js?v=trial-flow-9"></script>
 
 </body>
 </html>

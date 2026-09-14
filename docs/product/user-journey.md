@@ -40,9 +40,11 @@ Do not introduce competing objects called Quick Evaluation, Experiment or Run.
 
 ## Latest entry: try a task, then build a campaign
 
-The quick workspace has **Case → Configure → Run → Results**. Case retains the
+The quick workspace has **Case → Configure → Review & run → Results**. Case retains the
 conversational task refinement, observation upload and optional URDF. Configure uses
-the same strategy selection table as campaigns. Run executes the existing pipeline;
+the same strategy selection table as campaigns. Review & run shows the observation,
+full task, robot file and selected strategies together. Only its Run trials action
+executes the existing pipeline;
 Results shows saved outputs and evidence, with **Add to campaign**.
 
 ```mermaid
@@ -51,7 +53,8 @@ flowchart TD
     H --> NC[New campaign]
     NT --> TC[Case: task, image, optional URDF and chat refinement]
     TC --> TF[Configure: shared strategy table]
-    TF --> TR[Run: existing pipeline progress]
+    TF --> REVIEW[Review exact case and strategies]
+    REVIEW --> TR[Run trials: existing pipeline progress]
     TR --> TO[Results: compare saved strategy trials]
     TO --> ADD[Add to campaign]
     NC --> CC[Cases]
@@ -73,11 +76,22 @@ a substitute for its historical identity.
 
 Changing quick-workspace stages retains the task, image, robot input and selected
 strategies. Progress, original pipeline output, saved trial history and case promotion
-remain available. Results opens at the top of the recorded output. Review case inputs
-returns to the editable draft; opening older history does not pretend to restore its
-attachments. History and pending sample loads cannot overwrite a live comparison.
-Conversation prepares the input; stage navigation itself never runs
-a strategy or rates an output.
+remain available. Results opens at the top of the recorded output. Start another
+comparison returns to the retained draft without executing. Opening older history
+does not pretend to restore its attachments. History and pending sample loads cannot
+overwrite a live comparison.
+
+Case must have a task and observation before Configure becomes available. Configure
+must have selected strategies before Review & run becomes available. Results remains
+unavailable until output exists. Setup locks during execution; task Enter inserts a
+line break. Edits invalidate the reviewed input snapshot.
+
+Leaving unfinished work prompts the user to stay or leave. This covers Back to trials,
+the top navigation, browser back, reload and close. Switching steps or selecting a
+sample retains the draft without a leave prompt. Completed, unchanged inputs with
+durable trial results are saved; subsequent edits are an unsaved new draft. See
+[ADR-032](../architecture/ADR-032-trial-review-and-navigation-state.md) for the state
+model and validation boundary.
 
 ## A persistent campaign header
 
@@ -283,7 +297,7 @@ not acceptance of this redesign. Verify the following on the new revision:
 
 - Trials/Campaigns browse existing records; New trial/New campaign consistently open
   creation drafts. Settings remains accessible across all workspace pages.
-- Quick Case/Configure/Run/Results retains chat refinement, task, image, optional robot
+- Quick Case/Configure/Review & run/Results retains chat refinement, task, image, optional robot
   input, chosen strategies, pipeline progress, results, history and Add to campaign.
 - Both Configure stages use the same checkbox/stage/endpoint component and selection
   semantics. Inline configuration checks show pending, ready and blocked states.
