@@ -19,6 +19,10 @@ def public_campaign(campaign: dict) -> dict:
         **campaign["spec"],
         "tasks": [{"id": t["id"], "task": t["task"]} for t in campaign["spec"]["tasks"]],
     }
+    if campaign["spec"].get("execution", "robotics") != "robotics":
+        from rove.trials.snapshots import sanitize
+
+        result = sanitize(result)
     return result
 
 
@@ -267,6 +271,11 @@ def to_html(data: dict) -> str:
         if scope == "episode_outcome"
         else "A passing configured check does not by itself establish physical task success."
     )
+    if spec.get("execution", "robotics") != "robotics":
+        scope = "executor_assessment"
+        scope_label = "Task output assessment"
+        source_label = "Independent grader assessment"
+        scope_note = "Each outcome comes from the recorded grader and its evidence. Missing assessments remain unknown."
     human = any(
         criterion.get("required") and criterion.get("assessment") == "human_review"
         for criterion in contract.get("criteria", [])
@@ -343,7 +352,7 @@ def to_html(data: dict) -> str:
             f'<p><span class="pass">{counts["passed"]} pass</span> · '
             f'<span class="fail">{counts["failed"]} fail</span> · {counts["unknown"]} unknown</p>'
             f'<div class="strategy-metrics"><div><strong>{row["coverage"]:.0%}</strong><small>Verdict coverage</small></div>'
-            f"<div><strong>{latency_label}</strong><small>p95 pipeline time</small></div></div></article>"
+            f"<div><strong>{latency_label}</strong><small>p95 execution and assessment time</small></div></div></article>"
         )
     outcome = go.Figure()
     for field, label, color in (
@@ -617,7 +626,7 @@ def to_html(data: dict) -> str:
 <style>{_REPORT_STYLE}</style><script>{get_plotlyjs()}</script></head><body>
 <a class="skip" href="#report">Skip to report</a><header class="topbar"><a class="brand" href="/">ROVE</a><a href="/static/benchmarks.html">Results</a><span>/ Campaign report</span><button id="theme-toggle" type="button">Light theme</button></header>
 <main id="report"><div class="eyebrow">Robot Observation &amp; Vision Evaluation</div><h1>{escape(spec["name"])}</h1>
-<p class="subtitle">An evidence-backed view of your robotics agent pipeline.</p>
+<p class="subtitle">An evidence-backed view of your evaluated strategies.</p>
 <div class="meta"><span class="badge">{escape(campaign["status"])}</span><span class="badge">{escape(spec["suite_version"])}</span><span class="badge">Revision {escape(spec["revision"])}</span><span class="badge">{len(task_ids)} cases · {len(strategy_ids)} strategies · {len(spec["seeds"])} repeats</span></div>
 <p class="notice"><strong>{escape(campaign["evidence_kind"])}</strong> · {escape(campaign["grading_note"])}</p>
 <nav class="jump-links" aria-label="Report sections"><a href="#outcomes">Outcomes</a><a href="#reliability">Reliability</a><a href="#tasks">Cases &amp; measurements</a><a href="#evidence">Evidence</a></nav>

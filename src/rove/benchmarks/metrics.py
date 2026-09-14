@@ -97,9 +97,11 @@ def summarize(campaign: dict, trials: list[dict]) -> dict:
             latencies[math.ceil(0.95 * len(latencies)) - 1] if latencies else None
         )
         aggregates.append(agg)
-    from rove.benchmarks.robotics import summarize_robotics
+    robotics, targets = [], []
+    if spec.get("execution", "robotics") == "robotics":
+        from rove.benchmarks.robotics import summarize_robotics
 
-    robotics, targets = summarize_robotics(campaign, trials)
+        robotics, targets = summarize_robotics(campaign, trials)
     solved = sum(any(r["passed"] for r in rows if r["task_id"] == t["id"]) for t in spec["tasks"])
     return {
         "strategies": aggregates,

@@ -1,0 +1,10 @@
+{
+  "id": "normalize",
+  "task": "Normalize whitespace and capitalization",
+  "inputs": {
+    "text": "  Hello ROVE  "
+  },
+  "reference": {
+    "expected": "hello rove"
+  }
+}

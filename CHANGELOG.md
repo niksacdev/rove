@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Reuse trials and campaigns beyond robotics
+
+Run structured-input evaluations with separate candidates and graders through the same durable trials, campaigns, evidence, traces and reports. The existing robotics pipeline stays available, while an offline text example demonstrates the reusable execution boundary.
+
 ### Configure and test the evaluation assistant
 
 Campaign results now link to a real Assistant settings section with persistent endpoint selection, explicit connection testing and a return to the campaign. Missing configuration offers setup instead of a useless retry; summaries request exact evidence citations and retain strict validation. The same controls are available through the CLI. *(PR #31)*

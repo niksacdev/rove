@@ -339,7 +339,10 @@ def assessed_trials(root: Path, campaign: dict, trials: list[dict]) -> tuple[lis
     """Project immutable output assessments without inventing additional executions."""
     contract = campaign.get("contract")
     if not contract:
-        return trials, {"scope": "configured_verification", "review_ids": []}
+        return trials, {
+            "scope": campaign.get("metric_scope", "configured_verification"),
+            "review_ids": [],
+        }
     required = [c for c in contract["criteria"] if c["required"]]
     human_ids = {c["id"] for c in required if c["assessment"] == "human_review"}
     service = DatasetService(root)

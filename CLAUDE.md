@@ -88,6 +88,18 @@ tests/                             # pytest test suite
 └── test_api.py
 ```
 
+## Reusable evaluation core
+
+The 2026-09-14 pivot preserves the robotics workbench and makes its trial/campaign
+lifecycle reusable. See [reusable core](docs/product/reusable-evaluation-core.md) and
+[ADR-036](docs/architecture/ADR-036-reusable-evaluation-core.md). The default
+`robotics` executor retains current image, URDF and stage contracts. Installed
+`rove.evaluations` integrations accept structured inputs, run separate candidate
+and grader calls, and share SQLite history, evidence, deadlines and reporting.
+Generic case authoring is currently manifest/CLI based; do not claim the robotics
+case builder or strategy catalog already supports arbitrary domains. ABC rollout
+hosting and Azure/Fabric integrations are outside this pivot.
+
 ## Changelog
 
 When creating a PR, always update `CHANGELOG.md`:
@@ -140,7 +152,7 @@ When creating a PR, always update `CHANGELOG.md`:
 - No model training or fine-tuning (ROVE is inference-only — it consumes models, not produces them)
 - No real robot control (simulation only — output is data, not robot motion)
 - No model serving infrastructure (ROVE calls models, does not host them)
-- No general-purpose LLM evaluation (robotics agent pipelines only)
+- Keep robotics behavior compatible while reusing Trials/Campaigns for other evaluation domains. Domain-specific inputs and grading belong behind execution adapters; do not build a second campaign engine.
 - No authentication/RBAC
 - No multi-tenant support
 

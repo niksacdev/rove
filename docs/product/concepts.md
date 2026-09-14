@@ -1,5 +1,7 @@
 # Cases, Trials and Campaigns
 
+The [reusable core](reusable-evaluation-core.md) applies Cases, Trials and Campaigns beyond robotics. Image and URDF requirements belong to the robotics integration; structured evaluation inputs have no image requirement.
+
 ROVE helps a robotics developer answer: **did this system perform the task under
 these conditions, and what evidence supports that assessment?** The same workbench
 can assess scene understanding or a proposed plan before robot execution evidence

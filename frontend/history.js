@@ -1,9 +1,20 @@
 "use strict";
 
+function isGenericTrial(trial) {
+  const envelope = trial.result || {};
+  const result = envelope.result || envelope;
+  return envelope.metric_scope === "executor_assessment" || (!Array.isArray(result.stages) && Boolean(trial.snapshot?.config?.executor_identity));
+}
+
 // Pure presentation helpers are also exercised with Node's built-in test runner.
 function trialPresentation(trial) {
   const envelope = trial.result || {};
   const result = envelope.result || envelope;
+  if (isGenericTrial(trial)) {
+    const assessment = result.assessment && typeof result.assessment === "object" ? result.assessment : null;
+    const verdict = ["pass", "fail", "unknown"].includes(envelope.outcome) ? envelope.outcome : "unknown";
+    return {generic: true, result, stages: [], output: {...result, evaluator_version: trial.snapshot?.config?.executor_identity?.revision}, assessment, checks: [], verdict, pipelineVerdict: verdict, quality: assessment?.evidence_quality || "unknown", contractAssessment: null};
+  }
   const stages = Array.isArray(result.stages) ? result.stages : [];
   const verify = stages.find(stage => stage.stage === "verify" && stage.status === "completed");
   const output = verify?.output || {};
@@ -53,10 +64,10 @@ function eventIsError(event) {
 }
 
 function promotionEligible(trial) {
-  return trial.source === "quick" && Boolean(trial.status) && trial.status !== "running" && /^[a-f0-9]{64}$/.test(trial.task?.image_asset?.sha256 || "") && Boolean((trial.task?.task || trial.task?.instruction || "").trim());
+  return !isGenericTrial(trial) && trial.source === "quick" && Boolean(trial.status) && trial.status !== "running" && /^[a-f0-9]{64}$/.test(trial.task?.image_asset?.sha256 || "") && Boolean((trial.task?.task || trial.task?.instruction || "").trim());
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = {trialPresentation, trialTitle, trialStrategy, usagePresentation, eventIsError, promotionEligible};
+if (typeof module !== "undefined" && module.exports) module.exports = {isGenericTrial, trialPresentation, trialTitle, trialStrategy, usagePresentation, eventIsError, promotionEligible};
 
 if (typeof document !== "undefined") (() => {
   const $ = id => document.getElementById(id);
@@ -157,13 +168,13 @@ if (typeof document !== "undefined") (() => {
   }
   function renderMeasurements(container, view) {
     const checks = [];
-    if (view.assessment) checks.push({endpoint: "Task assessment", role: "assessment", result: view.assessment, evaluator_version: view.output.evaluator_version});
+    if (view.assessment) checks.push({endpoint: view.generic ? "Executor assessment" : "Task assessment", role: "assessment", result: view.assessment, evaluator_version: view.output.evaluator_version});
     checks.push(...view.checks);
     const content = section(view.contractAssessment ? "Configured verifier and measurements" : "Assessment and measurements");
     if (view.contractAssessment) content.append(node("p", `Recorded pipeline verdict: ${view.pipelineVerdict}. These original checks are retained separately from the contract assessment and expert reviews shown above.`, "muted"));
     const refs = new Set();
     if (!checks.length) {
-      content.append(node("p", view.output.reasoning || "No structured assessment was recorded. A completed pipeline alone does not establish task success.", "muted"));
+      content.append(node("p", view.output.reasoning || (view.generic ? "No structured assessment was recorded. Completed execution alone does not establish acceptance." : "No structured assessment was recorded. A completed pipeline alone does not establish task success."), "muted"));
     }
     for (const check of checks) {
       const assessment = check.result || {};
@@ -198,7 +209,7 @@ if (typeof document !== "undefined") (() => {
         item.append(node("span", ref, "evidence-ref"));
         const managed = (state.currentTrial?.evidence_refs || []).find(value => value.id === ref);
         if (managed) {
-          item.append(node("span", `${managed.kind} · ${managed.availability} · ${managed.frame || "frame unspecified"}`, "muted"));
+          item.append(node("span", `${managed.kind} · ${managed.availability}${view.generic ? "" : ` · ${managed.frame || "frame unspecified"}`}`, "muted"));
           if (managed.availability === "available") item.append(link("Open exact recording selection", traceEvidenceHref(state.selected, ref)));
           if (managed.selector) item.append(node("span", `${managed.selector.unit} [${managed.selector.start}, ${managed.selector.end})`, "muted"));
         } else item.append(node("span", "Recorded reference · managed asset unavailable", "muted"));
@@ -213,9 +224,9 @@ if (typeof document !== "undefined") (() => {
     const heading = node("h2", trialTitle(trial), "detail-title"); heading.id = "inspectorHeading"; heading.tabIndex = -1;
     container.append(heading, node("p", `${trialStrategy(trial)} · Trial ${trial.id}`, "muted trial-id"));
     const grid = node("div", null, "summary-grid");
-    grid.append(summaryItem(view.contractAssessment ? "Contract assessment" : "Pipeline verdict", view.verdict), summaryItem("Execution", trial.status || "Unknown"), summaryItem("Recorded evidence quality", view.quality), summaryItem("Started", date(trial.created_at)), summaryItem("Finished", trial.finished_at ? date(trial.finished_at) : "Not recorded"), summaryItem("Reported usage (loaded events)", "Loading…", "usageSummary"));
+    grid.append(summaryItem(view.generic ? "Executor assessment" : view.contractAssessment ? "Contract assessment" : "Pipeline verdict", view.verdict), summaryItem("Execution", trial.status || "Unknown"), summaryItem("Recorded evidence quality", view.quality), summaryItem("Started", date(trial.created_at)), summaryItem("Finished", trial.finished_at ? date(trial.finished_at) : "Not recorded"), summaryItem("Reported usage (loaded events)", "Loading…", "usageSummary"));
     container.append(grid);
-    const meaning = view.quality === "observed" ? "Observed evidence is reported by the configured evaluator. Inspect its required criteria and measurements to understand the verdict." : `This verdict uses ${view.quality} evidence. It does not establish observed robot task success.`;
+    const meaning = view.generic ? `The executor recorded this assessment using ${view.quality} evidence. Execution status and assessment outcome are separate; inspect the grader rationale and measurements below.` : view.quality === "observed" ? "Observed evidence is reported by the configured evaluator. Inspect its required criteria and measurements to understand the verdict." : `This verdict uses ${view.quality} evidence. It does not establish observed robot task success.`;
     container.append(node("p", meaning, "notice"));
     if (view.contractAssessment) {
       container.append(node("p", view.contractAssessment.note || "The contract assessment includes required expert ratings. Missing or conflicting reviews remain unknown even when the original pipeline reported success.", "notice"), details("Authoritative assessment and review revisions", view.contractAssessment));
@@ -223,8 +234,11 @@ if (typeof document !== "undefined") (() => {
     }
     if (trial.source === "legacy") container.append(node("p", "Imported history may lack configuration or live events. Missing provenance remains unknown.", "notice"));
     if (trial.error) container.append(node("p", typeof trial.error === "string" ? trial.error : JSON.stringify(trial.error), "error-text"));
-    if (["cancelled", "interrupted"].includes(trial.status)) container.append(node("p", "Execution ended before normal completion. Process cancellation does not confirm that a robot stopped.", "notice"));
-    if (trial.campaign_id) container.append(link("Back to campaign results", `/static/datasets.html?step=review&campaign=${encodeURIComponent(trial.campaign_id)}`), document.createTextNode(" · "), link("Open campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
+    if (["cancelled", "interrupted"].includes(trial.status)) container.append(node("p", view.generic ? "Execution ended before normal completion. Missing outputs and assessments remain unavailable." : "Execution ended before normal completion. Process cancellation does not confirm that a robot stopped.", "notice"));
+    if (trial.campaign_id) {
+      if (view.generic) container.append(link("Back to campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
+      else container.append(link("Back to campaign results", `/static/datasets.html?step=review&campaign=${encodeURIComponent(trial.campaign_id)}`), document.createTextNode(" · "), link("Open campaign report", `/api/campaigns/${encodeURIComponent(trial.campaign_id)}/report?format=html`));
+    }
     if (promotionEligible(trial)) {
       const promotion = section("Use this trial for future evaluations");
       promotion.append(node("p", "Create a reusable case from this input and preserve the existing trial as an exploratory reference. Future campaigns run fresh attempts; this selected result does not enter their reliability denominator.", "muted"));
@@ -257,6 +271,17 @@ if (typeof document !== "undefined") (() => {
       }
       const download = link("Download recorded asset", url); download.setAttribute("download", asset.sha256);
       observation.append(download); container.append(observation);
+    }
+    if (view.generic) {
+      const inputs = section("Task inputs");
+      if (trial.task && Object.hasOwn(trial.task, "inputs")) inputs.append(node("pre", JSON.stringify(trial.task.inputs, null, 2)));
+      else inputs.append(node("p", "No structured inputs were recorded.", "muted"));
+      if (trial.task?.reference_asset) inputs.append(details("Recorded reference asset", trial.task.reference_asset));
+      container.append(inputs);
+      const candidate = section("Candidate output");
+      if (Object.hasOwn(view.result, "output")) candidate.append(node("pre", JSON.stringify(view.result.output, null, 2)));
+      else candidate.append(node("p", "No candidate output was recorded.", "muted"));
+      container.append(candidate);
     }
     renderMeasurements(container, view);
     if (trial.evidence_refs?.length) {

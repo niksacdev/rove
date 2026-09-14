@@ -1,0 +1,16 @@
+{
+  "strategies": {
+    "original": {
+      "display_name": "Original text",
+      "mode": "identity"
+    },
+    "normalized": {
+      "display_name": "Trim and lowercase",
+      "mode": "strip_lower"
+    }
+  },
+  "grading": {},
+  "environment": {
+    "fixture": "offline-text-example-v1"
+  }
+}

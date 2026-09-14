@@ -10,6 +10,8 @@ def summarize_evidence(campaign, trials):
     planned = len(campaign["spec"]["tasks"]) * len(campaign["spec"]["seeds"])
     checks = {}
     for sid, definition in campaign["strategy_definitions"].items():
+        if campaign["spec"].get("execution", "robotics") != "robotics":
+            continue
         for check in StrategyConfig.model_validate(definition).stage_options("verify").checks:
             checks[sid, check.endpoint] = {
                 "strategy": sid,
@@ -28,7 +30,8 @@ def summarize_evidence(campaign, trials):
             (s for s in trial.get("result", {}).get("stages", []) if s.get("stage") == "verify"), {}
         )
         output = stage.get("output") or {}
-        entries = []
+        assessment = trial.get("result", {}).get("assessment")
+        entries = [("executor", assessment)] if assessment else []
         if output.get("evaluator_result"):
             entries.append(("task_evaluator", output["evaluator_result"]))
         for check in output.get("check_results", []):

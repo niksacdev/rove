@@ -72,6 +72,9 @@ class BaselineStore:
         originals = {(row["task_id"], row["strategy_id"], row["seed"]): row for row in assessed}
         for outcome in outcomes:
             original = originals[outcome["task_id"], outcome["strategy_id"], outcome["seed"]]
+            if campaign["spec"].get("execution", "robotics") != "robotics":
+                outcome["result"] = {"assessment": (original.get("result") or {}).get("assessment")}
+                continue
             outcome["result"] = {
                 "stages": [
                     stage

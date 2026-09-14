@@ -75,7 +75,9 @@ function campaignCard(campaign) {
     const progress = document.createElement("p"); progress.className = "progress campaign-trials"; progress.dataset.column = "Trials";
     progress.textContent = "Loading trial counts…";
     const actions = document.createElement("div"); actions.className = "campaign-actions";
-    const review = campaignLink(`/static/datasets.html?step=review&campaign=${encoded}`, "View results", "campaign-action");
+    const review = campaignLink(campaign.execution && campaign.execution !== "robotics"
+      ? `/api/campaigns/${encoded}/report?format=html`
+      : `/static/datasets.html?step=review&campaign=${encoded}`, "View results", "campaign-action");
     const campaignHistory = campaignLink(`/static/campaign-history.html?campaign=${encoded}`, "History", "campaign-action");
     campaignHistory.setAttribute("aria-label", `History for ${campaign.name || "this campaign"}`);
     const improve = campaignLink(`/static/datasets.html?improve=${encoded}`, "Improve", "campaign-action improve-link");
@@ -115,7 +117,7 @@ function campaignCard(campaign) {
   const baselines = savedBaselines?.filter(b => b && b.campaign_id === id && typeof b.id === "string" && b.id && typeof b.strategy_id === "string" && b.strategy_id) || [];
   entry.baselineBadge.hidden = baselines.length === 0;
   entry.card.classList.toggle("is-baseline", baselines.length > 0);
-  entry.improve.hidden = campaign.status !== "completed";
+  entry.improve.hidden = campaign.status !== "completed" || Boolean(campaign.execution && campaign.execution !== "robotics");
   entry.improve.setAttribute("aria-label", `Improve ${campaign.name || "this campaign"}`);
   entry.campaignHistory.setAttribute("aria-label", `History for ${campaign.name || "this campaign"}`);
   entry.control.hidden = campaign.status === "completed";

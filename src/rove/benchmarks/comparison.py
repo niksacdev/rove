@@ -72,6 +72,27 @@ def _system(campaign: dict, strategy_id: str) -> tuple[dict, dict, dict]:
     if strategy_id not in campaign["spec"]["strategies"]:
         raise _InvalidConditions("Selected strategy is not part of the campaign plan")
     definition = campaign["config"]["strategies"][strategy_id]
+    if campaign["spec"].get("execution", "robotics") != "robotics":
+        identity = campaign.get("executor_identity")
+        if not identity or identity.get("name") != campaign["spec"]["execution"]:
+            raise _InvalidConditions("Evaluation executor identity is missing or inconsistent")
+        return (
+            {
+                "executor": identity,
+                "strategy": _configuration(definition),
+                "strategy_sha256": fingerprint(definition),
+            },
+            {
+                "executor": identity,
+                "grading": _configuration(campaign["config"].get("grading", {})),
+                "grading_sha256": fingerprint(campaign["config"].get("grading", {})),
+            },
+            {
+                "execution": campaign["spec"]["execution"],
+                "environment": _configuration(campaign["config"].get("environment", {})),
+                "environment_sha256": fingerprint(campaign["config"].get("environment", {})),
+            },
+        )
     strategy = StrategyConfig.model_validate(definition)
     stages = {}
     for name in ("perceive", "plan", "act", "verify"):
@@ -272,6 +293,10 @@ def compare_campaigns(
         "metric_scope": baseline.get("metric_scope", "configured_verification"),
         "evidence_note": "Compares configured output assessments; it does not establish fresh physical robot performance. Model revisions are supplied identities, not independently verified weights. Paired counts are descriptive; no significance claim or task-macro confidence interval is computed.",
     }
+    if baseline["spec"].get("execution", "robotics") != "robotics":
+        result["evidence_note"] = (
+            "Compares recorded executor assessments with frozen inputs and grading. Paired counts are descriptive; no significance claim is computed."
+        )
     try:
         base_system, base_grader, base_environment = _system(baseline, baseline_strategy_id)
         new_system, new_grader, new_environment = _system(candidate, candidate_strategy_id)
@@ -347,7 +372,10 @@ def compare_campaigns(
             reasons.append(
                 "Fresh robot execution evidence is not established by these campaign records"
             )
-        if not baseline.get("contract"):
+        if (
+            not baseline.get("contract")
+            and baseline["spec"].get("execution", "robotics") == "robotics"
+        ):
             result["evidence_note"] += (
                 " No explicit frozen success contract is present; legacy verify-stage judgments are the only comparison scope."
             )

@@ -1,8 +1,22 @@
 # ROVE Product Specification
 
 **Version:** 0.9
-**Updated:** 2026-09-13
+**Updated:** 2026-09-14
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
+
+## Current direction: reusable evaluations
+
+ROVE preserves its robotics workbench while separating reusable Trials, Campaigns,
+evidence, grading, baselines and history from domain-specific execution. A case
+supplies concrete inputs; a strategy defines the candidate configuration; a trial
+records one attempt; a campaign repeats selected comparisons under frozen conditions.
+
+The [reusable evaluation core](product/reusable-evaluation-core.md) is implemented
+for structured-input CLI trials/campaigns and saved-result inspection. Robotics
+remains the default integration and current case-authoring UI. This is an OSS
+foundation for future evaluation uses, not a claim of a complete general-purpose
+product or an implemented ABC/cloud service. The original robotics vision and
+personas below remain the specification for the preserved robotics integration.
 
 ## 1. Core vision
 

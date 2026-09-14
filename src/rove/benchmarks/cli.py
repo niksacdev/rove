@@ -38,8 +38,16 @@ def main(argv: list[str]) -> None:
     try:
         if args.action == "run":
             spec = CampaignSpec.model_validate(yaml.safe_load(Path(args.target).read_text()))
-            config = load_config(args.config)
-            campaign_id = store.create(prepare(spec, config))
+            if spec.execution == "robotics":
+                payload = prepare(spec, load_config(args.config))
+            else:
+                from rove.evaluation.executors import prepare_evaluation
+                from rove.evaluation.models import EvaluationConfig
+
+                payload = prepare_evaluation(
+                    spec, EvaluationConfig.model_validate(yaml.safe_load(args.config.read_text()))
+                )
+            campaign_id = store.create(payload)
             print(f"Campaign {campaign_id}: {spec.planned_trials} planned attempts", flush=True)
         else:
             campaign_id = args.target

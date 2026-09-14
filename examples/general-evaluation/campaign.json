@@ -1,0 +1,33 @@
+{
+  "name": "Text normalization comparison",
+  "suite_version": "text-v1",
+  "revision": "baseline",
+  "execution": "text-example",
+  "grading": "executor_assessment",
+  "strategies": [
+    "original",
+    "normalized"
+  ],
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "ks": [
+    1,
+    2,
+    3
+  ],
+  "tasks": [
+    {
+      "id": "normalize",
+      "task": "Normalize whitespace and capitalization",
+      "inputs": {
+        "text": "  Hello ROVE  "
+      },
+      "reference": {
+        "expected": "hello rove"
+      }
+    }
+  ]
+}

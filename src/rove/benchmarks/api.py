@@ -64,6 +64,7 @@ def create_router(root: Path) -> APIRouter:
                 "revision": c["spec"]["revision"],
                 "created_at": c["created_at"],
                 "status": c["status"],
+                "execution": c["spec"].get("execution", "robotics"),
             }
             for c in store().list()
         ]
