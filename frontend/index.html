@@ -10,11 +10,11 @@
   <title>ROVE — Robot Observation &amp; Vision Evaluation</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <link rel="stylesheet" href="/static/styles.css?v=runtime-traces-10">
+  <link rel="stylesheet" href="/static/styles.css?v=assistant-settings-1">
   <link rel="stylesheet" href="/static/stage-renderers.css?v=workspace-8">
   <link rel="stylesheet" href="/static/navigation.css?v=workspace-8">
   <link rel="stylesheet" href="/static/start.css?v=workspace-8">
-  <script src="/static/navigation.js?v=workspace-8" defer></script>
+  <script src="/static/navigation.js?v=assistant-settings-1" defer></script>
   <script>
     tailwind.config = {
       theme: {
@@ -73,7 +73,7 @@
 
     <!-- ---- Content Main Area ---- -->
     <main id="main" tabindex="-1" class="root-main flex-1 flex flex-col min-h-0 min-w-0">
-      <div id="configureHeading" class="root-page-heading" hidden><h1>Settings</h1><p>Manage reusable strategies and model connections. Select these strategies in a trial or campaign.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a><a href="/?view=settings" data-root-view="settings">Settings</a></nav></div>
+      <div id="configureHeading" class="root-page-heading" hidden><h1>Settings</h1><p>Configure your assistant, reusable strategies, and model connections.</p><nav class="workspace-tabs" aria-label="Configuration"><a href="/?view=settings" data-root-view="settings">General</a><a href="/?view=strategies" data-root-view="strategies">Strategies</a><a href="/?view=models" data-root-view="models">Endpoints</a></nav></div>
       <div id="quickHeading" class="root-page-heading" hidden><div class="quick-title"><div><h1>New trial</h1><p>Give your agent an observation and a task. Inspect what it does.</p></div><a href="/static/history.html" class="start-secondary">Back to trials</a></div></div>
 
       <section id="quickWorkspace" hidden aria-label="Trial workspace">
@@ -209,7 +209,7 @@
   <script src="/static/stage-renderers.js?v=probe-evidence-1"></script>
   <script src="/static/tooltips.js"></script>
   <script src="/static/strategy-table.js?v=workspace-8"></script>
-  <script src="/static/app.js?v=runtime-traces-12"></script>
+  <script src="/static/app.js?v=assistant-settings-1"></script>
 
 </body>
 </html>

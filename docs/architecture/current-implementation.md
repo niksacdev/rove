@@ -20,6 +20,15 @@ baseline comparisons extend that foundation. The linked [product concepts](../pr
 [trace specification](../product/traces-and-measurements.md) describe the fuller
 target, including capabilities not yet implemented.
 
+## Assistant configuration
+
+[ADR-034](ADR-034-persistent-assistant-settings.md) adds persistent local assistant
+selection in Settings and through the CLI. Save does not contact a provider; explicit
+Test connection runs a fixed synthetic JSON request. Runtime presence is separate from
+provider connectivity. Campaign summary links now reach this section, with a return
+path to the campaign. A real local Copilot/Qwen summary passed evidence-reference
+validation; unavailable and invalid replies remain explicit rather than invented AI.
+
 ## Trial-to-campaign handoff and guided improvement
 
 The implemented refinement connects chat trial results to **Add to campaign**, then

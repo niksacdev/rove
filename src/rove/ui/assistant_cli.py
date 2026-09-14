@@ -36,9 +36,12 @@ def local_url(value):
 
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["status", "ask", "confirm"])
+    parser.add_argument(
+        "action", choices=["status", "settings", "configure", "disable", "test", "ask", "confirm"]
+    )
     parser.add_argument("target", nargs="?", help="AskRequest JSON/YAML or saved proposal file")
     parser.add_argument("--url", default="http://127.0.0.1:5001")
+    parser.add_argument("--endpoint", help="Existing copilot_agent endpoint ID for configure")
     parser.add_argument(
         "--proposal-output",
         type=Path,
@@ -51,8 +54,14 @@ def main(argv):
         "--confirmed", action="store_true", help="Explicitly execute the selected reviewed proposal"
     )
     args = parser.parse_args(argv)
-    if args.action != "status" and not args.target:
+    if args.action in {"ask", "confirm"} and not args.target:
         parser.error("target is required")
+    if args.action == "configure" and not args.endpoint:
+        parser.error("configure requires --endpoint")
+    if args.endpoint and args.action != "configure":
+        parser.error("--endpoint is only supported for configure")
+    if args.target and args.action not in {"ask", "confirm"}:
+        parser.error("this action does not accept a target")
     if args.action == "confirm" and not args.confirmed:
         parser.error("Review the saved proposal, then supply --confirmed to execute it")
     if args.proposal_output and args.action != "ask":
@@ -63,7 +72,9 @@ def main(argv):
         if args.proposal_output and args.proposal_output.exists():
             raise ValueError("Proposal output already exists; choose a new file")
         payload = None
-        if args.action == "ask":
+        if args.action in {"configure", "disable"}:
+            payload = {"endpoint_id": args.endpoint if args.action == "configure" else None}
+        elif args.action == "ask":
             payload = AskRequest.model_validate(read_document(args.target)).model_dump()
         elif args.action == "confirm":
             saved = read_document(args.target)
@@ -93,10 +104,18 @@ def main(argv):
             ).model_dump()
         try:
             with httpx.Client(timeout=130, follow_redirects=False, trust_env=False) as client:
-                endpoint = url + "/api/assistant/" + args.action
-                response = (
-                    client.get(endpoint) if payload is None else client.post(endpoint, json=payload)
-                )
+                action = "settings" if args.action in {"configure", "disable"} else args.action
+                endpoint = url + "/api/assistant/" + action
+                if args.action in {"configure", "disable"}:
+                    response = client.put(endpoint, json=payload)
+                elif args.action == "test":
+                    response = client.post(endpoint)
+                else:
+                    response = (
+                        client.get(endpoint)
+                        if payload is None
+                        else client.post(endpoint, json=payload)
+                    )
                 response.raise_for_status()
                 result = response.json()
         except httpx.HTTPError as error:

@@ -1340,6 +1340,69 @@ async function loadExample(ex) {
   }
 }
 
+function renderAssistantSettings(wrapper) {
+  const node=(tag,text)=>{const item=document.createElement(tag);if(text!=null)item.textContent=text;return item;};
+  const section=node("section");section.id="assistant";section.className="assistant-settings";section.setAttribute("aria-labelledby","assistantSettingsHeading");
+  const heading=node("h2","Assistant");heading.id="assistantSettingsHeading";heading.tabIndex=-1;
+  section.append(heading,node("p","Choose the assistant that explains campaign results and suggests evaluation criteria. This does not change the strategies being evaluated."));
+  const label=node("label","Assistant endpoint");label.htmlFor="assistantEndpoint";
+  const select=node("select");select.id="assistantEndpoint";select.disabled=true;
+  const description=node("p");description.id="assistantEndpointDescription";select.setAttribute("aria-describedby",description.id);
+  const control=node("p");control.id="assistantSettingsControl";
+  const status=node("p","Loading assistant settings…");status.id="assistantConnectionStatus";status.setAttribute("role","status");
+  const actions=node("div");actions.className="assistant-settings-actions";
+  const save=node("button","Save");save.id="saveAssistantSettings";save.type="button";save.disabled=true;
+  const test=node("button","Test connection");test.id="testAssistantConnection";test.type="button";test.disabled=true;
+  actions.append(save,test);section.append(label,select,description,control,status,actions);wrapper.append(section);
+  const returnValue=new URLSearchParams(location.search).get("return");
+  if(returnValue){
+    try{const target=new URL(returnValue,location.origin);
+      if(target.origin===location.origin && target.pathname==="/static/datasets.html" && target.searchParams.get("campaign")){
+        const back=node("a","Return to campaign results");back.id="assistantReturnToCampaign";back.href=target.pathname+target.search+target.hash;section.append(back);
+      }
+    }catch{/* Invalid return destinations are not navigation targets. */}
+  }
+  let settings=null,saved="",locked=false,epoch=0,busy=false,testing=false;
+  const current=version=>version===epoch && section.isConnected;
+  async function request(url,options){const response=await fetch(API_BASE+url,options);let value;try{value=await response.json();}catch{throw Error("The server returned an unreadable response.");}if(!response.ok)throw Error(typeof value.detail==="string"?value.detail:"The assistant settings request failed.");return value;}
+  function update(){
+    const endpoint=settings?.endpoints?.find(item=>item.id===select.value);
+    description.textContent=endpoint?`Model: ${endpoint.model || "Not specified"} · Provider: ${endpoint.provider_base_url || "Configured provider"}`:"Disabled. Campaign execution and recorded results remain available.";
+    save.disabled=busy || locked || !settings || select.value===saved;
+    test.disabled=busy || !settings || !saved || select.value!==saved;
+    select.disabled=locked || !settings || (busy && !testing);
+  }
+  function apply(value,runtime){
+    settings=value;saved=value.effective_endpoint_id || "";locked=Boolean(value.read_only);
+    select.replaceChildren();const disabled=node("option","Disabled");disabled.value="";select.append(disabled);
+    for(const endpoint of value.endpoints || []){const option=node("option",endpoint.display_name || endpoint.id);option.value=endpoint.id;select.append(option);}
+    if(saved && !Array.from(select.options).some(option=>option.value===saved)){const missing=node("option",`${saved} (unavailable)`);missing.value=saved;select.append(missing);}
+    select.value=saved;
+    control.textContent=locked?(value.override_reason || "This assistant is controlled by the server environment. Change it on the server to use a different endpoint."):"Save your choice, then test the connection. The test sends a fixed connectivity prompt, without your campaign data.";
+    status.textContent=!saved?"Assistant disabled. Choose an endpoint to enable AI explanations.":value.configured===false?(value.status_reason || "The selected endpoint needs server configuration before it can be used."):(runtime?.runtime_available ?? runtime?.available)?"Assistant configured. Runtime available; model connection has not been tested.":runtime?.reason || value.status_reason || "Assistant configured. Test the connection to check the model.";
+    if(!value.endpoints?.length && !saved)status.textContent="No Copilot assistant endpoints are configured. Add a copilot_agent endpoint to rove.yaml, then reload Settings.";
+    update();
+  }
+  async function load(){const version=++epoch;busy=true;update();status.textContent="Loading assistant settings…";
+    try{const [value,runtime]=await Promise.all([request("/api/assistant/settings"),request("/api/assistant/status").catch(()=>null)]);if(current(version))apply(value,runtime);}
+    catch(error){if(current(version)){status.textContent="Could not load assistant settings. "+error.message;const retry=node("button","Reload settings");retry.type="button";retry.addEventListener("click",()=>{retry.remove();load();});actions.append(retry);}}
+    finally{if(current(version)){busy=false;update();}}
+  }
+  select.addEventListener("change",()=>{epoch++;busy=false;testing=false;status.textContent="Unsaved assistant selection. Save before testing or generating explanations.";update();});
+  save.addEventListener("click",async()=>{if(save.disabled)return;const version=++epoch,selected=select.value;busy=true;update();status.textContent="Saving assistant selection…";
+    try{const value=await request("/api/assistant/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint_id:selected || null})});if(current(version)){apply(value,null);status.textContent=selected?"Assistant selection saved. Test the connection before returning to your campaign.":"Assistant disabled. Recorded results and evaluation execution remain available.";}}
+    catch(error){if(current(version))status.textContent="Could not save assistant settings. "+error.message;}
+    finally{if(current(version)){busy=false;update();}}
+  });
+  test.addEventListener("click",async()=>{if(test.disabled)return;const version=++epoch;busy=true;testing=true;update();status.textContent="Testing the saved assistant connection…";
+    try{const result=await request("/api/assistant/test",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});if(current(version))status.textContent=result.available && result.provider_tested && result.endpoint_id===saved?"Connection successful. The assistant model responded to the test prompt.":"Connection failed. "+(result.reason || "The model did not respond successfully.");}
+    catch(error){if(current(version))status.textContent="Connection failed. "+error.message;}
+    finally{if(current(version)){busy=false;update();}}
+  });
+  load();
+  if(location.hash==="#assistant")requestAnimationFrame(()=>{if(section.isConnected){section.scrollIntoView({block:"start"});heading.focus({preventScroll:true});}});
+}
+
 function renderSettingsView() {
   settingsView.textContent = "";
   var wrapper = document.createElement("div");
@@ -1347,13 +1410,14 @@ function renderSettingsView() {
 
   var heading = document.createElement("h2");
   heading.className = "text-lg font-semibold mb-1";
-  heading.textContent = "Configuration";
+  heading.textContent = "Settings";
   wrapper.appendChild(heading);
 
   var subtitle = document.createElement("p");
   subtitle.className = "text-[13px] text-gray-500 mb-4";
-  subtitle.textContent = "Full rove.yaml rendered from /api/config";
+  subtitle.textContent = "Manage your evaluation assistant and inspect the current server configuration.";
   wrapper.appendChild(subtitle);
+  renderAssistantSettings(wrapper);
 
   if (!configData) {
     var loading = document.createElement("p");

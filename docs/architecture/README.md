@@ -60,6 +60,8 @@ This diagram shows decision dependencies, not a statement that every component i
 
 - [033: Isolated VLA runtime and trial inspection](ADR-033-isolated-vla-runtime-and-trial-inspection.md) — native inference, probe boundaries and evidence-backed improvement.
 
+- [034: Persistent assistant settings](ADR-034-persistent-assistant-settings.md) — saved selection, explicit provider testing and useful summary recovery.
+
 ## Historical decisions
 
 ADRs 001–016 record earlier choices. They are retained to explain context, and may contain planned behavior that differs from current code. The [older architecture overview](high-level-architecture.md) is also historical. In particular, [ADR-012](ADR-012-evaluation-provenance-and-failure-attribution.md) has a current implementation note about quick-history provenance and reproducibility limits.

@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Configure and test the evaluation assistant
+
+Campaign results now link to a real Assistant settings section with persistent endpoint selection, explicit connection testing and a return to the campaign. Missing configuration offers setup instead of a useless retry; summaries request exact evidence citations and retain strict validation. The same controls are available through the CLI. *(PR #31)*
+
 ### Follow live strategies into their recorded evidence
 
 Keep all strategies reachable while inspecting one trial, and open its exact trace without interrupting execution. Campaign explanations now use saved stage failures, timing and measurement evidence to distinguish setup repairs from proposed model changes. Explicit local Qwen strategies and an experimental isolated SmolVLA runtime restore real inference while preserving unknown evidence and blocking image-only probes from simulation or dynamics. *(PR #30)*

@@ -485,7 +485,9 @@ def test_new_expert_review_invalidates_summary_without_reexecution(h):
     assert len(h["service"].list_reviews()) == 1
 
 
-@pytest.mark.parametrize("bad", ["trial", "anchor", "missing_anchor", "grade_field", "failure"])
+@pytest.mark.parametrize(
+    "bad", ["trial", "anchor", "nested_anchor", "missing_anchor", "grade_field", "failure"]
+)
 def test_bad_summary_is_labelled_template_and_retryable(h, bad):
     cid = make_campaign(h)
     output = summary_output(h, cid)
@@ -493,6 +495,8 @@ def test_bad_summary_is_labelled_template_and_retryable(h, bad):
         output["findings"][0]["trial_ids"] = ["invented"]
     elif bad == "anchor":
         output["findings"][0]["evidence_refs"] = ["invented"]
+    elif bad == "nested_anchor":
+        output["findings"][0]["evidence_refs"] = ["summary.completed_trials"]
     elif bad == "missing_anchor":
         output["findings"][0]["evidence_refs"] = ["summary"]
     elif bad == "grade_field":
@@ -636,3 +640,15 @@ def test_draft_returns_three_to_five_short_individual_criteria(h, shape):
     assert data["source"] == "template"
     assert 3 <= len(data["contract"]["criteria"]) <= 5
     assert all(len(c["description"]) <= 400 for c in data["contract"]["criteria"])
+
+
+def test_summary_supplies_exact_citation_choices_and_trial_binding_rule(h):
+    cid = make_campaign(h)
+    h["runtime"].output = summary_output(h, cid)
+    assert summary(h, cid).json()["source"] == "ai"
+    context = h["runtime"].calls[-1][3]
+    assert context["allowed_evidence_refs"] == list(context["anchors"])
+    assert "summary" in context["allowed_evidence_refs"]
+    prompt = h["runtime"].instances[-1][0].system_message
+    assert "Do not append field names, JSON paths, array indices" in prompt
+    assert "that same finding's evidence_refs" in prompt

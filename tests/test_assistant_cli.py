@@ -111,3 +111,45 @@ def test_invalid_confirmation_does_not_echo_rejected_token(tmp_path, capsys):
     output = capsys.readouterr()
     assert "private-confirmation" not in output.out + output.err
     assert "string_too_long" in output.err
+
+
+@pytest.mark.parametrize(
+    ("arguments", "method", "path", "payload"),
+    [
+        (["settings"], "GET", "/api/assistant/settings", None),
+        (
+            ["configure", "--endpoint", "local-agent"],
+            "PUT",
+            "/api/assistant/settings",
+            {"endpoint_id": "local-agent"},
+        ),
+        (["disable"], "PUT", "/api/assistant/settings", {"endpoint_id": None}),
+        (["test"], "POST", "/api/assistant/test", None),
+    ],
+)
+def test_settings_cli_uses_same_local_server(arguments, method, path, payload, monkeypatch, capsys):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        assert request.method == method and request.url.path == path
+        assert (json.loads(request.content) if request.content else None) == payload
+        return httpx.Response(200, json={"configured": True})
+
+    client = httpx.Client
+    monkeypatch.setattr(
+        assistant_cli.httpx,
+        "Client",
+        lambda **kw: client(transport=httpx.MockTransport(handler), **kw),
+    )
+    assistant_cli.main(arguments)
+    assert len(calls) == 1 and json.loads(capsys.readouterr().out)["configured"]
+
+
+@pytest.mark.parametrize(
+    "arguments", [["configure"], ["disable", "--endpoint", "x"], ["settings", "unexpected"]]
+)
+def test_settings_cli_requires_unambiguous_action(arguments):
+    with pytest.raises(SystemExit) as error:
+        assistant_cli.main(arguments)
+    assert error.value.code == 2

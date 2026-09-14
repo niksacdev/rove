@@ -135,6 +135,15 @@ credentials and compatible checkpoints.
   Known dependency advisories remain; review the runtime limits before use.
   Pi0.5 also requires authorized access to its tokenizer.
 
+For AI campaign explanations, open **Settings → Assistant**, choose an existing
+Copilot assistant endpoint, **Save**, then **Test connection**. The selection persists
+locally across restarts. `ROVE_ASSISTANT_ENDPOINT` remains an explicit server override.
+The configured local assistant uses the existing model server; a successful test proves
+connectivity, not evaluation quality. The same controls are available through
+`rove assistant settings`, `rove assistant configure --endpoint local-assistant`,
+`rove assistant test` and `rove assistant disable` (add `--url http://127.0.0.1:5010`
+when the app runs on that port).
+
 Use `/docs` for the implemented HTTP API. From this source checkout, compare your
 observation against two configured strategies without opening the dashboard:
 

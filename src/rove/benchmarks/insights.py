@@ -27,7 +27,7 @@ from rove.runtime.copilot import CLI_VERSION, SDK_VERSION, CopilotRuntime
 from rove.trials.snapshots import canonical_json, content_hash, sanitize
 from rove.trials.store import now
 
-PROMPT_VERSION = "campaign-insights-v3"
+PROMPT_VERSION = "campaign-insights-v4"
 MAX_CONTEXT_BYTES = 256_000
 Identifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[\w.-]+$")]
 BASE_METRICS = ["task_success", "pass_at_k", "pass_pow_k", "pipeline_latency"]
@@ -255,15 +255,15 @@ class CampaignInsights:
     def settings(self, purpose):
         try:
             settings = assistant_settings(
-                config_loader=self.config_loader, endpoint_id=self.endpoint_id
+                root=self.root, config_loader=self.config_loader, endpoint_id=self.endpoint_id
             )
         except (ValueError, OSError, KeyError):
             return (
                 None,
                 content_hash({"assistant": "unavailable", "prompt": PROMPT_VERSION}),
                 (
-                    "AI assistance is unavailable. Configure ROVE_ASSISTANT_ENDPOINT with a "
-                    "copilot_agent endpoint and its provider credentials; using a template."
+                    "AI assistance is unavailable. Choose a configured Copilot endpoint in "
+                    "Assistant settings and test its connection; using a template."
                 ),
             )
         settings = replace(settings, system_message=BOUNDARY + purpose)
@@ -442,7 +442,7 @@ class CampaignInsights:
             "assistant_available": source == "ai",
             "assistant_configured": settings is not None,
             "warnings": [warning] if warning else [],
-            "configuration_url": "/?view=models",
+            "configuration_url": "/?view=settings#assistant",
             "requires_confirmation": True,
             "observation_basis": "task_and_annotations",
             "provenance": provenance(source, settings),
@@ -509,6 +509,7 @@ class CampaignInsights:
             "status": campaign["status"],
             "name": campaign["spec"]["name"],
             "anchors": anchors,
+            "allowed_evidence_refs": list(anchors),
             "trials": trial_rows,
             "metric_scope": campaign.get("metric_scope", "configured_verification"),
             "planned_repetitions": len(campaign["spec"]["seeds"]),
@@ -526,7 +527,11 @@ class CampaignInsights:
             "units and observed/estimated/synthetic/unknown quality. Missing telemetry is unavailable, never zero. "
             "Unresolved human review is not a failure or success. Mention missing evidence and sampling limits. "
             "Return headline, findings [{text,trial_ids,evidence_refs}], next_steps. "
-            "Each finding must cite at least one exact supplied anchors key; trial IDs must exist in supplied trials. "
+            "Each finding must cite at least one exact string from allowed_evidence_refs. "
+            "Do not append field names, JSON paths, array indices or any other suffix to those strings. "
+            "For a metric inside summary, cite 'summary' exactly. "
+            "trial_ids may be empty; every included trial ID must exist in supplied trials AND have "
+            "its exact 'trial:' plus ID anchor in that same finding's evidence_refs. "
             "Next steps are suggestions, not diagnoses. Schema: "
             + canonical_json(SummaryOutput.model_json_schema())
         )
@@ -587,7 +592,7 @@ class CampaignInsights:
             "assistant_available": source == "ai",
             "assistant_configured": settings is not None,
             "warnings": [warning] if warning else [],
-            "configuration_url": "/?view=models",
+            "configuration_url": "/?view=settings#assistant",
             "generated_at": now(),
             "interpretation_only": True,
             "interpretation_scope": "saved_aggregates_and_stage_evidence",

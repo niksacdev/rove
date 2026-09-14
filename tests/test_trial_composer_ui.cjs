@@ -3,7 +3,7 @@ const test = require("node:test"), assert = require("node:assert/strict"), fs = 
 const {JSDOM} = require("jsdom");
 const source = name => fs.readFileSync(path.resolve(__dirname, "../frontend", name), "utf8");
 async function composer(options = {}) {
-  const dom = new JSDOM(source("index.html"), {url: "http://localhost/?view=quick&case=case-r1", runScripts: "outside-only", pretendToBeVisual: true});
+  const dom = new JSDOM(source("index.html"), {url: options.url || "http://localhost/?view=quick&case=case-r1", runScripts: "outside-only", pretendToBeVisual: true});
   const w = dom.window, calls = [];
   w.HTMLDialogElement.prototype.showModal=function(){this.setAttribute("open","");this.querySelector("[autofocus]")?.focus();};
   w.HTMLDialogElement.prototype.close=function(){this.removeAttribute("open");this.dispatchEvent(new w.Event("close"));};
@@ -12,8 +12,18 @@ async function composer(options = {}) {
   const streams = [];
   w.EventSource = class { constructor(){this.listeners = {}; streams.push(this);} addEventListener(type, listener){this.listeners[type] = listener;} close(){} emit(type, data){this.listeners[type]?.({data: JSON.stringify(data)});} };
   const item = {id: "case-r1", case_id: "case", name: "Block on tray", task: "Place the block in the tray", revision: 1, image_asset: {sha256: "a".repeat(64)}, candidate_context: {robot: "panda", proprioception: [0, 1], constraints: ["Avoid cup"]}, reference_data: {eval_qa: {answer: "private answer"}, expected_subtasks: ["private plan"]}};
+  let assistantSettings=options.assistantSettings || {selected_endpoint_id:null,effective_endpoint_id:null,selection_source:"disabled",read_only:false,endpoints:[],configured:false};
   w.fetch = async (url, request = {}) => {
     const route = new URL(url, w.location.href).pathname; calls.push({route, method: request.method || "GET", body: request.body});
+    if(route==="/api/assistant/settings"){
+      if(request.method==="PUT"){
+        if(options.assistantSaveFail)return {ok:false,json:async()=>({detail:"Endpoint no longer exists"})};
+        const endpoint=JSON.parse(request.body).endpoint_id;assistantSettings={...assistantSettings,selected_endpoint_id:endpoint,effective_endpoint_id:endpoint,configured:Boolean(endpoint),selection_source:endpoint?"saved":"disabled"};
+      }
+      return {ok:true,json:async()=>assistantSettings};
+    }
+    if(route==="/api/assistant/status")return {ok:true,json:async()=>options.assistantStatus || {configured:assistantSettings.configured,runtime_available:true,available:true,provider_tested:false}};
+    if(route==="/api/assistant/test"){await options.assistantTestWait;return {ok:true,json:async()=>options.assistantTestResult || {available:true,provider_tested:true,endpoint_id:assistantSettings.effective_endpoint_id}};}
     if (route === "/api/history") return {ok:true,json:async()=>options.serverHistory || []};
     if (route === "/api/cases/case-r1") return {ok: !options.missing, json: async () => item};
     if (route.startsWith("/api/trial-assets/")) return {ok: true, blob: async () => new w.Blob(["image"], {type: "image/png"})};
@@ -316,7 +326,7 @@ test("approved Settings navigation keeps a running comparison stream and draft i
   try {
     el("quickContinueConfigure").click();el("strategyGrid").querySelector("input").click();el("quickContinueReview").click();el("evalBtn").click();await pause();
     w.document.querySelector('#roveNav [data-nav-section="configure"]').click();assert.equal(el("quickLeaveDialog").open,true);
-    el("quickLeaveConfirm").click();assert.equal(w.location.search,"?view=strategies");assert.equal(el("quickLeaveDialog").open,false);
+    el("quickLeaveConfirm").click();assert.equal(w.location.search,"?view=settings");assert.equal(el("quickLeaveDialog").open,false);
     w.document.querySelector('#configureHeading [data-root-view="models"]').click();assert.equal(el("quickLeaveDialog").open,false);assert.equal(w.location.search,"?view=models");
     streams[0].emit("complete",{trial_ids:{mock:"saved"},results:[{strategy_id:"mock",stages:[]}]});
     assert.match(el("taskInput").value,/Place the block/);
@@ -403,5 +413,49 @@ test("restored summary uses recorded stage outcomes and does not invent pending 
     saved.summaryResults.scene.stageStatuses={};
     w.caseRunnerTest.showHistoryEntry(0);
     assert.ok(el("tab-content-__summary__").querySelector('[aria-label="perceive completed"].done'),"old browser caches are repaired from preserved stages too");
+  }finally{w.close();}
+});
+
+const assistantFixture={selected_endpoint_id:null,effective_endpoint_id:null,selection_source:"disabled",read_only:false,configured:false,endpoints:[{id:"assistant-a",display_name:"Local assistant",model:"model-a",provider_base_url:"http://127.0.0.1:1234/v1"},{id:"assistant-b",display_name:"Alternative assistant",model:"model-b",provider_base_url:"https://example.test/v1"}]};
+test("Assistant settings saves an explicit endpoint and tests the provider separately before returning to the campaign",async()=>{
+  const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings&return=%2Fstatic%2Fdatasets.html%3Fstep%3Dreview%26campaign%3Dcampaign#assistant",assistantSettings:assistantFixture});
+  try{
+    assert.equal(el("assistantSettingsHeading").textContent,"Assistant");assert.equal(el("assistantEndpoint").value,"");assert.match(el("assistantConnectionStatus").textContent,/disabled/);
+    assert.equal(el("testAssistantConnection").disabled,true);
+    el("assistantEndpoint").value="assistant-a";el("assistantEndpoint").dispatchEvent(new w.Event("change"));
+    assert.match(el("assistantEndpointDescription").textContent,/model-a.*127.0.0.1/);assert.equal(el("testAssistantConnection").disabled,true);
+    el("saveAssistantSettings").click();await pause();
+    const save=calls.find(call=>call.route==="/api/assistant/settings"&&call.method==="PUT");assert.deepEqual(JSON.parse(save.body),{endpoint_id:"assistant-a"});
+    assert.equal(calls.some(call=>call.route==="/api/assistant/test"),false);assert.match(el("assistantConnectionStatus").textContent,/saved.*Test the connection/);
+    el("testAssistantConnection").click();await pause();assert.match(el("assistantConnectionStatus").textContent,/Connection successful/);
+    assert.equal(el("assistantReturnToCampaign").getAttribute("href"),"/static/datasets.html?step=review&campaign=campaign");
+    el("assistantEndpoint").value="";el("assistantEndpoint").dispatchEvent(new w.Event("change"));el("saveAssistantSettings").click();await pause();
+    assert.equal(JSON.parse(calls.filter(call=>call.method==="PUT").at(-1).body).endpoint_id,null);assert.equal(el("testAssistantConnection").disabled,true);
+  }finally{w.close();}
+});
+
+test("Assistant settings distinguish environment control, failed saves and real test failures",async()=>{
+  const locked=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,effective_endpoint_id:"assistant-a",configured:true,read_only:true,selection_source:"environment",override_reason:"Set by ROVE_ASSISTANT_ENDPOINT"},assistantTestResult:{available:false,provider_tested:false,endpoint_id:"assistant-a",reason:"Provider unreachable"}});
+  try{assert.equal(locked.el("assistantEndpoint").disabled,true);assert.equal(locked.el("saveAssistantSettings").disabled,true);assert.match(locked.el("assistantSettingsControl").textContent,/ROVE_ASSISTANT_ENDPOINT/);assert.match(locked.el("assistantConnectionStatus").textContent,/connection has not been tested/);locked.el("testAssistantConnection").click();await locked.pause();assert.match(locked.el("assistantConnectionStatus").textContent,/Provider unreachable/);}finally{locked.w.close();}
+  const failed=await composer({url:"http://localhost/?view=settings&return=https%3A%2F%2Fevil.test%2Fstatic%2Fdatasets.html%3Fcampaign%3Dx#assistant",assistantSettings:assistantFixture,assistantSaveFail:true});
+  try{failed.el("assistantEndpoint").value="assistant-a";failed.el("assistantEndpoint").dispatchEvent(new failed.w.Event("change"));failed.el("saveAssistantSettings").click();await failed.pause();assert.match(failed.el("assistantConnectionStatus").textContent,/Could not save.*no longer exists/);assert.equal(failed.el("testAssistantConnection").disabled,true);assert.equal(failed.el("assistantReturnToCampaign"),null);}finally{failed.w.close();}
+});
+
+test("a late connection probe cannot mark a different unsaved assistant selection connected",async()=>{
+  let release;const wait=new Promise(resolve=>{release=resolve;});
+  const {w,el,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selected_endpoint_id:"assistant-a",effective_endpoint_id:"assistant-a",configured:true,selection_source:"saved"},assistantTestWait:wait});
+  try{
+    el("testAssistantConnection").click();assert.equal(el("assistantEndpoint").disabled,false);
+    el("assistantEndpoint").value="assistant-b";el("assistantEndpoint").dispatchEvent(new w.Event("change"));release();await pause();
+    assert.match(el("assistantConnectionStatus").textContent,/Unsaved assistant selection/);assert.equal(el("testAssistantConnection").disabled,true);assert.equal(el("saveAssistantSettings").disabled,false);
+  }finally{release();w.close();}
+});
+
+test("Assistant settings with no eligible endpoint explain configuration instead of claiming connection",async()=>{
+  const {w,el,calls}=await composer({url:"http://localhost/?view=settings#assistant"});
+  try{
+    assert.match(el("assistantConnectionStatus").textContent,/No Copilot assistant endpoints.*rove.yaml/);
+    assert.equal(el("assistantEndpoint").options.length,1);assert.equal(el("saveAssistantSettings").disabled,true);assert.equal(el("testAssistantConnection").disabled,true);
+    assert.equal(calls.some(call=>call.route==="/api/assistant/test"),false);
   }finally{w.close();}
 });
