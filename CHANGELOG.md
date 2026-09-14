@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Explore ABC and XDOF in Jupyter
 
-An executable notebook follows a prepared robot demonstration through camera/state inspection, optional ABC-VLA inference, complete simulator episodes and a small fine-tuning exercise. It uses a separate ABC environment and records actual evidence without adding training to the ROVE application.
+An executable notebook follows a prepared robot demonstration through camera/state inspection, optional ABC-VLA inference, complete simulator episodes and a small fine-tuning exercise. It uses a separate ABC environment and records actual evidence without adding training to the ROVE application. *(PR #33)*
 
 ### Reuse trials and campaigns beyond robotics
 
