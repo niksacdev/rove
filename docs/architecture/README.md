@@ -2,6 +2,9 @@
 
 [ADR-036: Reusable evaluation core](ADR-036-reusable-evaluation-core.md) separates domain execution from shared trials, campaigns and evidence.
 
+[ADR-037: Standalone ABC notebook](ADR-037-standalone-abc-notebook.md) keeps the
+XDOF/ABC learning exercise and its optional training environment separate from ROVE.
+
 Use [current implementation](current-implementation.md) to explain the shipped code,
 the [target architecture](target-architecture.md) and [system diagram](system-diagram.md)
 to explain the accepted direction, and [the product specification](../PRODUCT_SPEC.md)

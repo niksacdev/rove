@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Explore ABC and XDOF in Jupyter
+
+An executable notebook follows a prepared robot demonstration through camera/state inspection, optional ABC-VLA inference, complete simulator episodes and a small fine-tuning exercise. It uses a separate ABC environment and records actual evidence without adding training to the ROVE application.
+
 ### Reuse trials and campaigns beyond robotics
 
 Run structured-input evaluations with separate candidates and graders through the same durable trials, campaigns, evidence, traces and reports. The existing robotics pipeline stays available, while an offline text example demonstrates the reusable execution boundary. *(PR #32)*

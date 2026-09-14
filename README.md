@@ -24,6 +24,11 @@ execution adapter. Try the [offline text example](examples/general-evaluation/RE
 or read the [core boundary and scope](docs/product/reusable-evaluation-core.md).
 The existing robotics workbench remains available.
 
+For a separate hands-on learning exercise, open the
+[ABC + XDOF Jupyter notebook](notebooks/abc_xdof/README.md): inspect demonstrations,
+run a released VLA in ABC's simulator, and optionally explore fine-tuning.
+Its GPU steps use an independent environment and are not ROVE application features.
+
 ![ROVE dashboard](docs/images/rove-welcome.png)
 
 ## Try it locally

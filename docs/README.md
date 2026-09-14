@@ -6,6 +6,7 @@
 
 | Read | Purpose |
 | --- | --- |
+| [ABC + XDOF Jupyter tutorial](product/abc-jupyter-tutorial.md) | Standalone demonstration-to-policy notebook with optional GPU evaluation and fine-tuning |
 | [Product specification](PRODUCT_SPEC.md) | Core vision, founding personas, campaign model and delivery status |
 | [Concepts](product/concepts.md) | Cases, trials, campaigns, strategies, datasets and provenance |
 | [Product workflows](product/evaluation-workflows.md) | Baselines, SME review, frozen datasets, ablations and acceptance criteria |
