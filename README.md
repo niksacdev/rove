@@ -18,6 +18,12 @@ individual outputs, freeze dataset revisions and compare a changed strategy with
 an explicit baseline. See the [customer workflow](docs/product/evaluation-workflows.md)
 and [product specification](docs/PRODUCT_SPEC.md) for scope and remaining work.
 
+The evaluation core is also reusable for non-robotics tasks. Structured-input
+trials and campaigns use the same history, evidence and reports through a trusted
+execution adapter. Try the [offline text example](examples/general-evaluation/README.md)
+or read the [core boundary and scope](docs/product/reusable-evaluation-core.md).
+The existing robotics workbench remains available.
+
 ![ROVE dashboard](docs/images/rove-welcome.png)
 
 ## Try it locally

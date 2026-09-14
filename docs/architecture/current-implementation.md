@@ -1,5 +1,7 @@
 # Current Implementation
 
+The [reusable evaluation core](../product/reusable-evaluation-core.md) adds structured-input CLI execution and saved-result inspection using the existing campaign and trial stores. Robotics case authoring and the strategy catalog remain domain specific; see [ADR-036](ADR-036-reusable-evaluation-core.md).
+
 **Checked:** 14 September 2026. The original T01–T12 review excluded live providers;
 this follow-up exercised local Qwen Scene/Plan execution and native SmolVLA inference.
 Foundry calls and Pi0.5 inference remain blocked on external configuration/access.

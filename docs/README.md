@@ -1,5 +1,7 @@
 # ROVE documentation
 
+[Reusable evaluation core](product/reusable-evaluation-core.md) explains the preserved robotics integration and structured-input evaluation path.
+
 **ROVE evaluates robotics agent pipelines on your task.** The founding vision and three personas remain the basis for the product. This guide explains how a robotics team can assess a pipeline, inspect the evidence and compare changes under stated conditions.
 
 | Read | Purpose |

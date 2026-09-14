@@ -43,6 +43,8 @@ def _changes(before, after):
                 before.get("metric_scope"),
                 before.get("local_evaluators"),
                 before["spec"].get("grading"),
+                before.get("config", {}).get("grading"),
+                before.get("executor_identity"),
             ],
             [
                 after.get("contract"),
@@ -50,6 +52,8 @@ def _changes(before, after):
                 after.get("metric_scope"),
                 after.get("local_evaluators"),
                 after["spec"].get("grading"),
+                after.get("config", {}).get("grading"),
+                after.get("executor_identity"),
             ],
         ),
         "strategies": (selected(before), selected(after)),
@@ -59,19 +63,32 @@ def _changes(before, after):
                 before.get("runtime"),
                 before.get("config", {}).get("defaults"),
                 before["spec"].get("timeout_s"),
+                before.get("config", {}).get("environment"),
+                before["spec"].get("execution", "robotics"),
             ],
             [
                 after.get("runtime"),
                 after.get("config", {}).get("defaults"),
                 after["spec"].get("timeout_s"),
+                after.get("config", {}).get("environment"),
+                after["spec"].get("execution", "robotics"),
             ],
         ),
     }
-    return [name for name, (old, new) in fields.items() if _hash(old) != _hash(new)]
+    identity = (
+        content_hash
+        if any(c["spec"].get("execution", "robotics") != "robotics" for c in (before, after))
+        else _hash
+    )
+    return [name for name, (old, new) in fields.items() if identity(old) != identity(new)]
 
 
 def _strategy_fingerprint(campaign, definition):
     config = campaign.get("config", {})
+    if campaign["spec"].get("execution", "robotics") != "robotics":
+        return content_hash(
+            {"definition": definition, "executor": campaign.get("executor_identity")}
+        )
     try:
         refs = StrategyConfig.model_validate(definition).endpoint_refs()
     except ValueError:
@@ -191,7 +208,9 @@ def campaign_timeline(root, campaign_id):
                 "outcomes": _outcomes(campaign, trials),
                 "warnings": warnings[identity],
                 "report_url": f"/api/campaigns/{identity}/report?format=html",
-                "results_url": f"/static/datasets.html?step=review&campaign={identity}",
+                "results_url": f"/static/datasets.html?step=review&campaign={identity}"
+                if campaign["spec"].get("execution", "robotics") == "robotics"
+                else f"/api/campaigns/{identity}/report?format=html",
             }
         )
     edges = []

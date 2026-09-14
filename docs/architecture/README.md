@@ -1,5 +1,7 @@
 # Architecture decisions
 
+[ADR-036: Reusable evaluation core](ADR-036-reusable-evaluation-core.md) separates domain execution from shared trials, campaigns and evidence.
+
 Use [current implementation](current-implementation.md) to explain the shipped code,
 the [target architecture](target-architecture.md) and [system diagram](system-diagram.md)
 to explain the accepted direction, and [the product specification](../PRODUCT_SPEC.md)

@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from rove.evaluation.models import EvaluationCase
 from rove.models import ExampleData
 
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")]
@@ -52,16 +53,24 @@ class CampaignSpec(BaseModel):
     suite_version: str = Field(min_length=1, max_length=160)
     revision: str = Field(min_length=1, max_length=160)
     strategies: list[Identifier] = Field(min_length=1, max_length=20)
-    tasks: list[BenchmarkTask] = Field(min_length=1, max_length=1000)
+    tasks: list[BenchmarkTask | EvaluationCase] = Field(min_length=1, max_length=1000)
+    execution: Identifier = "robotics"
     seeds: list[Annotated[int, Field(ge=0, le=2**32 - 1)]] = Field(min_length=1, max_length=1000)
     ks: list[Annotated[int, Field(ge=1, le=1000)]] = Field(
         default=[1, 3, 5], min_length=1, max_length=100
     )
     timeout_s: float = Field(default=120, ge=1, le=3600, allow_inf_nan=False)
-    grading: Literal["verify_stage_judgment"] = "verify_stage_judgment"
+    grading: Literal["verify_stage_judgment", "executor_assessment"] = "verify_stage_judgment"
 
     @model_validator(mode="after")
     def unique_inputs(self) -> CampaignSpec:
+        robotics = self.execution == "robotics"
+        if any(isinstance(t, BenchmarkTask) != robotics for t in self.tasks):
+            raise ValueError(
+                "Robotics tasks require images; other executors require structured inputs"
+            )
+        if (self.grading == "verify_stage_judgment") != robotics:
+            raise ValueError("Choose executor_assessment for non-robotics execution")
         for label, values in (
             ("strategies", self.strategies),
             ("task IDs", [t.id for t in self.tasks]),

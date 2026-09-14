@@ -39,6 +39,13 @@ def main(argv):
     )
     run.add_argument("--case", dest="case_revision_id")
     run.add_argument("--task")
+    run.add_argument(
+        "--input", type=Path, help="Structured EvaluationCase JSON/YAML (no image required)"
+    )
+    run.add_argument(
+        "--executor", default="robotics", help="Name of a trusted installed evaluation executor"
+    )
+    run.add_argument("--timeout", type=float, default=120)
     run.add_argument("--image", type=Path)
     run.add_argument("--urdf", type=Path)
     run.add_argument(
@@ -72,20 +79,46 @@ def main(argv):
                 if kind in {"stage_start", "stage_complete", "strategy_complete", "strategy_error"}:
                     print(f"{sid}: {kind} {data.get('stage', '')}", file=sys.stderr, flush=True)
 
-            result = asyncio.run(
-                run_trials(
-                    root=args.store,
-                    config_path=args.config,
-                    strategy_ids=args.strategy,
-                    case_revision_id=args.case_revision_id,
-                    task=args.task,
-                    image_bytes=read_bounded(args.image, 16 * 1024 * 1024) if args.image else None,
-                    urdf_bytes=read_bounded(args.urdf, 4 * 1024 * 1024) if args.urdf else None,
-                    candidate_context=read_document(args.context) if args.context else None,
-                    seed=args.seed,
-                    on_event=progress,
+            if args.executor != "robotics":
+                from rove.evaluation.models import EvaluationCase, EvaluationConfig
+                from rove.evaluation.trials import run_evaluation_trials
+
+                if not args.input or any(
+                    (args.case_revision_id, args.task, args.image, args.urdf, args.context)
+                ):
+                    raise ValueError(
+                        "Use --input for structured trials; robotics inputs cannot be combined"
+                    )
+                result = asyncio.run(
+                    run_evaluation_trials(
+                        root=args.store,
+                        case=EvaluationCase.model_validate(read_document(args.input)),
+                        config=EvaluationConfig.model_validate(read_document(args.config)),
+                        strategy_ids=args.strategy,
+                        execution=args.executor,
+                        seed=args.seed if args.seed is not None else 0,
+                        timeout_s=args.timeout,
+                    )
                 )
-            )
+            else:
+                if args.input:
+                    raise ValueError("Choose an installed executor for structured --input")
+                result = asyncio.run(
+                    run_trials(
+                        root=args.store,
+                        config_path=args.config,
+                        strategy_ids=args.strategy,
+                        case_revision_id=args.case_revision_id,
+                        task=args.task,
+                        image_bytes=read_bounded(args.image, 16 * 1024 * 1024)
+                        if args.image
+                        else None,
+                        urdf_bytes=read_bounded(args.urdf, 4 * 1024 * 1024) if args.urdf else None,
+                        candidate_context=read_document(args.context) if args.context else None,
+                        seed=args.seed,
+                        on_event=progress,
+                    )
+                )
         elif args.action == "list":
             result = {
                 "trials": with_assessments(

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import importlib.metadata
 import json
 import os
@@ -17,8 +16,7 @@ from pathlib import Path
 
 from rove.benchmarks.models import CampaignSpec, fingerprint
 from rove.benchmarks.store import CampaignStore, now
-from rove.models.config import RoveConfig, StrategyConfig
-from rove.models.verification import AGGREGATION_VERSION
+from rove.models.config import RoveConfig
 
 
 def runtime_fingerprint() -> dict:
@@ -68,78 +66,10 @@ def validate_local_evaluators(campaign: dict) -> None:
 
 
 def prepare(spec: CampaignSpec, config: RoveConfig) -> dict:
-    selected = {}
-    endpoints = {}
-    for sid in spec.strategies:
-        if sid not in config.strategies:
-            raise ValueError(f"Unknown strategy: {sid}")
-        strategy = config.strategies[sid].model_dump(mode="json")
-        selected[sid] = strategy
-        for ref in config.strategies[sid].endpoint_refs():
-            endpoints[ref] = config.endpoints[ref].model_dump(mode="json")
-    frozen = {
-        "version": config.version,
-        "endpoints": endpoints,
-        "strategies": selected,
-        "defaults": config.defaults.model_dump(mode="json"),
-    }
-    runtime = runtime_fingerprint()
-    evaluators = {
-        sid: {
-            "endpoint": endpoints[
-                StrategyConfig.model_validate(s).stage_options("verify").endpoint
-            ],
-            "verify_settings": StrategyConfig.model_validate(s)
-            .stage_options("verify")
-            .model_dump(mode="json"),
-            "checks": {
-                c.endpoint: endpoints[c.endpoint]
-                for c in StrategyConfig.model_validate(s).stage_options("verify").checks
-            },
-            "aggregation_version": AGGREGATION_VERSION,
-            "local_evaluators": local_evaluator_versions(frozen),
-            "verify_mode": s["verify_mode"],
-            "pipeline_mode": s["pipeline_mode"],
-            "compute_dynamics": s["compute_dynamics"],
-            "sim": endpoints.get(s["sim"]),
-        }
-        for sid, s in selected.items()
-    }
-    comparisons = {
-        sid: fingerprint(
-            {
-                "suite_version": spec.suite_version,
-                "tasks": [t.model_dump(mode="json") for t in spec.tasks],
-                "seeds": spec.seeds,
-                "timeout_s": spec.timeout_s,
-                "grading": spec.grading,
-                "evaluator": evaluators[sid],
-                "runtime": runtime,
-            }
-        )
-        for sid in selected
-    }
-    synthetic = any((e.get("adapter") or "").startswith("mock_") for e in endpoints.values())
-    return {
-        "spec": spec.model_dump(mode="json"),
-        "config": frozen,
-        "runtime": runtime,
-        "local_evaluators": local_evaluator_versions(frozen),
-        "config_hash": fingerprint(frozen),
-        "comparison_keys": comparisons,
-        "strategy_definitions": selected,
-        "evidence_kind": "synthetic_or_mixed" if synthetic else "configured_verifier",
-        "model_versions": {
-            key: {
-                "adapter": e.get("adapter"),
-                "provider": e.get("provider"),
-                "declared_revision": e.get("config", {}).get("revision"),
-                "identity_hash": fingerprint(e),
-            }
-            for key, e in endpoints.items()
-        },
-        "grading_note": "Scores reflect the configured verify stage. They do not establish observed robot task success. Model revisions are declared, not independently resolved.",
-    }
+    """Backward-compatible robotics preparation entry point."""
+    from rove.evaluation.robotics import prepare_robotics
+
+    return prepare_robotics(spec, config)
 
 
 @contextmanager
@@ -171,7 +101,9 @@ async def run_attempt(request: dict, timeout_s: float) -> dict:
         process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
-            "rove.benchmarks.worker",
+            "rove.benchmarks.worker"
+            if request.get("execution", "robotics") == "robotics"
+            else "rove.evaluation.worker",
             str(input_path),
             str(output_path),
             stdout=asyncio.subprocess.DEVNULL,
@@ -213,6 +145,9 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
     trial_store = TrialStore(store.root)
     with campaign_lock(store, campaign_id):
         campaign = store.get(campaign_id)
+        from rove.evaluation.executors import executor_for
+
+        executor = executor_for(campaign)
         # Reconcile two journals after any crash boundary, while holding ownership.
         indexed = {r["trial_id"]: r for r in store.trials(campaign_id) if r.get("trial_id")}
         for shared in trial_store.for_campaign(campaign_id):
@@ -232,7 +167,7 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                     status="interrupted",
                     error="Campaign owner interrupted before committing completion",
                 )
-        validate_local_evaluators(campaign)
+        executor.validate(campaign)
         if campaign["runtime"] != runtime_fingerprint():
             raise ValueError("Runtime changed; create a new campaign instead of mixing revisions")
         if campaign["status"] == "completed":
@@ -259,7 +194,7 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                     for strategy in spec.strategies:
                         if (task.id, strategy, seed) in done:
                             continue
-                        validate_local_evaluators(campaign)
+                        executor.validate(campaign)
                         if campaign["runtime"] != runtime_fingerprint():
                             raise ValueError(
                                 "Runtime changed during campaign; start a new campaign"
@@ -275,42 +210,9 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                             "outcome": "unknown",
                             "execution": "running",
                         }
-                        task_snapshot = task.model_dump(mode="json")
-                        if task.image_asset:
-                            from hashlib import sha256
-
-                            asset_bytes = trial_store.asset_path(task.image_asset).read_bytes()
-                            if sha256(asset_bytes).hexdigest() != task.image_asset:
-                                raise ValueError(
-                                    "Case image integrity changed; repair the asset before execution"
-                                )
-                        image_bytes = (
-                            asset_bytes
-                            if task.image_asset
-                            else base64.b64decode(task.image_base64, validate=True)
+                        task_snapshot, system_config, worker_task = executor.prepare_trial(
+                            campaign, task, strategy, trial_store
                         )
-                        media_type = (
-                            "image/png"
-                            if image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
-                            else "image/jpeg"
-                            if image_bytes.startswith(b"\xff\xd8\xff")
-                            else "application/octet-stream"
-                        )
-                        task_snapshot["image_asset"] = trial_store.save_asset(
-                            image_bytes, media_type
-                        )
-                        refs = StrategyConfig.model_validate(
-                            campaign["config"]["strategies"][strategy]
-                        ).endpoint_refs()
-                        system_config = {
-                            **campaign["config"],
-                            "strategies": {strategy: campaign["config"]["strategies"][strategy]},
-                            "endpoints": {
-                                k: v
-                                for k, v in campaign["config"]["endpoints"].items()
-                                if k in refs
-                            },
-                        }
                         trial_id = trial_store.begin(
                             source="campaign",
                             campaign_id=campaign_id,
@@ -328,30 +230,20 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                                     "contract": campaign.get("contract"),
                                     "dataset_revision_id": campaign.get("dataset_revision_id"),
                                 },
-                                "local_evaluators": {
-                                    k: v
-                                    for k, v in campaign["local_evaluators"].items()
-                                    if k in refs
-                                },
                             },
                         )
                         record["trial_id"] = trial_id
                         store.save_trial(campaign_id, record)
                         request = {
                             "config": campaign["config"],
-                            "task": task.model_dump(mode="json"),
+                            "task": worker_task,
+                            "execution": spec.execution,
+                            "executor_identity": campaign.get("executor_identity"),
                             "strategy_id": strategy,
                             "seed": seed,
                             "trial_id": trial_id,
                             "trial_root": str(store.root.resolve()),
                         }
-                        # Large media stays referenced in frozen campaign records; hydrate only
-                        # the bounded, private worker request, never the public report payload.
-                        if task.image_asset:
-                            request["task"] = {
-                                **request["task"],
-                                "image_base64": base64.b64encode(image_bytes).decode(),
-                            }
                         started = time.monotonic()
                         try:
                             result = await run_attempt(request, spec.timeout_s)
@@ -374,7 +266,7 @@ async def run_campaign(store: CampaignStore, campaign_id: str, progress=None) ->
                         if campaign["runtime"] != runtime_fingerprint():
                             record.update(outcome="unknown", execution="runtime_changed")
                         try:
-                            validate_local_evaluators(campaign)
+                            executor.validate(campaign)
                         except ValueError:
                             record.update(outcome="unknown", execution="evaluator_changed")
                         store.finish_trial(campaign_id, record)
