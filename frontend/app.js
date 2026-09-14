@@ -10,6 +10,16 @@ let loadingCaseVersion = 0;
 let isRunning = false;
 let quickStep = "case";
 let quickRunSnapshot = null;
+let quickReviewedSignature = null;
+let quickReviewImageUrl = null;
+let quickReviewImageFile = null;
+let quickSavedSignature = null;
+let quickAcceptedLocation = location.href;
+let quickUnloadAllowance = 0;
+let quickPendingDeparture = null;
+let quickDepartureTrigger = null;
+const quickFileIdentities = new WeakMap();
+let quickFileIdentityCounter = 0;
 let currentEventSource = null;
 let runningEvaluationId = null;
 let strategies = [];
@@ -439,42 +449,115 @@ async function loadConfig() {
   }
 }
 
-// ---- Shared trial workspace: the original runner owns execution and output. ----
+// ---- Shared trial workspace: review is the only execution boundary. ----
+function quickFileIdentity(file) {
+  if(!file)return null;
+  if(!quickFileIdentities.has(file))quickFileIdentities.set(file,++quickFileIdentityCounter);
+  return quickFileIdentities.get(file);
+}
+function quickDraftSignature() {
+  return JSON.stringify({task:taskInput.value.trim(),image:quickFileIdentity(selectedFile),urdf:quickFileIdentity(selectedUrdfFile),
+    case:selectedSavedCase && selectedSavedCase.task===taskInput.value.trim() && selectedSavedCase.image===selectedFile?selectedSavedCase.id:null,
+    example:window._selectedExampleFilename || null,
+    candidate:{proprioception:window._selectedProprioception || null,category:window._selectedCategory || null,eval_category:window._selectedEvalCategory || null,correction:window._selectedCorrection || null,constraints:window._selectedConstraints || null,expected_subtasks:window._selectedExpectedSubtasks || null},
+    strategies:Array.from(selectedStrategyIds).map(id=>({id,definition:strategies.find(strategy=>strategy.id===id) || null}))});
+}
+function quickDraftDirty() {
+  const hasInputs=Boolean(taskInput.value.trim() || selectedFile || selectedUrdfFile || selectedStrategyIds.size);
+  return hasInputs && quickDraftSignature()!==quickSavedSignature;
+}
+function quickCaseReady() {return Boolean(taskInput.value.trim() && selectedFile && !loadingCaseVersion);}
+function quickConfigurationReady() {return quickCaseReady() && selectedStrategyIds.size>0 && selectedStrategyIds.size<=20 && Array.from(selectedStrategyIds).every(id=>strategies.some(strategy=>strategy.id===id));}
+function quickHasResults() {return Object.keys(tabData).length>0 && !isRunning;}
+function quickInternalDestination(target) {
+  if(target.origin!==location.origin || target.pathname!=="/")return false;
+  return ["quick","examples"].includes(window.RoveNavigation.rootView(target.search));
+}
+function approveQuickDeparture(target) {
+  const settingsViews=["settings","strategies","models"];
+  if(isRunning && settingsViews.includes(currentView) && target.origin===location.origin && target.pathname==="/" && settingsViews.includes(window.RoveNavigation.rootView(target.search)))return true;
+  return quickInternalDestination(target) || (!isRunning && !quickDraftDirty());
+}
+function requestQuickDeparture(target, replace, trigger) {
+  const dialog=document.getElementById("quickLeaveDialog");
+  if(dialog.open)return;
+  quickPendingDeparture={href:target.href,replace:Boolean(replace)};
+  quickDepartureTrigger=trigger || document.activeElement;
+  document.getElementById("quickLeaveTitle").textContent=isRunning?"Leave the running comparison?":"Discard unsaved changes?";
+  document.getElementById("quickLeaveMessage").textContent=isRunning?"Leaving closes this live progress view. Trials already saved will remain available in Trials.":"Your case inputs and strategy selection have unsaved changes. Stay to keep working, or discard this draft and leave.";
+  document.getElementById("quickLeaveConfirm").textContent=isRunning?"Leave comparison":"Discard changes and leave";
+  dialog.showModal();
+  document.getElementById("quickLeaveStay").focus();
+}
+function renderQuickReview() {
+  const host=document.getElementById("quickReviewSummary");host.replaceChildren();
+  const node=(tag,text,className)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;if(className)el.className=className;return el;};
+  const inputs=node("section",null,"quick-review-inputs"),image=node("img");
+  if(quickReviewImageFile!==selectedFile){
+    if(quickReviewImageUrl && quickReviewImageUrl!==quickRunSnapshot?.imageUrl)URL.revokeObjectURL(quickReviewImageUrl);
+    quickReviewImageUrl=URL.createObjectURL(selectedFile);quickReviewImageFile=selectedFile;
+  }
+  image.src=quickReviewImageUrl;image.alt="Observation that will be submitted";
+  const detail=node("div");detail.append(node("h3","Case"),node("p",taskInput.value.trim(),"quick-review-task"),node("p",`Robot description: ${selectedUrdfFile?.name || "None attached"}`));
+  const edit=node("button","Edit case","secondary");edit.type="button";edit.addEventListener("click",()=>setQuickStep("case"));detail.append(edit);inputs.append(image,detail);host.append(inputs);
+  const configured=node("section",null,"quick-review-strategies");configured.append(node("h3",`Strategies (${selectedStrategyIds.size})`));
+  const list=node("div");list.id="quickReviewedStrategies";
+  window.RoveStrategyTable.render(list,{strategies:Array.from(selectedStrategyIds).map(id=>strategies.find(item=>item.id===id)),selected:selectedStrategyIds,disabled:true});configured.append(list);
+  const editStrategies=node("button","Edit strategies","secondary");editStrategies.type="button";editStrategies.addEventListener("click",()=>setQuickStep("configure"));configured.append(editStrategies);host.append(configured);
+  host.append(node("p",`1 case × ${selectedStrategyIds.size} ${selectedStrategyIds.size===1?"strategy":"strategies"} × 1 attempt = ${selectedStrategyIds.size} planned ${selectedStrategyIds.size===1?"trial":"trials"}`,"quick-review-total"));
+  quickReviewedSignature=quickDraftSignature();
+}
 function initQuickWorkspace() {
   document.getElementById("quickCaseComposer").append(document.getElementById("quickComposer"));
   document.getElementById("quickStrategySelection").append(document.getElementById("configPanel"));
-  document.getElementById("quickRunAction").append(evalBtn);evalBtn.textContent="Run comparison";evalBtn.setAttribute("aria-label","Run comparison");evalBtn.title="Run selected strategies once on this case";
+  document.getElementById("quickRunAction").append(evalBtn);evalBtn.textContent="Run trials";evalBtn.setAttribute("aria-label","Run trials");evalBtn.title="Run the reviewed comparison";
   configToggle.hidden=true;configContent.style.display="";
-  document.querySelectorAll("[data-quick-step]").forEach(function(control){control.addEventListener("click",()=>setQuickStep(control.dataset.quickStep));});
+  document.querySelectorAll("[data-quick-step]").forEach(control=>control.addEventListener("click",()=>setQuickStep(control.dataset.quickStep)));
+  document.getElementById("quickStartAnother").addEventListener("click",()=>{if(isRunning)return;quickReviewedSignature=null;setQuickStep("case");});
   document.getElementById("quickSampleCases").addEventListener("click",()=>switchView("examples"));
   for(const input of [taskInput,imageInput,urdfInput]){input.addEventListener("input",updateQuickWorkspace);input.addEventListener("change",updateQuickWorkspace);}
   document.getElementById("quickResultsSummary").textContent="Compare pipeline outputs and verdicts below. Add a saved trial to a campaign to define success criteria and repeat the comparison.";
 }
 function setQuickStep(step) {
-  if(!["case","configure","run","results"].includes(step))return;
+  if(!["case","configure","run","results"].includes(step) || isRunning)return;
+  if(step==="configure"&&!quickCaseReady())return;
+  if(step==="run"&&!quickConfigurationReady())return;
+  if(step==="results"&&!quickHasResults())return;
   quickStep=step;
-  if((step==="run"||step==="results") && Object.keys(tabData).length)restoreEvaluation();else updateQuickWorkspace();
-  if(step==="results") {chatArea.scrollTop=0;document.querySelector(".root-main").scrollTop=0;}
+  if(step==="run")renderQuickReview();
+  if(step==="results")restoreEvaluation();else updateQuickWorkspace();
+  chatArea.scrollTop=0;document.querySelector(".root-main").scrollTop=0;
   document.querySelector(`[data-quick-panel="${step}"] h2`)?.focus();
 }
 function updateQuickWorkspace() {
   const workspace=document.getElementById("quickWorkspace");if(!workspace)return;
+  const ready=quickCaseReady(),configured=quickConfigurationReady();
+  if(quickReviewedSignature && quickReviewedSignature!==quickDraftSignature())quickReviewedSignature=null;
   const visible=currentView==="quick"||currentView==="evaluation";workspace.hidden=!visible;
   document.getElementById("quickWelcome").hidden=true;
   document.getElementById("quickComposer").hidden=!visible||quickStep!=="case";
+  evalBtn.disabled=isRunning || quickStep!=="run" || !configured || !quickReviewedSignature;
+  document.getElementById("quickContinueConfigure").disabled=isRunning || !ready;
+  document.getElementById("quickContinueReview").disabled=isRunning || !configured;
+  document.getElementById("quickStartAnother").disabled=isRunning;
   if(!visible){chatArea.hidden=false;return;}
   document.body.dataset.quickStep=quickStep;
-  for(const control of document.querySelectorAll("#quickJourney [data-quick-step]")) {if(control.dataset.quickStep===quickStep)control.setAttribute("aria-current","step");else control.removeAttribute("aria-current");}
+  for(const control of document.querySelectorAll("#quickJourney [data-quick-step]")) {
+    const step=control.dataset.quickStep;control.disabled=isRunning || (step==="configure"&&!ready) || (step==="run"&&!configured) || (step==="results"&&!quickHasResults());
+    if(step===quickStep)control.setAttribute("aria-current","step");else control.removeAttribute("aria-current");
+    if(step==="run")control.textContent=isRunning?"Running":"Review & run";
+  }
   for(const panel of document.querySelectorAll("[data-quick-panel]"))panel.hidden=panel.dataset.quickPanel!==quickStep;
-  document.getElementById("quickRunAction").hidden=quickStep==="results";
-  const outputs=quickStep==="run"||quickStep==="results";chatArea.hidden=!outputs;
+  document.getElementById("quickRunAction").hidden=isRunning || quickStep!=="run";
+  document.getElementById("quickReviewSummary").hidden=isRunning;
+  const outputs=isRunning || quickStep==="results";chatArea.hidden=!outputs;
   tabBar.classList.toggle("hidden",!outputs || !(Object.keys(tabData).length>1 || summaryEl));
-  const snapshot=outputs&&quickRunSnapshot, count=snapshot?snapshot.strategies.length:selectedStrategyIds.size;
+  const snapshot=outputs&&quickRunSnapshot,count=snapshot?snapshot.strategies.length:selectedStrategyIds.size;
   document.getElementById("quickTrialCount").textContent=`${snapshot||selectedFile?1:0} case × ${count} ${count===1?"strategy":"strategies"} × 1 attempt = ${snapshot||selectedFile?count:0} ${count===1?"trial":"trials"}`;
-  document.getElementById("quickRunHeading").textContent=isRunning?"Running your comparison":Object.keys(tabData).length?"Execution finished":"Ready to compare?";
-  document.getElementById("quickRunSummary").textContent=snapshot?`${snapshot.task} · ${isRunning?"Follow each strategy below. Every execution is saved as a trial.":"Open Results to inspect the recorded outputs."}`:"Run comparison uses your current case and selected strategies. You can run directly from any step when ready.";
-  document.querySelector("#quickHeading h1").textContent=isRunning?"Trial comparison":outputs&&Object.keys(tabData).length?"Trial results":"New trial";
-  evalBtn.textContent=isRunning?"Running…":"Run comparison";
+  document.getElementById("quickRunHeading").textContent=isRunning?"Running your comparison":"Review your comparison";
+  document.getElementById("quickRunSummary").textContent=isRunning?`${snapshot?.task || taskInput.value.trim()} · Follow each strategy below. Every execution is saved as a trial.`:quickReviewedSignature?"These exact inputs will be sent to each selected strategy. Run trials starts execution.":"The inputs changed. Return to Configure, then review the updated comparison.";
+  document.querySelector("#quickHeading h1").textContent=isRunning?"Trial comparison":quickStep==="results"&&quickHasResults()?"Trial results":"New trial";
+  evalBtn.textContent=isRunning?"Running…":"Run trials";
 }
 
 // ---- Top nav click handlers ----
@@ -483,6 +566,7 @@ function rootRoute(view, push) {
   if (view === "home") url.searchParams.delete("view");
   else url.searchParams.set("view", view === "evaluation" ? "quick" : view);
   if (url.href !== location.href) history[push ? "pushState" : "replaceState"]({}, "", url);
+  quickAcceptedLocation=location.href;
 }
 
 function clearCaseBinding() {
@@ -500,7 +584,7 @@ function clearCaseBinding() {
   window._selectedConstraints = null;
   window._selectedEvalCategory = null;
   window._selectedCategory = "perceive-plan";
-  const url = new URL(location.href); url.searchParams.delete("case"); history.replaceState({}, "", url);
+  const url = new URL(location.href); url.searchParams.delete("case"); history.replaceState({}, "", url);quickAcceptedLocation=location.href;
   const status = document.getElementById("trialCaseContext");
   if (status) status.textContent = "Inputs edited. This will be saved as a new trial, without claiming the original case revision.";
 }
@@ -543,12 +627,12 @@ async function loadSavedCase(id) {
     window._selectedEvalCategory = context.eval_category || null; window._selectedCategory = item.conditions?.category || "perceive-plan";
     taskInput.value = item.task; taskInput.style.height = "auto"; taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
     previewImg.src = URL.createObjectURL(blob); previewImg.alt = "Observation for " + item.name; imagePreview.classList.remove("hidden");
-    const url = new URL(location.href); url.searchParams.set("view", "quick"); url.searchParams.set("case", item.id); history.replaceState({}, "", url);
+    const url = new URL(location.href); url.searchParams.set("view", "quick"); url.searchParams.set("case", item.id); history.replaceState({}, "", url);quickAcceptedLocation=location.href;
     quickStep="case";switchView("quick", false);
     status.textContent = `Case: ${item.name} · revision ${item.revision || item.id}. Each selected strategy creates a recorded trial linked to this case.${robotFile ? " Bundled robot description attached." : " Add a robot description if your strategy requires it."}`;
     taskInput.focus();
   } catch (error) { if (version === caseInputVersion) { status.textContent = error.message + " No case was loaded or executed."; announce(error.message); } }
-  finally { if (loadingCaseVersion === version) { loadingCaseVersion = 0; evalBtn.disabled = isRunning; if (version !== caseInputVersion) status.textContent = "Case loading cancelled because the inputs changed."; } }
+  finally { if (loadingCaseVersion === version) { loadingCaseVersion = 0; updateQuickWorkspace(); if (version !== caseInputVersion) status.textContent = "Case loading cancelled because the inputs changed."; } }
 }
 
 function setRootChrome(view) {
@@ -568,6 +652,32 @@ function setRootChrome(view) {
 }
 
 function initTopNav() {
+  const leaveDialog=document.getElementById("quickLeaveDialog");
+  const stay=()=>{quickPendingDeparture=null;leaveDialog.close();quickDepartureTrigger?.focus();quickDepartureTrigger=null;};
+  document.getElementById("quickLeaveStay").addEventListener("click",stay);
+  leaveDialog.addEventListener("cancel",event=>{event.preventDefault();stay();});
+  leaveDialog.addEventListener("close",()=>{quickPendingDeparture=null;});
+  document.getElementById("quickLeaveConfirm").addEventListener("click",()=>{
+    const pending=quickPendingDeparture;if(!pending)return;
+    quickPendingDeparture=null;leaveDialog.close();
+    const target=new URL(pending.href);
+    if(isRunning && target.origin===location.origin && target.pathname==="/"){
+      history[pending.replace?"replaceState":"pushState"]({},"",target);quickAcceptedLocation=location.href;
+      switchView(window.RoveNavigation.rootView(target.search),false);return;
+    }
+    // This explicit departure disposes the draft, including same-document settings routes.
+    // Suppress only the immediate unload; subsequent reload/close must still be guarded.
+    quickUnloadAllowance=Date.now()+1000;
+    setTimeout(()=>{quickUnloadAllowance=0;},1000);
+    if(pending.replace)location.replace(pending.href);else location.assign(pending.href);
+  });
+  document.addEventListener("click",function(event){
+    const link=event.target.closest("a[href]");
+    if(!link || event.defaultPrevented || event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target==="_blank" || link.hasAttribute("download"))return;
+    const target=new URL(link.href,location.href);
+    if(!["http:","https:"].includes(target.protocol) || (target.pathname===location.pathname && target.search===location.search && target.hash))return;
+    if(!approveQuickDeparture(target)){event.preventDefault();event.stopImmediatePropagation();requestQuickDeparture(target,false,link);}
+  },true);
   document.addEventListener("click", function(event) {
     var link = event.target.closest("a[data-root-view], #roveNav a, #roveFooter a");
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -579,12 +689,18 @@ function initTopNav() {
     else switchView(view);
   });
   window.addEventListener("popstate", function() {
+    const target=new URL(location.href);
+    if(!approveQuickDeparture(target)){history.pushState({},"",quickAcceptedLocation);requestQuickDeparture(target,true);return;}
+    quickAcceptedLocation=location.href;
     var view = window.RoveNavigation.rootView(location.search);
     if (view === "quick" && (isRunning || Object.keys(tabData).length)) restoreEvaluation();
     else switchView(view, false);
     loadCaseRoute();
   });
-  window.addEventListener("beforeunload", function(event) { if (isRunning) { event.preventDefault(); event.returnValue = ""; } });
+  window.addEventListener("beforeunload", function(event) {
+    if(quickUnloadAllowance>Date.now()){quickUnloadAllowance=0;return;}
+    if(isRunning || quickDraftDirty()){event.preventDefault();event.returnValue="";}
+  });
 }
 
 function restoreEvaluation() {
@@ -2046,10 +2162,6 @@ function autoResizeTextarea() {
     taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
   });
   taskInput.addEventListener("keydown", function(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      evalBtn.click();
-    }
     // Tab to fill sample question when input is empty
     if (e.key === "Tab" && taskInput.value.trim() === "") {
       e.preventDefault();
@@ -2058,6 +2170,7 @@ function autoResizeTextarea() {
       sampleIndex++;
       taskInput.style.height = "auto";
       taskInput.style.height = Math.min(taskInput.scrollHeight, 120) + "px";
+      updateQuickWorkspace();
     }
   });
 }
@@ -2066,6 +2179,7 @@ function autoResizeTextarea() {
 evalBtn.addEventListener("click", async function() {
   var task = taskInput.value.trim();
   if (isRunning || loadingCaseVersion) return;
+  if(quickStep!=="run" || !quickReviewedSignature || quickReviewedSignature!==quickDraftSignature() || !quickConfigurationReady()){quickReviewedSignature=null;updateQuickWorkspace();announce("Review the current case and strategies before running trials.");return;}
 
   // Prompt user to select a strategy if none selected
   if (selectedStrategyIds.size === 0) {
@@ -2079,7 +2193,8 @@ evalBtn.addEventListener("click", async function() {
   if (!task || !selectedFile) {setQuickStep("case");announce(!task?"Describe the task before running.":"Attach an observation before running.");taskInput.focus();return;}
 
   caseInputVersion++; // A run supersedes any pending legacy sample load.
-  quickRunSnapshot={task,strategies:Array.from(selectedStrategyIds)};quickStep="run";
+  if(quickRunSnapshot?.imageUrl && quickRunSnapshot.imageUrl!==quickReviewImageUrl)URL.revokeObjectURL(quickRunSnapshot.imageUrl);
+  quickRunSnapshot={task,strategies:Array.from(selectedStrategyIds),signature:quickReviewedSignature,imageUrl:quickReviewImageUrl};quickStep="run";
   setRunning(true);
 
   var ids = Array.from(selectedStrategyIds);
@@ -2096,7 +2211,7 @@ evalBtn.addEventListener("click", async function() {
   document.querySelectorAll(".sidebar-nav-link").forEach(function(l) { l.classList.remove("active"); });
 
   setupTabs(ids);
-  addUserCard(previewImg.src, task, ids);
+  addUserCard(quickReviewImageUrl || previewImg.src, task, ids);
 
   // Keep the case available for refinement; execution receives this immutable form snapshot.
 
@@ -3410,6 +3525,7 @@ function connectSSE(evalId) {
     if (e.data) {
       try {
         var completeData = JSON.parse(e.data);
+        if(completeData.trial_ids && Object.keys(completeData.trial_ids).length && quickRunSnapshot?.signature)quickSavedSignature=quickRunSnapshot.signature;
         if (historyEntry) {
           historyEntry.trialIds = completeData.trial_ids || {};
           historyEntry.completedStrategyIds = (completeData.results || []).filter(function(result) { return !result.error && !(result.stages || []).some(function(stage) { return stage.status === "error"; }); }).map(function(result) { return result.strategy_id; });
@@ -3436,6 +3552,7 @@ function connectSSE(evalId) {
       } catch (_) {}
     }
     updateHistoryStatus(evalId, "completed");
+    updateQuickWorkspace();
   });
 
   es.addEventListener("error", function(e) {

@@ -24,6 +24,8 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [030: Foundry-inspired visual language](ADR-030-foundry-visual-language.md) | Accepted; navigation/setup refined by ADR-031 | Shared Fluent tokens, evaluation list, controls and theme contrast checks |
 | [031: Shared evaluation workspace](ADR-031-shared-evaluation-workspace.md) | Implemented; verification limits recorded | Peer Trials/Campaigns browsers, shared strategy selection, persistent campaign identity and explicit scoring semantics |
 
+| [032: Trial review and navigation](ADR-032-trial-review-and-navigation-state.md) | Accepted | Gated setup, explicit review-to-execution boundary and unsaved-work protection |
+
 ## How the decisions connect
 
 ```mermaid
@@ -51,6 +53,7 @@ flowchart TD
     J --> W[031: Shared evaluation workspace]
     K --> W
     M --> W
+    W --> N[032: Trial review and navigation]
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.

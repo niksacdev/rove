@@ -2,6 +2,8 @@
 
 **Status:** Implemented; automated regression and desktop browser checks recorded below.
 **Date:** 2026-09-13.
+**Amended by:** [ADR-032](ADR-032-trial-review-and-navigation-state.md), which adds gated
+quick-trial review, explicit execution and unsaved-work navigation.
 **Product contract:** [Evaluation workspace](../product/user-journey.md).
 **Supersedes:** Conflicting navigation, header placement and setup presentation in
 [ADR-030](ADR-030-foundry-visual-language.md). Its shared visual tokens and historical

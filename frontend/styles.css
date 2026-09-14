@@ -299,7 +299,7 @@ body[data-quick-step] .root-main { overflow-y:auto; }
 #quickWorkspace[hidden] { display:none; }
 #quickWorkspace .quick-workspace-commandbar { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:0 0 20px; }
 #quickWorkspace #quickTrialCount { font-size:16px; margin:0; color:var(--f-text-secondary); }
-#quickWorkspace #evalBtn { width:auto; min-width:160px; flex:auto; min-height:40px; height:auto; padding:9px 18px; font-size:14px; font-weight:600; border-radius:var(--f-radius-control,4px); }
+#quickWorkspace #evalBtn { width:auto; min-width:160px; flex:0 0 auto; min-height:40px; height:auto; padding:9px 18px; font-size:14px; font-weight:600; border-radius:var(--f-radius-control,4px); }
 #quickJourney { display:flex; flex-wrap:wrap; gap:24px; border-bottom:1px solid var(--f-border); margin-bottom:24px; }
 #quickJourney button { padding:12px 2px; min-height:44px; border:0; border-bottom:3px solid transparent; border-radius:0; color:var(--f-text-secondary); background:transparent; font-size:16px; }
 #quickJourney [aria-current="step"] { color:var(--f-text); border-bottom-color:var(--f-accent-text); font-weight:600; }
@@ -319,3 +319,24 @@ body[data-quick-step] .root-main { overflow-y:auto; }
 #quickWorkspace #plusPopover { bottom:auto; top:50px; }
 #quickWorkspace .composer-input-row { align-items:start; }
 @media(max-width:640px){#quickWorkspace {padding:0 16px 16px;}#quickJourney {gap:18px;}#quickWorkspace .quick-workspace-commandbar {align-items:stretch;}#quickRunAction {flex:1;}#quickWorkspace #evalBtn {width:100%;}}
+/* Review-gated creation: one primary action belongs to each setup step. */
+#quickWorkspace .quick-primary { display:inline-flex; align-items:center; justify-content:center; min-height:40px; padding:9px 18px; border:1px solid var(--f-accent); border-radius:var(--f-radius-control,4px); background:var(--f-accent); color:white; font-size:14px; font-weight:600; }
+#quickWorkspace .quick-primary:disabled,#quickWorkspace #quickJourney button:disabled { opacity:.55; cursor:not-allowed; }
+#quickWorkspace #quickRunAction[hidden] { display:none; }
+#quickWorkspace #quickReviewSummary[hidden] { display:none; }
+#quickWorkspace .quick-review-inputs { display:grid; grid-template-columns:minmax(180px,260px) minmax(0,1fr); gap:24px; padding:20px; margin:20px 0; background:var(--f-surface); border:1px solid var(--f-border); border-radius:var(--f-radius-panel,6px); }
+#quickWorkspace .quick-review-inputs img { width:100%; max-height:210px; object-fit:contain; align-self:center; }
+#quickWorkspace .quick-review-inputs h3,#quickWorkspace .quick-review-strategies h3 { font-size:18px; font-weight:600; line-height:26px; margin:0 0 12px; }
+#quickWorkspace .quick-review-task { color:var(--f-text); white-space:pre-wrap; }
+#quickWorkspace .quick-review-strategies { margin:24px 0; }
+#quickWorkspace .quick-review-strategies > button { margin-top:12px; }
+#quickWorkspace .quick-review-total { padding:16px 0; border-top:1px solid var(--f-border); font-size:18px; font-weight:600; color:var(--f-text); }
+@media(max-width:600px){#quickWorkspace .quick-review-inputs {grid-template-columns:1fr;padding:16px;}#quickWorkspace .quick-review-inputs img {max-height:180px;}}
+#quickCasePanel > .quick-workspace-actions,#quickConfigurePanel > .quick-workspace-actions,#quickRunPanel > .quick-workspace-actions { position:sticky; bottom:0; z-index:5; padding:16px 0; background:var(--f-bg); border-top:1px solid var(--f-border); }
+#quickLeaveDialog { width:min(480px,calc(100vw - 32px)); padding:24px; }
+#quickLeaveDialog h2 { margin:0 0 12px; }
+#quickLeaveDialog p { color:var(--f-text-secondary); font-size:16px; line-height:25px; margin:0; }
+#quickLeaveDialog .quick-leave-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:24px; }
+#quickLeaveDialog button { min-height:40px; padding:9px 14px; border:1px solid var(--f-border-strong); border-radius:var(--f-radius-control,4px); color:var(--f-text); background:var(--f-surface); font-size:14px; }
+#quickLeaveDialog #quickLeaveStay { color:white; background:var(--f-accent); border-color:var(--f-accent); }
+#quickLeaveDialog button:focus-visible { outline:2px solid var(--f-accent-text); outline-offset:3px; }
