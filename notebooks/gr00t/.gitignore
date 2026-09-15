@@ -1,0 +1,4 @@
+.venv/
+.work/
+gr00t_lab/
+*.executed.ipynb
