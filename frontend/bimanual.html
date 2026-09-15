@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ROVE · Compare bimanual models</title>
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem("rove-theme") || "dark"; } catch { document.documentElement.dataset.theme = "dark"; }</script>
+  <link rel="stylesheet" href="/static/styles.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/navigation.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/campaign-progress.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/fluent.css?v=workspace-8">
+  <link rel="stylesheet" href="/static/bimanual.css?v=1">
+  <script src="/static/navigation.js?v=assistant-settings-1" defer></script>
+  <script src="/static/trial-output.js?v=1" defer></script>
+  <script src="/static/campaign-progress.js?v=1" defer></script>
+  <script src="/static/bimanual.js?v=1" defer></script>
+</head>
+<body class="bimanual-page">
+  <a href="#main" class="skip-link">Skip to main content</a>
+  <header id="roveNav" data-section="evaluate"></header>
+  <main id="main">
+    <div class="page-heading"><div><p class="bimanual-eyebrow">ABC simulator · Two-arm manipulation</p><h1>Compare bimanual models</h1><p>See how ABC-VLA and an adapted π0.5 perform on the same task and starting scenes.</p></div><a id="backToBrowser" class="secondary" href="/static/history.html">Back to trials</a></div>
+    <p id="pageStatus" role="status" aria-live="polite">Checking the configured models…</p>
+    <section id="setup" class="bimanual-panel" hidden aria-labelledby="setupHeading">
+      <h2 id="setupHeading">Connect your evaluation runtime</h2><p>Configure ABC and your model checkpoints on the machine that runs ROVE. Model inference requires a compatible Linux NVIDIA GPU runtime. π0.5 needs a checkpoint adapted to ABC’s 14 joint and gripper values.</p>
+      <ol><li>Prepare the ABC runtime and checkpoints using the setup guide.</li><li>Register their paths with the ROVE CLI.</li><li>Return here to choose models and run.</li></ol>
+      <pre><code>rove bimanual --help</code></pre>
+      <div class="bimanual-actions"><a class="secondary" href="https://github.com/niksacdev/rove/tree/main/examples/abc-pi05" target="_blank" rel="noopener noreferrer">Open setup guide</a><button id="recheck" class="secondary" type="button">Check setup again</button></div>
+    </section>
+    <form id="comparisonForm" hidden>
+      <fieldset id="configurationFields">
+        <div class="bimanual-header-controls">
+          <label for="comparisonName">Comparison name<input id="comparisonName" maxlength="160" value="Bimanual model comparison" required></label>
+          <label for="comparisonMode">Evaluation<select id="comparisonMode"><option value="trial">Trial · one starting scene</option><option value="campaign">Campaign · repeated comparisons</option></select></label>
+        </div>
+        <p id="plannedCount" class="bimanual-calculator" aria-live="polite"></p>
+        <section class="bimanual-panel" aria-labelledby="caseHeading">
+          <h2 id="caseHeading">1. Your task</h2><p class="bimanual-task">Put plastic bottles in the bin</p><p>The simulator supplies the robot, three camera views and starting state. Each scene seed defines a case; every selected model receives that same starting scene.</p>
+          <div class="bimanual-fields"><label for="resetSeeds">Scene seeds<input id="resetSeeds" value="0" required aria-describedby="resetHelp"><span id="resetHelp">One number per starting scene, separated by commas.</span></label><label for="policySeeds">Model seeds<input id="policySeeds" value="0" required aria-describedby="policyHelp"><span id="policyHelp">One number per attempt on each case. Repeated attempts measure reliability.</span></label><label for="maxSteps">Maximum control steps<input id="maxSteps" type="number" value="3540" min="1" max="3540" required><span>Same action budget for every model.</span></label></div>
+        </section>
+        <section class="bimanual-panel" aria-labelledby="strategiesHeading">
+          <h2 id="strategiesHeading">2. Models to compare</h2><p>Each strategy uses its own checkpoint and preprocessing. All strategies use the same simulator and action interface.</p>
+          <div class="bimanual-table-scroll"><table><thead><tr><th scope="col">Select</th><th scope="col">Strategy</th><th scope="col">Model</th><th scope="col">Readiness</th></tr></thead><tbody id="strategyRows"></tbody></table></div>
+          <div id="configurationIssues" role="status"></div>
+          <p><a class="secondary" href="https://github.com/niksacdev/rove/tree/main/examples/abc-pi05" target="_blank" rel="noopener noreferrer">Model setup guide</a></p>
+        </section>
+        <section class="bimanual-panel" aria-labelledby="successHeading"><h2 id="successHeading">3. How success is measured</h2><p>The ABC simulator checks whether the task goal is reached. ROVE records that evidence alongside executed actions, inference timing and traces.</p><p>Review confirms the exact frozen criterion before launch. Campaign reports include success rate, pass@k and pass^k when enough repeated attempts are available.</p></section>
+      </fieldset>
+      <div class="bimanual-actions"><button id="reviewButton" class="primary-link" type="submit" disabled>Review and run</button></div>
+    </form>
+    <section id="review" class="bimanual-panel" hidden aria-labelledby="reviewHeading">
+      <h2 id="reviewHeading" tabindex="-1">Review your comparison</h2><p id="reviewSummary" class="bimanual-calculator"></p><dl id="reviewFacts" class="bimanual-facts"></dl><p id="reviewReadiness" role="status"></p>
+      <div class="bimanual-actions"><button id="editButton" class="secondary" type="button">Edit configuration</button><button id="launchButton" class="primary-link" type="button" disabled>Run comparison</button></div>
+    </section>
+    <section id="execution" hidden aria-labelledby="executionHeading"><div class="bimanual-section-heading"><h2 id="executionHeading" tabindex="-1">Running your comparison</h2><button id="cancelButton" class="secondary" type="button">Stop comparison</button></div><div id="executionProgress"></div><div id="episodeActivity" class="bimanual-panel" aria-live="polite"></div></section>
+    <section id="results" class="bimanual-panel" hidden aria-labelledby="resultsHeading"><h2 id="resultsHeading" tabindex="-1">Comparison results</h2><p id="resultsSummary"></p><div id="resultActions" class="bimanual-actions"></div><div class="bimanual-table-scroll"><table><thead><tr><th scope="col">Strategy</th><th scope="col">Case</th><th scope="col">Model seed</th><th scope="col">Task outcome</th><th scope="col">Execution</th><th scope="col">Evidence</th></tr></thead><tbody id="resultRows"></tbody></table></div><div class="bimanual-actions"><button id="newComparison" class="secondary" type="button">New comparison</button></div></section>
+  </main>
+</body>
+</html>

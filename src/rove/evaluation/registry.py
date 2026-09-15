@@ -15,12 +15,18 @@ def resolve(name: str) -> tuple[type[EvaluationAdapter], dict]:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", name) or name == "robotics":
         raise ValueError("Invalid evaluation executor name")
     entries = list(importlib.metadata.entry_points(group="rove.evaluations", name=name))
-    if name == "text-example":
-        from rove.evaluation.examples import TextEvaluation
-
+    if name in {"text-example", "abc-bimanual"}:
         if entries:
-            raise ValueError("Installed executor conflicts with the built-in text-example")
-        factory, distribution = TextEvaluation, "rove-eval"
+            raise ValueError(f"Installed executor conflicts with the built-in {name}")
+        if name == "text-example":
+            from rove.evaluation.examples import TextEvaluation
+
+            factory = TextEvaluation
+        else:
+            from rove.bimanual.adapter import ABCBimanualEvaluation
+
+            factory = ABCBimanualEvaluation
+        distribution = "rove-eval"
     else:
         if len(entries) != 1:
             raise ValueError(f"Install exactly one trusted rove.evaluations executor named {name}")
@@ -33,11 +39,16 @@ def resolve(name: str) -> tuple[type[EvaluationAdapter], dict]:
     if not isinstance(revision, str) or not revision.strip() or len(revision) > 160:
         raise ValueError("Executor revision must contain 1-160 characters")
     sources = {}
-    for name_, value in (
+    methods = [
         ("adapter", factory),
         ("candidate", factory.predict),
         ("grader", factory.grade),
-    ):
+    ]
+    if hasattr(factory, "bind_context"):
+        if not callable(factory.bind_context):
+            raise ValueError("Optional bind_context must be callable")
+        methods.append(("context_binding", factory.bind_context))
+    for name_, value in methods:
         path = inspect.getsourcefile(value)
         if not path:
             raise ValueError("Executor requires inspectable Python source for provenance")

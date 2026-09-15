@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Compare ABC-VLA and adapted pi0.5 on bimanual episodes
+
+Run compatible policies through repeated ABC simulator episodes using existing Trials, Campaigns, evidence, traces and reports. A guided comparison and matching CLI preserve scene resets, checkpoint identities, task outcomes and policy-call measurements; a separate ABC/XDOF conversion and pi0.5 training recipe prepares adapted checkpoints. Real data conversion and CPU simulation are validated; GPU training and learned-policy comparison remain pending. *(PR #35)*
+
 ### Explore ABC and XDOF in Jupyter
 
 An executable notebook follows a prepared robot demonstration through camera/state inspection, optional ABC-VLA inference, complete simulator episodes and a small fine-tuning exercise. It uses a separate ABC environment and records actual evidence without adding training to the ROVE application. *(PR #33)*

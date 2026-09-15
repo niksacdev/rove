@@ -29,6 +29,15 @@ For a separate hands-on learning exercise, open the
 run a released VLA in ABC's simulator, and optionally explore fine-tuning.
 Its GPU steps use an independent environment and are not ROVE application features.
 
+The experimental [ABC-VLA versus pi0.5 comparison](docs/product/abc-pi05-comparison.md)
+connects complete bimanual simulator episodes to ROVE's Trials and Campaigns.
+Register compatible checkpoints with `rove bimanual setup`, preview fixed scene
+cases and repeated policy seeds, then run comparisons with preserved measurements
+and evidence. The pi0.5 checkpoint must be adapted to ABC's robot. Local checks
+cover the integration contracts, a real ABC CPU simulation with rendering, and
+LeRobot dataset conversion/readback. GPU inference, fine-tuning and model
+performance remain unverified on the development host.
+
 ![ROVE dashboard](docs/images/rove-welcome.png)
 
 ## Try it locally
@@ -123,7 +132,9 @@ ROVE has a validated timing, inertia and actuator-mapping contract.
 A VLM's success judgment is not measured task success. Stage attribution is a
 heuristic debugging hypothesis, not a demonstrated causal root cause. Perception
 and planning diagnostics do not control VLA actions in the parallel pipeline.
-There is no real closed-loop simulator integration yet; `mock-sim` is a stub.
+The experimental ABC integration adds a separate closed-loop episode path;
+its [validation scope](docs/product/abc-pi05-comparison.md) remains explicit.
+The original image-based pipeline's `mock-sim` remains a stub.
 
 ## Connect your models
 

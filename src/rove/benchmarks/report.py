@@ -6,10 +6,147 @@ import csv
 import html
 import io
 import json
+import math
+import re
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 from rove.benchmarks.evidence import summarize_evidence
 from rove.benchmarks.metrics import summarize
+
+_EPISODE_MEASUREMENTS = {
+    "episode_success": "Goal reached during the episode",
+    "final_success": "Goal satisfied at episode end",
+    "episode_steps": "Executed steps",
+    "simulated_time_s": "Simulated episode duration",
+    "replans": "Policy predictions",
+    "inference_latency_mean_s": "Mean inference latency per episode",
+    "inference_latency_p95_s": "p95 inference latency per episode",
+    "inference_wall_s": "Total inference time per episode",
+}
+
+
+def episode_comparison(campaign: dict, trials: list[dict]) -> dict | None:
+    """Requested seeds alone do not establish that the actual reset states match."""
+    spec = campaign["spec"]
+    if spec.get("execution") != "abc-bimanual":
+        return None
+    expected = {
+        (task["id"], strategy, seed)
+        for task in spec["tasks"]
+        for strategy in spec["strategies"]
+        for seed in spec["seeds"]
+    }
+    states, recorded = defaultdict(set), set()
+    for trial in trials:
+        identity = (trial.get("task_id"), trial.get("strategy_id"), trial.get("seed"))
+        output = (trial.get("result") or {}).get("output") or {}
+        if not isinstance(output, dict):
+            continue
+        digest = output.get("initial_state_digest")
+        if (
+            identity in expected
+            and output.get("scope") == "abc_simulation"
+            and isinstance(digest, str)
+            and re.fullmatch(r"[a-f0-9]{64}", digest)
+        ):
+            states[identity[0]].add(digest)
+            recorded.add(identity)
+    mismatches = sorted(case for case, digests in states.items() if len(digests) > 1)
+    missing = len(expected - recorded)
+    status = "mismatched" if mismatches else "incomplete" if missing else "matched"
+    return {
+        "status": status,
+        "matched_initial_states": False if mismatches else None if missing else True,
+        "mismatched_cases": mismatches,
+        "recorded_initial_states": len(recorded),
+        "planned_trials": len(expected),
+        "missing_initial_states": missing,
+        "note": (
+            "Initial simulator states differed; this is not a matched comparison. "
+            "Per-strategy outcomes remain available, but differences cannot be attributed to the policy alone."
+            if mismatches
+            else "Some initial simulator states are missing. Matching starting conditions are not yet established for all planned trials."
+            if missing
+            else "Recorded initial simulator states match within every case. This checks resets; it does not establish equal training exposure or deterministic GPU execution."
+        ),
+    }
+
+
+def episode_measurement_section(data: dict) -> str:
+    """Compare supplied episode measurements, retaining units, quality and coverage."""
+    spec = data["campaign"]["spec"]
+    if spec.get("execution", "robotics") == "robotics":
+        return ""
+    records = data.get("verification", {}).get("measurement_records", [])
+    keys = {
+        (r["name"], r["unit"], r["quality"])
+        for r in records
+        if r.get("name") in _EPISODE_MEASUREMENTS and r.get("quality") != "unknown"
+    }
+    if not keys:
+        return ""
+    values = defaultdict(dict)
+    for record in records:
+        value = record.get("value")
+        key = (record.get("name"), record.get("unit"), record.get("quality"))
+        if (
+            key in keys
+            and isinstance(value, int | float)
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
+            # One measured value per planned episode. Duplicate evaluator records
+            # must not make a strategy appear to have more coverage than it has.
+            identity = (record["task"], record["seed"])
+            group = values[*key, record["strategy"]]
+            if identity in group and group[identity] != value:
+                group[identity] = None
+            else:
+                group[identity] = value
+    planned = len(spec["tasks"]) * len(spec["seeds"])
+    headings = "".join(f"<th>{html.escape(sid)}</th>" for sid in spec["strategies"])
+    rows = []
+    for name, unit, quality in sorted(
+        keys, key=lambda key: (list(_EPISODE_MEASUREMENTS).index(key[0]), key[1], key[2])
+    ):
+        label = _EPISODE_MEASUREMENTS[name]
+        quality_label = (
+            "observed in simulation"
+            if quality == "observed" and spec["execution"] == "abc-bimanual"
+            else quality
+        )
+        cells = []
+        for sid in spec["strategies"]:
+            known = [
+                value for value in values[name, unit, quality, sid].values() if value is not None
+            ]
+            mean = sum(known) / len(known) if known else None
+            display = "Unavailable" if mean is None else f"{mean:.3f}".rstrip("0").rstrip(".")
+            if (
+                name in {"episode_success", "final_success"}
+                and known
+                and all(0 <= value <= 1 for value in known)
+            ):
+                display = f"{mean:.1%}"
+            cells.append(
+                f'<td><strong>{html.escape(display)}</strong><br><span class="muted">'
+                f"{len(known)} / {planned} episodes measured</span></td>"
+            )
+        rows.append(
+            f'<tr><th scope="row">{html.escape(label)}<br><span class="muted">'
+            f"{html.escape(unit)} · {html.escape(quality_label)}</span></th>{''.join(cells)}</tr>"
+        )
+    return (
+        '<section class="section" id="episode-measurements"><h2>Episode performance</h2>'
+        '<p class="section-intro">Compare what happened in the episodes with the inference time needed to control them. '
+        "Values are averages across measured episodes; missing measurements are excluded and coverage is shown in every cell. "
+        "The average of episode p95 latencies is not a pooled p95 across all predictions.</p>"
+        '<div class="table"><table><thead><tr><th>Measurement</th>'
+        f"{headings}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "<p>Simulated duration is not wall-clock cycle time. Inference measurements exclude model loading and environment setup; "
+        "the separate execution and assessment time includes that work. Goal-at-end and goal-reached measurements do not replace the frozen success criterion.</p></section>"
+    )
 
 
 def public_campaign(campaign: dict) -> dict:
@@ -62,11 +199,14 @@ def report_data(
                     **row,
                 }
             )
+    summary = summarize(campaign, trials)
+    if comparison := episode_comparison(campaign, trials):
+        summary["episode_comparison"] = comparison
     return {
         "schema_version": 2,
         "verification": summarize_evidence(campaign, trials),
         "campaign": public_campaign(campaign),
-        "summary": summarize(campaign, trials),
+        "summary": summary,
         "trials": trials,
         "trends": trends,
         "excluded_history_series": excluded,
@@ -276,6 +416,10 @@ def to_html(data: dict) -> str:
         scope_label = "Task output assessment"
         source_label = "Independent grader assessment"
         scope_note = "Each outcome comes from the recorded grader and its evidence. Missing assessments remain unknown."
+        if spec["execution"] == "abc-bimanual":
+            scope_label = "Simulated episode outcome"
+            source_label = "ABC simulator assessment"
+            scope_note = "These outcomes measure the configured goal in ABC's simulator. They do not establish performance on a customer's physical robot."
     human = any(
         criterion.get("required") and criterion.get("assessment") == "human_review"
         for criterion in contract.get("criteria", [])
@@ -619,7 +763,16 @@ def to_html(data: dict) -> str:
     portfolio = summary["portfolio"]
     campaign_url = (
         f"/static/datasets.html?step=review&campaign={quote(str(campaign['id']), safe='')}"
+        if spec.get("execution", "robotics") == "robotics"
+        else "/static/benchmarks.html"
     )
+    episode_section = episode_measurement_section(data)
+    comparison_notice = ""
+    if comparison := summary.get("episode_comparison"):
+        comparison_notice = (
+            '<p class="notice" role="status"><strong>Initial state comparison</strong> · '
+            f"{escape(comparison['note'])}</p>"
+        )
     invalid_note = f"{invalid} invalid configured verdicts · {execution_issues} execution issues. These are execution diagnostics, separate from contract assessments."
     return f'''<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>{escape(spec["name"])} · ROVE campaign report</title>
@@ -629,6 +782,7 @@ def to_html(data: dict) -> str:
 <p class="subtitle">An evidence-backed view of your evaluated strategies.</p>
 <div class="meta"><span class="badge">{escape(campaign["status"])}</span><span class="badge">{escape(spec["suite_version"])}</span><span class="badge">Revision {escape(spec["revision"])}</span><span class="badge">{len(task_ids)} cases · {len(strategy_ids)} strategies · {len(spec["seeds"])} repeats</span></div>
 <p class="notice"><strong>{escape(campaign["evidence_kind"])}</strong> · {escape(campaign["grading_note"])}</p>
+{comparison_notice}
 <nav class="jump-links" aria-label="Report sections"><a href="#outcomes">Outcomes</a><a href="#reliability">Reliability</a><a href="#tasks">Cases &amp; measurements</a><a href="#evidence">Evidence</a></nav>
 <section class="hero" id="outcomes"><div class="hero-head"><div><div class="eyebrow">{escape(source_label)}</div><h2>What did the trials establish?</h2><p>{scope_note}</p></div><span class="scope-label">{escape(scope_label)}</span></div>
 <div class="stats"><div class="stat" data-stat="passed" data-value="{passed}"><span class="label">Assessed pass</span><strong class="pass">{passed}</strong><small>of {planned} planned trials</small></div>
@@ -638,6 +792,7 @@ def to_html(data: dict) -> str:
 <div class="coverage"><div class="coverage-head"><span>Verdict coverage · {resolved} / {planned} trials resolved</span><strong>{coverage:.0%}</strong></div><div class="coverage-track" role="meter" aria-label="Verdict coverage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{coverage * 100:.2f}"><div class="coverage-fill" style="width:{coverage * 100:.2f}%"></div></div></div>
 <p class="context-line">{human_note}</p><p class="context-line" data-invalid-count="{invalid}">{invalid_note}</p></section>
 <section class="section"><h2>Compare strategies</h2><p class="section-intro">{portfolio["tasks_solved"]} / {portfolio["tasks_total"]} cases succeeded at least once across the selected strategies, with {portfolio["attempt_budget_per_task"]} planned attempts per case. This is hindsight coverage, not a deployed selection policy.</p><div class="panel chart-panel">{outcome_chart}</div><div class="strategy-grid">{"".join(strategy_cards)}</div></section>
+{episode_section}
 {robotics_section}
 <section class="section" id="reliability"><h2>Correctness and repeatability</h2><p class="section-intro">Each case has equal weight. Unknown outcomes stay visible as bounds; they cannot inflate a point estimate.</p><div class="chart-grid">{"".join(reliability)}</div>
 <details><summary>How to read the curves and uncertainty</summary><p>Solid points require a verdict for every planned attempt. Dotted lines bound unresolved outcomes; they are not confidence intervals. Missing points at k greater than the repeat count mean insufficient trials.</p><p>pass@k = 1 - C(n-c,k)/C(n,k); pass^k = C(c,k)/C(n,k), for n repeats and c successes. Errors, timeouts, interrupted and pending trials remain unknown.</p><p>Task-level pass@1 intervals are 95% Wilson intervals assuming independent attempts. Correlated environments or provider changes weaken that assumption. A verifier's confidence is never used as reliability.</p></details>

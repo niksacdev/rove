@@ -1,0 +1,3 @@
+# Install into a dedicated Python 3.12 environment, separate from ROVE and ABC.
+# This is a source pin, not a complete transitive dependency lock.
+lerobot[pi,training] @ git+https://github.com/huggingface/lerobot.git@89236ea0f4f81a81ca566081e20dd1ff5f823cbe

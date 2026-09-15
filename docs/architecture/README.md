@@ -5,6 +5,9 @@
 [ADR-037: Standalone ABC notebook](ADR-037-standalone-abc-notebook.md) keeps the
 XDOF/ABC learning exercise and its optional training environment separate from ROVE.
 
+[ADR-038: ABC bimanual episodes](ADR-038-abc-bimanual-episodes.md) adds a closed-loop
+executor using the same Trials, Campaigns, evidence and reporting lifecycle.
+
 Use [current implementation](current-implementation.md) to explain the shipped code,
 the [target architecture](target-architecture.md) and [system diagram](system-diagram.md)
 to explain the accepted direction, and [the product specification](../PRODUCT_SPEC.md)
