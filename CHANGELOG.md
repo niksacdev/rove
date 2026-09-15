@@ -10,7 +10,7 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ### Learn with the GR00T, MuJoCo and MCAP notebook
 
-The supplied GR00T N1.7 lab is available alongside the ABC/XDOF notebook in a shared notebook index, with dedicated kernel setup and local artifact guidance. LIBERO task selection follows the chosen suite, and before/after comparisons require distinct checkpoints saved during training. ABC video conversion also supports current FFmpeg; GPU execution remains unvalidated.
+The supplied GR00T N1.7 lab is available alongside the ABC/XDOF notebook in a shared notebook index, with dedicated kernel setup and local artifact guidance. LIBERO task selection follows the chosen suite, and before/after comparisons require distinct checkpoints saved during training. ABC video conversion also supports current FFmpeg; GPU execution remains unvalidated. *(PR #36)*
 
 ### Compare ABC-VLA and adapted pi0.5 on bimanual episodes
 
