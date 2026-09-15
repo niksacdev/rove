@@ -138,6 +138,7 @@ def create_router(root: Path) -> APIRouter:
     from rove.api.datasets import create_dataset_router
     from rove.api.insights import create_insights_router
     from rove.api.trajectory import create_trajectory_router
+    from rove.bimanual.api import create_bimanual_router
 
     combined = APIRouter(lifespan=lifespan)
 
@@ -146,6 +147,7 @@ def create_router(root: Path) -> APIRouter:
             launch(campaign_id)
 
     combined.include_router(create_dataset_router(root, ensure_launched))
+    combined.include_router(create_bimanual_router(root, ensure_launched))
     combined.include_router(create_assistant_router(root, ensure_launched))
     combined.include_router(create_insights_router(root))
     combined.include_router(create_trajectory_router(root))

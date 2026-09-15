@@ -6,6 +6,7 @@
 
 | Read | Purpose |
 | --- | --- |
+| [ABC-VLA versus pi0.5](product/abc-pi05-comparison.md) | Experimental bimanual episode comparison, repeated scene cases, measured outcomes and checkpoint adaptation |
 | [ABC + XDOF Jupyter tutorial](product/abc-jupyter-tutorial.md) | Standalone demonstration-to-policy notebook with optional GPU evaluation and fine-tuning |
 | [Product specification](PRODUCT_SPEC.md) | Core vision, founding personas, campaign model and delivery status |
 | [Concepts](product/concepts.md) | Cases, trials, campaigns, strategies, datasets and provenance |

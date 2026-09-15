@@ -8,6 +8,7 @@ import sys
 
 def main():
     commands = {
+        "bimanual": "rove.bimanual.cli",
         "trial": "rove.trials.cli",
         "campaign": "rove.benchmarks.workflow_cli",
         "baseline": "rove.benchmarks.baseline_cli",
@@ -34,7 +35,7 @@ def main():
         return
     parser = argparse.ArgumentParser(
         description="ROVE local robotics evaluation workbench",
-        epilog="Commands: trial, campaign, baseline, data, strategy, config, assistant, history, benchmark, exchange. Use COMMAND --help for automation options.",
+        epilog="Commands: trial, campaign, baseline, data, strategy, config, assistant, history, benchmark, exchange, bimanual. Use COMMAND --help for automation options.",
     )
     parser.add_argument("command", nargs="?", choices=["serve"], default="serve")
     parser.add_argument("--port", type=int, default=5001)

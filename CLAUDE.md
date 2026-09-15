@@ -16,7 +16,7 @@ in [concepts](docs/product/concepts.md) and
 
 ROVE evaluates robotics agent pipelines by running real inference through VLM+VLA+LLM+Agent combinations. It orchestrates a standardized 4-step pipeline (perceive → plan → act → verify) across multiple model combinations in parallel, producing ranked comparisons of success rate, latency, and cost for each agent configuration.
 
-ROVE is inference-only. It does not train, fine-tune, or modify models. It runs them in realistic robotics pipelines and measures the outcomes.
+ROVE's evaluation engine runs models and measures outcomes. Explicit standalone preparation examples may fine-tune a model before evaluation; training never starts implicitly inside a trial or campaign.
 
 - **PyPI package**: `rove-eval`
 - **Python import**: `import rove`
@@ -97,8 +97,10 @@ lifecycle reusable. See [reusable core](docs/product/reusable-evaluation-core.md
 `rove.evaluations` integrations accept structured inputs, run separate candidate
 and grader calls, and share SQLite history, evidence, deadlines and reporting.
 Generic case authoring is currently manifest/CLI based; do not claim the robotics
-case builder or strategy catalog already supports arbitrary domains. ABC rollout
-hosting and Azure/Fabric integrations are outside this pivot.
+case builder or strategy catalog already supports arbitrary domains. The built-in
+`abc-bimanual` executor now hosts ABC simulation episodes through this lifecycle;
+see [ADR-038](docs/architecture/ADR-038-abc-bimanual-episodes.md). Azure/Fabric
+deployment remains future work.
 
 ## Changelog
 
@@ -149,7 +151,7 @@ When creating a PR, always update `CHANGELOG.md`:
 
 ## What NOT to Build
 
-- No model training or fine-tuning (ROVE is inference-only — it consumes models, not produces them)
+- No training inside evaluation workers. Standalone preparation recipes may produce checkpoints which Trials and Campaigns then consume explicitly.
 - No real robot control (simulation only — output is data, not robot motion)
 - No model serving infrastructure (ROVE calls models, does not host them)
 - Keep robotics behavior compatible while reusing Trials/Campaigns for other evaluation domains. Domain-specific inputs and grading belong behind execution adapters; do not build a second campaign engine.

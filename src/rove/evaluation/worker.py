@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
 import json
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 
 from pydantic import JsonValue, TypeAdapter
 
+from rove.evaluation.context import EvaluationContext
 from rove.evaluation.models import EvaluationCase
 from rove.evaluation.registry import resolve
 from rove.evaluation.results import EvaluatorResult
@@ -22,88 +25,81 @@ async def execute(request: dict) -> dict:
     factory, identity = resolve(request["execution"])
     if identity != request["executor_identity"]:
         raise ValueError("Evaluation executor changed before execution")
-    adapter = factory()
     case = EvaluationCase.model_validate(request["task"])
     store, trial_id = TrialStore(Path(request["trial_root"])), request["trial_id"]
     config = request["config"]
     started = time.monotonic()
-
-    def event(stage, phase):
-        store.append_event(
-            trial_id,
-            {
-                "event_type": f"evaluation.{phase}",
-                "stage": stage,
-                "name": f"{stage.title()} {phase}",
-                "source": "rove.evaluation",
-                "source_clock_id": f"worker:{trial_id}",
-                "time_unit": "ns",
-                "source_timestamp": time.monotonic_ns(),
-                "span_id": f"{trial_id}:{stage}",
-            },
+    context = EvaluationContext(store, trial_id, config.get("environment", {}))
+    stage = "setup"
+    try:
+        adapter = factory()
+        if binder := getattr(adapter, "bind_context", None):
+            bound = binder(context)
+            if inspect.isawaitable(bound):
+                await bound
+        stage = "candidate"
+        context.emit(stage, "started")
+        output = await adapter.predict(
+            case.candidate(),
+            copy.deepcopy(config["strategies"][request["strategy_id"]]),
+            request["seed"],
         )
-
-    event("candidate", "started")
-    output = await adapter.predict(
-        case.candidate(),
-        copy.deepcopy(config["strategies"][request["strategy_id"]]),
-        request["seed"],
-    )
-    output = TypeAdapter(JsonValue).validate_python(output)
-    encoded = canonical_json(output).encode()
-    if len(encoded) > 4_000_000:
-        raise ValueError("Candidate output exceeds 4 MB")
-    # Store raw output once as managed evidence; sanitize the public record below.
-    asset = store.save_asset(encoded, "application/json")
-    store.attach_evidence(
-        trial_id,
-        {
-            "id": "candidate.output",
-            "asset_sha256": asset["sha256"],
-            "kind": "tool_output",
-            "units": {},
-        },
-    )
-    event("candidate", "completed")
-    reference_asset = store.save_asset(canonical_json(case.reference).encode(), "application/json")
-    store.attach_evidence(
-        trial_id,
-        {
-            "id": "case.reference",
-            "asset_sha256": reference_asset["sha256"],
-            "kind": "tool_output",
-            "units": {},
-        },
-    )
-    event("assessment", "started")
-    # Fresh validated copies prevent candidate-side mutation from changing the grader inputs.
-    case = EvaluationCase.model_validate(request["task"])
-    graded = await adapter.grade(
-        case.candidate(), copy.deepcopy(output), case.reference, copy.deepcopy(config["grading"])
-    )
-    assessment = EvaluatorResult.model_validate(
-        graded.model_dump(mode="json") if isinstance(graded, EvaluatorResult) else graded
-    )
-    refs = set(assessment.evidence_refs)
-    refs.update(ref for m in assessment.measurements for ref in m.evidence_refs)
-    if refs - {"candidate.output", "case.reference"}:
-        raise ValueError("Assessment refers to evidence that was not recorded")
-    assessment_payload = assessment.model_dump(mode="json")
-    # Round-trip prohibits NaN in free-form details and validates bounded storage.
-    encoded_assessment = canonical_json(assessment_payload).encode()
-    if len(encoded_assessment) > 1_000_000:
-        raise ValueError("Assessment exceeds 1 MB")
-    assessment_asset = store.save_asset(encoded_assessment, "application/json")
-    store.attach_evidence(
-        trial_id,
-        {
-            "id": "assessment.output",
-            "asset_sha256": assessment_asset["sha256"],
-            "kind": "tool_output",
-            "units": {},
-        },
-    )
-    event("assessment", "completed")
+        output = TypeAdapter(JsonValue).validate_python(output)
+        encoded = canonical_json(output).encode()
+        if len(encoded) > 4_000_000:
+            raise ValueError("Candidate output exceeds 4 MB")
+        # Store raw output once as managed evidence; sanitize the public record below.
+        context._record("candidate.output", encoded, "application/json")
+        context.emit(stage, "completed")
+        context._record(
+            "case.reference", canonical_json(case.reference).encode(), "application/json"
+        )
+        stage = "assessment"
+        context.emit(stage, "started")
+        # Fresh copies prevent candidate mutation from changing the grader inputs.
+        case = EvaluationCase.model_validate(request["task"])
+        graded = await adapter.grade(
+            case.candidate(),
+            copy.deepcopy(output),
+            case.reference,
+            copy.deepcopy(config["grading"]),
+        )
+        assessment = EvaluatorResult.model_validate(
+            graded.model_dump(mode="json") if isinstance(graded, EvaluatorResult) else graded
+        )
+        refs = set(assessment.evidence_refs)
+        refs.update(ref for m in assessment.measurements for ref in m.evidence_refs)
+        if refs - context.evidence_ids:
+            raise ValueError("Assessment refers to evidence that was not recorded")
+        assessment_payload = assessment.model_dump(mode="json")
+        # Round-trip prohibits NaN in free-form details and validates bounded storage.
+        encoded_assessment = canonical_json(assessment_payload).encode()
+        if len(encoded_assessment) > 1_000_000:
+            raise ValueError("Assessment exceeds 1 MB")
+        context._record("assessment.output", encoded_assessment, "application/json")
+        context.emit(stage, "completed")
+    except BaseException as error:
+        # Provider exceptions often contain URLs, credentials or customer inputs.
+        # Persist the stage and type only, while keeping already-written evidence.
+        with suppress(Exception):
+            context._record(
+                "evaluation.error",
+                canonical_json(
+                    {
+                        "stage": stage,
+                        "exception_type": type(error).__name__,
+                        "message": "Evaluation stage did not complete",
+                    }
+                ).encode(),
+                "application/json",
+            )
+            context.emit(
+                stage,
+                "cancelled" if isinstance(error, asyncio.CancelledError) else "failed",
+                data={"exception_type": type(error).__name__},
+                evidence_refs=["evaluation.error"],
+            )
+        raise
     return {
         "outcome": assessment.verdict,
         "execution": "completed",

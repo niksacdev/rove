@@ -22,6 +22,7 @@ async def run_evaluation_trials(
     execution: str,
     seed: int = 0,
     timeout_s: float = 120,
+    on_trial_created=None,
 ) -> dict:
     spec = CampaignSpec(
         name="Standalone evaluation",
@@ -49,6 +50,8 @@ async def run_evaluation_trials(
             seed=seed,
         )
         identities[sid] = trial_id
+        if on_trial_created is not None:
+            on_trial_created(sid, trial_id)
         started = time.monotonic()
         try:
             result = await run_attempt(

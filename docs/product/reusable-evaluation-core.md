@@ -156,11 +156,12 @@ environment identities must be supplied in configuration;
 ROVE does not independently resolve or verify them. Conservative comparison checks
 can reject a changed adapter even when its author believes the results comparable.
 
-This is preparation for future integrations. It does not run ABC episodes, turn
-XDOF demonstrations into executable scenes, deploy Azure workers, export to Fabric
-or provide a generic LLM grader. Those integrations need their own tested adapters
-and evidence contracts. The current [ABC import](abc-dataset-support.md) retains
-its existing observation-import scope.
+The core does not provision environments, turn XDOF demonstrations into executable
+scenes, deploy Azure workers, export to Fabric or provide a generic LLM grader.
+The experimental [ABC bimanual integration](abc-pi05-comparison.md) adds a specific
+episode executor through this boundary, with its own runtime and evidence contract.
+The existing [ABC import](abc-dataset-support.md) retains its observation-import
+scope. Generic authoring remains distinct from that supported simulator preset.
 
 ## Implementation evidence
 
