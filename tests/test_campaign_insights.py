@@ -16,6 +16,7 @@ from rove.benchmarks.runner import prepare
 from rove.benchmarks.store import CampaignStore
 from rove.datasets.service import DatasetService
 from rove.models.config import RoveConfig
+from rove.runtime.assistant import save_assistant_selection
 
 
 class Runtime:
@@ -193,7 +194,8 @@ def summary_output(h, cid):
 
 
 @pytest.mark.asyncio
-async def test_unconfigured_template_is_honest_and_never_calls_provider_or_writes(h):
+async def test_disabled_template_is_honest_and_never_calls_provider_or_writes(h):
+    save_assistant_selection(None, root=h["root"])
     service = CampaignInsights(
         h["root"], config_loader=lambda: h["config"], runtime_factory=h["runtime"]
     )
@@ -594,7 +596,8 @@ def test_evidence_changed_during_generation_is_not_cached_or_presented_as_curren
 
 
 @pytest.mark.asyncio
-async def test_unconfigured_summary_distinguishes_missing_setup_from_generation_failure(h):
+async def test_disabled_summary_distinguishes_missing_setup_from_generation_failure(h):
+    save_assistant_selection(None, root=h["root"])
     cid = make_campaign(h)
     insights = CampaignInsights(
         h["root"], config_loader=lambda: h["config"], runtime_factory=h["runtime"]

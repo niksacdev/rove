@@ -21,6 +21,11 @@ flowchart TD
     G --> H[Report with expandable details]
 ```
 
+A repeated action chunk is not another trial. Reliability for a complete robotics
+task requires independently assessed episodes, not repeated inference on an unchanged
+image or counting actions inside one execution. Current VLA inference and future
+closed-loop execution have [different evidence scopes](action-and-episode-evaluation.md).
+
 ## Two levels of success
 
 | Level | Definition | Example |
@@ -45,7 +50,7 @@ estimates, not an additional target type.
 
 ## Setup in configuration and the UI
 
-The implemented Cases workflow saves a contract with assessment scope, evidence
+The campaign Success metrics stage saves a contract with assessment scope, evidence
 mode, required criteria and selected metrics. Automated criteria bind to configured
 verification; human criteria require per-output ratings. Preview marks measures
 available, conditional, awaiting review or unavailable, explains k values exceeding repetitions,
@@ -59,9 +64,8 @@ configured episode verifier supplies completion, constraint, intervention and
 recovery measurements with synthetic or supplied observed provenance. Explicit
 contract bindings can supply selected frozen SME labels to local graders while
 keeping candidate inputs separate. See [robotics evidence](robotics-evidence.md)
-for exact schemas and supported bindings. The API/UI share these contracts; the
-example runner demonstrates programmatic setup, without adding a dedicated
-contract-file CLI.
+for exact schemas and supported bindings. The API, UI and `rove data contract create --file FILE` share these contracts;
+see the [CLI guide](cli-ui-parity.md) for scripted setup and report gates.
 
 The API and UI use the same validated, versioned contract:
 

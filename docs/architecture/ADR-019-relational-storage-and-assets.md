@@ -1,5 +1,7 @@
 # ADR-019: Keep local records relational and large assets separate
 
+> **Current implementation:** Local SQLite records, managed assets and validated relational exchange are implemented. See [current storage and process boundaries](system-diagram.md) and [evidence/exchange](../product/evidence-and-exchange.md). Historical alternatives below remain the decision record.
+
 **Status:** Accepted direction
 **Implementation status:** Shared trial/case/review SQLite schema, managed images and versioned dataset membership implemented; campaign journal remains separate
 **Date:** 2026-09-12

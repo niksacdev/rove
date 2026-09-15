@@ -357,3 +357,9 @@ body[data-quick-step] .root-main { overflow-y:auto; }
 #assistant .assistant-settings-actions {display:flex;gap:12px;flex-wrap:wrap;margin:20px 0;}
 #assistant button,#assistantReturnToCampaign {display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;font-size:14px;color:var(--f-text);background:var(--f-surface);border:1px solid var(--f-border-strong);border-radius:var(--f-radius-control,4px);}
 #assistant #saveAssistantSettings {background:var(--f-accent);border-color:var(--f-accent);color:white;}#assistant button:disabled {opacity:.5;cursor:not-allowed;}
+#assistant [hidden] {display:none;}
+#assistant input {width:100%;min-height:40px;padding:8px 12px;background:var(--f-bg);color:var(--f-text);border:1px solid var(--f-border-strong);border-radius:var(--f-radius-control,4px);font-size:16px;}
+#assistantCopilotFields,#assistantEndpointFields,#assistantFoundryFields {margin-top:20px;}
+#assistantDeviceLogin {padding:16px;border:1px solid var(--f-border);border-radius:var(--f-radius-panel,6px);background:var(--f-bg);}
+#assistantDeviceCode {display:block;margin:12px 0;font-size:24px;letter-spacing:3px;color:var(--f-text);}
+#assistantDeviceLogin a {font-size:16px;color:var(--f-accent-text);text-decoration:underline;}

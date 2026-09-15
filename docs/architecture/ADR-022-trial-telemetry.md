@@ -1,5 +1,7 @@
 # ADR-022: Retain Trial Events and Link Measurements to Evidence
 
+> **Current implementation:** Durable events, source-clock lanes, paired traces and bounded local OTLP export are implemented. Hosted collectors remain separately validated integrations. See [traces and measurements](../product/traces-and-measurements.md) and [local observability](runtime-observability.md); the proposal history below is retained.
+
 **Status:** Proposed
 **Implementation status:** Durable event recording and linked trial inspection are pending
 **Date:** 2026-09-12

@@ -24,11 +24,13 @@ from enum import Enum
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 SDK_VERSION = "1.0.13"
 CLI_VERSION = "1.0.81-9"
 Role = Literal["candidate", "grader", "assistant"]
+AuthMode = Literal["byok", "github", "azure_cli"]
 EventSink = Callable[[dict[str, Any]], None]
 
 
@@ -54,7 +56,7 @@ class RuntimeTool:
 @dataclass(frozen=True)
 class CopilotRuntimeConfig:
     model: str
-    provider: dict[str, Any] = field(repr=False)
+    provider: dict[str, Any] = field(default_factory=dict, repr=False)
     role: Role = "candidate"
     timeout_seconds: float = 60.0
     cleanup_timeout_seconds: float = 5.0
@@ -66,12 +68,51 @@ class CopilotRuntimeConfig:
     system_message: str = "Return a JSON object describing the requested robotics pipeline stage."
     telemetry: dict[str, Any] | None = None
     native_traces: bool = True
+    auth_mode: AuthMode = "byok"
+    github_auth_directory: str | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.role not in {"candidate", "grader", "assistant"}:
             raise ValueError("Invalid runtime actor role")
-        if not self.model or not self.provider.get("base_url"):
+        if self.auth_mode not in {"byok", "github", "azure_cli"}:
+            raise ValueError("Invalid runtime authentication mode")
+        if self.auth_mode == "github":
+            if self.provider:
+                raise ValueError("GitHub authentication cannot include a BYOK provider")
+            if not self.github_auth_directory or not Path(self.github_auth_directory).is_absolute():
+                raise ValueError("GitHub authentication requires an explicit absolute ROVE profile")
+        elif not self.model or not self.provider.get("base_url"):
             raise ValueError("An explicit model and provider base_url are required")
+        if self.auth_mode == "azure_cli":
+            parsed = urlsplit(self.provider["base_url"])
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or not parsed.hostname.endswith((".openai.azure.com", ".services.ai.azure.com"))
+                or parsed.port not in {None, 443}
+                or parsed.path.rstrip("/") != "/openai/v1"
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+                or self.provider.get("type", "openai") != "openai"
+            ):
+                raise ValueError(
+                    "Azure CLI authentication requires a public Foundry HTTPS /openai/v1 endpoint"
+                )
+            if any(
+                key in self.provider
+                for key in (
+                    "api_key",
+                    "api_key_env",
+                    "bearer_token",
+                    "bearer_token_provider",
+                    "headers",
+                )
+            ):
+                raise ValueError(
+                    "Azure CLI authentication cannot include alternative provider credentials"
+                )
         for value in (self.timeout_seconds, self.cleanup_timeout_seconds):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError("Runtime deadlines must be positive finite seconds")
@@ -79,6 +120,69 @@ class CopilotRuntimeConfig:
             raise ValueError("Runtime evidence limits are too small")
         if type(self.native_traces) is not bool:
             raise ValueError("native_traces must be a boolean")
+
+
+def github_login_environment(directory: str | Path) -> dict[str, str]:
+    """Use one explicit app profile, without ambient token or GitHub CLI configuration."""
+    root = Path(directory)
+    if not root.is_absolute():
+        raise ValueError("GitHub authentication requires an absolute profile directory")
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    paths = {name: root / name for name in ("isolated-home", "isolated-gh", "isolated-config")}
+    for path in paths.values():
+        path.mkdir(exist_ok=True, mode=0o700)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key
+        in {
+            "PATH",
+            "SYSTEMROOT",
+            "WINDIR",
+            "LANG",
+            "LC_ALL",
+            "TMPDIR",
+            "TEMP",
+            "TMP",
+        }
+    }
+    environment.update(
+        {
+            "COPILOT_HOME": str(root),
+            "HOME": str(paths["isolated-home"]),
+            "USERPROFILE": str(paths["isolated-home"]),
+            "GH_CONFIG_DIR": str(paths["isolated-gh"]),
+            "XDG_CONFIG_HOME": str(paths["isolated-config"]),
+            "GH_PROMPT_DISABLED": "1",
+        }
+    )
+    return environment
+
+
+async def _azure_cli_token() -> str:
+    """Acquire per execution off the event loop; drain bounded CLI work on cancellation."""
+
+    def acquire():
+        from azure.identity import AzureCliCredential
+
+        with AzureCliCredential(process_timeout=10) as credential:
+            token = credential.get_token("https://ai.azure.com/.default")
+            if not token.token or token.expires_on <= time.time() + 30:
+                raise ValueError("Azure CLI returned no usable access token")
+            return token.token
+
+    operation = asyncio.create_task(asyncio.to_thread(acquire))
+    try:
+        return await asyncio.shield(operation)
+    except asyncio.CancelledError:
+        # AzureCliCredential's synchronous subprocess timeout kills and reaps the CLI.
+        # Never abandon a background credential acquisition on stage cancellation.
+        await asyncio.gather(operation, return_exceptions=True)
+        raise
+    except Exception:
+        raise RuntimeError(
+            "Azure CLI authentication failed; sign in with az login and verify resource access"
+        ) from None
 
 
 def _plain(value: Any) -> Any:
@@ -325,8 +429,8 @@ class CopilotRuntime:
         self.tools = tools
         self.event_sink = event_sink
         self._factory = client_factory
-        self.model_id = config.model
-        self.display_name = f"Copilot: {config.model}"
+        self.model_id = config.model or "copilot-default"
+        self.display_name = f"Copilot: {config.model or 'default model'}"
         if len({tool.name for tool in tools}) != len(tools):
             raise ValueError("Runtime tool names must be unique")
         if any(config.role not in tool.roles for tool in tools):
@@ -355,6 +459,15 @@ class CopilotRuntime:
                 }
             },
         }
+        if self.config.auth_mode == "github":
+            options.update(
+                {
+                    "base_directory": self.config.github_auth_directory,
+                    "use_logged_in_user": True,
+                    "mode": "copilot-cli",
+                    "env": github_login_environment(self.config.github_auth_directory),
+                }
+            )
         if self.config.telemetry is not None:
             options["telemetry"] = {
                 **self.config.telemetry,
@@ -419,6 +532,46 @@ class CopilotRuntime:
             )
         except PackageNotFoundError:
             return False
+
+    async def github_identity(self, *, include_models: bool = False) -> dict[str, Any]:
+        """Inspect the explicitly selected ROVE sign-in profile; never run inference."""
+        if self.config.auth_mode != "github":
+            raise ValueError("GitHub identity is available only in explicit GitHub mode")
+        result = {"authenticated": False, "login": None, "models": [], "reason": None}
+        client = None
+        with tempfile.TemporaryDirectory(prefix="rove-auth-status-") as workspace:
+            try:
+                async with asyncio.timeout(min(self.config.timeout_seconds, 20)):
+                    client = await self._client(workspace)
+                    await client.start()
+                    status = await client.get_auth_status()
+                    result["authenticated"] = (
+                        status.isAuthenticated is True and status.authType == "user"
+                    )
+                    if result["authenticated"]:
+                        login = status.login
+                        if isinstance(login, str) and len(login) <= 128:
+                            result["login"] = login
+                        if include_models:
+                            result["models"] = [
+                                {"id": str(model.id)[:128], "name": str(model.name)[:256]}
+                                for model in (await client.list_models())[:200]
+                            ]
+                    else:
+                        result["reason"] = "Sign in to GitHub Copilot for this ROVE profile."
+            except Exception:
+                result["reason"] = "GitHub Copilot identity or model discovery is unavailable."
+            finally:
+                if client is not None:
+                    try:
+                        await asyncio.wait_for(client.stop(), self.config.cleanup_timeout_seconds)
+                    except Exception:
+                        result["reason"] = "GitHub Copilot runtime cleanup failed."
+                        if hasattr(client, "force_stop"):
+                            await asyncio.wait_for(
+                                client.force_stop(), self.config.cleanup_timeout_seconds
+                            )
+        return result
 
     def _sdk_tools(self, recorder: _Recorder) -> list[Any]:
         from rove.orchestrator.recording import capture_recording_context, event_sink
@@ -613,9 +766,23 @@ class CopilotRuntime:
                 async with asyncio.timeout(self.config.timeout_seconds):
                     client = await self._client(workspace)
                     await client.start()
-                    session = await client.create_session(
-                        model=self.config.model,
-                        provider=dict(self.config.provider),
+                    if self.config.auth_mode == "github":
+                        identity = await client.get_auth_status()
+                        if identity.isAuthenticated is not True or identity.authType != "user":
+                            raise RuntimeError(
+                                "Sign in to the dedicated ROVE GitHub Copilot profile before inference"
+                            )
+                    routing = {}
+                    if self.config.model:
+                        routing["model"] = self.config.model
+                    if self.config.auth_mode != "github":
+                        provider = dict(self.config.provider)
+                        if self.config.auth_mode == "azure_cli":
+                            provider["type"] = "openai"
+                            provider["bearer_token"] = await _azure_cli_token()
+                        routing["provider"] = provider
+                    session = await client.create_session(  # nosec B106 - in-memory is a storage mode
+                        **routing,
                         session_id=session_id,
                         available_tools=[tool.name for tool in self.tools],
                         tools=self._sdk_tools(recorder),
@@ -628,7 +795,31 @@ class CopilotRuntime:
                         enable_host_git_operations=False,
                         enable_skills=False,
                         enable_session_store=False,
+                        enable_session_telemetry=False,
+                        enable_on_demand_instruction_discovery=False,
+                        skip_embedding_retrieval=True,
+                        embedding_cache_storage="in-memory",
+                        mcp_oauth_token_storage="in-memory",
+                        memory={"enabled": False},
+                        enable_experimental_mode=False,
+                        custom_agents_local_only=True,
+                        coauthor_enabled=False,
+                        manage_schedule_enabled=False,
+                        included_builtin_skills=[],
+                        custom_agents=[],
+                        mcp_servers={},
+                        plugin_directories=[],
+                        instruction_directories=[],
+                        skill_directories=[],
                     )
+                    if self.config.auth_mode == "github":
+                        # copilot-cli mode enables keychain authentication; explicitly restore
+                        # empty mode's installed-plugin exclusion before any model request.
+                        from copilot.generated.rpc import SessionUpdateOptionsParams
+
+                        await session.rpc.options.update(
+                            SessionUpdateOptionsParams(installed_plugins=[])
+                        )
                     recorder.check()
                     ready_at = time.monotonic()
                     operation = asyncio.create_task(
@@ -695,11 +886,22 @@ class CopilotRuntime:
             raise RuntimeError("Copilot runtime cleanup failed: " + ", ".join(cleanup_errors))
         if result is None:
             raise RuntimeError("Copilot stage terminated without an output")
+        observed_models = sorted(
+            {
+                item["model"]
+                for item in recorder.usage
+                if isinstance(item.get("model"), str) and item["model"]
+            }
+        )
         result["_runtime"] = {
             "provider": "copilot",
             "sdk_version": SDK_VERSION,
             "cli_version": self.config.expected_cli_version,
-            "model": self.config.model,
+            "model": self.config.model
+            or (observed_models[0] if len(observed_models) == 1 else "copilot-default"),
+            "requested_model": self.config.model or "copilot-default",
+            "observed_models": observed_models,
+            "auth_mode": self.config.auth_mode,
             "role": self.config.role,
             "session_id": session_id,
             "memory": "fresh_per_stage",

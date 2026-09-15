@@ -1,5 +1,7 @@
 # ADR-021: Campaign success definitions and report explanations
 
+> **Current implementation:** Success contracts, manual/configured assessment and aggregate targets are implemented. [Current measures](../product/metrics-and-success.md) and [ADR-031](ADR-031-shared-evaluation-workspace.md) describe the current Success metrics UI; earlier screen designs below are historical.
+
 **Status:** Accepted; local contracts, explicit frozen-label bindings, synthetic episode measures and aggregate target evaluation implemented. Real provider/robot validation remains separate.
 
 ## Context at proposal

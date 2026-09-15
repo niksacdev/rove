@@ -15,7 +15,7 @@ The trial interface uses shared neutral tokens and viewport-bounded tooltips.
 ROVE runs configurable robotics evaluation pipelines from a local dashboard and a
 repeated-trial campaign runner. Both now create durable trial identities and frozen
 configuration records before execution, retain available intermediate events, and
-expose saved evidence through Trial history. The optional Copilot adapter hosts
+expose saved evidence through the Trials browser and inspector. The optional Copilot adapter hosts
 perception, planning and verification stages; customer adapters remain directly
 callable. Versioned cases, success contracts, SME review, dataset freezing and
 baseline comparisons extend that foundation. The linked [product concepts](../product/concepts.md) and
@@ -30,6 +30,15 @@ Test connection runs a fixed synthetic JSON request. Runtime presence is separat
 provider connectivity. Campaign summary links now reach this section, with a return
 path to the campaign. A real local Copilot/Qwen summary passed evidence-reference
 validation; unavailable and invalid replies remain explicit rather than invented AI.
+
+The current provider extension is implemented and under verification in
+[ADR-035](ADR-035-assistant-provider-selection.md): Copilot is the default only with no
+saved row; existing endpoint/Disabled settings survive migration. Explicit ROVE-profile
+GitHub device authentication and model discovery are separate from Test connection.
+Foundry uses a validated public Azure model resource plus deployment, with an ephemeral
+Azure CLI bearer token. This is distinct from the Foundry Agent strategy adapter.
+No authenticated GitHub/Azure model test is claimed here; see the
+[setup guide](../product/assistant-setup.md) for the exact CLI/UI contract.
 
 ## Trial-to-campaign handoff and guided improvement
 
@@ -57,84 +66,74 @@ mock behavior and no-change comparison, not live AI, model improvement or hardwa
 [ADR-027](ADR-027-trial-to-campaign-improvement.md) links implementation and tests.
 Earlier campaign-only browser evidence below has its original narrower scope.
 
-## Workflow navigation
+## Shared workflow, scoring and results
 
-The existing shared navigation and saved campaign/trial deep links were delivered in
-PR #21. User feedback found that route consistency left the workflow unclear: case
-selection, contracts, chat, datasets and execution still competed for attention.
+**Trials** and **Campaigns** are peer saved-record browsers. Home and browsers use
+**New trial** and **New campaign** consistently; Settings is separate on the right.
+Quick work follows Case, Configure, Review & run and Results. Campaigns extend it
+through Cases, Configure, Success metrics, Run and Review & improve. Both render
+[`strategy-table.js`](../../frontend/strategy-table.js) for checkbox selection and
+configured stage endpoints. Configuration checks show inline pending/ready/blocked
+feedback; server preview remains authoritative.
 
-The accepted amendment is **Start, Evaluate, Results**, with **Settings** separately
-on the right. The latest accepted refinement is **Cases → Configure → Success metrics
-→ Run → Results**, implemented with local regression and mock browser verification. It
-uses an image/task gallery dialog and selected-case cards, existing strategies from
-configuration, plain-language success criteria with draft suggestions, and an optional
-assistant with the campaign context. Success metrics separates assessment agreement
-from strategy selection. Run exposes the planned trial count and each recorded trial's
-case, strategy and attempt identity. Dataset actions use case-collection wording;
-adding to a collection requires a new revision retaining its earlier membership.
+Quick review shows the observation, full task, optional robot file and selected
+strategies before an explicit Run trials action. Inputs lock during execution. Step
+navigation, inspection and Enter in the task field do not run a model. Unsaved-work
+navigation has a stay/leave boundary. Results retains All strategies and an exact
+Inspect trial & traces link; opening one result does not discard the comparison.
+[ADR-031](ADR-031-shared-evaluation-workspace.md),
+[ADR-032](ADR-032-trial-review-and-navigation-state.md) and
+[ADR-033](ADR-033-isolated-vla-runtime-and-trial-inspection.md) record the changes and
+validation scope.
 
-The five-stage amendment extends the existing DOM behavior regression coverage with
-metrics drafting/confirmation, strategy progress and graph-first Results checks. Run
-confirms the selected strategy and exact scoring criteria. Case expectations are keyed
-by immutable case revision in the saved contract; scoring edits and late save responses
-cannot silently activate an outdated preview. Saved collection cards load their actual
-members, and adding cases preserves the old revision and its review references.
+The campaign header keeps name, attempts per case and the trial total visible across
+stages. Saved campaign setup is read-only from its recorded spec; the attempt count is
+its seed-list length, including nonconsecutive seed values. Improve creates a linked
+editable copy rather than mutating history. Case selection uses a bounded image/task
+library; saved datasets supply exact case membership and review choices.
 
-Active campaign progress polls every two seconds while the Run page is visible, and
-active trial events update each strategy overview. Inline
-pipeline details fetch recorded stages/output on expansion and manual refresh, showing
-up to 200 events with a full-inspector link. They do not stream tokens. Tests cover these
-paths alongside draft preservation, search/selection, deep links and no execution from
-navigation. Browser verification completed the desktop dark-theme journey with three
-isolated mock trials, plus narrow-shell checks in both themes. A stale Review summary
-found during that run now refreshes on entry and has a regression test. Saved Run
-links show recorded configuration, and campaign refresh retains expanded trial details.
-The 390px case gallery was verified in both themes; mock execution does not
-establish model quality or physical robot performance.
-The [campaign workspace](../product/user-journey.md) and
-[ADR-025](ADR-025-workflow-navigation.md) define the requirements and evidence checklist.
-Existing API, recording and scoring contracts remain authoritative below.
+Success metrics separates trial-level pass conditions and manual/configured checks
+from report statistics. A description is not executable logic. Human criteria stay
+unassessed until reviews exist; configured criteria require their actual verifier and
+evidence. Contracts, targets and annotation bindings remain under Technical settings.
+A new draft's Results stage has a focused no-results state. Saved results display
+outcomes, per-strategy charts, optional interpretation and inspectable trials, with
+scoring/baseline details secondary. Foreground completion opens results automatically.
 
-The five-stage refinement adds an individual progress overview for each chosen
-strategy. Results leads with assessment-derived charts, then a compact optional AI
-explanation and expandable **Inspect trials** evidence. Passed/failed/unknown counts,
-execution status and assessment coverage remain separate. Unavailable metrics are
-not converted to zero; unresolved pass@k/pass^k bounds are not confidence intervals.
+The insight endpoints are read-only uses of the configured assistant runtime.
+`/api/campaigns/metrics-draft` prepares reviewable criteria from tasks and annotations,
+not image inspection or SME judgments. `/api/campaigns/{id}/outcome-summary` interprets
+bounded saved stage/model/status/timing/check evidence and allowlisted trial anchors;
+it cannot change scores. It distinguishes a missing provider, failed generation and
+incomplete campaign. Valid AI summaries are cached in `campaign_insights` against the
+assessed evidence, assistant/runtime configuration and prompt version. Changed evidence
+invalidates generation/cache identity; templates remain retryable. Raw prompts, action
+arrays and private trace journals are not automatically sent to the assistant.
 
-The implemented insight endpoints reuse the configured assistant runtime in read-only
-mode. `/api/campaigns/metrics-draft` produces a reviewable success-contract draft from
-tasks and annotations, with source and evidence fingerprints. It does not perform
-image inspection or write SME judgments. `/api/campaigns/{id}/outcome-summary` explains
-retained assessment data without changing it. The `campaign_insights` cache table in
-existing `campaigns.sqlite3` keys explanations to the full assessed campaign/trials,
-assistant configuration, SDK/CLI versions and prompt version. Only valid completed-
-campaign AI interpretations are persisted; templates remain retryable. Evidence changes
-during generation cause a regeneration error. Concurrent requests coalesce in process.
-The model receives bounded saved aggregates, stage/model/status/timing evidence,
-allowlisted check measurements and trial anchors. Raw prompts, outputs and trace journals
-are not included. Runtime failures produce repair recommendations rather than invented
-model-quality diagnoses.
-Credentials and inline media are sanitized; reference annotations remain task context.
-Missing/failing providers and incomplete campaigns have distinct template explanations.
-The source is [`insights.py`](../../src/rove/benchmarks/insights.py), its
-[API router](../../src/rove/api/insights.py) and the shared
-[assistant configuration](../../src/rove/runtime/assistant.py). Fake-runtime tests in
-[`test_campaign_insights.py`](../../tests/test_campaign_insights.py) verify draft and
-summary boundaries without live inference.
+Sources: [`insights.py`](../../src/rove/benchmarks/insights.py),
+[API](../../src/rove/api/insights.py), [assistant selection](../../src/rove/runtime/assistant.py)
+and [insight tests](../../tests/test_campaign_insights.py). A real local Qwen summary
+passed the evidence-reference validator in the ADR-034 check; that is not proof of
+recommendation quality or general provider support.
 
-The isolated five-stage browser campaign `0dcb416a21a755b2be325b61b061df0c` ran two mock
-strategy revisions on one case with three repetitions. Six persisted executions had
-six unassessed outcomes in the graphs, with recorded strategy stages and collapsed
-trial inspection. The 390px Results view had no horizontal overflow. This evidence
-establishes local workflow behavior, not live assistant or hardware performance.
+Progress uses recorded trial slots and stage events. It does not claim token streaming.
+Execution status and outcome acceptance remain independent; unknown metrics are not
+zero and unresolved pass@k/pass^k bounds are not confidence intervals. Set as baseline
+captures one completed strategy's assessment snapshot. A preview or review operation
+never dispatches new trials; a comparison requires explicit execution.
 
-Creation uses **Create a campaign**, and **Run campaign** is an execution action on that
-record. **Review results** loads recorded evidence. Baseline creation names a completed
-campaign strategy and preserves its assessment snapshot; it is not another execution.
-The primary **Set as baseline** action and Results **Baseline** badge expose that role,
-while pinning and revision history remain secondary. The badge must derive from saved
-baseline references. Comparison preparation is read-only until **Start comparison
-campaign** explicitly dispatches fresh candidate trials.
+## Action inference is not full episode execution
+
+The local LeRobot adapter/worker gathers action outputs from the same prepared batch.
+There is no generic execute/observe/replan loop that receives a fresh robot observation
+after each chunk. A complete integration could put many chunks inside one trial; they
+are not independent reliability samples. Strict inputs, explicit probe limits and
+URDF-based diagnostics do not fill this missing episode/outcome layer. See
+[action and episode scope](../product/action-and-episode-evaluation.md) for the current
+boundary and the proposed industrial pick-and-place milestone. The separate
+[ABC bimanual executor](../product/abc-pi05-comparison.md) now supplies a simulator
+episode loop through the reusable evaluation core. Its integration and CPU simulator
+checks do not validate GPU model performance or arbitrary physical robot control.
 
 ## Strategy selection and saved revisions
 
@@ -153,7 +152,8 @@ from the current selected strategy, so a changed source is not silently treated 
 archived baseline. [ADR-026](ADR-026-versioned-strategy-catalog.md) records this boundary;
 the implemented shared loader, API and local regression evidence are linked there.
 The revision editor adds new saved candidates without rewriting YAML or starting trials;
-its browser integration remains pending.
+the browser exposes reviewed stage alternatives and exact change previews through
+Improve; see [ADR-029](ADR-029-workspace-interaction-consistency.md).
 
 ## Two Entry Paths, One Pipeline
 
@@ -527,7 +527,7 @@ The campaign routes are implemented in
 current HTTP schema. There is no supported `rove evaluate` batch command or
 `rove.evaluate()` convenience function.
 
-Open the existing **Trial history** page to reopen a saved attempt without
+Open the **Trials** browser to reopen a saved attempt without
 executing it; the navigation consolidation places it under **Results**. The shared store adds regression tests for
 [storage](../../tests/test_trial_store.py),
 [quick/campaign recording](../../tests/test_trial_integration.py),

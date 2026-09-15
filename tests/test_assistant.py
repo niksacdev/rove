@@ -12,6 +12,7 @@ from rove.api.assistant import create_assistant_router
 from rove.benchmarks.store import CampaignStore
 from rove.datasets.service import DatasetService
 from rove.models.config import RoveConfig
+from rove.runtime.assistant import save_assistant_selection
 
 
 class ControlledRuntime:
@@ -130,7 +131,8 @@ def confirmation(proposal):
     }
 
 
-def test_unconfigured_is_optional_and_never_starts_runtime(tmp_path, monkeypatch):
+def test_disabled_is_optional_and_never_starts_runtime(tmp_path, monkeypatch):
+    save_assistant_selection(None, root=tmp_path)
     monkeypatch.delenv("ROVE_ASSISTANT_ENDPOINT", raising=False)
     app = FastAPI()
     app.include_router(create_assistant_router(tmp_path, lambda _: pytest.fail("launch")))

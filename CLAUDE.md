@@ -12,81 +12,71 @@ status and source/test evidence. The product vocabulary and current roadmap are
 in [concepts](docs/product/concepts.md) and
 [workflows](docs/product/evaluation-workflows.md).
 
-## Project Overview
+## Current project overview
 
-ROVE evaluates robotics agent pipelines by running real inference through VLM+VLA+LLM+Agent combinations. It orchestrates a standardized 4-step pipeline (perceive → plan → act → verify) across multiple model combinations in parallel, producing ranked comparisons of success rate, latency, and cost for each agent configuration.
+**ROVE evaluates robotics agent pipelines on your task.** Compare the same task,
+observation and relevant robot input across configured strategies. Quick trials
+provide immediate outputs; campaigns add repeated attempts, success contracts,
+reviews, baselines and versioned improvement history. Execution, outcome acceptance
+and physical completion are separate claims.
 
 ROVE's evaluation engine runs models and measures outcomes. Explicit standalone preparation examples may fine-tune a model before evaluation; training never starts implicitly inside a trial or campaign.
 
-- **PyPI package**: `rove-eval`
-- **Python import**: `import rove`
-- **CLI command**: `rove`
+A local VLA action chunk is not a closed-loop robot episode; see
+[action and episode scope](docs/product/action-and-episode-evaluation.md).
 
-## Architecture Principles
+- **PyPI package:** `rove-eval`; **Python import:** `rove`; **CLI:** `rove`.
+- **Shared services:** API and CLI use the same configuration, execution, assessment
+  and storage services. Keep product behavior out of frontend-only implementations.
+- **Adapters:** `VLMAdapter`, `VLAAdapter`, `AgentAdapter`, `SimAdapter` and
+  `VerifierAdapter` protocols define supported contracts. Compatibility still needs
+  real tests and cannot be inferred from a provider/model name.
+- **Configuration:** `rove.yaml` supplies endpoint and strategy definitions; saved
+  strategy revisions and campaign snapshots preserve actual versioned selections.
+- **Orchestration:** configured optional perceive/plan/act/verify stages support
+  sequential and parallel paths. ROVE schedules them; an LLM does not secretly
+  choose the campaign's execution graph.
+- **Runtime:** Copilot hosts optional assistant and configured agent roles. Direct
+  customer models/agents do not need Copilot planning around them. Local LeRobot
+  inference can use the separately locked experimental process runtime.
+- **Persistence:** local SQLite stores plus content-addressed assets retain trials,
+  cases, reviews, configuration, evidence and lineage. Telemetry is supplementary.
+- **Future integrations:** general physical environment lifecycle, hosted monitoring,
+  Fabric/Databricks/Delta and MCP exposure are not automatically implemented because
+  an older design document names them.
 
-1. **The API is the product.** CLI, Python library, Jupyter, and dashboard all use the same engine. If you delete `frontend/`, the evaluation system still works.
-2. **Adapter pattern via Python Protocols.** `VLMAdapter`, `PolicyAdapter`, `AgentAdapter`, `SimAdapter` are `@runtime_checkable` Protocols. Adding a new model = implement the Protocol + add a YAML config entry. No other code changes.
-3. **Configuration over code.** `rove.yaml` is the single source of truth for all model configurations and evaluation definitions. Both backend and frontend read from it.
-4. **Deterministic orchestrator.** The 5-step pipeline is fixed. The orchestrator does NOT use an LLM to decide steps. LLMs are only used by adapters.
-5. **Azure AI Foundry alignment.** Evaluation data uses Foundry-compatible field names (`query`, `response`, `context`). JSONL export works with `azure-ai-evaluation` SDK.
+## Technology and structure
 
-## Key Design Decisions
-
-- **3 MCP servers** (VLM:8081, VLA:8082, Grounding+Sim:8083) — thin wrappers routing to adapters via `model_id`. FastAPI backend calls adapters directly for low latency. MCP servers expose tools externally for Claude, Copilot, and agent frameworks.
-- **Hybrid deployment** — Cloud VLMs (Azure OpenAI, NIM, HF), local VLAs (LeRobot, MPS), local grounding (PyTorch/CoreML), local sim (MuJoCo).
-- **Mock-first development** — Phase 1 runs entirely on mock adapters. All real model adapters come in Phase 2+.
-
-## Technology Stack
-
-### Backend (Python)
-
-- **FastAPI** — async REST + WebSocket + OpenAPI spec generation
-- **Click** — CLI (`rove evaluate`, `rove models`, `rove export`)
-- **PyYAML** — model registry configuration
-- **SQLite** — evaluation persistence (stdlib)
-- **FastMCP v2.x** — MCP server framework
-- **Pydantic** — request/response models
-
-### Frontend (Plain HTML+JS)
-
-- **Static HTML + vanilla JS** — no React, no npm, no build step
-- Served by FastAPI as static files
-- Dark theme (`#09090b` background)
-- **SSE (Server-Sent Events)** — real-time streaming via `EventSource`
-
-### ML Libraries (Phase 2+)
-
-- `torch` (MPS backend), `transformers`, `mlx`, `lerobot`, `mujoco`, `coremltools`
-
-## Project Structure
+Python uses FastAPI, Pydantic, argparse CLI dispatch, YAML configuration and SQLite.
+The frontend is static HTML, vanilla JavaScript and shared CSS, with no React build.
+Quick execution uses SSE; campaign progress reads durable state. Optional provider,
+Copilot, kinematics and local policy dependencies have separate setup/validation
+requirements. Python 3.12 is the tested local setup recommendation; package metadata
+allows Python 3.11+ where dependencies support it.
 
 ```text
-src/
-└── rove/                          # Python package (import rove) — src layout
-    ├── adapters/
-    │   ├── protocols.py           # THE contracts — VLMAdapter, PolicyAdapter, AgentAdapter, SimAdapter
-    │   ├── registry.py            # YAML → adapter resolution + health checks
-    │   ├── vlm/                   # mock, azure_openai, azure_foundry, local_mlx
-    │   ├── policy/                # mock, local_lerobot, local_hf
-    │   ├── agent/                 # mock, azure_foundry (Foundry agents)
-    │   └── sim/                   # mock, local_mujoco
-    ├── orchestrator/
-    │   ├── pipeline.py            # EvaluationPipeline (4-step pipeline)
-    │   └── run_manager.py         # Parallel multi-strategy execution
-    ├── api/
-    │   └── app.py                 # FastAPI app + SSE streaming
-    ├── models.py                  # Dataclass shared models
-    ├── config.py                  # Load rove.yaml, env vars, strategies
-    └── cli.py                     # CLI entry point
-tests/                             # pytest test suite
-├── conftest.py                    # Shared fixtures
-├── test_models.py
-├── test_config.py
-├── test_pipeline.py
-├── test_run_manager.py
-├── test_mock_adapters.py
-└── test_api.py
+src/rove/
+  adapters/        # Protocols, registry, model/agent/verifier adapters and workers
+  api/             # HTTP services and local application
+  benchmarks/      # Campaign planning, execution, assessment and reports
+  datasets/        # Cases, reviews, success contracts, ABC imports and frozen sets
+  evaluators/      # Configured task/constraint/diagnostic evaluation
+  models/          # Shared typed configuration and result models
+  orchestrator/    # Stage execution and recording bridge
+  runtime/         # Copilot roles, assistant selection and observability
+  strategies/      # Immutable strategy catalog
+  trials/          # SQLite records, assets, evidence and exchange
+  ui/              # Server and CLI entry points; cli.py owns the rove command
+frontend/          # Shared navigation, strategy table and evaluation workspaces
+tests/             # Python and Node regression suites
 ```
+
+Current navigation is **Trials** and **Campaigns**, with **New trial** and
+**New campaign** creation actions and separate Settings. Follow the
+[user journey](docs/product/user-journey.md) and source rather than older navigation
+or React/MCP sketches. Keep task/image/URDF comparison, recorded pipeline progress,
+CLI parity, private reference boundaries and baseline immutability intact during UI
+changes.
 
 ## Reusable evaluation core
 
@@ -125,12 +115,12 @@ When creating a PR, always update `CHANGELOG.md`:
 - No global state — pass dependencies explicitly (registry, store)
 - Protocol pattern: adapters implement `@runtime_checkable` Protocols, never inherit from ABC
 
-### TypeScript/React
+### Frontend
 
-- Strict mode TypeScript
-- Types auto-generated from FastAPI OpenAPI spec
-- Functional components with hooks
-- No business logic in frontend — render what API tells it, send user actions to API
+- Use the existing HTML/JavaScript/CSS architecture and shared components.
+- Render authoritative API records; keep evaluation and scoring in shared services.
+- Preserve keyboard focus, accessible dialogs, saved theme and draft/saved-state boundaries.
+- Run applicable Node behavior tests and inspect meaningful interaction changes in the browser.
 
 ### Testing
 
@@ -146,7 +136,7 @@ When creating a PR, always update `CHANGELOG.md`:
 | `src/rove/adapters/protocols.py` | Adapter contracts — change these carefully |
 | `src/rove/orchestrator/pipeline.py` | 4-step pipeline — deterministic, no LLM decisions |
 | `src/rove/orchestrator/run_manager.py` | Concurrent multi-strategy execution |
-| `src/rove/models.py` | Shared data models (dataclasses) |
+| `src/rove/models/` | Shared data and configuration models |
 | `docs/PRODUCT_SPEC.md` | Full product specification and reference |
 
 ## What NOT to Build
@@ -160,14 +150,21 @@ When creating a PR, always update `CHANGELOG.md`:
 
 ## Terminology
 
-- **adapter** (not connector/driver) — model-specific implementation of a Protocol
-- **orchestrator** (not runner/agent) — the 4-step pipeline executor
-- **evaluation** (not run/experiment) — a top-level assessment of agent pipeline configurations on a task
-- **combination** (not pair/config) — a specific agent pipeline configuration (VLM+VLA+LLM+Agent pairing)
-- Pipeline steps: **perceive**, **plan**, **act**, **verify** (always lowercase in code/prose)
-- **task_planning** (not grasp_planning) — the capability for the plan stage
+Use the [current concepts](docs/product/concepts.md): a task is an instruction,
+a case supplies concrete inputs/conditions, a trial is one strategy attempt, and a
+campaign organizes selected cases, strategies and repetitions. Baseline is a saved
+reference to a completed strategy's assessment; Improve prepares a linked editable
+copy. Evaluation and run describe activities rather than extra persisted containers.
 
-## Phased Build Order
+An adapter implements a supported integration contract. The orchestrator executes
+the configured stage graph. Stage names remain perceive, plan, act and verify;
+`task_planning` is the plan capability. Descriptions and AI suggestions are not
+executable graders or SME judgments.
+
+## Historical phased build order
+
+This sequence records the original roadmap, not current delivery status. Use
+[current implementation](docs/architecture/current-implementation.md) for what exists.
 
 1. **Phase 1**: Mock adapters + orchestrator + CLI + API + dashboard (no external deps)
 2. **Phase 2**: Local models (SmolVLA, GroundingDINO, CoreML SAM2, MuJoCo/LIBERO)

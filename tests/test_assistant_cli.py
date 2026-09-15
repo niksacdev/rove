@@ -123,7 +123,7 @@ def test_invalid_confirmation_does_not_echo_rejected_token(tmp_path, capsys):
             "/api/assistant/settings",
             {"endpoint_id": "local-agent"},
         ),
-        (["disable"], "PUT", "/api/assistant/settings", {"endpoint_id": None}),
+        (["disable"], "PUT", "/api/assistant/settings", {"provider": "disabled"}),
         (["test"], "POST", "/api/assistant/test", None),
     ],
 )

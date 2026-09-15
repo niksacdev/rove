@@ -6,38 +6,26 @@
 
 ---
 
-## Current ROVE checkout: optional local policy runtime
+## Current ROVE checkout: use the isolated runtime guide
 
-ROVE retains the SmolVLA and pi0.5 loading path in `LeRobotVLAAdapter`. The default
-development installation omits their ML dependencies. The experimental extra
-can be installed in a Python 3.12+ checkout while retaining other installed extras:
+**Current update: 14 September 2026.** The supported experimental preparation path
+is the [isolated LeRobot runtime guide](../../examples/runtime/lerobot/README.md),
+with [ADR-033](../architecture/ADR-033-isolated-vla-runtime-and-trial-inspection.md)
+recording validation and limits. Native SmolVLA inference was exercised locally;
+Pi0.5 still requires authorized tokenizer access and separate validation. Do not
+resolve historical dependency conflicts by downgrading the main ROVE environment.
 
-```bash
-uv sync --frozen --extra smolvla --inexact
-```
+The worker is a separate dependency environment, not an OS security sandbox. It
+loads trusted local artifacts, verifies declared content/runtime identities and
+retains upstream dependency limitations. Strict input checks and explicit image-only
+probes are different modes. Probes remain execution-ineligible and cannot establish
+robot success. Neither mode supplies a generic execute/observe/replan episode loop.
+See [action versus episode evaluation](../product/action-and-episode-evaluation.md).
 
-Restart ROVE afterward: the adapter checks dependency imports when the server
-starts. The `smolvla` extra name covers both SmolVLA and pi0.5. Installing it
-does not download model weights or validate a checkpoint, tokenizer, robot
-embodiment or device. The adapter loads the configured checkpoint when a trial
-requests inference. See [the optional-runtime security limitations](../../SECURITY.md#optional-lerobot-environment)
-before using it; this remains an experimental environment outside the supported
-default dependency audit.
-
-**Offline import audit, 2026-09-13:** installing the frozen extra alone does not
-produce a usable policy runtime. LeRobot 0.6.1 imports its dataset package through
-the policy factory and fails on missing `av`. Importing a specific policy directly
-also executes the same parent package initializer. Its full dataset extra requires
-`datasets<5` and `pandas<3`, while its pi/SmolVLA extras require
-`transformers<5.6`; these conflict with ROVE's current dependency choices
-(`datasets>=5.0.1`, `transformers>=5.10.0`). Do not work around this by downgrading
-the main environment or bypassing upstream package initialization. A validated
-compatible runtime or a separately integrated policy endpoint is required before
-claiming local inference works. No model weights or live inference were exercised
-in this audit.
-
-The model research below is historical reference, not validation of the current
-locked runtime or every checkpoint listed.
+Everything below is the **February 2026 research reference** identified by the
+original date. Its package commands, performance estimates and checkpoint/platform
+matrix are not a current installation recipe or verified support inventory. Use the
+isolated runtime guide and current adapter tests for this checkout.
 
 ## Quick Reference: Hardware Compatibility Matrix
 

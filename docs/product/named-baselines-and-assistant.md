@@ -7,7 +7,8 @@ to use the same services and permissions as the visible workflow.
 
 ## A baseline is a reference, not another run
 
-The Cases workspace can name and pin a completed campaign strategy. Its baseline
+Campaign Results can set a completed strategy as a named baseline; pinning and
+revision details remain secondary. Its baseline
 revision records the campaign/configuration hash, case and dataset identities,
 contract, assessed trial outcomes, verifier measurements and assessment revision set.
 Later SME ratings do not rewrite these saved outcomes. Pinning does not certify the
@@ -40,6 +41,14 @@ half-open selection range. The generated `recorded_evidence.evidence_refs` entry
 in the unsaved case until the user saves it. Whole-file is the default; no clock,
 physical outcome or evidence quality is guessed. Sample/frame/time ranges require an
 indexed JSON recording, and typed trajectory/state metadata must match its envelope.
+
+## Select the assistant independently of the strategy
+
+[Settings → Assistant](assistant-setup.md) selects Copilot, an existing endpoint,
+Foundry or Disabled. New setups default to Copilot while saved choices are preserved.
+Authentication, model discovery and connection testing are explicit; the assistant
+provider does not replace the strategy being evaluated. The provider extension is
+under verification and does not establish authenticated GitHub/Azure inference.
 
 ## Assistant prepares; the host confirms
 
@@ -93,10 +102,10 @@ write resumes the original operation rather than creating a duplicate.
 
 Prepared authorizations expire after ten minutes or a server restart. A changed head,
 review preview, configuration or baseline capture requires another preview. Committed
-records remain available through their normal history APIs. There is no live-provider
-validation claim: acceptance tests use real local services and a controlled fake runtime;
-the UI journey uses a simulated API. Provider/Azure setup remains a separate documented
-validation task, with no credentials or network calls required for these tests.
+records remain available through their normal history APIs. The original acceptance tests used real local services and a controlled fake runtime.
+Later local Qwen summary validation is recorded in ADR-034; authenticated GitHub/Azure
+and hosted integrations require separate evidence. These checks do not establish
+recommendation quality or physical robot success.
 
 ## Interfaces
 

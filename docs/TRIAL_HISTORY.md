@@ -1,4 +1,4 @@
-# Trial History and Optional Copilot Stages
+# Saved trials, trace inspection and optional Copilot stages
 
 ROVE saves one trial for each strategy attempt before execution starts. A quick
 evaluation and a campaign attempt use the same history model. You can close the
@@ -10,11 +10,12 @@ From the source checkout, install the normal local dependencies and start ROVE:
 
 ```sh
 uv sync --frozen --extra dev --extra data --extra kinematics
-uv run rove serve
+uv run --no-sync rove serve
 ```
 
-Choose an image, task and strategy in **Evaluate**, then open **Trial history** in
-the navigation. Copilot is optional: existing direct models, agents and synthetic
+Choose **New trial**, supply an image/task and optional robot input, select strategies
+and explicitly run from **Review & run**. Open **Trials** to browse saved attempts,
+or use **Inspect trial & traces** from a strategy result without losing the comparison. Copilot is optional: existing direct models, agents and synthetic
 strategies do not require a Copilot installation or account.
 
 The history view supports these workflows:
@@ -55,7 +56,9 @@ Expand the assessment, stage or event details to inspect the recorded payload.
 Measurements preserve their units, source quality and references. The stage filter
 helps follow one part of the pipeline. Arbitrary evidence strings are preserved;
 they are not automatically fetched as remote files or resolved to video ranges.
-Parallel trace graphs and aligned baseline comparisons are later work.
+Producer-clock lanes and paired baseline/candidate traces are available. Different
+clock domains remain unaligned without an explicit mapping; see
+[traces and measurements](product/traces-and-measurements.md).
 
 Usage is shown only when reported, and the summary covers **loaded event pages**.
 Missing token counts are unknown, not zero. SDK content capture defaults off, so a
