@@ -11,13 +11,16 @@
 | [Product specification](PRODUCT_SPEC.md) | Core vision, founding personas, campaign model and delivery status |
 | [Concepts](product/concepts.md) | Cases, trials, campaigns, strategies, datasets and provenance |
 | [Product workflows](product/evaluation-workflows.md) | Baselines, SME review, frozen datasets, ablations and acceptance criteria |
-| [User journey and navigation](product/user-journey.md) | Start, Evaluate, Results and Configure; staged workspace, routes and accessibility acceptance |
-| [Navigation decision](architecture/ADR-025-workflow-navigation.md) | Why navigation follows the evaluation journey while retaining existing routes |
+| [User journey and navigation](product/user-journey.md) | New trial and New campaign; shared configuration, explicit execution, saved state and improvement |
+| [Shared workspace decision](architecture/ADR-031-shared-evaluation-workspace.md) | Peer browsers, shared strategy selection, persistent campaign identity and scoring clarity |
 | [Success and performance measures](product/metrics-and-success.md) | Define success before a campaign; understand the report and missing evidence |
 | [Traces and measurements](product/traces-and-measurements.md) | Inspect trial timelines, supporting evidence and baseline differences |
 | [Robotics evidence and targets](product/robotics-evidence.md) | Action-dependent fixtures, approved annotation bindings and supplied episode measures |
 | [Named baselines and assistant](product/named-baselines-and-assistant.md) | Frozen baseline assessments and confirmed guided workflows |
 | [Preserved evidence and exchange](product/evidence-and-exchange.md) | Recording selections, clock-aware traces and portable relational tables |
+| [Trial review and navigation](architecture/ADR-032-trial-review-and-navigation-state.md) | Reviewed inputs, explicit launch, locked execution and unsaved-work protection |
+| [Assistant setup](product/assistant-setup.md) | Copilot default for new setups, preserved local/disabled choices, explicit authentication, Foundry and CLI |
+| [Actions and complete episodes](product/action-and-episode-evaluation.md) | What one VLA output establishes, why chunks are not trials, and the future execute/observe lifecycle |
 | [Experimental local VLA runtime](../examples/runtime/lerobot/README.md) | Trusted local checkpoints, native preprocessing, preparation and evidence limits |
 | [Live provider validation spec](product/live-provider-validation.md) | Provider/Azure acceptance plan; local validation scope is recorded in ADR-033 |
 | [Model assessment](product/model-landscape-2026-09.md) | September 2026 evidence on frontier agents, VLAs and evaluation scope |
@@ -39,7 +42,7 @@ from external deployment and provider validation. Product specifications include
 proposed follow-up work and label it explicitly; an accepted direction alone does
 not establish deployed integration support.
 
-## Explain ROVE in three diagrams
+## Explain ROVE with diagrams
 
 1. Use the concepts diagram to explain the units being evaluated.
 2. Use the current implementation diagram to explain how ROVE runs and records them today.

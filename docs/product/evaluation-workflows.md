@@ -8,6 +8,16 @@
 
 The [product specification](../PRODUCT_SPEC.md) retains the founding vision and the three personas below. Configurable agents, human-reviewed datasets and business-outcome reports extend that vision. A supported agent or VLM can occupy the relevant stages; a VLA is not mandatory for every robotics evaluation.
 
+## Start small and retain the comparison
+
+**New trial** compares one task, image and relevant robot configuration across chosen
+strategies. Case → Configure → Review & run → Results preserves the original pipeline,
+All strategies view and exact trace inspection. **Add to campaign** retains that trial
+as an exploratory reference and carries its input/strategy into a repeated evaluation.
+**New campaign** starts directly from a prepared collection. Trials and Campaigns are
+peer saved-record browsers; Settings holds reusable configuration and the assistant.
+See the [current journey](user-journey.md) for interaction and validation details.
+
 ## Personas and user stories
 
 | Founding persona | Job to be done | Journey and evidence of value |
@@ -26,7 +36,7 @@ An SME is a reviewer collaborating with these personas, not a replacement for th
 
 A developer may have images and robot tasks but no labeled evaluation dataset. They need an initial baseline, a way for an expert to validate cases and assess outputs, and a stable reference for comparing a changed model or strategy. Quick evaluations and campaigns now share durable trial identities and saved evidence; named baseline revisions preserve the exact configuration and assessment used for a later comparison.
 
-ROVE should support both starting points: evaluating a prepared dataset, and creating a reviewed dataset from an initial campaign. The outcome is an explainable comparison tied to fixed inputs, criteria, configuration and evidence. Physical completion claims require outcome evidence from the relevant robot episode; expert assessment of perception and planning is useful before such episodes exist.
+ROVE supports both starting points: evaluating a prepared dataset, and creating a reviewed dataset from an initial campaign. The outcome is an explainable comparison tied to fixed inputs, criteria, configuration and evidence. Physical completion claims require outcome evidence from the relevant robot episode; expert assessment of perception and planning is useful before such episodes exist.
 
 ## First value for a robotics company
 

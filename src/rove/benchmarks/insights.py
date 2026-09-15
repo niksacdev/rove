@@ -127,7 +127,7 @@ def provenance(source, settings):
     return {
         "method": "copilot_runtime" if source == "ai" else "deterministic_template",
         "prompt_version": PROMPT_VERSION,
-        "model": settings.model if source == "ai" else None,
+        "model": (settings.model or "copilot-default") if source == "ai" else None,
     }
 
 

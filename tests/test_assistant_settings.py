@@ -86,7 +86,8 @@ def setup(tmp_path, monkeypatch):
 def test_saved_selection_survives_new_router_and_changes_insight_model(setup):
     root, config, _, calls, client, private = setup
     initial = client().get("/api/assistant/settings").json()
-    assert not initial["configured"] and initial["selection_source"] == "disabled"
+    assert initial["configured"] and initial["selection_source"] == "default"
+    assert initial["selection"] == {"provider": "copilot", "model": ""}
     assert not (root / "assistant-settings.sqlite3").exists()
     assert {e["id"] for e in initial["endpoints"]} == {"first", "second"}
     assert initial["endpoints"][0]["provider_base_url"] == "https://provider.invalid"
@@ -151,7 +152,7 @@ def test_selections_are_scoped_by_active_config_path(setup, monkeypatch):
     root, _, _, _, client, _ = setup
     client().put("/api/assistant/settings", json={"endpoint_id": "first"})
     monkeypatch.setattr("rove.runtime.assistant.active_config_path", lambda: root / "other.yaml")
-    assert client().get("/api/assistant/settings").json()["effective_endpoint_id"] is None
+    assert client().get("/api/assistant/settings").json()["selection_source"] == "default"
     client().put("/api/assistant/settings", json={"endpoint_id": "second"})
     monkeypatch.setattr("rove.runtime.assistant.active_config_path", lambda: root / "rove.yaml")
     assert client().get("/api/assistant/settings").json()["effective_endpoint_id"] == "first"
@@ -160,6 +161,7 @@ def test_selections_are_scoped_by_active_config_path(setup, monkeypatch):
 def test_status_is_not_provider_proof_but_explicit_test_is(setup):
     _, _, _, calls, client, _ = setup
     api = client()
+    api.put("/api/assistant/settings", json={"provider": "disabled"})
     assert not api.post("/api/assistant/test").json()["provider_tested"]
     api.put("/api/assistant/settings", json={"endpoint_id": "second"})
     status = api.get("/api/assistant/status").json()
@@ -169,6 +171,7 @@ def test_status_is_not_provider_proof_but_explicit_test_is(setup):
         "available": True,
         "provider_tested": True,
         "endpoint_id": "second",
+        "fingerprint": api.get("/api/assistant/settings").json()["fingerprint"],
         "reason": None,
     }
     settings, tools, stage, image, prompt, context = calls[0]

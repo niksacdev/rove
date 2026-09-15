@@ -1341,66 +1341,89 @@ async function loadExample(ex) {
 }
 
 function renderAssistantSettings(wrapper) {
-  const node=(tag,text)=>{const item=document.createElement(tag);if(text!=null)item.textContent=text;return item;};
+  const node=(tag,text)=>{const el=document.createElement(tag);if(text!=null)el.textContent=text;return el;};
   const section=node("section");section.id="assistant";section.className="assistant-settings";section.setAttribute("aria-labelledby","assistantSettingsHeading");
   const heading=node("h2","Assistant");heading.id="assistantSettingsHeading";heading.tabIndex=-1;
   section.append(heading,node("p","Choose the assistant that explains campaign results and suggests evaluation criteria. This does not change the strategies being evaluated."));
-  const label=node("label","Assistant endpoint");label.htmlFor="assistantEndpoint";
-  const select=node("select");select.id="assistantEndpoint";select.disabled=true;
-  const description=node("p");description.id="assistantEndpointDescription";select.setAttribute("aria-describedby",description.id);
+  function field(parent,id,label,tag="select"){const caption=node("label",label);caption.htmlFor=id;const input=node(tag);input.id=id;parent.append(caption,input);return input;}
+  function option(select,value,label){const item=node("option",label);item.value=value;select.append(item);}
+  function action(parent,id,label){const button=node("button",label);button.id=id;button.type="button";parent.append(button);return button;}
+  const provider=field(section,"assistantProvider","Provider");
+  for(const [id,name] of [["copilot","GitHub Copilot"],["endpoint","Local or own endpoint"],["foundry","Microsoft Foundry"],["disabled","Disabled"]])option(provider,id,name);
+  const copilot=node("div");copilot.id="assistantCopilotFields";section.append(copilot);
+  const model=field(copilot,"assistantCopilotModel","Model");option(model,"","Copilot default");
+  const authStatus=node("p","Sign-in status has not been checked.");authStatus.id="assistantCopilotStatus";authStatus.setAttribute("role","status");copilot.append(authStatus);
+  const authActions=node("div");authActions.className="assistant-settings-actions";copilot.append(authActions);
+  const authCheck=action(authActions,"checkCopilotSignIn","Check sign-in & load models"),signIn=action(authActions,"signInCopilot","Sign in to GitHub"),cancelLogin=action(authActions,"cancelCopilotSignIn","Cancel sign-in");cancelLogin.hidden=true;
+  const device=node("div");device.id="assistantDeviceLogin";device.hidden=true;copilot.append(device);
+  const local=node("div");local.id="assistantEndpointFields";section.append(local);
+  const select=field(local,"assistantEndpoint","Assistant endpoint"),description=node("p");description.id="assistantEndpointDescription";select.setAttribute("aria-describedby",description.id);local.append(description);
+  const foundry=node("div");foundry.id="assistantFoundryFields";section.append(foundry);
+  const reuse=field(foundry,"assistantFoundryPreset","Use an existing model connection");option(reuse,"","Enter endpoint and deployment");
+  const endpoint=field(foundry,"assistantFoundryEndpoint","Azure model endpoint","input");endpoint.type="url";endpoint.placeholder="https://your-resource.openai.azure.com";endpoint.autocomplete="off";
+  const deployment=field(foundry,"assistantFoundryDeployment","Model deployment name","input");deployment.type="text";deployment.autocomplete="off";
+  foundry.append(node("p","Authentication uses Azure CLI on the computer running ROVE. Run az login there, then save and test this connection. Use an Azure model deployment, not a Foundry agent endpoint."));
   const control=node("p");control.id="assistantSettingsControl";
   const status=node("p","Loading assistant settings…");status.id="assistantConnectionStatus";status.setAttribute("role","status");
   const actions=node("div");actions.className="assistant-settings-actions";
-  const save=node("button","Save");save.id="saveAssistantSettings";save.type="button";save.disabled=true;
-  const test=node("button","Test connection");test.id="testAssistantConnection";test.type="button";test.disabled=true;
-  actions.append(save,test);section.append(label,select,description,control,status,actions);wrapper.append(section);
+  const save=action(actions,"saveAssistantSettings","Save"),test=action(actions,"testAssistantConnection","Test connection");section.append(control,status,actions);wrapper.append(section);
   const returnValue=new URLSearchParams(location.search).get("return");
-  if(returnValue){
-    try{const target=new URL(returnValue,location.origin);
-      if(target.origin===location.origin && target.pathname==="/static/datasets.html" && target.searchParams.get("campaign")){
-        const back=node("a","Return to campaign results");back.id="assistantReturnToCampaign";back.href=target.pathname+target.search+target.hash;section.append(back);
-      }
-    }catch{/* Invalid return destinations are not navigation targets. */}
-  }
-  let settings=null,saved="",locked=false,epoch=0,busy=false,testing=false;
+  if(returnValue){try{const target=new URL(returnValue,location.origin);if(target.origin===location.origin && target.pathname==="/static/datasets.html" && target.searchParams.get("campaign")){const back=node("a","Return to campaign results");back.id="assistantReturnToCampaign";back.href=target.pathname+target.search+target.hash;section.append(back);}}catch{/* Ignore unsafe return destinations. */}}
+  let settings=null,saved=null,locked=false,epoch=0,busy=false,testing=false,authEpoch=0,authBusy=false,loginId=null,loginTimer=null,loginStarted=0;
   const current=version=>version===epoch && section.isConnected;
-  async function request(url,options){const response=await fetch(API_BASE+url,options);let value;try{value=await response.json();}catch{throw Error("The server returned an unreadable response.");}if(!response.ok)throw Error(typeof value.detail==="string"?value.detail:"The assistant settings request failed.");return value;}
+  const authCurrent=version=>version===authEpoch && section.isConnected && currentView==="settings" && provider.value==="copilot";
+  async function request(url,options){const response=await fetch(API_BASE+url,options);let value;try{value=await response.json();}catch{throw Error("The server returned an unreadable response.");}if(!response.ok)throw Error(typeof value.detail==="string"?value.detail:"The assistant request failed.");return value;}
+  const post=(url,body={})=>request(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  function selection(){switch(provider.value){case "copilot":return {provider:"copilot",model:model.value};case "endpoint":return {provider:"endpoint",endpoint_id:select.value};case "foundry":return {provider:"foundry",endpoint:endpoint.value.trim(),deployment:deployment.value.trim()};default:return {provider:"disabled"};}}
+  const same=(a,b)=>JSON.stringify(a,Object.keys(a || {}).sort())===JSON.stringify(b,Object.keys(b || {}).sort());
   function update(){
-    const endpoint=settings?.endpoints?.find(item=>item.id===select.value);
-    description.textContent=endpoint?`Model: ${endpoint.model || "Not specified"} · Provider: ${endpoint.provider_base_url || "Configured provider"}`:"Disabled. Campaign execution and recorded results remain available.";
-    save.disabled=busy || locked || !settings || select.value===saved;
-    test.disabled=busy || !settings || !saved || select.value!==saved;
-    select.disabled=locked || !settings || (busy && !testing);
+    copilot.hidden=provider.value!=="copilot";local.hidden=provider.value!=="endpoint";foundry.hidden=provider.value!=="foundry";
+    const selected=settings?.endpoints?.find(item=>item.id===select.value);
+    description.textContent=selected?`Model: ${selected.model || "Not specified"} · Provider: ${selected.provider_base_url || "Configured provider"}`:"Choose an existing Copilot-compatible endpoint. Configure its provider credentials on the ROVE server.";
+    const draft=selection(),valid=draft.provider==="endpoint"?Boolean(draft.endpoint_id):draft.provider!=="foundry" || (endpoint.validity.valid && /^https:\/\//.test(draft.endpoint) && Boolean(draft.deployment));
+    save.disabled=busy || locked || !settings || !valid || same(draft,saved);
+    test.disabled=busy || !settings || saved?.provider==="disabled" || !same(draft,saved);
+    for(const input of [provider,model,select,reuse,endpoint,deployment])input.disabled=locked || !settings || (busy && !testing);
+    authCheck.disabled=authBusy || !settings;signIn.disabled=authBusy || !settings;cancelLogin.hidden=!loginId && !loginStarted;
   }
+  function setModels(models){const selected=model.value;model.replaceChildren();option(model,"","Copilot default");for(const item of models || [])if(item.id)option(model,item.id,item.name || item.id);if(selected && !Array.from(model.options).some(item=>item.value===selected))option(model,selected,selected+" (saved model)");model.value=selected;}
   function apply(value,runtime){
-    settings=value;saved=value.effective_endpoint_id || "";locked=Boolean(value.read_only);
-    select.replaceChildren();const disabled=node("option","Disabled");disabled.value="";select.append(disabled);
-    for(const endpoint of value.endpoints || []){const option=node("option",endpoint.display_name || endpoint.id);option.value=endpoint.id;select.append(option);}
-    if(saved && !Array.from(select.options).some(option=>option.value===saved)){const missing=node("option",`${saved} (unavailable)`);missing.value=saved;select.append(missing);}
-    select.value=saved;
-    control.textContent=locked?(value.override_reason || "This assistant is controlled by the server environment. Change it on the server to use a different endpoint."):"Save your choice, then test the connection. The test sends a fixed connectivity prompt, without your campaign data.";
-    status.textContent=!saved?"Assistant disabled. Choose an endpoint to enable AI explanations.":value.configured===false?(value.status_reason || "The selected endpoint needs server configuration before it can be used."):(runtime?.runtime_available ?? runtime?.available)?"Assistant configured. Runtime available; model connection has not been tested.":runtime?.reason || value.status_reason || "Assistant configured. Test the connection to check the model.";
-    if(!value.endpoints?.length && !saved)status.textContent="No Copilot assistant endpoints are configured. Add a copilot_agent endpoint to rove.yaml, then reload Settings.";
+    settings=value;saved=value.selection || (value.effective_endpoint_id?{provider:"endpoint",endpoint_id:value.effective_endpoint_id}:{provider:"disabled"});locked=Boolean(value.read_only);
+    provider.value=saved.provider;select.replaceChildren();option(select,"","Choose an endpoint");for(const item of value.endpoints || [])option(select,item.id,item.display_name || item.id);
+    if(saved.provider==="endpoint" && !Array.from(select.options).some(item=>item.value===saved.endpoint_id))option(select,saved.endpoint_id,saved.endpoint_id+" (unavailable)");select.value=saved.endpoint_id || "";
+    model.value="";if(saved.model){if(!Array.from(model.options).some(item=>item.value===saved.model))option(model,saved.model,saved.model);model.value=saved.model;}
+    reuse.replaceChildren();option(reuse,"","Enter endpoint and deployment");for(const item of value.foundry_endpoints || [])option(reuse,item.id,item.display_name || item.id);
+    endpoint.value=saved.endpoint || "";deployment.value=saved.deployment || "";
+    control.textContent=locked?(value.override_reason || "The server environment controls this assistant selection."):"Save your choice, then test the connection. The test sends a fixed connectivity prompt, without your campaign data.";
+    status.textContent=saved.provider==="disabled"?"Assistant disabled. Choose a provider to enable AI explanations.":value.configured===false?(value.status_reason || "Complete authentication and configuration, then test the assistant."):(runtime?.runtime_available ?? runtime?.available)?"Assistant configured. Runtime available; model connection has not been tested.":runtime?.reason || "Assistant configured. Test the model connection.";
+    if(!value.selection && !value.endpoints?.length && !value.effective_endpoint_id)status.textContent="No Copilot assistant endpoints are configured. Add a copilot_agent endpoint to rove.yaml, then reload Settings.";
     update();
   }
-  async function load(){const version=++epoch;busy=true;update();status.textContent="Loading assistant settings…";
-    try{const [value,runtime]=await Promise.all([request("/api/assistant/settings"),request("/api/assistant/status").catch(()=>null)]);if(current(version))apply(value,runtime);}
-    catch(error){if(current(version)){status.textContent="Could not load assistant settings. "+error.message;const retry=node("button","Reload settings");retry.type="button";retry.addEventListener("click",()=>{retry.remove();load();});actions.append(retry);}}
-    finally{if(current(version)){busy=false;update();}}
+  async function load(){const version=++epoch;busy=true;update();status.textContent="Loading assistant settings…";try{const [value,runtime]=await Promise.all([request("/api/assistant/settings"),request("/api/assistant/status").catch(()=>null)]);if(current(version))apply(value,runtime);}catch(error){if(current(version)){status.textContent="Could not load assistant settings. "+error.message;const retry=action(actions,"reloadAssistantSettings","Reload settings");retry.addEventListener("click",()=>{retry.remove();load();});}}finally{if(current(version)){busy=false;update();}}}
+  function stopLogin(cancel=true){authEpoch++;clearTimeout(loginTimer);loginTimer=null;const old=loginId;loginId=null;loginStarted=0;authBusy=false;device.hidden=true;device.replaceChildren();if(old && cancel)request("/api/assistant/copilot/login/"+encodeURIComponent(old),{method:"DELETE"}).catch(()=>{});update();}
+  function changed(){epoch++;busy=false;testing=false;status.textContent="Unsaved assistant selection. Save before testing or generating explanations.";update();}
+  provider.addEventListener("change",()=>{stopLogin();changed();});
+  for(const input of [model,select,endpoint,deployment])input.addEventListener(input.tagName==="INPUT"?"input":"change",changed);
+  reuse.addEventListener("change",()=>{const item=settings?.foundry_endpoints?.find(item=>item.id===reuse.value);if(item){endpoint.value=item.endpoint;deployment.value=item.deployment;}changed();});
+  save.addEventListener("click",async()=>{if(save.disabled)return;const version=++epoch,draft=selection();busy=true;testing=false;update();status.textContent="Saving assistant selection…";try{const payload=settings.selection?draft:{endpoint_id:draft.endpoint_id || null};const value=await request("/api/assistant/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(current(version)){apply(value,null);status.textContent=draft.provider==="disabled"?"Assistant disabled. Recorded results remain available.":"Assistant selection saved. Test the connection before returning to your campaign.";}}catch(error){if(current(version))status.textContent="Could not save assistant settings. "+error.message;}finally{if(current(version)){busy=false;update();}}});
+  test.addEventListener("click",async()=>{if(test.disabled)return;const version=++epoch,fingerprint=settings.fingerprint,selected=saved;busy=true;testing=true;update();status.textContent="Testing the saved assistant connection…";try{const result=await post("/api/assistant/test");if(current(version)){const matches=fingerprint?result.fingerprint===fingerprint:result.endpoint_id===selected.endpoint_id;status.textContent=result.available && result.provider_tested && matches?"Connection successful. The assistant model responded to the test prompt.":"Connection failed. "+(result.reason || "The saved connection could not be verified. Save and test your current selection.");}}catch(error){if(current(version))status.textContent="Connection failed. "+error.message;}finally{if(current(version)){busy=false;update();}}});
+  async function checkAuth(){const version=++authEpoch;authBusy=true;update();authStatus.textContent="Checking GitHub sign-in and available models…";try{const result=await post("/api/assistant/copilot/status",{include_models:true});if(authCurrent(version)){authStatus.textContent=result.authenticated?`Signed in${result.login?" as "+result.login:""}. Choose a model, then save and test your assistant.`:result.reason || "Not signed in to GitHub Copilot.";if(result.authenticated)setModels(result.models);}}catch(error){if(authCurrent(version))authStatus.textContent="Could not check sign-in. "+error.message;}finally{if(authCurrent(version)){authBusy=false;update();}}}
+  authCheck.addEventListener("click",checkAuth);
+  async function showLogin(result,version){
+    if(!authCurrent(version)){if(result.operation_id)request("/api/assistant/copilot/login/"+encodeURIComponent(result.operation_id),{method:"DELETE"}).catch(()=>{});return;}
+    loginId=result.operation_id || loginId;
+    if(result.status==="complete"){loginId=null;loginStarted=0;device.hidden=true;authBusy=false;authStatus.textContent="GitHub sign-in completed. Check sign-in to load available models.";update();return;}
+    if(["failed","expired","cancelled"].includes(result.status)){loginId=null;loginStarted=0;device.hidden=true;authBusy=false;authStatus.textContent=result.reason || "Sign-in did not complete. Try again.";update();return;}
+    authStatus.textContent=result.status==="starting"?"Starting GitHub sign-in…":"Waiting for you to complete GitHub sign-in.";device.replaceChildren();
+    if(result.verification_uri==="https://github.com/login/device" && result.user_code){const code=node("code",result.user_code);code.id="assistantDeviceCode";const link=node("a","Open GitHub and enter this code ↗");link.href=result.verification_uri;link.target="_blank";link.rel="noopener";device.append(node("p","Use this one-time code on GitHub:"),code,link);device.hidden=false;}else device.hidden=true;
+    update();
+    if(!loginId || Date.now()-loginStarted>300000){stopLogin();authStatus.textContent="Sign-in timed out. Start a new sign-in attempt.";return;}
+    loginTimer=setTimeout(async()=>{if(!authCurrent(version)){stopLogin();return;}try{await showLogin(await request("/api/assistant/copilot/login/"+encodeURIComponent(loginId)),version);}catch(error){if(authCurrent(version)){stopLogin();authStatus.textContent="Could not check sign-in. "+error.message;}}},1500);
   }
-  select.addEventListener("change",()=>{epoch++;busy=false;testing=false;status.textContent="Unsaved assistant selection. Save before testing or generating explanations.";update();});
-  save.addEventListener("click",async()=>{if(save.disabled)return;const version=++epoch,selected=select.value;busy=true;update();status.textContent="Saving assistant selection…";
-    try{const value=await request("/api/assistant/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({endpoint_id:selected || null})});if(current(version)){apply(value,null);status.textContent=selected?"Assistant selection saved. Test the connection before returning to your campaign.":"Assistant disabled. Recorded results and evaluation execution remain available.";}}
-    catch(error){if(current(version))status.textContent="Could not save assistant settings. "+error.message;}
-    finally{if(current(version)){busy=false;update();}}
-  });
-  test.addEventListener("click",async()=>{if(test.disabled)return;const version=++epoch;busy=true;testing=true;update();status.textContent="Testing the saved assistant connection…";
-    try{const result=await request("/api/assistant/test",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});if(current(version))status.textContent=result.available && result.provider_tested && result.endpoint_id===saved?"Connection successful. The assistant model responded to the test prompt.":"Connection failed. "+(result.reason || "The model did not respond successfully.");}
-    catch(error){if(current(version))status.textContent="Connection failed. "+error.message;}
-    finally{if(current(version)){busy=false;update();}}
-  });
-  load();
-  if(location.hash==="#assistant")requestAnimationFrame(()=>{if(section.isConnected){section.scrollIntoView({block:"start"});heading.focus({preventScroll:true});}});
+  signIn.addEventListener("click",async()=>{if(signIn.disabled)return;stopLogin();const version=authEpoch;authBusy=true;loginStarted=Date.now();authStatus.textContent="Starting GitHub sign-in…";update();try{await showLogin(await post("/api/assistant/copilot/login"),version);}catch(error){if(authCurrent(version)){authBusy=false;authStatus.textContent="Could not start sign-in. "+error.message;update();}}});
+  cancelLogin.addEventListener("click",()=>{stopLogin();authStatus.textContent="Sign-in cancelled.";});
+  const observer=new MutationObserver(()=>{if(!section.isConnected || currentView!=="settings"){stopLogin();observer.disconnect();}});observer.observe(settingsView,{attributes:true,childList:true});
+  load();if(location.hash==="#assistant")requestAnimationFrame(()=>{if(section.isConnected){section.scrollIntoView({block:"start"});heading.focus({preventScroll:true});}});
 }
 
 function renderSettingsView() {

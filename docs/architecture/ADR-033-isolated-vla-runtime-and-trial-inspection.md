@@ -51,6 +51,16 @@ flowchart TD
     E --> T[Trace-backed repair recommendation]
 ```
 
+### Clarification: inference horizon versus an episode
+
+The implemented worker/adapter repeatedly selects actions from the same prepared
+batch while collecting output. It does not execute a chunk and feed a new measured
+observation back into the policy. A returned horizon is therefore action-level
+inference evidence, not a complete task rollout. Multiple chunks from a future
+closed-loop integration belong inside one episode trial; they must not be counted
+as independent reliability attempts. See [the product boundary and lifecycle](../product/action-and-episode-evaluation.md).
+This clarification does not add a robot control loop to the accepted runtime change.
+
 ## Inspection and improvement
 
 Run and Results retain an **All strategies** overview. Selecting a strategy shows its output without losing the other executions; **Inspect trial & traces** opens the exact durable trial in a separate inspector. Campaign progress has an explicit return to all strategy lanes. Inspecting evidence does not launch another inference.

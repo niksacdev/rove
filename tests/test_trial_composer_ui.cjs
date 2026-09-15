@@ -13,17 +13,24 @@ async function composer(options = {}) {
   w.EventSource = class { constructor(){this.listeners = {}; streams.push(this);} addEventListener(type, listener){this.listeners[type] = listener;} close(){} emit(type, data){this.listeners[type]?.({data: JSON.stringify(data)});} };
   const item = {id: "case-r1", case_id: "case", name: "Block on tray", task: "Place the block in the tray", revision: 1, image_asset: {sha256: "a".repeat(64)}, candidate_context: {robot: "panda", proprioception: [0, 1], constraints: ["Avoid cup"]}, reference_data: {eval_qa: {answer: "private answer"}, expected_subtasks: ["private plan"]}};
   let assistantSettings=options.assistantSettings || {selected_endpoint_id:null,effective_endpoint_id:null,selection_source:"disabled",read_only:false,endpoints:[],configured:false};
+  let loginPolls=0;
+  if(options.fastLoginPoll){const original=w.setTimeout.bind(w);w.setTimeout=(callback,delay,...args)=>original(callback,delay===1500?1:delay,...args);}
   w.fetch = async (url, request = {}) => {
     const route = new URL(url, w.location.href).pathname; calls.push({route, method: request.method || "GET", body: request.body});
     if(route==="/api/assistant/settings"){
       if(request.method==="PUT"){
         if(options.assistantSaveFail)return {ok:false,json:async()=>({detail:"Endpoint no longer exists"})};
-        const endpoint=JSON.parse(request.body).endpoint_id;assistantSettings={...assistantSettings,selected_endpoint_id:endpoint,effective_endpoint_id:endpoint,configured:Boolean(endpoint),selection_source:endpoint?"saved":"disabled"};
+        const payload=JSON.parse(request.body),endpoint=payload.endpoint_id || null;
+        if(payload.provider)assistantSettings={...assistantSettings,selection:payload,fingerprint:JSON.stringify(payload),effective_endpoint_id:payload.endpoint_id || null,configured:payload.provider!=="disabled",selection_source:payload.provider==="disabled"?"disabled":"saved"};
+        else assistantSettings={...assistantSettings,selected_endpoint_id:endpoint,effective_endpoint_id:endpoint,configured:Boolean(endpoint),selection_source:endpoint?"saved":"disabled"};
       }
       return {ok:true,json:async()=>assistantSettings};
     }
     if(route==="/api/assistant/status")return {ok:true,json:async()=>options.assistantStatus || {configured:assistantSettings.configured,runtime_available:true,available:true,provider_tested:false}};
-    if(route==="/api/assistant/test"){await options.assistantTestWait;return {ok:true,json:async()=>options.assistantTestResult || {available:true,provider_tested:true,endpoint_id:assistantSettings.effective_endpoint_id}};}
+    if(route==="/api/assistant/test"){await options.assistantTestWait;return {ok:true,json:async()=>options.assistantTestResult || {available:true,provider_tested:true,endpoint_id:assistantSettings.effective_endpoint_id,fingerprint:assistantSettings.fingerprint}};}
+    if(route==="/api/assistant/copilot/status")return {ok:true,json:async()=>options.copilotStatus || {authenticated:true,login:"robot-builder",models:[{id:"model-1",name:"Model One"}]}};
+    if(route==="/api/assistant/copilot/login"){await options.assistantLoginWait;return {ok:true,json:async()=>options.loginStart || {operation_id:"login-1",status:"pending",verification_uri:"https://github.com/login/device",user_code:"ABCD-1234"}};}
+    if(route.startsWith("/api/assistant/copilot/login/"))return {ok:true,json:async()=>request.method==="DELETE"?{status:"cancelled"}:options.loginPoll?.[loginPolls++] || {operation_id:"login-1",status:"complete"}};
     if (route === "/api/history") return {ok:true,json:async()=>options.serverHistory || []};
     if (route === "/api/cases/case-r1") return {ok: !options.missing, json: async () => item};
     if (route.startsWith("/api/trial-assets/")) return {ok: true, blob: async () => new w.Blob(["image"], {type: "image/png"})};
@@ -422,14 +429,14 @@ test("Assistant settings saves an explicit endpoint and tests the provider separ
   try{
     assert.equal(el("assistantSettingsHeading").textContent,"Assistant");assert.equal(el("assistantEndpoint").value,"");assert.match(el("assistantConnectionStatus").textContent,/disabled/);
     assert.equal(el("testAssistantConnection").disabled,true);
-    el("assistantEndpoint").value="assistant-a";el("assistantEndpoint").dispatchEvent(new w.Event("change"));
+    el("assistantProvider").value="endpoint";el("assistantProvider").dispatchEvent(new w.Event("change"));el("assistantEndpoint").value="assistant-a";el("assistantEndpoint").dispatchEvent(new w.Event("change"));
     assert.match(el("assistantEndpointDescription").textContent,/model-a.*127.0.0.1/);assert.equal(el("testAssistantConnection").disabled,true);
     el("saveAssistantSettings").click();await pause();
     const save=calls.find(call=>call.route==="/api/assistant/settings"&&call.method==="PUT");assert.deepEqual(JSON.parse(save.body),{endpoint_id:"assistant-a"});
     assert.equal(calls.some(call=>call.route==="/api/assistant/test"),false);assert.match(el("assistantConnectionStatus").textContent,/saved.*Test the connection/);
     el("testAssistantConnection").click();await pause();assert.match(el("assistantConnectionStatus").textContent,/Connection successful/);
     assert.equal(el("assistantReturnToCampaign").getAttribute("href"),"/static/datasets.html?step=review&campaign=campaign");
-    el("assistantEndpoint").value="";el("assistantEndpoint").dispatchEvent(new w.Event("change"));el("saveAssistantSettings").click();await pause();
+    el("assistantProvider").value="disabled";el("assistantProvider").dispatchEvent(new w.Event("change"));el("saveAssistantSettings").click();await pause();
     assert.equal(JSON.parse(calls.filter(call=>call.method==="PUT").at(-1).body).endpoint_id,null);assert.equal(el("testAssistantConnection").disabled,true);
   }finally{w.close();}
 });
@@ -438,7 +445,7 @@ test("Assistant settings distinguish environment control, failed saves and real 
   const locked=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,effective_endpoint_id:"assistant-a",configured:true,read_only:true,selection_source:"environment",override_reason:"Set by ROVE_ASSISTANT_ENDPOINT"},assistantTestResult:{available:false,provider_tested:false,endpoint_id:"assistant-a",reason:"Provider unreachable"}});
   try{assert.equal(locked.el("assistantEndpoint").disabled,true);assert.equal(locked.el("saveAssistantSettings").disabled,true);assert.match(locked.el("assistantSettingsControl").textContent,/ROVE_ASSISTANT_ENDPOINT/);assert.match(locked.el("assistantConnectionStatus").textContent,/connection has not been tested/);locked.el("testAssistantConnection").click();await locked.pause();assert.match(locked.el("assistantConnectionStatus").textContent,/Provider unreachable/);}finally{locked.w.close();}
   const failed=await composer({url:"http://localhost/?view=settings&return=https%3A%2F%2Fevil.test%2Fstatic%2Fdatasets.html%3Fcampaign%3Dx#assistant",assistantSettings:assistantFixture,assistantSaveFail:true});
-  try{failed.el("assistantEndpoint").value="assistant-a";failed.el("assistantEndpoint").dispatchEvent(new failed.w.Event("change"));failed.el("saveAssistantSettings").click();await failed.pause();assert.match(failed.el("assistantConnectionStatus").textContent,/Could not save.*no longer exists/);assert.equal(failed.el("testAssistantConnection").disabled,true);assert.equal(failed.el("assistantReturnToCampaign"),null);}finally{failed.w.close();}
+  try{failed.el("assistantProvider").value="endpoint";failed.el("assistantProvider").dispatchEvent(new failed.w.Event("change"));failed.el("assistantEndpoint").value="assistant-a";failed.el("assistantEndpoint").dispatchEvent(new failed.w.Event("change"));failed.el("saveAssistantSettings").click();await failed.pause();assert.match(failed.el("assistantConnectionStatus").textContent,/Could not save.*no longer exists/);assert.equal(failed.el("testAssistantConnection").disabled,true);assert.equal(failed.el("assistantReturnToCampaign"),null);}finally{failed.w.close();}
 });
 
 test("a late connection probe cannot mark a different unsaved assistant selection connected",async()=>{
@@ -458,4 +465,77 @@ test("Assistant settings with no eligible endpoint explain configuration instead
     assert.equal(el("assistantEndpoint").options.length,1);assert.equal(el("saveAssistantSettings").disabled,true);assert.equal(el("testAssistantConnection").disabled,true);
     assert.equal(calls.some(call=>call.route==="/api/assistant/test"),false);
   }finally{w.close();}
+});
+
+test("new Copilot defaults preserve explicit local/disabled choices and model loading is an explicit action",async()=>{
+  for(const selection of [{model:"",provider:"copilot"},{provider:"endpoint",endpoint_id:"assistant-a"},{provider:"disabled"}]){
+    const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection,fingerprint:"initial",configured:selection.provider!=="disabled",selection_source:selection.provider==="copilot"?"default":"saved"}});
+    try{
+      assert.equal(el("assistantProvider").value,selection.provider);assert.equal(el("saveAssistantSettings").disabled,true,"JSON key ordering never creates a false unsaved change");
+      assert.equal(calls.some(call=>call.route.includes("/copilot/")),false,"opening settings never starts sign-in or model enumeration");
+      assert.equal(el("assistantEndpointFields").hidden,selection.provider!=="endpoint");
+      if(selection.provider==="copilot"){
+        assert.equal(el("assistantCopilotModel").options[0].textContent,"Copilot default");el("checkCopilotSignIn").click();await pause();
+        assert.deepEqual(JSON.parse(calls.find(call=>call.route==="/api/assistant/copilot/status").body),{include_models:true});
+        assert.match(el("assistantCopilotStatus").textContent,/Signed in as robot-builder/);
+        el("assistantCopilotModel").value="model-1";el("assistantCopilotModel").dispatchEvent(new w.Event("change"));assert.equal(el("testAssistantConnection").disabled,true);
+        el("saveAssistantSettings").click();await pause();assert.deepEqual(JSON.parse(calls.find(call=>call.method==="PUT").body),{provider:"copilot",model:"model-1"});
+        el("testAssistantConnection").click();await pause();assert.match(el("assistantConnectionStatus").textContent,/Connection successful/);
+      }
+    }finally{w.close();}
+  }
+});
+
+test("Foundry uses a model endpoint and deployment, validates inputs and reuses only supplied model connections",async()=>{
+  const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"endpoint",endpoint_id:"assistant-a"},fingerprint:"local",foundry_endpoints:[{id:"azure-model",display_name:"Azure model",endpoint:"https://robot.openai.azure.com",deployment:"robot-deployment"}]}});
+  try{
+    el("assistantProvider").value="foundry";el("assistantProvider").dispatchEvent(new w.Event("change"));assert.equal(el("assistantFoundryFields").hidden,false);assert.match(el("assistantFoundryFields").textContent,/Azure CLI.*az login.*not a Foundry agent/s);
+    assert.equal(el("saveAssistantSettings").disabled,true);assert.equal(el("assistant").querySelector('input[type="password"]'),null);
+    el("assistantFoundryEndpoint").value="http://unsafe.test";el("assistantFoundryDeployment").value="model";el("assistantFoundryEndpoint").dispatchEvent(new w.Event("input"));assert.equal(el("saveAssistantSettings").disabled,true);
+    el("assistantFoundryPreset").value="azure-model";el("assistantFoundryPreset").dispatchEvent(new w.Event("change"));assert.equal(el("saveAssistantSettings").disabled,false);
+    el("saveAssistantSettings").click();await pause();assert.deepEqual(JSON.parse(calls.find(call=>call.method==="PUT").body),{provider:"foundry",endpoint:"https://robot.openai.azure.com",deployment:"robot-deployment"});
+  }finally{w.close();}
+});
+
+test("Copilot device sign-in exposes only the GitHub device page, polls completion and never implicitly lists models",async()=>{
+  const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:""},fingerprint:"copilot"},fastLoginPoll:true});
+  try{
+    el("signInCopilot").click();await pause();assert.match(el("assistantCopilotStatus").textContent,/sign-in completed/);
+    assert.ok(calls.some(call=>call.route==="/api/assistant/copilot/login/login-1"&&call.method==="GET"));assert.equal(el("assistantDeviceLogin").hidden,true);
+    assert.equal(calls.some(call=>call.route==="/api/assistant/copilot/status"),false);
+  }finally{w.close();}
+});
+
+test("provider changes cancel device sign-in and stale starts cannot expose a code or keep polling",async()=>{
+  let release;const wait=new Promise(resolve=>{release=resolve;});
+  const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:""},fingerprint:"copilot"},assistantLoginWait:wait});
+  try{
+    el("signInCopilot").click();el("assistantProvider").value="endpoint";el("assistantProvider").dispatchEvent(new w.Event("change"));release();await pause();
+    assert.equal(el("assistantDeviceLogin").hidden,true);assert.ok(calls.some(call=>call.route==="/api/assistant/copilot/login/login-1"&&call.method==="DELETE"));
+    assert.equal(calls.some(call=>call.route==="/api/assistant/copilot/login/login-1"&&call.method==="GET"),false);
+  }finally{release();w.close();}
+});
+
+test("device codes use only the allowed GitHub URL and cancel when leaving Settings",async()=>{
+  for(const verification_uri of ["https://github.com/login/device","https://evil.test/login/device"]){
+    const {w,el,calls,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:""},fingerprint:"copilot"},loginStart:{operation_id:"login-1",status:"pending",verification_uri,user_code:"ABCD-1234"}});
+    try{
+      el("signInCopilot").click();await pause();
+      if(verification_uri.startsWith("https://github.com/")){assert.equal(el("assistantDeviceCode").textContent,"ABCD-1234");assert.equal(el("assistantDeviceLogin").querySelector("a").href,verification_uri);}else assert.equal(el("assistantDeviceLogin").querySelector("a"),null);
+      w.document.querySelector('[data-root-view="models"]').click();await pause();assert.ok(calls.some(call=>call.route==="/api/assistant/copilot/login/login-1"&&call.method==="DELETE"));
+      assert.equal(el("assistantDeviceLogin").hidden,true);
+    }finally{w.close();}
+  }
+});
+
+test("provider test fingerprints must match the saved model configuration",async()=>{
+  const {w,el,pause}=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:"model-1"},fingerprint:"new-model",configured:true},assistantTestResult:{available:true,provider_tested:true,fingerprint:"old-model"}});
+  try{el("testAssistantConnection").click();await pause();assert.match(el("assistantConnectionStatus").textContent,/could not be verified/);assert.doesNotMatch(el("assistantConnectionStatus").textContent,/Connection successful/);}finally{w.close();}
+});
+
+test("device sign-in can be cancelled while starting and terminal failures remain explicit",async()=>{
+  let release;const wait=new Promise(resolve=>{release=resolve;});
+  const pending=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:""},fingerprint:"copilot"},assistantLoginWait:wait});
+  try{pending.el("signInCopilot").click();assert.equal(pending.el("cancelCopilotSignIn").hidden,false);pending.el("cancelCopilotSignIn").click();release();await pending.pause();assert.match(pending.el("assistantCopilotStatus").textContent,/cancelled/);assert.equal(pending.el("assistantDeviceLogin").hidden,true);assert.ok(pending.calls.some(call=>call.method==="DELETE"));}finally{release();pending.w.close();}
+  for(const status of ["failed","expired"]){const ended=await composer({url:"http://localhost/?view=settings#assistant",assistantSettings:{...assistantFixture,selection:{provider:"copilot",model:""},fingerprint:"copilot"},loginStart:{operation_id:"login-1",status,reason:"Start a new sign-in attempt"}});try{ended.el("signInCopilot").click();await ended.pause();assert.match(ended.el("assistantCopilotStatus").textContent,/Start a new/);assert.equal(ended.el("signInCopilot").disabled,false);assert.equal(ended.el("cancelCopilotSignIn").hidden,true);}finally{ended.w.close();}}
 });

@@ -1,7 +1,9 @@
 # ROVE Architecture: Evaluation Services and Shared Agent Runtime
 
-**Status:** Accepted direction; implementation is pending except for the existing foundations identified below.
-**Updated:** 2026-09-12
+**Status:** Accepted logical architecture. The core services, optional Copilot
+runtime, durable records, assistant and local inspection are implemented; general
+physical lifecycle tools and hosted analytics integrations remain future work.
+**Updated:** 2026-09-14
 **Decision:** [ADR-024](ADR-024-copilot-runtime-and-observability.md)
 
 **ROVE evaluates robotics agent pipelines on your task.** Copilot SDK supplies the
@@ -11,9 +13,10 @@ their own runtime and decision-making behavior.
 
 ## Architecture Diagram
 
-This is the target logical architecture, not a deployment inventory or a claim
-that the proposed assistant, recorder and integrations already exist. Arrows show
-requests or data delivery; they do not imply that each component is a new service.
+This is a logical architecture rather than a deployment inventory. Existing local
+services and optional runtime roles are shown together with future environment tools.
+Arrows show requests or data delivery, not separate microservices. Use the
+[system diagram](system-diagram.md) for current process and storage boundaries.
 
 ```mermaid
 flowchart TB
@@ -24,9 +27,9 @@ flowchart TB
     CORE --> DISPATCH["Configured stage and trial execution"]
     DISPATCH --> HOSTED["ROVE-hosted strategy agent<br/>Copilot SDK"]
     DISPATCH --> DIRECT["Direct customer agent / VLM / VLA adapters"]
-    HOSTED --> TOOLS["Configured robotics tools and integrations"]
+    HOSTED --> TOOLS["Adapter actions; future SDK robotics tools"]
     DIRECT --> TOOLS
-    TOOLS --> ENV["Recorded inputs or fresh environment execution<br/>according to the evaluation contract"]
+    TOOLS --> ENV["Recorded inputs and synthetic test execution<br/>General physical lifecycle: future"]
     ENV --> EVID["Outputs and available observations"]
     HOSTED --> EVID
     DIRECT --> EVID
@@ -50,10 +53,10 @@ tools. Candidate inputs exclude grader-only labels and SME reference material.
 
 ## Responsibilities and Contracts
 
-| Boundary | Responsibility | Contract to implement |
+| Boundary | Responsibility | Contract and remaining extension |
 | --- | --- | --- |
 | UI/API/CLI → evaluation services | One behavior across quick runs and campaigns | Validate configuration, assign stable IDs and freeze revisions before dispatch |
-| Assistant → evaluation services | Prepare, launch and investigate evaluations | Typed tools call the same services as the UI; tool retries cannot duplicate campaigns |
+| Assistant → evaluation services | Prepare and investigate evaluations; confirm selected mutations | Typed tools use the same services; exact host confirmations guard writes and operation IDs prevent duplicates |
 | Trial executor → configured system | Run the selected system with declared conditions | Start, progress, cancel, terminal reason, memory/reset scope and telemetry coverage |
 | System → environment | Observe and act when supported | Input/output types, action units/frames, reset acknowledgement and execution evidence |
 | Evidence → grader | Apply a declared evaluation contract | Versioned rubric, required constraints and independent assessment identity |

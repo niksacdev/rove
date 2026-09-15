@@ -1,6 +1,6 @@
 # ROVE Product Specification
 
-**Version:** 0.9
+**Version:** 1.0
 **Updated:** 2026-09-14
 **Status:** Current product vision and requirements. Capability status is explicit below; proposed features are not shipped functionality.
 
@@ -15,7 +15,9 @@ The [reusable evaluation core](product/reusable-evaluation-core.md) is implement
 for structured-input CLI trials/campaigns and saved-result inspection. Robotics
 remains the default integration and current case-authoring UI. This is an OSS
 foundation for future evaluation uses, not a claim of a complete general-purpose
-product or an implemented ABC/cloud service. The original robotics vision and
+product or a deployed cloud service. The separate
+[ABC bimanual integration](product/abc-pi05-comparison.md) implements simulator
+episodes; GPU inference and model performance remain unverified. The original robotics vision and
 personas below remain the specification for the preserved robotics integration.
 
 ## 1. Core vision
@@ -28,7 +30,7 @@ Compare the same task, image and robot description across a chosen set of strate
 
 The unit being assessed is a configured robotics agent pipeline: its models, prompts, stage settings, tools and applicable action components. A strategy can combine vision-language reasoning, tool-using agents and action policies such as VLAs through supported adapters. An agent is a running system, while VLM and VLA describe model capabilities; these are not mutually exclusive choices. Perception or planning assessments do not require every action or simulation stage. The evaluation stays anchored to the customer's robotics task and business outcome.
 
-ROVE is an inference and evaluation workbench. It does not train models or choose a deployment on the customer's behalf. It records outputs, grades and evidence so a person can make that decision. Human review can assess scene understanding and plan quality; claims about physical task completion require associated episode outcome evidence.
+ROVE is an inference and evaluation workbench. Explicit standalone preparation examples can fine-tune models before evaluation; trials and campaigns never start training implicitly. ROVE does not choose a deployment on the customer's behalf. It records outputs, grades and evidence so a person can make that decision. Human review can assess scene understanding and plan quality; claims about physical task completion require associated episode outcome evidence.
 
 ## 2. Target users
 
@@ -118,11 +120,10 @@ This local workflow is designed to deliver a useful first report before requirin
 
 The first report shows accepted/completed, failed and unknown cases; representative failures link to evidence. It shows what is unreviewed or unmeasured. A configurable pilot checks data and grading before the full campaign, with attempt count and available budget information shown before launch.
 
-The primary UI starts a campaign, including the smallest useful evaluation of one
-case, one strategy and one attempt. Existing independent runs retain durable inputs,
-configuration, interruption state and saved trial evidence. Their compatibility routes
-remain usable. Promotion preserves an existing trial as an exploratory reference and
-creates a reusable case; later campaigns schedule fresh attempts separately.
+Home offers **New trial** for an immediate comparison and **New campaign** for a
+prepared case collection. Both create durable trials through the same underlying
+services. Saved work is browsed through peer **Trials** and **Campaigns** destinations;
+Settings contains reusable configuration and assistant setup.
 
 ### Trial-first entry and guided improvement
 
@@ -181,61 +182,46 @@ do not establish live-provider, GitHub-hosted workflow or hardware performance.
 
 ### Navigation and workspace design
 
-Primary navigation is **Start · Evaluate · Results**, with **Settings** separately
-on the right. Settings maintains reusable strategies, models/connections and preferences.
-Evaluate is a single campaign workspace: **Cases → Configure → Success metrics → Run → Results**.
+The current journey is [specified in one place](product/user-journey.md):
+**Trials** and **Campaigns** are record browsers; **New trial** and **New campaign**
+create drafts. Settings is a separate right-hand gear. A quick comparison follows
+**Case → Configure → Review & run → Results**, retaining task conversation, image,
+optional URDF, shared strategy selection and explicit execution. Results preserves
+All strategies and exact trial/trace inspection.
 
-Cases offers **Add new**, **Select existing** and **Import cases**. Add new opens a
-single-case dialog. The existing library groups Cases and Datasets in one bounded
-picker; a dataset loads exact case versions into Cases for inspection before choosing
-strategies. JSONL metadata import pairs records with explicitly selected PNG/JPEG
-images. Selected cases appear as compact editable cards with expandable expectations. Expected outcomes and expert-review material may be prefilled from
-available metadata or an explicit assistant, but remain labelled drafts. Suggested
-content cannot create a human judgment or turn an initial image into completion evidence.
+Campaigns extend the same setup through **Cases → Configure → Success metrics →
+Run → Review & improve**. A persistent header shows name, attempts per case and
+case × strategy × attempt total. Draft setup is editable; saved setup comes from
+its recorded specification, including exact seed identities. Improve creates a
+linked editable copy. The shared strategy table presents configured stages and
+endpoints; readiness feedback is inline and does not imply live model quality.
 
-Configure selects one or several available strategies. **Success metrics** is a
-dedicated stage for editable criteria, expected report measures and evidence needs.
-Its optional assistant drafts criteria from task and annotation context for review;
-it does not claim to have inspected image bytes. Advanced contract JSON stays collapsed.
-Existing strategies can be compared within one campaign on the same case set. A
-component ablation saves a new revision of a baseline strategy and compares that
-candidate under the same recorded assessment conditions. The optional assistant's
-chat helps prepare the same evaluation. Progressive assistance offers assessment
-drafts in Success metrics and an explanation of retained outcomes in Results. The
-manual path works without it; both use validated previews and explicit launch.
+Cases combines Add new, Select existing and Import cases with a bounded image/task
+library. Datasets are saved case collections inside this workflow, not an additional
+execution concept. Source labels remain separate from candidate input; populated
+expectations and assistant suggestions never become SME judgments automatically.
 
-Run confirms case count, strategy selection, repetitions, criteria and execution limits.
-It explains the total: **cases × strategies × repetitions = planned trials**. During
-execution, each selected strategy has visible progress and nested trials showing
-case, strategy and attempt identity. Campaign
-progress and active trial stage updates poll while visible; expanding pipeline details or pressing
-Refresh fetches recorded stage events and output. This does not imply token streaming.
-Results leads with per-strategy outcome and reliability charts, followed by an optional
-AI outcome summary and **Inspect trials** details for outputs, traces and expert
-assessments. Unknown outcomes and unavailable measures remain explicit; an explanation
-cannot alter scores or claim physical completion without evidence. **Set as
-baseline** names and saves one completed campaign strategy as the reference; Results
-shows a **Baseline** badge only for persisted references. Versioning and pinning stay
-secondary. **Compare a strategy change** prepares a matching candidate; only **Start
-comparison campaign** runs new trials. Neither review nor setting a baseline reruns
-the original campaign.
+Success metrics distinguishes each trial's **Pass condition** and **Checked by**
+from automatically calculated report statistics. Manual checks need a recorded review;
+configured checks need a verifier and suitable evidence. A textual description is not
+executable scoring logic. Technical settings retains contracts, targets and annotation
+bindings. Generated criteria and model-authored summaries have explicit provenance.
 
-Use **Save case collection** and **Add to an existing collection** for dataset actions.
-Adding creates a new immutable revision retaining old members; old revisions remain
-unchanged. Reviewed collections retain exact annotations and review identities.
-Opaque freeze/reuse terminology should not be a prerequisite for the main workflow.
+Run shows each strategy's execution and stage progress. Results begins with outcomes,
+strategy charts and optional evidence-grounded interpretation, followed by inspection
+and scoring/baseline details. A fresh draft shows No results yet and Go to Run rather
+than another campaign picker. Completion, acceptance, failure and missing assessment
+remain distinct. Setting a baseline, opening history or preparing an improvement never
+starts another trial. Unsaved-work navigation and locked execution inputs preserve the
+reviewed observation; [ADR-032](architecture/ADR-032-trial-review-and-navigation-state.md)
+records the execution boundary.
 
-Results returns to the exact campaign or trial through saved identities. Local stage
-changes retain draft selections and never execute work. Legacy URLs remain usable.
-Use warm neutral/slate surfaces with restrained teal accents, readable controls,
-keyboard focus and a connection status that never obscures the task input. This
-earlier workspace was verified with revised behavior tests, a desktop three-trial mock
-journey and a 390px gallery in both themes. The separate metrics stage, progressive AI
-assistance, strategy progress overview and graph-first Results were then checked with
-a separate six-trial mock campaign and a 390px Results layout. Unknown assessments
-remained visible after execution completed. Assistant behavior has fake-runtime
-regression coverage; live AI generation and hardware performance were not validated. See the [campaign workspace](product/user-journey.md) and
-[ADR-025](architecture/ADR-025-workflow-navigation.md) for requirements and validation.
+Saved collections preserve membership and selected reviews in new revisions. A new
+candidate strategy preserves its source and shows an exact change preview before
+use. Case or rubric changes remain visible in the timeline and can invalidate a
+controlled comparison. See [ADR-031](architecture/ADR-031-shared-evaluation-workspace.md)
+and [ADR-033](architecture/ADR-033-isolated-vla-runtime-and-trial-inspection.md) for
+workspace and trace-inspection validation limits.
 
 ## 5. Create datasets and validate cases
 
@@ -249,7 +235,9 @@ recordings and demonstrated actions remain reference material; they never establ
 that a newly evaluated strategy completed the physical task. This provides an
 onboarding path into existing strategy comparisons, SME review and campaign history.
 See [ADR-028](architecture/ADR-028-abc-episode-import.md) for scope and validation;
-integration of upstream simulation or physical evaluation results is a future step.
+the separate [ABC bimanual integration](product/abc-pi05-comparison.md) now runs
+simulator episodes with fresh candidate actions and retained measurements. Physical
+robot evaluation remains outside that implementation.
 
 ### Review customer cases and outputs
 
@@ -305,6 +293,19 @@ An ablation copies cases, repetitions and grading conditions and exposes both th
 
 Robotics episode evidence must identify the producing configuration and attempt. Reusing policy A's recorded outcome cannot demonstrate policy B's performance. Matching seed labels alone do not establish matching physical conditions or statistical independence. Curated development data remains distinct from an independent held-out assessment.
 
+### Action comparison and complete episodes
+
+The current local VLA path collects action output from one prepared observation/state;
+it does not execute, observe the changed environment and replan until completion.
+This supports integration and action-level diagnostics. The separate
+[ABC bimanual integration](product/abc-pi05-comparison.md) owns simulator reset, fresh
+observations, action execution and terminal evidence,
+with multiple chunks retained inside one trial. Match initial conditions for strategy
+comparisons; subsequent observations naturally diverge. A URDF does not adapt a
+checkpoint to arbitrary cameras, state, normalization or control conventions. See
+[action and episode evaluation](product/action-and-episode-evaluation.md) for the
+adapter-specific boundary and requirements for other episode integrations.
+
 ## 8. Storage and integration direction
 
 Use SQLite for the local product. The shared journal stores trials, snapshots, events, cases, reviews, frozen datasets, named baseline revisions, evidence references and operation identities with schema migrations and integrity checks. Observations, stage outputs and bounded auxiliary recordings are separate content-addressed assets. A complete backup preserves the journal, assets and separate campaign database together. The versioned exchange exports a validated relational manifest and assets and restores only into a fresh destination. It is a portable local format; PostgreSQL and cloud analytical connectors remain demand-driven.
@@ -326,28 +327,45 @@ baselines and campaign/ablation operations through validated services. Each writ
 requires its exact host confirmation; the assistant cannot manufacture SME reviews
 or labels. Local telemetry copies can use a bounded loopback OTLP exporter, disabled
 by default. Controlled real-SDK/CLI tests establish local infrastructure behavior,
-not live-provider quality or a deployed cloud monitoring profile. Live provider,
-Azure and hosted analytics validation remain specification-only in this delivery.
+not live-provider quality or a deployed cloud monitoring profile. Local Qwen and native SmolVLA inference were exercised in the later
+[ADR-033 validation](architecture/ADR-033-isolated-vla-runtime-and-trial-inspection.md).
+That does not establish physical success, cloud-provider coverage or deployed
+Azure/Grafana analytics.
 See [runtime lifecycle](architecture/runtime-lifecycle.md),
 [local observability](architecture/runtime-observability.md) and the
 [live-provider validation specification](product/live-provider-validation.md).
 
+### Recommended next industrial validation milestone
+
+Beyond the implemented ABC simulator episode path, an industrial task needs its own
+validated environment and outcome measurement. Image/task/URDF comparisons and FK diagnostics support preliminary screening;
+they cannot establish the most reliable industrial task solution. The next recommended
+slice is one resettable pick-and-place environment, one declared robot, measurable
+object-level success and repeated complete episodes of two executable strategies.
+Fresh observations and execution acknowledgements must connect actions to outcomes.
+Agent-with-robot-tools and VLA/controller systems are compared as full strategies.
+This is a proposed milestone requiring scope approval, not an implemented feature or
+a commitment to add generic closed-loop control in the current update.
+
 ## 9. Capability and delivery status
 
-| Capability | Status in the customer workflow implementation slice, 2026-09-12 |
+| Capability | Current implementation and validation boundary, 2026-09-14 |
 | --- | --- |
 | Configured optional stages, supported models/agents and local dashboard | Implemented; adapter availability depends on installed dependencies and endpoints |
 | Repeated campaigns, frozen selected configuration, SQLite trial records and HTML/JSON/CSV reports | Implemented in PR #13 |
 | Local task evaluators, required constraints, optional FK diagnostics and versioned evidence | Implemented in PR #14 |
 | Durable shared quick/campaign trial recording and initial observation assets | Implemented; frozen snapshots, interrupted-work recovery and idempotent legacy quick-history import |
 | Durable activity, evidence ranges and paired trace inspector | Implemented for supplied events and managed assets; separate source clocks, indexed JSON ranges and explicit missing coverage; no arbitrary remote fetch or video decoding |
-| Copilot runtime for hosted perception, planning and verification | Optional pinned runtime with fresh role scopes, lifecycle contracts and controlled real-CLI validation; live-provider validation is specification-only |
+| Copilot runtime for hosted perception, planning and verification | Optional pinned runtime with fresh role scopes, lifecycle contracts and local provider validation; cloud/provider-specific acceptance remains separate |
 | ROVE/native spans and optional monitoring | Local stage/tool correlation, native capture and bounded loopback OTLP export implemented; exporter disabled by default; no validated Azure/Grafana deployment |
-| Evaluation assistant | Typed reads and host-confirmed case, contract, freeze, baseline and campaign/ablation operations implemented; no SME judgment or label-writing tools |
+| Evaluation assistant | Typed reads and host-confirmed operations; saved selection and explicit connection tests; no SME judgment or label-writing tools |
 | Robot action integrations | Direct customer action adapters and the synthetic test world are supported; no Copilot hardware-action tools or hardware drivers |
 | Customer intake, case revisions and expected-metric preview | Managed images and bounded auxiliary evidence, typed episode validation, deterministic action-dependent synthetic rollout and aggregate targets implemented |
 | SME review, reusable annotations and frozen datasets | Optimistic drafts, immutable final reviews, atomic freezing and explicit frozen annotation-to-local-verifier bindings implemented |
 | Baseline/ablation references, component diffs and quick promotion | Named/pinned immutable baseline revisions, captured assessments, paired traces and exploratory quick promotion implemented |
+| Shared trial/campaign workspace and versioned iteration history | Implemented with retained strategy comparison, exact saved configuration, explicit launch, trace inspection and linked Improve copies |
+| ABC dataset support | Converted local real/sim observation import through CLI/API/UI; source assets private, no automatic candidate-success labels |
+| Isolated native VLA inference | Local SmolVLA path exercised; probes are execution-ineligible; Pi0.5 and physical deployment are not validated by that probe |
 | Relational exchange; PostgreSQL or Delta Lake integration | Validated local exchange/restore implemented; PostgreSQL and cloud connectors remain demand-driven |
 | Real closed-loop robot/simulator integration, universal adapter compatibility or safety certification | Not provided by the current release |
 

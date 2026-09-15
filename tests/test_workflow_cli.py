@@ -11,6 +11,8 @@ from rove.benchmarks import cli as legacy_cli
 from rove.benchmarks.report import saved_report
 from rove.benchmarks.store import CampaignStore
 from rove.datasets.service import DatasetService
+from rove.models.config import load_config
+from rove.runtime.assistant import save_assistant_selection
 from rove.trials import cli as trial_cli
 from rove.trials.store import TrialStore
 
@@ -251,8 +253,10 @@ def test_saved_case_cli_uses_its_robot_without_separate_urdf_and_rejects_changed
     assert "differs" in error and TrialStore(h["root"]).count() == before
 
 
-def test_cli_metrics_draft_is_honest_when_unconfigured(h, capsys):
+def test_cli_metrics_draft_is_honest_when_disabled(h, capsys):
     draft, _ = seed_and_request(h, capsys)
+    load_config(h["config"])
+    save_assistant_selection(None, root=h["root"])
     output = invoke(
         workflow_cli,
         [

@@ -1,7 +1,9 @@
 # ROVE Delivery Plan: From Trial Evidence to Customer Evaluation Workflows
 
-**Status:** Local completion implemented and verified; PR checks govern merge readiness. Live provider/Azure validation is specification-only at user request; hosted integrations remain explicitly unvalidated.
-**Updated:** 2026-09-12
+**Status:** Original T01–T12 local delivery recorded below, with subsequent shipped
+workflow/runtime refinements summarized here. Hosted integration acceptance remains
+separate; local provider checks do not establish physical outcomes.
+**Updated:** 2026-09-14
 **Design:** [Architecture diagram](../architecture/target-architecture.md), [system diagram](../architecture/system-diagram.md), [ADR-024](../architecture/ADR-024-copilot-runtime-and-observability.md)
 
 The first useful milestone is a saved robotics trial whose configuration, agent
@@ -10,7 +12,35 @@ workflow: import cases → baseline → SME review → frozen dataset → candid
 comparison. Copilot powers ROVE-owned agents while direct customer systems share
 the same evaluation records and reporting rules.
 
-## Already Available
+## Subsequent delivery beyond the original plan
+
+| Capability | Current evidence |
+| --- | --- |
+| Trial-first and shared campaign setup | [ADR-031](../architecture/ADR-031-shared-evaluation-workspace.md) and [ADR-032](../architecture/ADR-032-trial-review-and-navigation-state.md): shared strategy table, recorded setup, explicit reviewed execution and navigation guards |
+| Versioned improvement and CLI workflows | [ADR-027](../architecture/ADR-027-trial-to-campaign-improvement.md): source-linked iterations, baseline snapshots, timeline and shared commands |
+| ABC observations | [ADR-028](../architecture/ADR-028-abc-episode-import.md): bounded real/sim converted exports, source identities and private demonstration evidence |
+| Local model/runtime checks | [ADR-033](../architecture/ADR-033-isolated-vla-runtime-and-trial-inspection.md): local Qwen and native SmolVLA; inference/probe scope only, not complete robot episodes |
+| Reusable evaluation core and ABC episodes | [ADR-036](../architecture/ADR-036-reusable-evaluation-core.md) and [ADR-038](../architecture/ADR-038-abc-bimanual-episodes.md): structured-input execution and a simulator episode integration; GPU model performance remains unverified |
+| Persistent assistant | [ADR-034](../architecture/ADR-034-persistent-assistant-settings.md): local selection, explicit synthetic connection tests and validated summary anchors |
+
+The original decision to leave live-provider validation as a specification applies to
+that earlier T01–T12 delivery. Later local Qwen/SmolVLA checks are recorded separately;
+Foundry/Pi0.5 and hosted monitoring coverage must be reported by actual provider and
+scenario. The current [action-versus-episode boundary](action-and-episode-evaluation.md)
+remains explicit: generic closed-loop execution is not implemented by these refinements.
+
+## Recommended next robotics milestone
+
+One industrial pick-and-place task, one declared resettable robot/environment and an
+independently measured object goal would extend validation beyond the implemented
+[ABC bimanual episode path](abc-pi05-comparison.md). Integrate two executable strategies, capture fresh observations and action
+acknowledgements, repeat episodes, and report actual success and timing with evidence.
+An agent using robot tools and a VLA/controller can then be compared as complete
+strategies, rather than treating raw model outputs as interchangeable. This is a
+recommendation awaiting scope approval, not work delivered by the current UI or
+assistant update. See [action and episode evaluation](action-and-episode-evaluation.md).
+
+## Original foundations
 
 PR #13 supplies repeated campaigns, pass@k/pass^k, cross-strategy coverage and
 portable reports. PR #14 supplies configured verification, required checks,

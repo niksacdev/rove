@@ -14,8 +14,9 @@ for example, whether a planning agent produces an acceptable placement plan. It
 does not require a VLA or a complete robot recording to be useful.
 
 This page defines the product vocabulary and distinguishes it from the current
-implementation as of the customer workflow slice on 12 September 2026. Versioned
+implementation as of 14 September 2026. Versioned
 cases, explicit reviews, dataset freezing and baseline references are implemented;
+bounded ABC observation imports and explicit recording references are supported;
 complete robot reset contracts and general recording ingestion remain future work.
 
 ## One Attempt Has One Identity
@@ -27,7 +28,7 @@ not an additional persisted container.
 A **trial** is one strategy attempting that case once. A **campaign** organizes
 trials across selected cases, strategies and repetitions. Selecting three
 strategies for one case produces three trials, even if the user selects **Run campaign**
-once. **Create a campaign** prepares this work; **Run campaign** executes its trials;
+once. **New campaign** prepares this work; **Run campaign** executes its trials;
 **Review results** reads their saved evidence. Evaluation and run describe activities,
 not additional persisted containers.
 
@@ -45,9 +46,17 @@ This hierarchy now has local implementation support. A quick trial needs no camp
 name before execution. Promotion preserves the same trial as an exploratory reference
 and creates a reusable input case without manufacturing another attempt. New planned repetitions receive their own identities.
 
+An action chunk is part of an attempt, not a separate trial. The current local VLA
+path returns actions from one prepared observation; it does not run an entire
+execute/observe/replan episode. A complete customer/environment integration could
+supply many chunks within one trial and independently observed termination. Compare
+strategies from matching initial conditions; their later observations can diverge.
+See [action and episode evaluation](action-and-episode-evaluation.md).
+
 The vocabulary follows the distinction between a test case, an individual attempt
 and its outcome in [Anthropic's evaluation guidance](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
-ROVE uses **Case** in navigation and retains **task instruction** as a case field.
+ROVE uses **Cases** as a campaign stage and retains **task instruction** as a case field.
+**Trials** and **Campaigns** browse saved work; neither is another name for a case.
 An Experiment or Session container is not needed alongside Campaign.
 
 | Concept | Meaning | Robotics example |

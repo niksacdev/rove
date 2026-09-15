@@ -4,12 +4,16 @@
 
 **ROVE evaluates robotics agent pipelines on your task.**
 
-Bring your task and data, configure the models and agents in your pipeline,
-and compare their outputs. ROVE is an open-source workbench for inspecting the evidence
-behind each assessment, and the checks or observations that are still missing.
-A strategy configures the system being evaluated: vision-language reasoning,
-tool-using agents, action policies such as VLAs, or a combination. Configure the
-stages relevant to the task; these capabilities can coexist in one pipeline.
+Compare the same **task + observation + robot configuration** across your chosen
+strategies. Inspect each strategy's outputs and traces, then use campaigns to repeat
+that comparison, preserve a baseline and track changes to cases, models and success
+criteria over time.
+
+A strategy can use a VLM, a tool-using agent, a VLA or a configured combination of
+pipeline stages. ROVE evaluates the connected system through supported adapters;
+training is an explicit standalone preparation step, separate from trials and
+campaigns. This is an experimental OSS
+workbench for robotics evaluation engineering.
 
 It connects supported model and agent adapters, optional MuJoCo diagnostics,
 and a local browser dashboard. This is an experimental OSS project for
@@ -43,8 +47,8 @@ performance remain unverified on the development host.
 ## Try it locally
 
 Python 3.12 and [uv](https://docs.astral.sh/uv/) are recommended. Run from the
-repository root; the dashboard currently needs the source checkout's assets.
-No cloud account or model download is needed for the mock demo.
+repository root because the dashboard uses the source checkout's assets. The mock
+workflow needs no cloud account or model download.
 
 ```bash
 git clone https://github.com/niksacdev/rove.git
@@ -54,64 +58,98 @@ uv run --no-sync rove serve
 # Open http://127.0.0.1:5001
 ```
 
-Choose a sample case, select **Mock (Test)**, open **Review & run**, then click
-**Run trials**. Inspect
-stage outputs, evidence confidence, missing checks, and comparison results.
-Mock outputs demonstrate the workflow; they do not measure a robot's ability.
+Choose **New trial**, load a sample observation or provide an image and task, and
+add a URDF when your evaluation needs robot geometry. In **Configure**, select one
+or several strategies, including **Mock (Test)** for an offline demonstration.
+**Review & run** shows the exact inputs; **Run trials** starts execution. Results
+retains an **All strategies** overview, individual outputs and **Inspect trial &
+traces**. Mock output verifies the workflow, not robot competence.
 
-Open **Cases** to evaluate your own PNG/JPEG images and task instructions:
+**Trials** and **Campaigns** browse saved work. **Settings** maintains reusable
+configuration and the optional assistant. Creation, inspection and execution are
+separate actions: opening history never reruns a model.
 
-1. Choose from the 49 bundled **Sample cases**, import your own case, or load the [synthetic customer cases](examples/customer-cases/README.md).
-2. Define success criteria, choose strategies and preview the planned trials and measures.
-3. Run a baseline, inspect its trace, and rate individual outputs when SME judgment is required.
-4. Freeze exact cases/reviews, then compare a candidate configuration under the same conditions.
+## From one comparison to an improvement history
 
-The existing gallery is imported into versioned Cases automatically. Sample case links
-open the exact imported revision; source/license metadata, robot state and reference
-annotations are retained. Re-importing preserves user edits and creates no extra trials.
-Reference annotations are unreviewed source material, kept separate from candidate
-inputs and observed episode evidence. Historical runs remain in History.
-
-Use **Cases → Import cases → XDOF ABC episode** to turn an upstream ABC export
-into a case with a selected camera observation and current robot state. The same
-operation is available as `rove data case import-abc` for automated dataset
-preparation. ROVE builds on the ABC project's converter and public samples;
-demonstrated actions remain reference material. Follow the
-[ABC dataset guide](examples/abc/README.md) for preparation, source versions and
-the supported export formats.
-
-Name and pin a baseline, inspect clock-aware trace lanes beside a candidate trial,
-and open preserved stage outputs or exact recording selections. Explicit frozen
-annotation bindings can grade later candidates without exposing labels to them.
-Campaign targets report met, not met or unknown alongside robotics evidence coverage.
-Try the [action-dependent synthetic robotics example](examples/robotics/README.md),
-or read [evidence and exchange](docs/product/evidence-and-exchange.md) for portable
-relational exports. The [guided assistant](docs/product/named-baselines-and-assistant.md)
-prepares imports, revisions, freezes and comparisons with host-confirmed mutations.
-
-Missing or disputed assessments stay unknown. An accepted plan is not observed
-robot completion. **Trial history** can promote a finished quick run into a reusable
-case while retaining the original trial as an exploratory reference; new campaigns
-plan fresh attempts. No cloud service is needed for this workflow with mock adapters.
-
-For a shareable, seeded example without opening the dashboard:
-
-```bash
-uv run --frozen python scripts/demo.py --output data/output/demo.json
+```mermaid
+flowchart LR
+    T[New trial: same task, image and robot input] --> S[Compare strategies]
+    S --> E[Inspect outputs and traces]
+    E --> C[Add to campaign]
+    C --> M[Add cases and review success criteria]
+    M --> R[Run repeated trials]
+    R --> B[Save a baseline]
+    B --> I[Improve: review a proposed change]
+    I --> R
+    R --> H[Timeline: changes, outcomes and evidence]
 ```
 
-The demo uses fresh seeded mock adapters and produces a JSON evidence report.
-Latency and timestamps vary; mock actions and judgments repeat for the same seed.
+Start a **New campaign** directly when you already have a case collection. Its stages
+are **Cases → Configure → Success metrics → Run → Review & improve**. The header
+keeps the campaign name, attempts per case and planned total visible:
+**cases × strategies × attempts = trials**. Saved campaigns show their recorded setup;
+**Improve** creates a linked editable copy.
 
-For repeated trials, open **Campaigns** in the dashboard or run:
+- **Bring cases.** Select bundled samples, add customer images/tasks, or import
+  JSONL with separate images. Case revisions retain source identity, optional robot
+  input and private reference material. [Synthetic customer cases](examples/customer-cases/README.md)
+  exercise onboarding without claiming measured outcomes.
+- **Define success.** Each criterion has a pass condition and a human reviewer or
+  configured verifier. AI can suggest a draft; writing a condition does not implement
+  a check. Reports calculate eligible success/reliability measures and timing from
+  actual assessments and measurements. Missing judgments remain unknown.
+- **Run and inspect.** Watch each strategy's pipeline progress, compare outputs and
+  inspect individual trials. **Set as baseline** freezes one completed strategy's
+  assessment reference; review coverage is visible even when outcomes are unknown.
+- **Iterate deliberately.** Save a changed strategy revision, inspect the proposed
+  change and run new trials. The timeline records changes to cases, strategies and
+  criteria. Changed assessment conditions remain useful history but do not establish
+  a controlled improvement.
+
+**Add to campaign** retains the exploratory trial and carries its case/strategy
+context forward. A campaign schedules fresh attempts. **Save case collection** or
+**Add to an existing collection** creates a dataset revision with exact membership
+and review choices; previous revisions remain available.
+
+ROVE stores durable trials, case/configuration revisions, reviews and lineage in
+local SQLite databases, with large media in managed asset files. Inspect clock-aware
+trace lanes, stage outputs and exact evidence references; telemetry supplements these
+records rather than becoming the source of scores. The [evidence and exchange guide](docs/product/evidence-and-exchange.md)
+explains portable studies. Fabric/Databricks/Delta integration remains a future
+consumer of these records, not a replacement for transactional storage.
+
+## Build on ABC data
+
+Use **Cases → Import cases → XDOF ABC episode**, or `rove data case import-abc`,
+to turn a selected observation from an upstream converted episode into a ROVE case.
+ROVE reuses the ABC team's converter and public samples, preserving current state,
+source hashes and private demonstration artifacts. The [ABC guide](examples/abc/README.md)
+explains supported formats, bounded imports and source attribution. This imports
+observations for your own strategy comparisons; it does not run ABC's simulator or
+turn a demonstration into candidate success.
+
+## Automate evaluations
+
+Compare your own observation across two configured strategies:
 
 ```bash
-uv run --frozen rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml
+uv run --no-sync rove trial run --task "Pick up the bracket" --image observation.png \
+  --strategy mock-consistent --strategy mock-variable --config examples/benchmarks/rove.yaml
 ```
 
-This produces offline HTML, JSON and CSV reports with pass@k, pass^k, task
-outcomes and comparable history. See [benchmark configuration and scoring](docs/BENCHMARKS.md)
-for seed support, unknown outcomes, cancellation and resume behavior.
+Add `--urdf robot.urdf` when applicable. Each strategy produces its own saved trial.
+For repeated offline trials and an HTML/JSON/CSV report:
+
+```bash
+uv run --no-sync rove benchmark run examples/benchmarks/mock.json --config examples/benchmarks/rove.yaml
+```
+
+The [CLI guide](docs/product/cli-ui-parity.md) covers cases, reviews, campaigns,
+strategy revisions, baselines, reports, timeline and assistant controls. The
+[GitHub Actions example](examples/ci/README.md) restores explicit study state, records
+a source revision, writes reports and applies declared quality gates. It is an
+example to adapt, not a preconfigured hosted service. See [report metrics](docs/BENCHMARKS.md)
+for pass@k, pass^k, eligibility, unknown outcomes and seed limitations.
 
 ## What you can inspect
 
@@ -128,6 +166,13 @@ It is not proof of real-world execution. Default initial states and approximate
 IK produce estimated evidence. Missing collision geometry produces **unknown**,
 not “no collision.” Torque and payload feasibility remain **not computed** until
 ROVE has a validated timing, inertia and actuator-mapping contract.
+
+**Action output is not a complete episode.** The local VLA path generates actions
+from the supplied image/state; it does not execute a chunk, observe the changed
+scene and repeat. A URDF supports robot description and applicable checks, not
+universal checkpoint compatibility. [Action-level vs episode-level evaluation](docs/product/action-and-episode-evaluation.md)
+explains the current value, missing lifecycle and why multiple chunks still belong
+to one episode trial rather than separate reliability samples.
 
 A VLM's success judgment is not measured task success. Stage attribution is a
 heuristic debugging hypothesis, not a demonstrated causal root cause. Perception
@@ -157,33 +202,30 @@ credentials and compatible checkpoints.
   Known dependency advisories remain; review the runtime limits before use.
   Pi0.5 also requires authorized access to its tokenizer.
 
-For AI campaign explanations, open **Settings → Assistant**, choose an existing
-Copilot assistant endpoint, **Save**, then **Test connection**. The selection persists
-locally across restarts. `ROVE_ASSISTANT_ENDPOINT` remains an explicit server override.
-The configured local assistant uses the existing model server; a successful test proves
-connectivity, not evaluation quality. The same controls are available through
-`rove assistant settings`, `rove assistant configure --endpoint local-assistant`,
-`rove assistant test` and `rove assistant disable` (add `--url http://127.0.0.1:5010`
-when the app runs on that port).
+For AI drafts and campaign explanations, open **Settings → Assistant**. New setups
+default to **GitHub Copilot**, with explicit ROVE sign-in; saved local and Disabled
+choices are retained. You can instead select an existing endpoint or a **Microsoft
+Foundry** model resource and deployment using Azure CLI authentication on the ROVE
+host. Save then **Test connection**. Provider choice does not change the strategies
+under evaluation or authorize proposed workflow mutations.
 
-Use `/docs` for the implemented HTTP API. From this source checkout, compare your
-observation against two configured strategies without opening the dashboard:
+The [assistant setup guide](docs/product/assistant-setup.md) covers dedicated-profile
+GitHub sign-in, model discovery, local endpoints, Foundry and equivalent CLI commands.
+These provider paths are under verification in this change; authenticated GitHub/Azure
+inference is not implied by configuration or a successful local Qwen test.
 
-```bash
-uv run --no-sync rove trial run --task "Pick up the bracket" --image observation.png \
-  --strategy mock-consistent --strategy mock-variable --config examples/benchmarks/rove.yaml
-```
+Use `/docs` for the implemented HTTP API. UI and CLI call the same underlying
+services; an older published package may not include all commands in this checkout.
 
-Supply your own `observation.png`; add `--urdf robot.urdf` to retain a robot description.
-Each strategy produces its own saved trial. Campaigns retain cases, criteria and
-repetitions; **Improve** creates a linked iteration whose timeline shows what changed
-and whether outcomes are comparable. Unknown assessments remain unknown.
+## The remaining industrial evaluation gap
 
-See the [CLI capability guide](docs/product/cli-ui-parity.md),
-[iteration architecture](docs/architecture/ADR-027-trial-to-campaign-improvement.md)
-and [manual GitHub Actions example](examples/ci/README.md) for scripted data/review
-management, baselines, report gates and restored study history. These commands are
-verified in this checkout; an older published package may not contain them.
+Image + goal + URDF and forward-kinematics checks alone cannot identify the most
+reliable strategy for completing an industrial task. Today's offline comparison is
+preliminary screening with inspectable evidence. The next recommended milestone is
+one resettable industrial pick-and-place scenario, measurable object-level success,
+fresh observations after execution and repeated trials of two executable strategies.
+This is a proposed next step, not a shipped loop or approved implementation commitment.
+More geometric checks or report polish do not supply the missing outcome evidence.
 
 ## What a useful comparison needs
 
@@ -206,14 +248,16 @@ Use the [documentation guide](docs/README.md) to explain ROVE's
 [current implementation](docs/architecture/current-implementation.md).
 The [target architecture](docs/architecture/target-architecture.md),
 [system diagram](docs/architecture/system-diagram.md) and
-[implementation plan](docs/product/implementation-plan.md) show how ROVE will use
+[implementation plan](docs/product/implementation-plan.md) show how ROVE uses
 Copilot SDK for ROVE-owned agents while preserving direct evaluation of customer
 agents, VLMs and VLAs.
 The linked [architecture decisions](docs/architecture/README.md) include diagrams,
 trade-offs and implementation status. The local customer workflow is implemented;
 general video ingestion and production cloud exporters remain future work. Bounded
 recording imports, action-dependent synthetic trials and aggregate targets are implemented
-with local validation; live providers and physical robot execution remain unvalidated.
+with local validation. Local Qwen and native SmolVLA inference were exercised under
+the limits in [ADR-033](docs/architecture/ADR-033-isolated-vla-runtime-and-trial-inspection.md);
+physical robot execution and production cloud integrations remain unvalidated.
 
 ## Development
 
@@ -244,11 +288,3 @@ this README and executable tests describe the supported release behavior.
 Use [configured verification](docs/VERIFICATION.md) to provide a task evaluator,
 required constraints and optional FK diagnostics through the existing verify stage.
 Results carry measurements, evidence quality and evaluator versions into campaign reports.
-
-### Your evaluation journey
-
-The workspace uses the same navigation on every page: **Start → Evaluate → Results**,
-with strategies, endpoints and settings under **Configure**. Prepare cases, define
-success and run repeated trials, then inspect outcomes and compare a changed
-strategy with a saved baseline. Quick trials remain available from Start; saved
-attempts live under Results → Trials. See the [user journey](docs/product/user-journey.md).

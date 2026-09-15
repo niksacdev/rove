@@ -1,5 +1,7 @@
 # ADR-025: Organize navigation around the evaluation journey
 
+> **Superseded navigation:** [ADR-031](ADR-031-shared-evaluation-workspace.md), [ADR-032](ADR-032-trial-review-and-navigation-state.md) and the [current journey](../product/user-journey.md) replace the earlier Start/Evaluate/Results arrangement. Trials and Campaigns are peer browsers, with separate creation and execution actions.
+
 **Status:** Accepted and implemented; five-stage mock campaign and narrow Results layout verified locally. Live AI and hardware validation excluded.
 **Date:** 2026-09-12
 **Product contract:** [Campaign workspace](../product/user-journey.md).

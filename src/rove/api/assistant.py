@@ -1,7 +1,6 @@
 """Bounded workflow assistance; only the host can confirm a prepared mutation.
 
-Enable with ROVE_ASSISTANT_ENDPOINT naming an explicitly configured copilot_agent
-endpoint. Proposals expire after ten minutes and after server restart: prepare again
+Configure an assistant provider in Settings or through the CLI. Proposals expire after ten minutes and after server restart: prepare again
 to confirm. No confirmation token, write tool or ambient resource enters the model
 session. This local API inherits the application's loopback/security boundary.
 """
@@ -12,6 +11,7 @@ import asyncio
 import hmac
 import json
 import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Literal
@@ -40,9 +40,11 @@ from rove.models.config import load_config
 from rove.runtime.assistant import (
     assistant_settings,
     assistant_settings_view,
+    github_auth_directory,
     save_assistant_selection,
 )
-from rove.runtime.copilot import CopilotRuntime, RuntimeTool
+from rove.runtime.assistant_login import CopilotLogin
+from rove.runtime.copilot import CopilotRuntime, CopilotRuntimeConfig, RuntimeTool
 from rove.trials.snapshots import canonical_json, content_hash, sanitize
 from rove.trials.store import TrialStore, now
 
@@ -71,7 +73,15 @@ class AskRequest(Arguments):
 
 
 class AssistantSelection(Arguments):
-    endpoint_id: Identifier | None
+    provider: Literal["copilot", "endpoint", "foundry", "disabled"] | None = None
+    endpoint_id: Identifier | None = None
+    model: str = Field(default="", max_length=128)
+    endpoint: str | None = Field(default=None, max_length=2048)
+    deployment: str | None = Field(default=None, max_length=128)
+
+
+class IdentityRequest(Arguments):
+    include_models: bool = False
 
 
 class ConnectionProof(Arguments):
@@ -137,7 +147,14 @@ def create_assistant_router(
     clock=time.monotonic,
 ) -> APIRouter:
     """Mount alongside the customer workflow router using its launch callback."""
-    router = APIRouter()
+    login = CopilotLogin(github_auth_directory(root))
+
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        await login.close()
+
+    router = APIRouter(lifespan=lifespan)
     proposals: dict[str, Proposal] = {}
 
     def settings():
@@ -156,13 +173,58 @@ def create_assistant_router(
     async def put_settings(request: AssistantSelection):
         try:
             save_assistant_selection(
-                request.endpoint_id, root=root, config_loader=config_loader, endpoint_id=endpoint_id
+                request.model_dump(exclude_unset=True),
+                root=root,
+                config_loader=config_loader,
+                endpoint_id=endpoint_id,
             )
         except PermissionError as error:
             raise HTTPException(409, str(error)) from None
-        except ValueError:
-            raise HTTPException(422, "Choose an existing copilot_agent endpoint") from None
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
         return settings_view()
+
+    @router.post("/api/assistant/copilot/status")
+    async def copilot_identity(request: IdentityRequest):
+        try:
+            config = CopilotRuntimeConfig(
+                model="",
+                provider={},
+                role="assistant",
+                auth_mode="github",
+                github_auth_directory=github_auth_directory(root),
+            )
+            return await runtime_factory(config).github_identity(
+                include_models=request.include_models
+            )
+        except Exception:
+            return {
+                "authenticated": False,
+                "login": None,
+                "models": [],
+                "reason": "Could not check Copilot sign-in. Check the runtime on the ROVE host.",
+            }
+
+    @router.post("/api/assistant/copilot/login")
+    async def start_login():
+        try:
+            return await login.start()
+        except ValueError as error:
+            raise HTTPException(503, str(error)) from None
+
+    @router.get("/api/assistant/copilot/login/{operation_id}")
+    async def login_status(operation_id: Identifier):
+        try:
+            return login.get(operation_id)
+        except KeyError:
+            raise HTTPException(404, "Sign-in request not found. Start again.") from None
+
+    @router.delete("/api/assistant/copilot/login/{operation_id}")
+    async def cancel_login(operation_id: Identifier):
+        try:
+            return await login.cancel(operation_id)
+        except KeyError:
+            raise HTTPException(404, "Sign-in request not found.") from None
 
     @router.post("/api/assistant/test")
     async def test_connection():
@@ -171,6 +233,7 @@ def create_assistant_router(
             "available": False,
             "provider_tested": False,
             "endpoint_id": view["effective_endpoint_id"],
+            "fingerprint": view["fingerprint"],
             "reason": view["status_reason"],
         }
         if not view["configured"]:
@@ -178,7 +241,7 @@ def create_assistant_router(
         try:
             # Pin this request to the displayed selection if another client saves concurrently.
             configured_settings = assistant_settings(
-                root=root, config_loader=config_loader, endpoint_id=view["effective_endpoint_id"]
+                root=root, config_loader=config_loader, selection=view["selection"]
             )
             runtime_settings = replace(
                 configured_settings,
@@ -211,7 +274,7 @@ def create_assistant_router(
         except Exception:
             available, reason = (
                 False,
-                "Configure an explicit Copilot assistant endpoint and runtime",
+                "Choose an assistant provider and check its runtime",
             )
         return {
             "available": available,

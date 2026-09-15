@@ -1,66 +1,60 @@
-# ROVE System Diagram: Processes, Data and External Integrations
+# ROVE system: execution, evidence and integrations
 
-**Status:** Target system design; new runtime, recording and integration components are pending.
-**Updated:** 2026-09-12
+**Status:** Current local process boundaries, with future integrations explicitly
+labelled. Broader robot lifecycle requirements below remain a target contract.
+**Updated:** 2026-09-14.
 
-The first deployment remains a local application. These boundaries explain how
-the [logical architecture](target-architecture.md) maps to processes and storage;
-they do not require microservices, Kubernetes or a cloud account.
+The local application serves both interactive strategy comparison and automated
+campaigns. It does not require microservices or a cloud account for mock operation.
+See [current implementation](current-implementation.md) for source/test evidence and
+[logical architecture](target-architecture.md) for responsibilities.
 
-## System Diagram
-
-Solid arrows show the intended local execution and recording paths. Dashed arrows
-show optional external integrations. This entire diagram is a target design; see
-[current implementation](current-implementation.md) for today's separate history
-paths and worker behavior.
+## Current local system
 
 ```mermaid
 flowchart LR
-    B["Browser dashboard"] --> API
-    CLI["CLI / API client"] --> API
-    DATA["Customer cases and assets"] --> API
-    subgraph HOST["ROVE host: local workstation initially"]
-        API["Python application<br/>UI API and evaluation services"]
-        WORK["Bounded trial execution workers"]
-        SDK["Copilot SDK host integration"]
-        RUNTIME["Copilot child runtime<br/>Isolated role/trial sessions"]
-        DIRECT["Customer system adapters"]
-        RECORD["Durable recording boundary"]
-        DB[("SQLite<br/>Trials, revisions, events and assessments")]
-        ASSET[("Asset files<br/>Images, video and signal ranges")]
-        API --> WORK
-        API -->|"Assistant sessions"| SDK
-        WORK -->|"Configured agent or grader"| SDK
-        SDK --> RUNTIME
-        WORK --> DIRECT
-        API --> RECORD
-        WORK --> RECORD
-        SDK -->|"Session events and usage"| RECORD
-        RECORD --> DB
-        RECORD --> ASSET
-        DB --> API
-        ASSET --> API
-    end
-    RUNTIME -.-> MODEL["Azure / Foundry or other configured model provider"]
-    DIRECT -.-> CUSTOMER["Customer agent or model endpoint / local process"]
-    WORK -.-> ENV["Configured simulator or robot integration<br/>Future execution contract"]
-    ENV -.->|"Observations and action acknowledgements"| RECORD
-    RUNTIME -.->|"Native OTLP"| COL["Optional OpenTelemetry Collector"]
-    WORK -.->|"ROVE spans and metrics"| COL
-    API -.->|"ROVE spans and metrics"| COL
-    COL -.-> AZ["Azure Monitor<br/>Application Insights / Log Analytics"]
-    COL -.-> GF["Grafana Cloud or Tempo / Loki / Mimir"]
-    DB -.-> EXPORT["Versioned export job: future"]
-    ASSET -.-> EXPORT
-    EXPORT -.-> LAKE["Fabric / Databricks / Delta destination"]
+    B[Browser: Trials and Campaigns] --> API[FastAPI and static UI]
+    API --> S[Shared ROVE services]
+    CLI[CLI: cases, trials, campaigns and reports] --> S
+    S --> EX[Pipeline and bounded campaign execution]
+    EX --> DIRECT[Configured customer/model adapters]
+    EX --> SDK[Optional Copilot role-scoped runtime]
+    API --> ASSIST[Optional evaluation assistant]
+    ASSIST --> SDK
+    ASSIST --> CONF[Validated read or confirmed mutation]
+    CONF --> S
+    DIRECT --> LP[Optional isolated local VLA worker]
+    DIRECT --> EP[Configured local or remote endpoint]
+    SDK --> PROVIDER[Selected model provider]
+    EX --> REC[Durable trial and evidence recording]
+    SDK --> REC
+    S --> REC
+    REC --> DB[(Local SQLite stores)]
+    REC --> ASSET[(Managed content-addressed assets)]
+    DB --> REPORT[Assessments, reports, baselines and timeline]
+    ASSET --> REPORT
+    REPORT --> S
+    REC -. Optional bounded local OTLP .-> COL[Loopback collector]
+    COL -. Future hosted validation .-> MON[App Insights, Log Analytics or Grafana]
+    DB --> X[Validated relational exchange]
+    ASSET --> X
+    X -. Future destination integration .-> LAKE[Fabric, Databricks or Delta]
+    EX -. Future physical lifecycle adapter .-> ROBOT[Robot or general closed-loop simulator]
 ```
 
-The worker owns dispatch into the selected environment; an SDK robotics tool calls
-that same configured integration. The SDK is not a physical robot driver. Local
-adapters need not call external endpoints. The initial implementation must decide
-worker/SDK process reuse from isolation tests; no fixed process-per-session promise
-is made here. CLI commands can invoke application services directly without an
-HTTP round trip.
+Ordinary CLI evaluation and data commands call application services directly. Assistant
+settings/test/proposal commands contact the owning local server. Copilot hosts optional
+assistant or configured agent behavior; it does not schedule every direct-model call
+or act as a robot driver. The isolated VLA worker uses its own dependency environment,
+not a security sandbox. Its successful inference does not establish task completion.
+
+SQLite stores retain trials/cases/reviews/assets metadata, campaigns and their insight
+cache, strategy revisions, and local assistant selection in their respective databases.
+A complete study backup preserves all relevant databases and managed assets together.
+SDK session state and optional telemetry are not substitutes for those records.
+ABC and JSONL/image imports enter existing Case services; original source artifacts
+and private labels remain separate from candidate input. See
+[storage and exchange](../product/evidence-and-exchange.md).
 
 ## Trial Lifecycle
 
@@ -92,7 +86,7 @@ sequenceDiagram
     E-->>U: Outcome, timeline and evidence
 ```
 
-This target sequence preserves the distinction between execution state and task
+This broader target sequence preserves the distinction between execution state and task
 outcome. A failed task can have a complete trace; an interrupted process can leave
 an unknown outcome. Reopening history never dispatches actions. An interrupted
 physical trial is not automatically replayed; continuing it requires the declared

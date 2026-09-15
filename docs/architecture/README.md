@@ -20,19 +20,21 @@ Each new decision includes a diagram, alternatives, consequences and validation 
 | [018: Trial lineage and snapshots](ADR-018-trial-lineage-and-snapshots.md) | Accepted | Shared trial recording, case revisions, baseline references and exploratory promotion implemented |
 | [019: Relational storage and assets](ADR-019-relational-storage-and-assets.md) | Accepted direction | Shared trial/case/review schema and managed images implemented; campaign journal remains separate |
 | [020: SME-reviewed datasets](ADR-020-sme-reviewed-datasets.md) | Accepted | Local review drafts, immutable corrections and previewed dataset freezing implemented |
-| [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Accepted | Success contracts, preview and assessment comparison implemented; aggregate targets pending |
-| [022: Trial telemetry](ADR-022-trial-telemetry.md) | Proposed | Durable event and inspector foundation implemented; aligned traces and complete external export pending |
+| [021: Campaign success and reporting](ADR-021-campaign-success-and-reporting.md) | Accepted | Success contracts, aggregate targets, preview and assessed comparison implemented |
+| [022: Trial telemetry](ADR-022-trial-telemetry.md) | Accepted direction; local implementation delivered | Durable events, clock-aware lanes, native/stage correlation and bounded loopback export; hosted collectors remain separate |
 | [023: Evaluation semantics and execution services](ADR-023-evaluation-and-execution-harnesses.md) | Accepted direction, amended | Existing pipeline and shared recording retained; complete robot lifecycle contracts pending |
-| [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime and controlled transport proof implemented; live provider/collector validation pending |
+| [024: Copilot runtime and observability](ADR-024-copilot-runtime-and-observability.md) | Accepted direction | Optional pinned runtime, controlled transport and local-provider checks; hosted provider/collector validation remains separate |
 | [025: Workflow navigation](ADR-025-workflow-navigation.md) | Accepted | Campaign workspace, local mock journey and responsive gallery verified |
-| [026: Versioned strategy catalog](ADR-026-versioned-strategy-catalog.md) | Accepted | Immutable local strategy catalog and multi-strategy execution tested; editor browser integration pending |
+| [026: Versioned strategy catalog](ADR-026-versioned-strategy-catalog.md) | Accepted | Immutable local catalog, shared selection and reviewed strategy editor; campaign snapshots retain resolved endpoints |
 | [027: Versioned evaluation iterations](ADR-027-trial-to-campaign-improvement.md) | Accepted | Shared CLI, managed trial handoff and validated iteration timeline implemented; full mock browser loop and narrow timeline verified |
-| [028: ABC episode import](ADR-028-abc-episode-import.md) | Accepted | Shared import design reuses upstream conversion, existing Case records and managed source assets; see ADR for validation status |
+| [028: ABC episode import](ADR-028-abc-episode-import.md) | Accepted | Shared CLI/API/UI importer reuses upstream conversion and managed source assets; real/sim sample validation recorded in ADR |
 | [029: Workspace interaction consistency](ADR-029-workspace-interaction-consistency.md) | Accepted | Compact campaign list, reviewed strategy changes and unclipped accessible overlays |
 | [030: Foundry-inspired visual language](ADR-030-foundry-visual-language.md) | Accepted; navigation/setup refined by ADR-031 | Shared Fluent tokens, evaluation list, controls and theme contrast checks |
 | [031: Shared evaluation workspace](ADR-031-shared-evaluation-workspace.md) | Implemented; verification limits recorded | Peer Trials/Campaigns browsers, shared strategy selection, persistent campaign identity and explicit scoring semantics |
-
 | [032: Trial review and navigation](ADR-032-trial-review-and-navigation-state.md) | Accepted | Gated setup, explicit review-to-execution boundary and unsaved-work protection |
+
+| [033: Isolated VLA runtime and trial inspection](ADR-033-isolated-vla-runtime-and-trial-inspection.md) | Implemented locally; scope limited | Native SmolVLA inference, execution-ineligible probes and trace-backed repair; no physical-success claim |
+| [034: Persistent assistant settings](ADR-034-persistent-assistant-settings.md) | Implemented locally | Saved selection, explicit provider tests and validated summary references |
 
 ## How the decisions connect
 
@@ -65,10 +67,6 @@ flowchart TD
 ```
 
 This diagram shows decision dependencies, not a statement that every component is implemented.
-
-- [033: Isolated VLA runtime and trial inspection](ADR-033-isolated-vla-runtime-and-trial-inspection.md) — native inference, probe boundaries and evidence-backed improvement.
-
-- [034: Persistent assistant settings](ADR-034-persistent-assistant-settings.md) — saved selection, explicit provider testing and useful summary recovery.
 
 ## Historical decisions
 

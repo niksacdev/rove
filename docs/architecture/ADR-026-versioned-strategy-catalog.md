@@ -1,5 +1,7 @@
 # ADR-026: Keep UI-created strategy revisions in an immutable local catalog
 
+> **Current interaction:** Saved strategy revisions are selectable in the shared Configure table, and Improve exposes reviewed stage changes with exact previews. See [ADR-029](ADR-029-workspace-interaction-consistency.md) and [ADR-031](ADR-031-shared-evaluation-workspace.md). Original endpoint-resolution and snapshot boundaries below still apply.
+
 **Status:** Accepted and implemented; local mock browser integration verified.
 **Date:** 2026-09-12
 **Product contract:** [Campaign workspace](../product/user-journey.md).

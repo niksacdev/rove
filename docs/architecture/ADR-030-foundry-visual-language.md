@@ -1,5 +1,7 @@
 # ADR-030: Foundry-inspired visual language
 
+> **Navigation/setup refinement:** [ADR-031](ADR-031-shared-evaluation-workspace.md) and [ADR-032](ADR-032-trial-review-and-navigation-state.md) supersede conflicting navigation and setup behavior below. Shared tokens and theme history remain relevant; the [current journey](../product/user-journey.md) is the reader-facing workflow.
+
 - Status: Accepted, implemented
 - Date: 2026-09-13
 - Extends: [ADR-029](ADR-029-workspace-interaction-consistency.md)
