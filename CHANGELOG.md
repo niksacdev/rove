@@ -8,6 +8,10 @@ Format: each entry includes the date, a short title, and a description of what c
 
 ## Unreleased
 
+### Learn with the GR00T, MuJoCo and MCAP notebook
+
+The supplied GR00T N1.7 lab is available alongside the ABC/XDOF notebook in a shared notebook index, with dedicated kernel setup and local artifact guidance. LIBERO task selection follows the chosen suite, and before/after comparisons require distinct checkpoints saved during training. ABC video conversion also supports current FFmpeg; GPU execution remains unvalidated.
+
 ### Compare ABC-VLA and adapted pi0.5 on bimanual episodes
 
 Run compatible policies through repeated ABC simulator episodes using existing Trials, Campaigns, evidence, traces and reports. A guided comparison and matching CLI preserve scene resets, checkpoint identities, task outcomes and policy-call measurements; a separate ABC/XDOF conversion and pi0.5 training recipe prepares adapted checkpoints. Real data conversion and CPU simulation are validated; GPU training and learned-policy comparison remain pending. *(PR #35)*
