@@ -1,108 +1,116 @@
-# When simulation passes but the robot deviates
-## A proposed sim-to-real evaluation loop for ROVE
+# ROVE: Closing the sim-to-real evaluation loop
 
-**Author:** Nik Sachdeva  
-**Status:** Design proposal, September 24, 2026. No physical-robot results are claimed.
+**Design specification · Nik Sachdeva · September 2026**
 
-[ROVE](../README.md) is an experimental robotics evaluation workbench. It compares configured strategies, preserves trial evidence, and tracks changes against explicit baselines. This note proposes an extension to that workflow to investigate a VLA that succeeds in simulation but deviates on hardware.
+A VLA completes a task in simulation but misses the grasp, drifts from the intended motion, or fails to recover on hardware. The engineer needs to know where the behavior diverges, which conditions expose the failure, and whether a proposed change improves the physical outcome.
 
-The first question is whether the evaluation represents the deployed system. A model producing plausible actions, or passing geometric checks, is different from a robot completing a task through repeated observation and execution.
+[ROVE](../README.md) would connect that investigation to a repeatable evaluation campaign. Each deployment failure becomes a test case; each policy or system change is compared against a preserved baseline. The resulting report supports a concrete decision: accept the change, investigate further, or collect the evidence still missing.
 
-### Reference: NVIDIA's SO-101 sim-to-real course
+## From a failed episode to a decision
 
-The main reference is NVIDIA's [Train an SO-101 Robot From Sim-to-Real With NVIDIA Isaac](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html). It provides a concrete VLA manipulation example. The workflow below applies that guidance to a proposed ROVE extension. The course's hardware path is not integrated into ROVE.
+An engineer opens a failed episode and inspects camera observations alongside model actions, controller commands, and measured motion. The engineer marks the first meaningful deviation and creates a case around a suspected cause. ROVE retains that hypothesis separately from the measurements supporting it.
 
-| Course guidance | Proposed application in ROVE |
-| --- | --- |
-| [Domain randomization](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html): vary lighting, camera pose, and object placement while collecting demonstrations; use the policy's camera views during teleoperation. | Record the variation settings with each case and check that demonstration observations match the policy's inputs. |
-| [Sim evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/11-sim-evaluation.html): compare nominal evaluation with stronger lighting variation. | Keep separate baseline and stress-test results to reveal which conditions cause failures. |
-| [Real evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/12-real-evaluation.html): evaluate the same checkpoint through a shared GR00T server setup, replacing the simulator client with the robot client. | Preserve checkpoint identity across environments while recording each client's configuration and measured outcome. |
-| [SAGE + GapONet](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/15-strategy4-sage.html): compare paired real/sim motions and quantify actuation differences per joint. | Use measured actuation gaps to select targeted simulator or controller changes before considering policy adaptation. |
-
-### The workflow
+The engineer then configures a controlled campaign: vary the suspected factor, preserve the other conditions, and compare complete task outcomes. A lighting problem calls for different tests from a delayed action queue or a slipping gripper. Once an intervention is selected, the original and changed strategies run against the same evaluation definition, followed by held-out hardware validation.
 
 ```mermaid
 flowchart TD
-    A["Record a failed hardware episode"]
-    B["Align observations, actions, and measured motion"]
-    C["Find first divergence; form a testable hypothesis"]
-    D["Create a regression case and controlled perturbations"]
-    E{"What does the evidence support?"}
-    F["Policy change: corrective data and adaptation"]
-    G["System change: calibration, timing, or control"]
-    H["Rerun frozen baseline and candidate evaluations"]
-    I{"Held-out hardware outcomes meet task and safety gates?"}
-    J["Bounded deployment and continued capture"]
-    A --> B --> C --> D --> E
-    E --> F
-    E --> G
-    F --> H
-    G --> H
-    H --> I
-    I -->|Yes| J
-    I -->|No| C
-    J --> A
+    A["Failed hardware episode"] --> B["Inspect synchronized observations and motion"]
+    B --> C["Create failure case and hypothesis"]
+    C --> D["Run controlled evaluation campaign"]
+    D --> E{"Which change does the evidence support?"}
+    E --> F["Adapt policy with corrective data"]
+    E --> G["Correct interface, controller, or simulator"]
+    E --> H["Collect missing evidence"]
+    H --> B
+    F --> I["Compare baseline and candidate"]
+    G --> I
+    I --> J["Validate on held-out hardware episodes"]
+    J --> K{"Task and safety criteria met?"}
+    K -->|Yes| L["Accept revision and retain regression cases"]
+    K -->|No| B
 ```
 
-Policy and system causes can coexist. Change one suspected factor at a time before testing their interaction; a trace correlation alone does not establish root cause.
+## System design
 
-### 1. Establish an execution contract
+ROVE owns evaluation definitions, experiment scheduling, evidence, and comparisons. Environment adapters own reset, observation capture, action execution, and stop behavior. Policy runtimes and training tools remain separate integrations.
 
-Before changing the model, verify camera views, image preprocessing, measured-state ordering, coordinate frames, action units, normalization, gripper conventions, and controller interpretation. Freeze the checkpoint, processors, controller settings, and robot configuration with the trial.
+```mermaid
+flowchart TD
+    C["Campaign definition: cases, variations, criteria"] --> R["ROVE episode runner"]
+    P["Versioned policy runtime"] <--> R
+    R <--> S["Simulator adapter"]
+    R <--> H["Hardware adapter"]
+    S --> E["Episode evidence"]
+    H --> E
+    R --> E
+    E --> A["Outcome assessment"]
+    A --> B["Baseline comparison and decision report"]
+    B --> C
+```
 
-For chunked actions, record the prediction horizon, executed prefix, control frequency, and when fresh observations arrive. A policy evaluated with immediate simulated feedback may face stale observations or queued actions on hardware.
+| Component | Responsibility |
+| --- | --- |
+| Episode runner | Schedule repeated attempts, enforce budgets, and preserve partial evidence on interruption. |
+| Environment adapter | Confirm initial state, supply fresh observations, execute valid commands, and acknowledge completion or stop. |
+| Policy interface | Preserve checkpoint, processors, observation mapping, action conventions, and chunk execution settings. |
+| Evidence store | Link timestamped observations, native actions, transformed commands, measured motion, and outcomes to exact configuration revisions. |
+| Assessment | Apply versioned task and constraint checks through a configured evaluator or human review; retain unknown outcomes explicitly. |
+| Comparison report | Show baseline and candidate performance by condition, with trial counts, uncertainty, and links to the underlying episodes. |
 
-### 2. Capture enough evidence to distinguish failures
+A robot description alone does not establish policy compatibility. Before execution, the adapter must validate joint ordering, coordinate frames, units, normalization, camera mapping, and controller interpretation. Unverified mappings block execution. Clock domains and synchronization uncertainty travel with the evidence so apparent timing differences are not mistaken for physical errors.
 
-Record the instruction, timestamped images and measured state, native model output, transformed controller commands, execution acknowledgements, and actual motion. Preserve clock domains and synchronization uncertainty. Include contact or force measurements where available and an independently assessed terminal outcome.
+## What changes in the evaluation
 
-Compare intended commands with measured response around the first deviation. Tracking error suggests an execution issue, but incorrect input or action mappings must also be ruled out. Accurate tracking of an unsuccessful command points toward policy or observation problems; it does not prove them.
+The evaluation expands from nominal simulated success to a set of conditions derived from deployment failures.
 
-Offline replay helps inspect decisions on recorded observations. It cannot establish how a changed policy would complete the task: after its first different action, the future scene may differ. That requires a fresh closed-loop rollout.
-
-### 3. Make the eval reproduce deployment conditions
-
-| Suspected gap | Controlled eval change | Evidence to inspect |
+| Failure hypothesis | Evaluation change | Decision supported |
 | --- | --- | --- |
-| Perception or calibration | Camera offsets, lighting, occlusion, motion blur | Failure onset and success by condition |
-| Contact dynamics | Measured ranges of friction, mass, compliance, and slip | Grasp retention and task outcome |
-| Timing and action chunks | Observation delay, jitter, dropped frames, executed-prefix length | Observation age at execution, tracking error, recovery |
-| Distribution shift | Held-out objects, layouts, and starting states | Success by task and condition |
-| Error accumulation | Mid-task object displacement or grasp disturbance | Recovery without intervention; safe stop when needed |
+| Visual conditions alter the selected action | Sweep lighting or camera pose while holding scene and checkpoint fixed. | Correct calibration or collect targeted visual demonstrations. |
+| Commands are valid but actual motion differs | Compare matched motions in simulation and hardware; inspect per-joint tracking, friction, and contact behavior. | Improve actuator or physics modeling, or correct the controller. |
+| Actions arrive too late | Inject measured observation delays and jitter; vary the executed action prefix. | Change inference placement, scheduling, or chunk execution. |
+| Small errors accumulate during the task | Introduce a bounded grasp slip or object displacement mid-episode. | Improve recovery behavior or shorten the interval before fresh observations. |
+| Performance depends on familiar scenes | Evaluate held-out objects, layouts, and starting states. | Broaden training coverage and test generalization. |
 
-Start with ranges measured on the robot. Test single factors to investigate causes, then combinations to test robustness. Update the simulator where its behavior fails to reproduce the relevant hardware response. Retain a separate hardware evaluation set; calibrating the simulator to known failures is not evidence of generalization.
+Randomization ranges should reflect measured deployment variation. Single-factor tests support diagnosis; combined variations test robustness. Expanding every range indiscriminately can obscure the cause and increase training cost.
 
-### Worked example: a grasp changes under different lighting
+Recorded observations can be replayed to inspect a policy's decisions. They cannot establish the outcome of a different action sequence. Candidate success requires a fresh closed-loop episode in which the next observation reflects what the candidate actually did.
 
-**Illustrative experiment, not a measured ROVE result.** Suppose the robot completes a pick-and-place task in nominal simulation but misses the grasp under a different workcell light.
+## Example: a missed grasp under workcell lighting
 
-1. Verify camera mapping and preprocessing, then check whether actual motion follows the commanded motion.
-2. Keep the checkpoint fixed and compare nominal lighting with a controlled lighting sweep. Keep camera pose and object placement fixed initially.
-3. If the failure follows lighting, collect varied demonstrations and adapt a candidate checkpoint. Keep a calibration fix as a separate candidate if calibration is also suspect.
-4. Compare both checkpoints on the frozen evaluation cases, including separate held-out hardware trials. Report grasp and full-task outcomes separately.
+Consider a policy that grasps correctly in nominal simulation but misses the object under a different workcell light. This is an illustrative investigation, not a reported ROVE result.
 
-This uses the course's nominal-versus-varied-lighting evaluation as a starting point. The controlled comparisons and held-out decision procedure are proposed ROVE evaluation design. Randomization used for training improves coverage; randomization used for evaluation tests robustness. The two datasets must remain separate.
+First, verify camera assignment and preprocessing, then check whether the physical arm follows its commands. If execution tracks correctly, run the unchanged checkpoint across a lighting sweep with fixed camera pose and object placement. Inspect where grasp success declines and whether the same failure appears on hardware.
 
-### 4. Improve the part responsible
+If the evidence supports visual sensitivity, collect demonstrations around those conditions and adapt a candidate checkpoint outside the evaluation runner. Preserve the original checkpoint as the baseline. A calibration correction, if needed, is a separate revision so its effect can be measured.
 
-For a policy failure, collect demonstrations or corrective interventions around the failure states, adapt the policy outside the evaluation runner, and register the resulting checkpoint as a new strategy. For an interface or control failure, correct that component and preserve its revision instead. Training should not compensate for an unverified action mapping.
+Compare the candidates on the frozen case set and separate held-out hardware trials. Report grasp acquisition and final object placement separately: improving the grasp is insufficient if the robot still drops the object before completing the task.
 
-Compare baseline and candidate from matched starting conditions with fresh observations throughout each episode. Keep task budgets and success criteria fixed. Use separate diagnostic, training, and held-out evaluation episodes; split related recordings together to avoid leakage.
+## The decision report
 
-### 5. Decide using outcomes
+The report opens with whether the candidate meets the declared task requirements and what remains unresolved. It includes:
 
-The primary measure is **task success without human intervention**, subject to explicit safety constraints. Report recovery success on eligible disturbance trials, interventions, completion time, and observation-to-execution latency. Break down results by failure condition and include trial counts and uncertainty.
+- **Task success without intervention:** completed episodes against planned attempts, with failures, interruptions, and unknown outcomes visible.
+- **Performance by condition:** results for each tested variation, so an aggregate gain cannot hide a deployment weakness.
+- **Recovery and operating cost:** recovery on eligible disturbance trials, intervention frequency, completion time, and observation-to-execution latency.
+- **Constraint violations:** recorded safety-related violations and missing checks, assessed against workcell-specific limits.
+- **Change history:** what changed, which evidence supports improvement, and whether the comparison conditions remained equivalent.
 
-The unit of evaluation is a complete episode, not each action chunk. Keep missing evidence and aborted trials visible rather than silently excluding them. Safety limits and acceptable task performance come from the workcell requirements; independent robot safety controls remain outside the learned policy.
+The sampling unit is a complete episode. Action chunks within an episode are correlated steps, not additional independent trials. Comparisons preserve starting conditions and assessment criteria; later observations naturally differ as each strategy acts. Training, diagnosis, and held-out evaluation data have separate provenance.
 
-### What ROVE supplies today, and what this adds
+A candidate is accepted only when the evidence meets the predeclared task and constraint criteria. Insufficient coverage produces an inconclusive decision. Independent hardware safety controls remain responsible for enforcing physical limits during execution.
 
-ROVE already provides versioned cases and strategies, repeated campaigns, explicit baselines, traces, and evidence-backed assessments. Its image-based VLA path supports action-level inspection. A separate experimental ABC integration implements simulator episode execution and reporting.
+## Implementation boundary
 
-The repository documents CPU simulator and data-path checks; GPU learned-policy performance and physical-robot execution remain unvalidated. This proposal adds a hardware episode contract, failure-derived perturbation campaigns, and hardware validation gates. It does not claim those capabilities are already delivered.
+ROVE currently provides versioned cases and strategies, campaigns, explicit baselines, traces, and assessments. Its image-based VLA path supports action inspection; the experimental ABC integration provides a separate simulator episode path.
 
-Implementation context:
-- [Action-level versus episode-level evaluation](product/action-and-episode-evaluation.md)
-- [Experimental ABC-VLA and pi0.5 comparison and validation scope](product/abc-pi05-comparison.md)
+This specification extends those foundations to hardware failure capture and sim-to-real comparisons. Physical-robot execution and learned-policy performance remain unvalidated. See [action and episode evaluation](product/action-and-episode-evaluation.md) and the [ABC integration's validation scope](product/abc-pi05-comparison.md) for the current implementation.
 
-**The engineering goal:** make evaluation failures informative enough to choose the next change, and make a passing evaluation a better predictor of real task completion.
+## References
+
+NVIDIA's SO-101 course provides the practical reference for this design:
+
+- [Domain randomization](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html): demonstrations collected with varied visual conditions.
+- [Simulation evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/11-sim-evaluation.html) and [real evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/12-real-evaluation.html): the same policy evaluated through simulator and hardware clients.
+- [SAGE and GapONet](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/15-strategy4-sage.html): paired motion analysis to measure actuation differences.
+
+The campaign structure and decision workflow above are proposed ROVE product behavior.
