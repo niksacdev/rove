@@ -4,15 +4,15 @@
 **Author:** Nik Sachdeva  
 **Status:** Design proposal, September 24, 2026. No physical-robot results are claimed.
 
-[ROVE](../README.md) is my experimental robotics evaluation workbench. It compares configured strategies, preserves trial evidence, and tracks changes against explicit baselines. This note proposes how I would extend that workflow to investigate a VLA that succeeds in simulation but deviates on hardware.
+[ROVE](../README.md) is an experimental robotics evaluation workbench. It compares configured strategies, preserves trial evidence, and tracks changes against explicit baselines. This note proposes an extension to that workflow to investigate a VLA that succeeds in simulation but deviates on hardware.
 
 The first question is whether the evaluation represents the deployed system. A model producing plausible actions, or passing geometric checks, is different from a robot completing a task through repeated observation and execution.
 
 ### Reference: NVIDIA's SO-101 sim-to-real course
 
-The main reference is NVIDIA's [Train an SO-101 Robot From Sim-to-Real With NVIDIA Isaac](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html). It provides a concrete VLA manipulation example. The workflow below is my proposed application to ROVE; I have not run the course or integrated its hardware path into ROVE.
+The main reference is NVIDIA's [Train an SO-101 Robot From Sim-to-Real With NVIDIA Isaac](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html). It provides a concrete VLA manipulation example. The workflow below applies that guidance to a proposed ROVE extension. The course's hardware path is not integrated into ROVE.
 
-| Course guidance | How I would use it in ROVE |
+| Course guidance | Proposed application in ROVE |
 | --- | --- |
 | [Domain randomization](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html): vary lighting, camera pose, and object placement while collecting demonstrations; use the policy's camera views during teleoperation. | Record the variation settings with each case and check that demonstration observations match the policy's inputs. |
 | [Sim evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/11-sim-evaluation.html): compare nominal evaluation with stronger lighting variation. | Keep separate baseline and stress-test results to reveal which conditions cause failures. |
