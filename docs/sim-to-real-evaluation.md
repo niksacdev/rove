@@ -8,6 +8,17 @@
 
 The first question is whether the evaluation represents the deployed system. A model producing plausible actions, or passing geometric checks, is different from a robot completing a task through repeated observation and execution.
 
+### Reference: NVIDIA's SO-101 sim-to-real course
+
+The main reference is NVIDIA's [Train an SO-101 Robot From Sim-to-Real With NVIDIA Isaac](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html). It provides a concrete VLA manipulation example. The workflow below is my proposed application to ROVE; I have not run the course or integrated its hardware path into ROVE.
+
+| Course guidance | How I would use it in ROVE |
+| --- | --- |
+| [Domain randomization](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/09-strategy1-dr-teleop.html): vary lighting, camera pose, and object placement while collecting demonstrations; use the policy's camera views during teleoperation. | Record the variation settings with each case and check that demonstration observations match the policy's inputs. |
+| [Sim evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/11-sim-evaluation.html): compare nominal evaluation with stronger lighting variation. | Keep separate baseline and stress-test results to reveal which conditions cause failures. |
+| [Real evaluation](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/12-real-evaluation.html): evaluate the same checkpoint through a shared GR00T server setup, replacing the simulator client with the robot client. | Preserve checkpoint identity across environments while recording each client's configuration and measured outcome. |
+| [SAGE + GapONet](https://docs.nvidia.com/learning/physical-ai/sim-to-real-so-101/latest/15-strategy4-sage.html): compare paired real/sim motions and quantify actuation differences per joint. | Use measured actuation gaps to select targeted simulator or controller changes before considering policy adaptation. |
+
 ### The workflow
 
 ```mermaid
@@ -60,6 +71,17 @@ Offline replay helps inspect decisions on recorded observations. It cannot estab
 | Error accumulation | Mid-task object displacement or grasp disturbance | Recovery without intervention; safe stop when needed |
 
 Start with ranges measured on the robot. Test single factors to investigate causes, then combinations to test robustness. Update the simulator where its behavior fails to reproduce the relevant hardware response. Retain a separate hardware evaluation set; calibrating the simulator to known failures is not evidence of generalization.
+
+### Worked example: a grasp changes under different lighting
+
+**Illustrative experiment, not a measured ROVE result.** Suppose the robot completes a pick-and-place task in nominal simulation but misses the grasp under a different workcell light.
+
+1. Verify camera mapping and preprocessing, then check whether actual motion follows the commanded motion.
+2. Keep the checkpoint fixed and compare nominal lighting with a controlled lighting sweep. Keep camera pose and object placement fixed initially.
+3. If the failure follows lighting, collect varied demonstrations and adapt a candidate checkpoint. Keep a calibration fix as a separate candidate if calibration is also suspect.
+4. Compare both checkpoints on the frozen evaluation cases, including separate held-out hardware trials. Report grasp and full-task outcomes separately.
+
+This uses the course's nominal-versus-varied-lighting evaluation as a starting point. The controlled comparisons and held-out decision procedure are proposed ROVE evaluation design. Randomization used for training improves coverage; randomization used for evaluation tests robustness. The two datasets must remain separate.
 
 ### 4. Improve the part responsible
 
